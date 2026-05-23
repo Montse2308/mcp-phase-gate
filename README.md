@@ -1,15 +1,15 @@
 # MCP Orquestador
 
-Este es un servidor orchestrador básico que implementa el **Model Context Protocol (MCP)**. Por el momento, expone una herramienta de prueba simple (`ping`).
+Este es un servidor orquestador avanzado que implementa el **Model Context Protocol (MCP)**. Actúa como el cerebro central para la gestión de documentación y la ejecución estructurada de tareas a través de 4 fases metodológicas (Descubrimiento, Decisiones, Plan Técnico y Ejecución). Además, facilita la interacción con distintos repositorios del entorno local.
 
 ## 📁 Estructura del Proyecto
 
 El proyecto está construido con Node.js y TypeScript. Su estructura principal es:
 
 - `src/` - Código fuente en TypeScript.
-  - `src/index.ts` - Punto de entrada del servidor MCP.
+  - `src/index.ts` - Punto de entrada del servidor MCP, donde se definen las herramientas de orquestación.
 - `build/` - Código JavaScript compilado (se genera automáticamente).
-- `package.json` - Dependencias y scripts del proyecto.
+- `package.json` - Dependencias y scripts.
 - `tsconfig.json` - Configuración del compilador de TypeScript.
 
 ## 🚀 Requisitos
@@ -58,11 +58,18 @@ Una vez compilado, puedes iniciar el servidor con:
 npm start
 ```
 
-## ⚙️ Funcionalidades Actuales
+## ⚙️ Funcionalidades y Herramientas (Tools)
 
-- **Servidor MCP sobre `stdio`**: El servidor se comunica a través de la entrada y salida estándar.
-- **Herramienta `ping`**: Una herramienta básica de prueba que responde con `"pong"` al ser llamada. Útil para verificar que la conexión con los clientes MCP funciona correctamente.
+El servidor MCP expone diversas herramientas diseñadas para coordinar flujos de trabajo con agentes IA:
 
-## 📝 Próximos Pasos (Fase 3)
+- **`start_task`**: Inicia una nueva tarea. Crea automáticamente una carpeta en la Documentación Central para el proyecto correspondiente (ej. BOS, CRM, KANBAN) y guarda el requerimiento en el archivo `00 - Contexto Inicial.md`.
+- **`get_phase_prompt`**: Devuelve los *prompts* maestros de comportamiento que dictan cómo debe actuar la IA según la etapa del ciclo de vida del desarrollo:
+  - Fase 1: Descubrimiento y Análisis.
+  - Fase 2: Toma de Decisiones y Preguntas Críticas.
+  - Fase 3: Creación de Plan Técnico.
+  - Fase 4: Ejecución Segura.
+- **`read_central_doc`**: Permite leer archivos directamente desde la Documentación Central.
+- **`write_central_doc`**: Permite escribir o sobrescribir archivos (como análisis técnicos o planes de ejecución) en la Documentación Central.
+- **`read_cross_repo`**: Permite el acceso de solo lectura al código fuente de otros repositorios locales (ubicados en `C:/proyectos`), útil para contexto en proyectos cruzados.
 
-El servidor está preparado con un *placeholder* para agregar orquestación de más herramientas y lógicas complejas en el futuro.
+> **Nota de Seguridad:** Las herramientas que interactúan con el sistema de archivos de Windows contienen validaciones para evitar la salida indeseada de los directorios permitidos (`DOCS_BASE_PATH` y `REPOS_BASE_PATH`).
