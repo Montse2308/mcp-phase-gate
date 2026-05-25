@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "mcp-orquestador": {
+      "command": "node",
+      "args": [
+        "C:\\proyectos\\yo\\MCP_orquestador\\build\\index.js"
+      ]
+    }
+  }
+}
