@@ -1,75 +1,74 @@
-# MCP Orquestador
+# 🧠 MCP Orquestador para Cursor
 
-Este es un servidor orquestador avanzado que implementa el **Model Context Protocol (MCP)**. Actúa como el cerebro central para la gestión de documentación y la ejecución estructurada de tareas a través de 4 fases metodológicas (Descubrimiento, Decisiones, Plan Técnico y Ejecución). Además, facilita la interacción con distintos repositorios del entorno local.
+Este servidor MCP (Model Context Protocol) es el "cerebro central" de tu entorno de desarrollo. Conecta a Cursor con tu **Documentación Central** y aplica reglas estrictas de arquitectura ("Cero Rupturas") y convenciones de código dependiendo del repositorio en el que estés trabajando (BOS, CRM o Kanban).
 
-## 📁 Estructura del Proyecto
+---
 
-El proyecto está construido con Node.js y TypeScript. Su estructura principal es:
+## 🔌 1. Cómo Conectar este MCP a Cursor
 
-- `src/` - Código fuente en TypeScript.
-  - `src/index.ts` - Punto de entrada del servidor MCP, donde se definen las herramientas de orquestación.
-- `build/` - Código JavaScript compilado (se genera automáticamente).
-- `package.json` - Dependencias y scripts.
-- `tsconfig.json` - Configuración del compilador de TypeScript.
+El servidor ya está compilado en la carpeta `build/`. Para asegurarte de que Cursor lo está usando:
 
-## 🚀 Requisitos
+1. Abre Cursor y ve a la configuración (`Ctrl` + `,`).
+2. Busca la sección **Features > MCP**.
+3. Asegúrate de tener un servidor llamado `mcp-orquestador` tipo `command`.
+4. El comando debe ser: `node C:\proyectos\yo\MCP_orquestador\build\index.js`
+*(Nota: En los proyectos donde añadimos el archivo `.cursor/mcp.json` esto ocurre de manera automática).*
 
-- [Node.js](https://nodejs.org/) (se recomienda v18 o superior)
-- npm (viene incluido con Node.js)
+---
 
-## 🛠️ Instalación
+## 🚀 2. Guía de Uso Diario (Prompts Plantilla)
 
-1. Clona el repositorio:
-   ```bash
-   git clone https://github.com/Montse2308/MCP_orquestador.git
-   cd MCP_orquestador
-   ```
+El orquestador divide el trabajo en **4 Fases estandarizadas** para evitar que la IA rompa código existente y para obligarla a preguntarte siempre que haya decisiones críticas.
 
-2. Instala las dependencias:
-   ```bash
-   npm install
-   ```
+Cuando empieces un requerimiento nuevo, abre un Chat normal en Cursor y copia/pega estas plantillas reemplazando los corchetes `{ }`.
 
-## 💻 Uso y Ejecución
+### 🔍 FASE 1: Inicialización y Descubrimiento
+Usa este prompt cuando te asignan una nueva tarea. Cursor creará la estructura de carpetas y analizará tu código actual.
 
-### Entorno de Desarrollo
+> **Prompt a copiar en Cursor:**
+> Usa el mcp-orquestador para ejecutar la tool \`start_task\`. 
+> - project: "{ bos | crm | kanban }"
+> - task_name: "{ nombre_corto_de_tu_tarea }"
+> - initial_context: "{ Pega aquí todo el correo, mensaje de slack o requerimiento completo }"
+> 
+> Una vez creada la tarea, invoca la tool \`get_phase_prompt(1)\` para asumir tu rol de Fase 1. Analiza el código actual de este repositorio y usa \`write_central_doc\` para generar el documento "01 - Análisis Técnico.md" detallando cómo resolveremos este problema.
 
-Para ejecutar el servidor directamente desde TypeScript (útil durante el desarrollo):
+---
 
-```bash
-npm run dev
-```
+### 🛑 FASE 2: Preguntas y Decisiones (CRÍTICO)
+Una vez que Cursor termine el análisis de la Fase 1, es momento de obligarlo a pensar en qué puede fallar.
 
-### Compilar para Producción
+> **Prompt a copiar en Cursor:**
+> Invoca la tool \`get_phase_prompt(2)\` para asumir tu rol de Fase 2. 
+> Lee el documento "01 - Análisis Técnico.md" que acabas de crear usando \`read_central_doc\`. Analiza dependencias y posibles fallos con el código existente. 
+> Detente y hazme las preguntas críticas necesarias para poder tomar las decisiones de arquitectura antes de planear el código. No escribas código aún.
 
-Para compilar el código TypeScript a JavaScript:
+*(Aquí tú respondes a sus preguntas en el chat hasta que ambos estén 100% de acuerdo).*
 
-```bash
-npm run build
-```
+---
 
-Esto generará los archivos compilados en la carpeta `build/`.
+### 📝 FASE 3: Plan Técnico Seguro
+Una vez que le respondiste sus preguntas, pasamos a crear el plan detallado.
 
-### Ejecutar en Producción
+> **Prompt a copiar en Cursor:**
+> Las decisiones están tomadas. Invoca la tool \`get_phase_prompt(3)\` para asumir tu rol de Fase 3.
+> Crea el documento "03 - Plan Técnico.md" en la carpeta de esta tarea. Haz el paso a paso exacto de los archivos que vamos a modificar o crear, respetando siempre el principio de "Cero Rupturas".
 
-Una vez compilado, puedes iniciar el servidor con:
+---
 
-```bash
-npm start
-```
+### 💻 FASE 4: Ejecución del Código
+Con el plan aprobado en la documentación, ahora sí autorizas a Cursor a modificar tus archivos del repositorio.
 
-## ⚙️ Funcionalidades y Herramientas (Tools)
+> **Prompt a copiar en Cursor:**
+> Invoca la tool \`get_phase_prompt(4)\` para asumir tu rol de Fase 4 (Ejecución).
+> Ejecuta paso a paso el "03 - Plan Técnico.md". Recuerda aplicar las reglas locales del repositorio actual (Laravel/NestJS/React) y avísame cuando termines un bloque para que yo pueda verificar visualmente los cambios en el navegador.
 
-El servidor MCP expone diversas herramientas diseñadas para coordinar flujos de trabajo con agentes IA:
+---
 
-- **`start_task`**: Inicia una nueva tarea. Crea automáticamente una carpeta en la Documentación Central para el proyecto correspondiente (ej. BOS, CRM, KANBAN) y guarda el requerimiento en el archivo `00 - Contexto Inicial.md`.
-- **`get_phase_prompt`**: Devuelve los *prompts* maestros de comportamiento que dictan cómo debe actuar la IA según la etapa del ciclo de vida del desarrollo:
-  - Fase 1: Descubrimiento y Análisis.
-  - Fase 2: Toma de Decisiones y Preguntas Críticas.
-  - Fase 3: Creación de Plan Técnico.
-  - Fase 4: Ejecución Segura.
-- **`read_central_doc`**: Permite leer archivos directamente desde la Documentación Central.
-- **`write_central_doc`**: Permite escribir o sobrescribir archivos (como análisis técnicos o planes de ejecución) en la Documentación Central.
-- **`read_cross_repo`**: Permite el acceso de solo lectura al código fuente de otros repositorios locales (ubicados en `C:/proyectos`), útil para contexto en proyectos cruzados.
+## 🛠️ Tools Disponibles para ti o para el LLM
 
-> **Nota de Seguridad:** Las herramientas que interactúan con el sistema de archivos de Windows contienen validaciones para evitar la salida indeseada de los directorios permitidos (`DOCS_BASE_PATH` y `REPOS_BASE_PATH`).
+Cursor tiene acceso a estas herramientas por detrás:
+* \`start_task\`: Crea la carpeta en \`DOCUMENTACIÓN\` y el archivo base.
+* \`get_phase_prompt\`: Trae las reglas de comportamiento globales.
+* \`read_central_doc\` / \`write_central_doc\`: Lee o escribe en la ruta de Documentación de OneDrive.
+* \`read_cross_repo\`: Si estás programando en BOS y necesitas saber cómo el Kanban maneja un endpoint, el LLM usa esta tool para leer archivos en \`C:\proyectos\kanban\` sin que tú tengas que moverte de ventana.
