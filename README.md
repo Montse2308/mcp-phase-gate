@@ -2,7 +2,7 @@
 
 Este servidor MCP (Model Context Protocol) es el "cerebro central" de tu entorno de desarrollo. Conecta a Cursor con tu **Documentación Central** (en OneDrive) y aplica reglas estrictas de arquitectura ("Cero Rupturas") y convenciones de código según el repositorio en el que trabajes (BOS, CRM o Kanban).
 
-Divide cada requerimiento en **4 fases** para evitar que la IA rompa código existente y para obligarla a preguntarte antes de decisiones críticas.
+Divide cada requerimiento en **5 fases** para evitar que la IA rompa código existente, obligarla a preguntarte antes de decisiones críticas y, al final, auditar los cambios antes de subir el PR.
 
 ---
 
@@ -141,6 +141,12 @@ Cursor crea la estructura de carpetas y analiza tu código actual.
 > Invoca `get_phase_prompt(4)` para asumir tu rol de Fase 4 (Ejecución).
 > Ejecuta paso a paso "03 - Plan Técnico.md". Aplica las reglas locales del repositorio actual (Laravel/NestJS/React) y avísame cuando termines un bloque para verificar los cambios.
 
+### 🔎 FASE 5: Auditoría / Pre-PR
+Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto para anticipar bloqueos, y te redacta la descripción del PR. **Tú siempre haces los commits y el PR**; la IA solo usa herramientas de **lectura** (nunca commitea, hace push ni sube nada).
+
+> Invoca `get_phase_prompt(5)` para asumir tu rol de Fase 5 (Auditoría / Pre-PR).
+> Audita estos commits: "{ rango o lista de commits, ej. los últimos 6 de esta rama }". Dime si hay cambios BLOQUEANTES para subir el PR y luego redáctame la descripción del PR.
+
 ---
 
 ## 🛠️ Tools Disponibles
@@ -149,7 +155,7 @@ Cursor crea la estructura de carpetas y analiza tu código actual.
 |------|----------|
 | `start_task` | Crea la carpeta de la tarea (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y registra la tarea como **activa**. |
 | `get_active_task` | Devuelve la tarea activa actual (proyecto, nombre y ruta). Úsalo al abrir un chat nuevo o si se perdió el contexto de dónde escribir. |
-| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–4). |
+| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo. Mismos parámetros que `read_central_doc` + `content`. |
 | `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde BOS consultar cómo Kanban maneja un endpoint) sin cambiar de ventana. |
