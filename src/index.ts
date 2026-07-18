@@ -6,10 +6,18 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 // Paths absolutos del entorno
 const DOCS_BASE_PATH = "C:\\Users\\Usuario general\\OneDrive - Abogados Manuel Solis\\Documentos\\DOCUMENTACIÓN";
 const REPOS_BASE_PATH = "C:\\proyectos";
+
+// Subcarpeta fija donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>)
+const TASKS_SUBDIR = "Proyectos";
+
+// Archivo de estado para recordar la tarea activa entre chats (Opción B)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const STATE_FILE = path.join(__dirname, "active_task.json");
 
 const server = new Server(
   {
@@ -29,6 +37,43 @@ const PROJECT_DOC_DIRS: Record<string, string> = {
   crm: "CRM",
   kanban: "KANBAN",
 };
+
+// Opción A: la ruta de una tarea SIEMPRE se arma aquí, en un solo lugar.
+// Estructura: <DOCS_BASE_PATH>/<PROYECTO>/<TASKS_SUBDIR>/<tarea>
+function resolveTaskFolder(project: string, taskName: string): string {
+  const proj = String(project).toLowerCase();
+  const baseFolder = PROJECT_DOC_DIRS[proj] || proj.toUpperCase();
+  return path.join(DOCS_BASE_PATH, baseFolder, TASKS_SUBDIR, taskName);
+}
+
+// Opción B: guarda cuál es la tarea activa para sobrevivir cambios de chat / pérdida de contexto.
+function setActiveTask(project: string, taskName: string, folderPath: string): void {
+  const data = {
+    project: String(project).toLowerCase(),
+    task_name: taskName,
+    folder_path: folderPath,
+    updated_at: new Date().toISOString(),
+  };
+  fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+// Resuelve la ruta absoluta para read/write. Prioriza project+task_name+file_name (Opción A);
+// si no, cae al modo legacy con file_path relativo a DOCUMENTACIÓN.
+function resolveDocPath(args: any): string {
+  const project = args?.project ? String(args.project) : "";
+  const taskName = args?.task_name ? String(args.task_name) : "";
+  const fileName = args?.file_name ? String(args.file_name) : "";
+
+  if (project && taskName && fileName) {
+    return path.join(resolveTaskFolder(project, taskName), fileName);
+  }
+
+  if (args?.file_path) {
+    return path.join(DOCS_BASE_PATH, String(args.file_path));
+  }
+
+  throw new Error("Debes proporcionar (project + task_name + file_name) o bien file_path.");
+}
 
 // Plantillas Maestras Agnósticas
 const GLOBAL_RULES = `## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)
@@ -106,26 +151,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "get_active_task",
+        description: "Devuelve la tarea activa actual (proyecto, nombre y ruta de carpeta). Úsalo al iniciar un chat nuevo o si perdiste el contexto de dónde escribir la documentación.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
         name: "read_central_doc",
-        description: "Lee el contenido de un archivo dentro de la carpeta de Documentación Central.",
+        description: "Lee un archivo de la Documentación Central. RECOMENDADO: pasa 'project' + 'task_name' + 'file_name' y el servidor arma la ruta correcta automáticamente (<PROYECTO>/Proyectos/<tarea>/<archivo>). Alternativamente puedes pasar 'file_path' relativo a DOCUMENTACIÓN.",
         inputSchema: {
           type: "object",
           properties: {
-            file_path: { type: "string", description: "Ruta relativa dentro de DOCUMENTACIÓN (ej. 'BOS/tarea/01-analisis.md')" }
+            project: { type: "string", description: "Proyecto (bos, crm, kanban). Úsalo junto con task_name y file_name." },
+            task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
+            file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
+            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN (ej. 'BOS/Proyectos/tarea/01-analisis.md'). Solo si no usas project+task_name." }
           },
-          required: ["file_path"],
         },
       },
       {
         name: "write_central_doc",
-        description: "Escribe o sobrescribe un archivo en la Documentación Central.",
+        description: "Escribe o sobrescribe un archivo en la Documentación Central. RECOMENDADO: pasa 'project' + 'task_name' + 'file_name' y el servidor arma la ruta correcta automáticamente (<PROYECTO>/Proyectos/<tarea>/<archivo>). Alternativamente puedes pasar 'file_path' relativo a DOCUMENTACIÓN.",
         inputSchema: {
           type: "object",
           properties: {
-            file_path: { type: "string", description: "Ruta relativa dentro de DOCUMENTACIÓN" },
+            project: { type: "string", description: "Proyecto (bos, crm, kanban). Úsalo junto con task_name y file_name." },
+            task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
+            file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
+            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN. Solo si no usas project+task_name." },
             content: { type: "string", description: "Contenido a escribir" }
           },
-          required: ["file_path", "content"],
+          required: ["content"],
         },
       },
       {
@@ -153,8 +211,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const taskName = String(args?.task_name);
       const context = String(args?.initial_context);
 
-      const baseFolder = PROJECT_DOC_DIRS[proj] || proj.toUpperCase();
-      const taskFolderPath = path.join(DOCS_BASE_PATH, baseFolder, taskName);
+      const taskFolderPath = resolveTaskFolder(proj, taskName);
 
       if (!fs.existsSync(taskFolderPath)) {
         fs.mkdirSync(taskFolderPath, { recursive: true });
@@ -163,8 +220,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const filePath = path.join(taskFolderPath, "00 - Contexto Inicial.md");
       fs.writeFileSync(filePath, context, "utf-8");
 
+      // Opción B: recordar esta como la tarea activa.
+      setActiveTask(proj, taskName, taskFolderPath);
+
       return {
-        content: [{ type: "text", text: `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${filePath}` }],
+        content: [{ type: "text", text: `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${filePath}\nTarea activa registrada (proyecto: ${proj}).` }],
       };
     }
 
@@ -179,10 +239,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
+    if (name === "get_active_task") {
+      if (!fs.existsSync(STATE_FILE)) {
+        return {
+          content: [{ type: "text", text: "No hay ninguna tarea activa registrada. Inicia una con 'start_task' o especifica project + task_name al leer/escribir." }],
+        };
+      }
+      const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
+      return {
+        content: [{ type: "text", text: `Tarea activa:\n- Proyecto: ${state.project}\n- Tarea: ${state.task_name}\n- Carpeta: ${state.folder_path}\n- Actualizada: ${state.updated_at}` }],
+      };
+    }
+
     if (name === "read_central_doc") {
-      const filePath = String(args?.file_path);
-      const fullPath = path.join(DOCS_BASE_PATH, filePath);
-      
+      const fullPath = resolveDocPath(args);
+
       // Simple security check to avoid traversing outside DOCS_BASE_PATH
       if (!fullPath.startsWith(DOCS_BASE_PATH)) {
         throw new Error("Acceso denegado fuera de la carpeta DOCUMENTACIÓN.");
@@ -195,9 +266,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "write_central_doc") {
-      const filePath = String(args?.file_path);
       const content = String(args?.content);
-      const fullPath = path.join(DOCS_BASE_PATH, filePath);
+      const fullPath = resolveDocPath(args);
 
       if (!fullPath.startsWith(DOCS_BASE_PATH)) {
         throw new Error("Acceso denegado fuera de la carpeta DOCUMENTACIÓN.");
