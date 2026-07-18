@@ -7,16 +7,30 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
-// Paths absolutos del entorno
-const DOCS_BASE_PATH = "C:\\Users\\Usuario general\\OneDrive - Abogados Manuel Solis\\Documentos\\DOCUMENTACIÓN";
-const REPOS_BASE_PATH = "C:\\proyectos";
+// Carpeta de este módulo. Sirve para localizar el .env de la raíz del repo y el estado local.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Carga el archivo .env de la raíz del repo (un nivel arriba de build/ o src/).
+// Así cada dispositivo define su propia ruta de OneDrive sin tocar el mcp.json.
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
+
+// Paths absolutos del entorno.
+// Son configurables por variable de entorno (vía .env o el bloque "env" del mcp.json)
+// para poder usar el MCP en distintos dispositivos sin recompilar.
+// Si la variable no está definida, se usa la ruta por defecto de la compu actual.
+const DOCS_BASE_PATH =
+  process.env.ORQUESTADOR_DOCS_PATH ||
+  "C:\\Users\\Usuario general\\OneDrive - Abogados Manuel Solis\\Documentos\\DOCUMENTACIÓN";
+const REPOS_BASE_PATH =
+  process.env.ORQUESTADOR_REPOS_PATH ||
+  "C:\\proyectos";
 
 // Subcarpeta fija donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>)
 const TASKS_SUBDIR = "Proyectos";
 
 // Archivo de estado para recordar la tarea activa entre chats (Opción B)
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATE_FILE = path.join(__dirname, "active_task.json");
 
 const server = new Server(
