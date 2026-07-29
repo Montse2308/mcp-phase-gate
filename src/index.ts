@@ -14,7 +14,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Carga el archivo .env de la raíz del repo (un nivel arriba de build/ o src/).
 // Así cada dispositivo define su propia ruta de OneDrive sin tocar el mcp.json.
-dotenv.config({ path: path.join(__dirname, "..", ".env") });
+// quiet: true evita que dotenv v17 imprima su banner en stdout, que es el canal del JSON-RPC.
+dotenv.config({ path: path.join(__dirname, "..", ".env"), quiet: true });
 
 // Paths absolutos del entorno.
 // Son configurables por variable de entorno (vía .env o el bloque "env" del mcp.json)
