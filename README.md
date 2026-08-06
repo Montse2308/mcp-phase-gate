@@ -197,7 +197,7 @@ Reglas del formato:
 La Fase 5 no solo audita: redacta la descripción del PR bajo un contrato estricto,
 para que el resultado sea consistente sin importar qué modelo de IA se use.
 
-- **Título:** `tipo(área): frase` — y `- #NNNN` solo si diste número de ticket.
+- **Título:** `tipo(área): frase`, y ahí termina — nada de números de ticket.
 - **Estructura fija:** por qué (`Problema` si algo estaba roto, `Contexto` si es
   nuevo) → `Cambios` agrupados → secciones de cierre.
 - **Las secciones de cierre son condicionales**, cada una con su disparador:
@@ -207,7 +207,7 @@ para que el resultado sea consistente sin importar qué modelo de IA se use.
   componente, por sub-feature, por dimensión del dato…), con una tabla de decisión
   en el prompt. Así la descripción se adapta al tamaño del ticket sin dejar de ser
   predecible.
-- **Límites de longitud en palabras**, no adjetivos: trivial (1–3 líneas), chico
+- **Límites de longitud en palabras**, no adjetivos: trivial (60–100), chico
   (120–160), normal (200–260), grande (350–450, tope 500).
 - **Se entrega dentro de un bloque de código de cuatro backticks**, para que al
   copiar y pegar en GitHub llegue el markdown en crudo y no el texto ya renderizado.

@@ -45,8 +45,8 @@ Formato: `tipo(área): frase`
 - `tipo`: feat | fix | refactor | perf | chore
 - `área`: el módulo, reporte o pantalla afectada, en español y minúsculas
 - `frase`: qué logra el cambio, en minúscula, sin punto final, máximo 80 caracteres
-- Si el usuario te dio número de ticket, ciérralo con `- #NNNN`. Si no te lo dio,
-  no lo pongas ni lo inventes.
+- El título termina ahí. NO agregues número de ticket, ni `- #NNNN`, ni referencias
+  tipo `(#2313)`, aunque el usuario te haya dado el número del ticket en el contexto.
 
 ### BLOQUE 1 — POR QUÉ (siempre)
 Elige el encabezado con esta regla, no por gusto:
@@ -55,13 +55,18 @@ Elige el encabezado con esta regla, no por gusto:
   con qué magnitud).
 - `## Contexto` — si es funcionalidad nueva o una mejora, no un defecto. Di qué
   faltaba y por qué se necesita.
-- Sin encabezado, una sola frase de objetivo — si el cambio es trivial (una o
-  dos dimensiones tocadas).
+- Sin encabezado, 1 o 2 líneas de corrido — si el cambio es trivial (hasta tres
+  dimensiones tocadas). Aun siendo trivial, di qué estaba mal o qué faltaba, no
+  solo qué hiciste.
 
 Longitud: de 1 a 4 líneas. NUNCA abras la descripción con una lista.
 
-### BLOQUE 2 — CAMBIOS (siempre, salvo en triviales)
+### BLOQUE 2 — CAMBIOS (siempre)
 Encabezado `## Cambios`. Bullets agrupados.
+
+Excepción para triviales: van 2 o 3 bullets en lista plana y SIN el encabezado
+`## Cambios`, colgando directo del párrafo de apertura. Las reglas de cada bullet
+siguen aplicando igual.
 
 Elige el criterio de agrupación con esta tabla, según la forma del cambio:
 
@@ -94,8 +99,11 @@ descripción termina en Cambios.
 - `**Nota:**` suelta al final — si hay un cambio de comportamiento visible que el
   usuario va a notar sin que nadie se lo diga.
 
+En triviales, si aplica alguna, va en una sola línea con la etiqueta en negrita
+(`**Alcance:** ...`) en vez de como encabezado de sección.
+
 ### LONGITUD (cuenta las palabras, no las estimes)
-- Trivial: título + 1 a 3 líneas. Sin bullets y sin secciones.
+- Trivial: 60-100 palabras. Título + 1 o 2 líneas de porqué + 2 o 3 bullets.
 - Chico: 120-160 palabras
 - Normal: 200-260 palabras  ← objetivo por defecto
 - Grande: 350-450 palabras. Tope duro: 500.
@@ -103,6 +111,7 @@ descripción termina en Cambios.
 Si te pasas del tope, NO recortes el porqué: elimina bullets de detalle.
 
 ### PROHIBIDO
+- Poner número de ticket o referencias `#NNNN` en el título.
 - Listar archivo por archivo. (Nombrar un archivo sí, cuando ese archivo ES el
   centro del cambio.)
 - Secciones de "Cómo probar" con pasos numerados para el revisor.
@@ -163,10 +172,18 @@ En el reporte de Auditoría de Citas de Cobranza, las citas reprogramadas salía
 
 ### Ejemplo C — trivial (así de corto debe quedar)
 
+Nota cómo aquí no hay encabezados de sección: el párrafo de apertura va suelto, los
+bullets cuelgan directo y el alcance va en una línea con la etiqueta en negrita.
+
 --- INICIO EJEMPLO ---
 fix(reporte de pagos): corregir la etiqueta del filtro de fechas
 
-El filtro decía "Fecha de alta" pero en realidad filtra por fecha de pago. Solo cambia la etiqueta y su traducción en es/en; el query no se toca.
+El filtro decía "Fecha de alta" pero en realidad filtra por fecha de pago, lo que hacía que se interpretaran mal los resultados al comparar contra el corte del mes.
+
+- **Etiqueta:** se renombra a "Fecha de pago" en la vista del reporte.
+- **Traducciones:** se actualizan las keys correspondientes en `es` y `en`.
+
+**Alcance:** no cambia el query ni el comportamiento del filtro, solo el texto que se muestra.
 --- FIN EJEMPLO ---
 
 ---
