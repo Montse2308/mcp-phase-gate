@@ -31,6 +31,14 @@ const REPOS_BASE_PATH =
 // Subcarpeta fija donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>)
 const TASKS_SUBDIR = "Proyectos";
 
+// Carpeta con los prompts de las fases, en archivos .md sueltos.
+// Vivir fuera del código permite afinar el texto de una fase sin recompilar:
+// se edita el .md y la siguiente llamada a get_phase_prompt ya trae la versión nueva.
+// Configurable para que alguien más pueda apuntar a su propio juego de prompts sin forkear.
+const PROMPTS_PATH =
+  process.env.ORQUESTADOR_PROMPTS_PATH ||
+  path.join(__dirname, "..", "prompts");
+
 // Archivo de estado para recordar la tarea activa entre chats (Opción B)
 const STATE_FILE = path.join(__dirname, "active_task.json");
 
@@ -90,84 +98,96 @@ function resolveDocPath(args: any): string {
   throw new Error("Debes proporcionar (project + task_name + file_name) o bien file_path.");
 }
 
-// Plantillas Maestras Agnósticas
-const GLOBAL_RULES = `## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)
-- Nunca modifiques lógica, componentes, o funciones ya existentes a menos que sea 100% necesario. Si modificar algo existente podría romper otra parte del sistema que lo usa, DETENTE.
-- Si debes hacer un cambio en código existente o tomar una decisión de arquitectura, SIEMPRE pregúntale al usuario primero.
-- Cuando propongas un cambio, DEBES explicar detalladamente por qué se necesita y qué implicaciones tiene en el resto del sistema, para que el usuario pueda entenderlo y aprobarlo.`;
+// ─── Prompts de fase ────────────────────────────────────────────────────────
+// Las reglas globales y cada fase viven en prompts/*.md. El archivo de reglas
+// globales se antepone automáticamente a la fase, igual que hacía la versión
+// anterior con plantillas de string.
+const GLOBAL_RULES_FILE = "global-rules.md";
 
-const PHASES_PROMPTS: Record<number, string> = {
-  1: `${GLOBAL_RULES}
+// Acepta "fase-1-descubrimiento.md" y también "phase-1-discovery.md",
+// para que un juego de prompts en inglés funcione sin tocar el código.
+const PHASE_FILE_PATTERN = /^(?:fase|phase)-(\d+)[-.]/i;
 
-## ROL DE COMPORTAMIENTO (GLOBAL)
-Eres un Arquitecto de Software y Analista de Sistemas Senior. Tu enfoque es entender el problema al 100% antes de proponer soluciones definitivas. Tu prioridad es la investigación profunda y el pensamiento crítico.
+type PhaseFile = { file: string; title: string };
 
-## REGLAS DE LA FASE 1 (DESCUBRIMIENTO)
-1. NO escribas código para producción aún.
-2. Usa tus herramientas para leer la documentación central y el código base actual, enfocándote en comprender la estructura del proyecto en el que estamos.
-3. Analiza el impacto general del requerimiento planteado.
-4. Genera un documento (ej. '01 - Análisis Técnico.md') en la carpeta de la tarea desglosando técnica y funcionalmente el problema.`,
-  2: `${GLOBAL_RULES}
+// Descubre las fases disponibles a partir de los archivos de PROMPTS_PATH.
+// El número de fases no está cableado: agregar un "fase-6-*.md" basta para
+// que exista la fase 6.
+function discoverPhases(): Map<number, PhaseFile> {
+  const phases = new Map<number, PhaseFile>();
 
-## ROL DE COMPORTAMIENTO (GLOBAL)
-Eres un Líder Técnico especializado en seguridad y escalabilidad. No asumes absolutamente nada. Piensas las cosas lo suficiente hasta dar con algo 100% seguro y confiable.
+  if (!fs.existsSync(PROMPTS_PATH)) {
+    return phases;
+  }
 
-## REGLAS DE LA FASE 2 (DECISIONES)
-1. Lee el documento de Resumen Inicial / Análisis Técnico.
-2. Identifica lagunas técnicas, posibles fallos, o dependencias cruzadas con otros sistemas.
-3. Hazme una lista de Preguntas Críticas de Decisión. Al hacerme las preguntas, explícame las implicaciones y el contexto para yo poder responder de manera segura.
-4. Detente por completo y espera mis respuestas.`,
-  3: `${GLOBAL_RULES}
+  for (const file of fs.readdirSync(PROMPTS_PATH).sort()) {
+    const match = file.match(PHASE_FILE_PATTERN);
+    if (!match || !file.toLowerCase().endsWith(".md")) continue;
 
-## ROL DE COMPORTAMIENTO (GLOBAL)
-Eres un Ingeniero de Software de Élite enfocado en la prevención de fallos (Zero-defect mindset). 
+    const phaseNumber = Number(match[1]);
+    if (phases.has(phaseNumber)) continue; // gana el primero por orden alfabético
 
-## REGLAS DE LA FASE 3 (PLAN TÉCNICO)
-1. Con las decisiones tomadas, genera un plan de implementación técnico paso a paso (ej. '03 - Plan Técnico.md').
-2. LÍMITE ESTRICTO: No planees nada que se salga de los patrones del código actual de esta aplicación. Lo principal es la seguridad. Si algo puede dar problemas, sáltalo o pregúntame.
-3. Incluye una sección para saber cómo verificar rápidamente que todo funcionará.`,
-  4: `${GLOBAL_RULES}
+    phases.set(phaseNumber, {
+      file,
+      title: readPhaseTitle(path.join(PROMPTS_PATH, file), file),
+    });
+  }
 
-## ROL DE COMPORTAMIENTO (GLOBAL)
-Eres un Especialista en Desarrollo de Software. Escribes código limpio y mantenible respetando al máximo el stack del proyecto actual.
+  return phases;
+}
 
-## REGLAS DE LA FASE 4 (EJECUCIÓN)
-1. Ejecuta el plan técnico paso a paso de manera segura.
-2. Antes de dar un paso, asegúrate de haber investigado todo lo necesario. Si dudas, pregúntame.
-3. Al final de una tanda de cambios, indícame cómo verificarlos para poder avanzar.
-4. Aplica estrictamente las reglas de código del repositorio.`,
-  5: `${GLOBAL_RULES}
+// El título es el primer encabezado "# ..." del archivo; si no lo hay, se
+// deriva del nombre del archivo para que la descripción de la tool siga siendo útil.
+function readPhaseTitle(fullPath: string, fileName: string): string {
+  try {
+    for (const line of fs.readFileSync(fullPath, "utf-8").split(/\r?\n/)) {
+      if (line.startsWith("# ")) return line.slice(2).trim();
+    }
+  } catch {
+    // Si el archivo no se puede leer aquí, el error real se reporta al invocar la fase.
+  }
+  return fileName.replace(PHASE_FILE_PATTERN, "").replace(/\.md$/i, "");
+}
 
-## ROL DE COMPORTAMIENTO (GLOBAL)
-Eres un Auditor de Código Externo (revisor de Pull Requests) con mentalidad crítica e independiente. Tu trabajo es revisar los cambios como lo haría un revisor estricto ANTES de que el PR se suba, para anticipar cualquier objeción. En esta fase no escribes código de producción: auditas y redactas.
+// Se lee en cada llamada (no se cachea) para poder afinar un prompt y probarlo
+// de inmediato, sin reiniciar el servidor MCP.
+function loadPhasePrompt(phase: number): string {
+  const available = discoverPhases();
+  const entry = available.get(phase);
 
-## REGLAS DE LA FASE 5 (AUDITORÍA / PRE-PR)
-1. ENTRADA: el usuario te indicará los commits o el rango que quiere auditar. TÚ NUNCA haces commits, push, ni creas o subes PRs; de eso se encarga siempre el usuario.
-2. SOLO LECTURA: para inspeccionar los cambios usa exclusivamente comandos o herramientas de LECTURA (por ejemplo 'git diff' / 'git log' de solo lectura, o leer archivos). Está PROHIBIDA cualquier operación de escritura de git (commit, add, push, rebase, merge, checkout que altere, etc.) y editar archivos del repositorio.
-3. OBJETIVO PRINCIPAL: determinar si hay CAMBIOS BLOQUEANTES para subir el PR. Esto es lo más importante de la fase. Si existen, déjalos clarísimos y por encima de todo lo demás.
-4. CRITERIO: revisa con criterio de revisor senior el impacto real de los cambios (posibles roturas de lo ya existente, seguridad, integridad de datos, consistencia entre las distintas partes que consumen lo modificado, y descuidos como secretos, logs de debug o marcadores de conflicto olvidados). Usa tu juicio; no te limites a una lista rígida.
-5. Antes de opinar, asegúrate de entender de verdad el cambio. Si algo no queda claro con lo que tienes a la mano, pídeme más contexto en lugar de asumir.
+  if (!entry) {
+    const list = [...available.keys()].sort((a, b) => a - b).join(", ");
+    throw new Error(
+      list
+        ? `Fase no válida. Las fases disponibles son: ${list}.`
+        : `No se encontró ningún prompt de fase en ${PROMPTS_PATH}. Verifica que la carpeta 'prompts' exista junto al build.`
+    );
+  }
 
-## SALIDA 1 — AUDITORÍA (en español, con el formato del revisor)
-- Si NO hay bloqueantes:
-  - Primera línea: "Revisé el cambio y no encontré problemas bloqueantes."
-  - "Resumen:" con bullets de lo que hace el cambio.
-  - Si aplica, "Nit menor (no bloqueante):" con los detalles menores.
-  - Cierra con "LGTM."
-- Si SÍ hay bloqueantes:
-  - Déjalo explícito desde la primera línea, por ejemplo: "Revisé el cambio y encontré N punto(s) BLOQUEANTE(s) que hay que resolver antes de subir el PR:".
-  - Lista numerada, etiquetando cada punto como (BLOQUEANTE) o (no bloqueante), explicando el porqué y el impacto.
-  - Agrega una sección "Lo bueno:" con lo que sí quedó bien resuelto.
-  - NO escribas "LGTM"; cierra indicando que hay que resolver los bloqueantes antes de subir.
+  const parts: string[] = [];
 
-## SALIDA 2 — DESCRIPCIÓN DEL PR (en español)
-- Genera un Título claro y conciso.
-- Genera una Descripción estructurada (por área o reporte afectado) con bullets que expliquen el PORQUÉ de cada cambio, no solo el qué.
-- La descripción DEBE reflejar fielmente lo que hace el código: contrasta cada afirmación contra los cambios reales. Si algo que el usuario quiere poner no coincide con el código, adviértele.
+  const globalRulesPath = path.join(PROMPTS_PATH, GLOBAL_RULES_FILE);
+  if (fs.existsSync(globalRulesPath)) {
+    parts.push(fs.readFileSync(globalRulesPath, "utf-8").trim());
+  }
 
-## ENTREGA
-- Entrega ambas salidas en el chat para que el usuario las copie. NO escribas en la Documentación Central a menos que el usuario te lo pida explícitamente.`
-};
+  parts.push(fs.readFileSync(path.join(PROMPTS_PATH, entry.file), "utf-8").trim());
+
+  return parts.join("\n\n");
+}
+
+// La lista de tools es estática, así que la descripción se arma una sola vez al arrancar.
+function describePhases(): string {
+  const available = discoverPhases();
+  if (available.size === 0) return "No se encontraron prompts de fase.";
+
+  return [...available.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([number, { title }]) => `${number}: ${title}`)
+    .join(", ");
+}
+
+const PHASES_DESCRIPTION = describePhases();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -187,11 +207,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_phase_prompt",
-        description: "Obtiene el prompt maestro de comportamiento según la fase (1: Descubrimiento, 2: Decisiones, 3: Plan Técnico, 4: Ejecución, 5: Auditoría / Pre-PR).",
+        description: `Obtiene el prompt maestro de comportamiento según la fase. Fases disponibles — ${PHASES_DESCRIPTION}.`,
         inputSchema: {
           type: "object",
           properties: {
-            phase: { type: "number", description: "Número de la fase (1, 2, 3, 4 o 5)" }
+            phase: { type: "number", description: `Número de la fase. Disponibles: ${PHASES_DESCRIPTION}.` }
           },
           required: ["phase"],
         },
@@ -276,12 +296,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (name === "get_phase_prompt") {
       const phase = Number(args?.phase);
-      const prompt = PHASES_PROMPTS[phase];
-      if (!prompt) {
-        throw new Error("Fase no válida. Debe ser 1, 2, 3, 4 o 5.");
+      if (!Number.isInteger(phase)) {
+        throw new Error(`Debes indicar un número de fase. Disponibles: ${PHASES_DESCRIPTION}.`);
       }
       return {
-        content: [{ type: "text", text: prompt }],
+        content: [{ type: "text", text: loadPhasePrompt(phase) }],
       };
     }
 
