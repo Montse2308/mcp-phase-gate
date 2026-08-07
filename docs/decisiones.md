@@ -12,6 +12,131 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-07 — Todas las tareas pasan por todas las fases; lo que se ajusta es la profundidad
+
+**Decisión.** No hay triage que salte fases según el tamaño de la tarea. Todas pasan por
+todas. Lo que se ajusta es cuánto entrega cada una, mediante el mismo mecanismo del
+contrato del PR: un núcleo mínimo obligatorio más secciones que se activan por disparador.
+
+**Por qué.** La idea original era una fase 0 que clasificara la tarea y saltara fases en
+las chicas. Se descartó porque **el riesgo de un cambio no se correlaciona con su tamaño**:
+una línea tocando permisos es minúscula y peligrosa; un módulo nuevo aislado es grande e
+inofensivo. Una regla por tamaño acelera justo lo que había que analizar.
+
+Con secciones condicionales, un ajuste chico no dispara casi ninguna y el documento sale
+corto solo. La proporcionalidad se obtiene sin clasificar nada y sin arriesgar nada.
+
+**Sin límites numéricos de longitud**, a diferencia del PR. Un análisis de un refactor que
+toca tres reportes legítimamente necesita más espacio que uno de un botón. Lo que infla
+estos documentos no es la prosa, son las secciones de relleno.
+
+**Descartado.** Tallas chica/normal/grande con un paquete fijo de fases por talla.
+
+---
+
+## 2026-08-07 — Cada fase declara qué NO le toca
+
+**Decisión.** El prompt de cada fase incluye explícitamente el terreno que pertenece a
+otra fase. Reparto acordado:
+
+- **Fase 1** — diagnóstico y recomendación de dirección, marcada como recomendación.
+- **Fase 3** — el plan, y los **criterios de aceptación**: qué se tiene que poder verificar
+  y desde dónde, escrito antes de tocar código.
+- **Fase 4** — los **pasos concretos** para comprobar lo que se acaba de hacer, incluida la
+  navegación por la interfaz, y qué **no** debe haberse roto.
+
+**Por qué.** Dos fases pedían verificación sin decir de qué tipo: la 3 pedía "una sección
+para saber cómo verificar" y la 4 pedía "indícame cómo verificarlos". Ninguna la poseía,
+así que el "cómo probar" aparecía en una, en otra o en ninguna, según el modelo. Lo mismo
+pasaba con el alcance de la Fase 1: su prompt pedía desglosar *el problema* mientras la
+plantilla de uso pedía detallar *cómo lo resolveremos*, que es trabajo de la Fase 3.
+
+Una instrucción vaga compartida por dos fases no se reparte sola: cada modelo la reparte
+distinto. Declarar el dueño y declarar el no-dueño es lo que elimina la deriva.
+
+---
+
+## 2026-08-07 — En la Fase 1, la línea es describir contra comprometerse
+
+**Decisión.** La Fase 1 nombra archivos y líneas todo lo que haga falta, pero no encabeza
+una sección con "archivos a modificar". Inventariar lo que existe y quién lo consume es
+Fase 1; comprometerse con qué se va a cambiar es Fase 3.
+
+**Por qué.** La primera versión de la regla decía que la Fase 1 hablara de *áreas* y la
+Fase 3 bajara a *archivos*. Los documentos reales la desmintieron: citan `archivo:línea`
+constantemente y es de lo mejor que tienen — sin esa precisión, el análisis no se puede
+verificar. El problema nunca fue el detalle, sino el compromiso.
+
+Se ve en un mismo documento real, que tenía dos tablas seguidas: "Referencia (NO tocar)"
+con archivos y su rol, que es Fase 1 legítima, y "A corregir (candidatos)", que ya era plan.
+
+---
+
+## 2026-08-07 — La verificación se hace en la Fase 1, no se difiere
+
+**Decisión.** Si una hipótesis se puede comprobar ejecutando algo, se ejecuta en la Fase 1
+y se reporta la salida real. Dejar consultas escritas "listas para correr" es el último
+recurso, solo cuando el acceso no existe, y debe declararse como una laguna del análisis,
+no como un entregable.
+
+**Por qué.** Preferencia explícita del usuario, y coincide con lo que separa a los mejores
+documentos de los demás: los que midieron descartan hipótesis con números, los que no
+las descartan con argumentos. Un análisis medido cierra la discusión; uno argumentado la
+abre.
+
+**Consecuencia.** El prompt pide además confesar los errores de método propios y descartar
+esos números explícitamente, porque un análisis que reconoce dónde se equivocó midiendo es
+en el que se puede confiar.
+
+---
+
+## 2026-08-07 — El documento de una fase no se reescribe en fases posteriores
+
+**Decisión.** Lo que se decide en la Fase 2 vive en el documento de la Fase 2. El
+documento de la Fase 1 no se vuelve a tocar.
+
+**Por qué.** Un documento real había ganado por su cuenta una sección "Decisión y alcance
+confirmado (usuario, fecha)" escrita después de la Fase 2. Deja el expediente completo en
+un archivo, que es cómodo, pero rompe la trazabilidad: ya no se puede saber qué se sabía
+en cada momento, y el análisis original queda contaminado por lo que se decidió después.
+
+---
+
+## 2026-08-07 — Formato de los documentos de fase
+
+**Decisión.**
+- El **resumen ejecutivo va arriba**, nunca al final, con el veredicto y su número.
+- Cada hallazgo se etiqueta con **Severidad** y **Confianza**.
+- Las decisiones para la fase siguiente van como `D1..Dn`, con opciones `(a) (b) (c)` y una
+  recomendación técnica marcada como tal.
+- **Sin emojis**, en ninguna sección.
+
+**Por qué.** Los nueve documentos de referencia discrepaban en estos cuatro puntos, y la
+discrepancia no respondía a nada del contenido — era el modelo eligiendo. Se resolvieron
+por preferencia del usuario. Las etiquetas de Severidad y Confianza aparecían en uno solo
+de los nueve, y son lo que permite decidir qué atacar primero y en qué confiar.
+
+El formato de decisiones con opciones tiene un efecto concreto: convierte la Fase 2 en
+escoger en vez de redactar.
+
+---
+
+## 2026-08-07 — Los documentos de referencia no se versionan en el repo
+
+**Decisión.** Los contratos de fase se calibraron contra documentos reales de trabajo
+(descripciones de PR y análisis técnicos). Esos documentos **no se suben al repositorio**.
+Lo que se versiona es el contrato derivado y el porqué de cada regla.
+
+**Por qué.** Contienen nombres de clientes reales, direcciones IP internas, el esquema de
+la base de datos y el nombre de la persona que introdujo una regresión. El repositorio está
+destinado a ser público.
+
+**Consecuencia.** Los ejemplos incrustados en los prompts están recortados a la frase que
+demuestra el comportamiento, sin datos de negocio. Quien adapte el orquestador a su estilo
+debe reemplazarlos por ejemplos propios.
+
+---
+
 ## 2026-08-07 — El estado local vive en la carpeta de datos del usuario
 
 **Decisión.** La tarea activa se guarda en la carpeta de datos del sistema operativo
