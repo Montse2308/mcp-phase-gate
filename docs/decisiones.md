@@ -12,6 +12,111 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-07 — La Fase 3 dice qué debe verse; la Fase 4 dice cómo llegar a verlo
+
+**Decisión.** La verificación se reparte por tipo, no por documento:
+
+| Tipo | Ejemplo | Dueño |
+|---|---|---|
+| Evidencia técnica | tinker, SQL, `EXPLAIN`, un valor que debe seguir resolviendo igual | Fase 3 |
+| Resultado esperado | "el título debe decir `5 ago. - 4 sep.`", "debe aparecer exactamente 1 comentario" | Fase 3 |
+| Navegación por interfaz | "entra a la pantalla, clic en el botón, llena el campo, confirma" | Fase 4 |
+
+**Por qué.** Este es el problema que originó todo el refinamiento de las fases. La usuaria
+reportó que el "cómo probarlo desde la interfaz" a veces salía en la Fase 3, a veces en la
+Fase 4 y a veces en ninguna. El diagnóstico: el prompt de la Fase 3 pedía "una sección para
+saber cómo verificar" y el de la Fase 4 pedía "indícame cómo verificarlos". Dos fases lo
+pedían y ninguna lo poseía.
+
+El corte no es arbitrario. La evidencia técnica es parte de la prueba de que el diseño es
+correcto: sacarla de la Fase 3 deja al plan sin poder defenderse. La navegación depende de
+dónde está el botón hoy, y eso lo sabe mejor la Fase 4, que trabaja con la rama actualizada
+enfrente.
+
+**Qué se descartó.** Bajar toda la verificación a la Fase 4. Habría vaciado de contenido la
+comparación de paridad, que es donde un refactor de rendimiento demuestra que no cambió nada.
+
+---
+
+## 2026-08-07 — El plan declara en qué nivel está cada fragmento de código
+
+**Decisión.** Tres niveles, con disparador objetivo: **definitivo** (cabe en ~15 líneas, se
+calca de un archivo ya citado, no depende de nada sin leer), **firma y contrato** (el cuerpo
+es mecánico), y **propuesta** (algo no se pudo confirmar; el pendiente se escribe). Y una
+regla dura: **archivo que ya existe, nunca completo** — solo el fragmento con su ancla
+`archivo:línea`.
+
+**Por qué.** Los nueve planes reales usan los tres niveles y ninguno avisa cuál está usando,
+así que quien implementa no sabe si puede pegar o tiene que confirmar. La preocupación de la
+usuaria fue la correcta: si la Fase 3 escribe el archivo entero, la Fase 4 se reduce a pegar,
+y entonces lo que la Fase 3 no alcanzó a ver se pega también. La Fase 3 decide qué se va a
+escribir; la Fase 4 lo escribe.
+
+---
+
+## 2026-08-07 — La Fase 3 comprueba el plan contra el código antes de escribirlo
+
+**Decisión.** Antes del primer paso va una tabla `Verificación | Resultado` con lo que se
+comprobó contra el código real. **Solo entra lo que cambió algo del plan**: si nueve de diez
+comprobaciones salieron como se esperaba sin alterar nada, van cero de esas nueve.
+
+**Por qué.** En un plan real esta tabla son ocho renglones de una línea, y lo que compraron
+fue descubrir que el identificador que el plan iba a usar ya estaba ocupado por otro registro:
+reutilizarlo habría hecho que dos factories existentes etiquetaran mal sus datos en
+producción. Sin la tabla, ese defecto aparece en la Fase 4 o no aparece.
+
+Es el equivalente en la Fase 3 de "la investigación se hace aquí" (Fase 1) y "validar antes
+de cerrar" (Fase 2). Las tres fases comparten el mismo principio: comprobar en su propia
+fase, no diferir.
+
+**Qué se descartó.** Dejarla al final como nota de alineación. Arriba es la licencia para
+confiar en el resto del documento; al final es una nota al pie.
+
+---
+
+## 2026-08-07 — Las numeraciones son continuas por tarea, no por fase
+
+**Decisión.** Ya estaba establecido para las decisiones (`D1..Dn`); se extiende a los riesgos
+(`R1..Rn`). La Fase 3 hereda la lista de riesgos de las fases anteriores y actualiza el estado
+de cada uno (Aceptado / Cerrado / Nuevo) en vez de empezar una tabla desde cero.
+
+**Por qué.** Con tabla nueva por fase, cada documento reinventa la lista y se pierde el hilo:
+no se ve que `R12` se cerró gracias a un desvío de la Fase 3, ni que `R10` nació ahí. Ese hilo
+es justo lo que hace falta al retomar la tarea desde otro equipo. Un plan real ya numeraba su
+micro-decisión de Fase 3 como `D7`, continuando desde la Fase 2, sin que nadie se lo pidiera.
+
+---
+
+## 2026-08-07 — Sin suite de pruebas: la comparación contra la réplica ocupa ese lugar
+
+**Decisión.** El proyecto de la usuaria no tiene pruebas automatizadas, así que la Fase 3
+tiene **prohibido** inventar una sección de tests o proponer escribir la primera del módulo.
+En su lugar hay una sección condicional de **comparación de datos contra la réplica de solo
+lectura**, con disparador: *el cambio altera lo que muestra un reporte o un export existente*.
+
+El criterio de comparación cambia según el caso, y el plan lo declara: si el cambio es solo de
+rendimiento, **cero diferencias**; si altera datos a propósito, **toda diferencia tiene que
+caber en una lista escrita de antemano**, y lo que quede fuera es un defecto, no una mejora.
+
+**Por qué.** Tres de los nueve planes reales declaran explícitamente que no hay suite que
+correr, precisamente para cerrar una pregunta que el modelo se hace solo. Pero sí hay acceso
+de lectura a una réplica, y un plan real lo usó para verificar un refactor comparando volcados
+antes y después. La sustitución conserva la garantía sin pedir infraestructura que no existe.
+
+---
+
+## 2026-08-07 — El plan declara desde qué rama y commit se planeó
+
+**Decisión.** El encabezado de la Fase 3 incluye la rama, el commit y si el árbol estaba
+limpio.
+
+**Por qué.** La usuaria alterna entre el equipo de la oficina y su laptop personal. Al abrir el
+plan desde el otro dispositivo, o dos semanas después, esa línea es lo que dice si el plan
+sigue siendo válido o si la rama ya se movió por debajo. Cuesta una línea y uno de los planes
+reales ya lo hacía.
+
+---
+
 ## 2026-08-07 — Cada fase entrega documento, siempre
 
 **Decisión.** Toda fase que produce un entregable lo escribe en un documento de la
