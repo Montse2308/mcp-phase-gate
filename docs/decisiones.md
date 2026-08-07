@@ -12,6 +12,80 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-07 — La Fase 4 hace; el documento es el recibo
+
+**Decisión.** El prompt de la Fase 4 pone casi todo su peso en cómo ejecutar y cómo
+verificar. El documento va al final, corto, y el prompt lo dice con esas palabras: si el
+modelo está redactando en vez de implementar o verificar, está gastando el turno en lo que
+menos importa de esta fase.
+
+**Por qué.** Las tres fases anteriores producen documentos; esta produce código funcionando.
+La usuaria lo señaló al revisar el borrador: el enfoque de la Fase 4 tiene que seguir siendo
+hacer las cosas, como estaba desde el principio, y el archivo no puede desplazar a eso.
+
+**Qué se descartó.** Darle al documento de la Fase 4 el mismo tratamiento que a los de las
+fases 1 a 3. Habría convertido la única fase que ejecuta en una cuarta fase de escritura.
+
+---
+
+## 2026-08-07 — Por qué el documento de la Fase 4 existe, aun siendo secundario
+
+**Decisión.** El documento es obligatorio, pero su núcleo es chico y su propósito no es
+registrar lo que se hizo: es registrar **lo que se supo al ejecutar y el plan no sabía**.
+
+Sección obligatoria: *lo que no salió como decía el plan*, con sus tres formas — el método de
+verificación que no funcionaba, la decisión nueva tomada al ejecutar (numerada `D<n>`
+continua), y el número del plan que estaba mal. Si no hubo nada, una línea diciéndolo.
+
+**Por qué.** La usuaria preguntó si el documento hacía falta, porque en la práctica casi nunca
+aparecía. Aparecía poco por una razón simple: las fases 1 a 3 piden el documento
+explícitamente y la 4 no lo mencionaba.
+
+Sobre si hace falta: si solo repitiera lo hecho, no — para eso está el diff, y lo cuenta
+mejor. Lo que justifica el documento es lo que el diff no puede contener. En una ejecución
+real, el plan pedía congelar un baseline y volver a medirlo, y ese método no servía porque los
+datos se movían solos entre corridas; se sustituyó por comparar el SQL generado en 17
+escenarios. En esa misma ejecución, un número del plan resultó ser una medición en frío y lo
+que se creía una mejora era un empeoramiento de 0.24 s. Nada de eso sobrevive en un diff.
+
+**Qué se descartó.** Hacer el documento condicional a "pasó algo imprevisto". El modelo
+concluiría que no pasó nada la mayoría de las veces, y se perdería justo el caso en que sí
+pasó pero no era evidente.
+
+---
+
+## 2026-08-07 — La Fase 4 ejecuta lo que puede y deja escrito lo que necesita mouse
+
+**Decisión.** La verificación de la Fase 4 va en dos listas separadas y visiblemente
+distintas: lo que el modelo **ya ejecutó**, con su resultado en números, y lo que **espera al
+usuario** porque necesita una pantalla, en tabla de `Prueba | Resultado esperado`. Está
+prohibido mezclarlas o dar por hecha una prueba que quedó esperando.
+
+**Por qué.** Las ejecuciones reales hacen las dos cosas sin distinguirlas: en unas el modelo
+corrió scripts contra la réplica y reportó cifras; en otra dejó una tabla de siete pruebas
+manuales bajo un título que casi se pierde. Sin la separación explícita, una prueba pendiente
+se lee como una prueba superada.
+
+Esto cierra el reparto que empieza en la Fase 3: la Fase 3 dice qué debe verse, la Fase 4 lo
+comprueba y escribe cómo llegar a verlo solo para lo que no puede comprobar sola.
+
+**Consecuencia aceptada.** Los resultados deben ir con números y no con adjetivos. "Se
+verificó correctamente" queda prohibido de hecho: no distingue una verificación real de una
+supuesta.
+
+---
+
+## 2026-08-07 — La Fase 4 no sube nada
+
+**Decisión.** Prohibido hacer commit, crear ramas, hacer push o abrir un PR. La fase termina
+con el código escrito, verificado y el documento cerrado.
+
+**Por qué.** Es como ya trabaja la usuaria: las cuatro ejecuciones reales cierran diciendo que
+los commits los sube ella. Estaba implícito en la costumbre y ahora es regla del prompt, para
+que no dependa de qué modelo se use.
+
+---
+
 ## 2026-08-07 — La Fase 3 dice qué debe verse; la Fase 4 dice cómo llegar a verlo
 
 **Decisión.** La verificación se reparte por tipo, no por documento:
