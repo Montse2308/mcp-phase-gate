@@ -216,6 +216,10 @@ Si quieres adaptarlo a tu estilo, edita `prompts/fase-5-auditoria-pr.md`. Lo que
 mueve la aguja es cambiar los ejemplos de la sección "EJEMPLOS DE REFERENCIA" por
 descripciones de PR tuyas: el modelo imita esa voz más que cualquier instrucción.
 
+> El porqué de cada regla del contrato está en [`docs/decisiones.md`](docs/decisiones.md).
+> Léelo antes de cambiar algo: varias reglas que parecen arbitrarias resuelven un problema
+> concreto.
+
 ---
 
 ## ⚙️ Variables de entorno
@@ -248,3 +252,12 @@ Scripts disponibles:
 - `npm run build` → compila TypeScript a `build/`.
 - `npm start` → ejecuta el servidor compilado.
 - `npm run dev` → ejecuta directo desde TypeScript con `ts-node`.
+
+### Dónde está cada cosa
+
+| Qué buscas | Dónde |
+|------------|-------|
+| Lo que el proyecto hace hoy | Este README |
+| Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
+| Lo que falta por hacer | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
+| Lo que ya se hizo | El historial de commits y los PRs mergeados |
