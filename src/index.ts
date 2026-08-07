@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
@@ -39,8 +40,54 @@ const PROMPTS_PATH =
   process.env.ORQUESTADOR_PROMPTS_PATH ||
   path.join(__dirname, "..", "prompts");
 
-// Archivo de estado para recordar la tarea activa entre chats (Opción B)
-const STATE_FILE = path.join(__dirname, "active_task.json");
+// ─── Estado local (tarea activa) ────────────────────────────────────────────
+// El estado vive en la carpeta de datos del usuario, NO junto al build.
+// Antes se guardaba en build/, que es una carpeta generada y gitignoreada: borrarla
+// para recompilar desde cero se llevaba la tarea activa. Además, esta ubicación es la
+// única que funciona cuando el servidor se ejecuta desde un paquete instalado.
+const APP_DIR_NAME = "mcp-orquestador";
+
+function resolveStateDir(): string {
+  if (process.env.ORQUESTADOR_STATE_PATH) {
+    return process.env.ORQUESTADOR_STATE_PATH;
+  }
+
+  const home = os.homedir();
+
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
+    return path.join(appData, APP_DIR_NAME);
+  }
+
+  if (process.platform === "darwin") {
+    return path.join(home, "Library", "Application Support", APP_DIR_NAME);
+  }
+
+  const stateHome = process.env.XDG_STATE_HOME || path.join(home, ".local", "state");
+  return path.join(stateHome, APP_DIR_NAME);
+}
+
+const STATE_DIR = resolveStateDir();
+const STATE_FILE = path.join(STATE_DIR, "active_task.json");
+
+// Ubicación anterior, junto al build. Se conserva solo para migrar una vez.
+const LEGACY_STATE_FILE = path.join(__dirname, "active_task.json");
+
+// Mueve el estado de la ubicación vieja a la nueva la primera vez que arranca
+// esta versión, para que nadie pierda su tarea activa al actualizar.
+function migrateLegacyState(): void {
+  if (fs.existsSync(STATE_FILE) || !fs.existsSync(LEGACY_STATE_FILE)) return;
+
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.copyFileSync(LEGACY_STATE_FILE, STATE_FILE);
+    fs.unlinkSync(LEGACY_STATE_FILE);
+    console.error(`[orquestador] Tarea activa migrada a ${STATE_FILE}`);
+  } catch (error: any) {
+    // No es fatal: si falla, se sigue trabajando y solo se pierde la tarea activa previa.
+    console.error(`[orquestador] No se pudo migrar el estado anterior: ${error.message}`);
+  }
+}
 
 const server = new Server(
   {
@@ -77,6 +124,7 @@ function setActiveTask(project: string, taskName: string, folderPath: string): v
     folder_path: folderPath,
     updated_at: new Date().toISOString(),
   };
+  fs.mkdirSync(STATE_DIR, { recursive: true });
   fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
@@ -310,9 +358,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: "No hay ninguna tarea activa registrada. Inicia una con 'start_task' o especifica project + task_name al leer/escribir." }],
         };
       }
-      const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
+      let state: any;
+      try {
+        state = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
+      } catch {
+        // Un archivo corrupto no debe dejar al usuario sin saber qué pasó ni dónde mirar.
+        throw new Error(
+          `El archivo de tarea activa está dañado o no se pudo leer: ${STATE_FILE}. Bórralo y vuelve a iniciar la tarea con 'start_task'.`
+        );
+      }
       return {
-        content: [{ type: "text", text: `Tarea activa:\n- Proyecto: ${state.project}\n- Tarea: ${state.task_name}\n- Carpeta: ${state.folder_path}\n- Actualizada: ${state.updated_at}` }],
+        content: [{ type: "text", text: `Tarea activa:\n- Proyecto: ${state.project}\n- Tarea: ${state.task_name}\n- Carpeta: ${state.folder_path}\n- Actualizada: ${state.updated_at}\n- Estado guardado en: ${STATE_FILE}` }],
       };
     }
 
@@ -371,6 +427,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  migrateLegacyState();
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("MCP Orchestrator Server running on stdio");

@@ -104,7 +104,12 @@ Ajusta la ruta dentro de `args` según dónde clonaste el repo en este equipo. (
 ## 🔄 Trabajar en varios dispositivos sin perder el hilo
 
 - La **Documentación** vive en OneDrive, así que se sincroniza sola entre tu compu del trabajo y tu laptop de casa. Lo único distinto por equipo es el archivo `.env` (Paso 3), que es local y no se sube al repo.
-- El servidor recuerda cuál es la **tarea activa** (ver `get_active_task`). Ese registro es **local de cada dispositivo** (se guarda junto al build). Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
+- El servidor recuerda cuál es la **tarea activa** (ver `get_active_task`). Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
+  - **Windows:** `%APPDATA%\mcp-orquestador\active_task.json`
+  - **macOS:** `~/Library/Application Support/mcp-orquestador/active_task.json`
+  - **Linux:** `~/.local/state/mcp-orquestador/active_task.json`
+
+  Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
 - **Regla de oro:** deja que OneDrive termine de sincronizar antes de empezar a trabajar en el otro equipo, para no crear conflictos de archivos.
 
 ---
@@ -231,6 +236,7 @@ Se cargan desde el archivo `.env` de la raíz del repo (o desde el bloque `"env"
 | `ORQUESTADOR_DOCS_PATH` | `C:\Users\Usuario general\OneDrive - Abogados Manuel Solis\Documentos\DOCUMENTACIÓN` | Ruta a la carpeta raíz de la Documentación en OneDrive. **Cámbiala en cada dispositivo.** |
 | `ORQUESTADOR_REPOS_PATH` | `C:\proyectos` | Ruta a la carpeta donde están tus repositorios de código. |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
+| `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guarda la tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas o para forzar una ubicación concreta. |
 
 ---
 
