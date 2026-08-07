@@ -12,6 +12,29 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-07 — El estado local vive en la carpeta de datos del usuario
+
+**Decisión.** La tarea activa se guarda en la carpeta de datos del sistema operativo
+(`%APPDATA%` en Windows, `Application Support` en macOS, `XDG_STATE_HOME` en Linux),
+bajo `mcp-orquestador/`. Se puede forzar otra ubicación con `ORQUESTADOR_STATE_PATH`.
+
+**Por qué.** Antes se guardaba junto al build, y `build/` es una carpeta generada:
+borrarla para recompilar desde cero — algo perfectamente razonable — se llevaba la tarea
+activa sin aviso.
+
+Se eligió la carpeta del sistema operativo por encima de la raíz del repo porque es la
+única que sigue funcionando cuando el servidor se ejecuta desde un paquete instalado, sin
+repo alrededor. Resolver esto ahora evita rehacerlo al publicar en npm.
+
+**Descartado.** La raíz del repo: más simple, pero ata el estado a que exista un clon y
+ensucia el directorio de trabajo con un archivo que cambia solo.
+
+**Consecuencia.** Hay una migración única al arrancar: si existe el archivo viejo en
+`build/` y no el nuevo, se mueve. Es código que se puede borrar cuando ya nadie venga de
+una versión anterior.
+
+---
+
 ## 2026-08-07 — El plan del proyecto vive en Issues, no en un archivo
 
 **Decisión.** Lo que falta por hacer se registra como GitHub Issues, agrupado con las
