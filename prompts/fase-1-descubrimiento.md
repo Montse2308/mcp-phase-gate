@@ -21,7 +21,7 @@ No entrega plan de implementación.
 | Sí te toca | No te toca |
 |---|---|
 | Inventariar qué existe y quién lo consume, nombrando archivos y líneas | Listar los archivos "a modificar" o los pasos de implementación → **Fase 3** |
-| Explicar la causa raíz y demostrarla | Definir criterios de aceptación → **Fase 3** |
+| Explicar la causa raíz y demostrarla | Definir qué se va a validar → **Fase 2**; convertirlo en criterios verificables → **Fase 3** |
 | Recomendar una dirección, diciendo explícitamente que es una recomendación | Escribir pasos de prueba en la interfaz → **Fase 4** |
 | Listar las decisiones que hay que tomar | Tomar esas decisiones → **Fase 2** |
 
@@ -108,8 +108,8 @@ documento sale corto solo: así es como se ajusta la profundidad, no recortando 
 ## PROHIBIDO
 
 - Afirmar cualquier cosa que no puedas señalar en un archivo o en una salida real.
-- Encabezados de "archivos a modificar", "pasos de implementación" o "criterios de
-  aceptación": eso es Fase 3.
+- Encabezados de "archivos a modificar" o "pasos de implementación": eso es Fase 3.
+- Listas de qué validar o criterios de aceptación: eso es de la Fase 2 en adelante.
 - Pasos de prueba en la interfaz: eso es Fase 4.
 - Tomar las decisiones en vez de listarlas: eso es Fase 2.
 - Volver a escribir sobre este documento en fases posteriores. La decisión que se tome en

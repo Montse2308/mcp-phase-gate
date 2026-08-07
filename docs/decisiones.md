@@ -12,6 +12,99 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-07 — Cada fase entrega documento, siempre
+
+**Decisión.** Toda fase que produce un entregable lo escribe en un documento de la
+carpeta de la tarea, aunque el trabajo se haya resuelto conversando. En particular la
+Fase 2: aunque las decisiones se tomen en un intercambio de dos mensajes, se escriben.
+
+**Por qué.** No es por formalidad. La usuaria trabaja parte del tiempo en el equipo de la
+oficina y parte en su laptop personal fuera de horario. **El chat no viaja entre
+dispositivos; el documento sí.** Una decisión que solo quedó dicha en la conversación, en
+la práctica se perdió.
+
+Esto convierte el documento en el estado compartido entre sesiones, no en un subproducto.
+
+---
+
+## 2026-08-07 — La Fase 2 valida, no solo pregunta
+
+**Decisión.** Antes de dar una decisión por cerrada, la Fase 2 comprueba que sea segura:
+consultas contra datos reales, lectura del código del framework, barridos buscando otros
+consumidores, conteos de volumen. Los riesgos evaluados se documentan en una tabla de
+`Riesgo evaluado | Resultado | Cómo se verificó`, incluidos los que resultaron no aplicar.
+
+**Por qué.** El prompt anterior de la Fase 2 decía, completo: lee el análisis, identifica
+lagunas, hazme preguntas, detente. Ni siquiera pedía generar un documento. Pero los
+documentos reales hacían mucho más: uno descartó cuatro riesgos con datos y **encontró dos
+consumidores que la Fase 1 no había visto**; otro planteó un riesgo propio, lo midió,
+resultó ser cero y lo dejó escrito igual.
+
+Eso salía por iniciativa del modelo, no porque se le pidiera. Codificarlo es la diferencia
+entre que pase siempre y que pase cuando el modelo tiene un buen día.
+
+**Consecuencia.** Se asume explícitamente que **la Fase 1 se equivoca**: buscó con un
+criterio y algo se le escapó. Lo que la verificación destape pertenece al documento de la
+Fase 2, no a una corrección del de la Fase 1.
+
+---
+
+## 2026-08-07 — Toda decisión dice a qué renuncia
+
+**Decisión.** Cada decisión que sacrifica algo declara su **implicación aceptada**, como
+elección consciente. Si no renuncia a nada, no se inventa una para llenar el hueco.
+
+**Por qué.** Es la firma que aparecía en cuatro de los cinco documentos de decisiones
+reales, y es lo que evita que dentro de seis meses alguien lea la decisión y crea que fue
+un descuido. "La regla queda duplicada, es consciente, prioriza cero impacto en código
+compartido" se lee muy distinto a encontrarse la regla duplicada sin explicación.
+
+---
+
+## 2026-08-07 — Reparto de los criterios de validación entre fases
+
+**Decisión.**
+- **Fase 2** define **qué hay que validar y qué se espera**, en términos de negocio y de
+  superficies afectadas, derivado del alcance que acaba de cerrar.
+- **Fase 3** convierte esa lista en criterios verificables con el detalle técnico.
+- **Fase 4** los ejecuta.
+- La Fase 1 no los escribe.
+
+**Por qué.** Los documentos reales los pusieron en tres lugares distintos: uno en Fase 1
+marcados como "propuestos", otro en Fase 2 como "lista de validación acordada", y la
+instrucción inicial de la usuaria decía Fase 3.
+
+Gana la Fase 2 para la lista porque **esos criterios se derivan del alcance**: no se pueden
+escribir antes de decidir qué entra. En el documento real la lista salió con nueve puntos
+precisamente porque la Fase 2 había descubierto dos consumidores más de los que conocía
+la Fase 1.
+
+---
+
+## 2026-08-07 — Las decisiones se numeran de corrido por tarea
+
+**Decisión.** La numeración `D1..Dn` es continua a lo largo de toda la tarea, no por fase.
+Si la Fase 1 dejó abiertas `D1` a `D6`, la Fase 2 sigue en `D7`.
+
+**Por qué.** Una decisión es una decisión sin importar en qué fase se tomó, y la
+numeración continua permite referirse a ella sin ambigüedad desde cualquier documento
+posterior. Cuatro de los cinco documentos reiniciaban en `D1` y uno continuaba; se eligió
+el que continuaba.
+
+---
+
+## 2026-08-07 — No se clasifican las decisiones por quién las autoriza
+
+**Decisión.** El documento registra la decisión y su fundamento. No se abren categorías
+del tipo "cerrado con el usuario" contra "pendiente de validar con el negocio".
+
+**Por qué.** Uno de los documentos reales lo hacía, y la distinción tenía lógica: son dos
+tipos de bloqueo distintos. Se descartó por preferencia explícita de la usuaria. Si una
+decisión sigue abierta, se dice que está abierta; el resto es taxonomía que no ayuda a
+decidir.
+
+---
+
 ## 2026-08-07 — Todas las tareas pasan por todas las fases; lo que se ajusta es la profundidad
 
 **Decisión.** No hay triage que salte fases según el tamaño de la tarea. Todas pasan por
