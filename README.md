@@ -155,7 +155,7 @@ Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto 
 |------|----------|
 | `start_task` | Crea la carpeta de la tarea (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y registra la tarea como **activa**. |
 | `get_active_task` | Devuelve la tarea activa actual (proyecto, nombre y ruta). Úsalo al abrir un chat nuevo o si se perdió el contexto de dónde escribir. |
-| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. |
+| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo. Mismos parámetros que `read_central_doc` + `content`. |
 | `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde BOS consultar cómo Kanban maneja un endpoint) sin cambiar de ventana. |
@@ -163,6 +163,58 @@ Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto 
 ### Cómo el servidor arma las rutas
 - **Documentación:** `ORQUESTADOR_DOCS_PATH` / `<PROYECTO>` / `Proyectos` / `<tarea>` / `<archivo>`
 - **Repos de código:** `ORQUESTADOR_REPOS_PATH` / `<repo>` / `<archivo>`
+
+---
+
+## 📝 Los prompts de las fases viven en `prompts/`
+
+El texto de cada fase **ya no está dentro del código**: son archivos markdown sueltos.
+
+```
+prompts/
+├── global-rules.md              ← reglas "Cero Rupturas", se anteponen a TODAS las fases
+├── fase-1-descubrimiento.md
+├── fase-2-decisiones.md
+├── fase-3-plan-tecnico.md
+├── fase-4-ejecucion.md
+└── fase-5-auditoria-pr.md       ← incluye el contrato de la descripción del PR
+```
+
+**Se leen en cada llamada.** Si editas un `.md`, la siguiente vez que la IA invoque
+`get_phase_prompt` ya recibe la versión nueva — sin `npm run build` y sin reiniciar
+Cursor. Eso permite afinar el comportamiento de una fase probándolo al momento.
+
+Reglas del formato:
+- El archivo debe llamarse `fase-<N>-<lo-que-sea>.md` (también acepta `phase-<N>-...`).
+- **El número de fases no está cableado:** si agregas un `fase-6-despliegue.md`, la
+  fase 6 existe de inmediato.
+- El primer encabezado `# Título` del archivo es el nombre que aparece en la
+  descripción de la tool.
+- `global-rules.md` se antepone automáticamente al contenido de la fase.
+
+### El contrato de la descripción del PR (Fase 5)
+
+La Fase 5 no solo audita: redacta la descripción del PR bajo un contrato estricto,
+para que el resultado sea consistente sin importar qué modelo de IA se use.
+
+- **Título:** `tipo(área): frase`, y ahí termina — nada de números de ticket.
+- **Estructura fija:** por qué (`Problema` si algo estaba roto, `Contexto` si es
+  nuevo) → `Cambios` agrupados → secciones de cierre.
+- **Las secciones de cierre son condicionales**, cada una con su disparador:
+  `Alcance` solo si tocaste código existente, `Verificación` solo si la prueba fue
+  sustanciosa, `Notas de despliegue` solo si hay migraciones.
+- **El criterio para agrupar los bullets depende de la forma del cambio** (por
+  componente, por sub-feature, por dimensión del dato…), con una tabla de decisión
+  en el prompt. Así la descripción se adapta al tamaño del ticket sin dejar de ser
+  predecible.
+- **Límites de longitud en palabras**, no adjetivos: trivial (60–100), chico
+  (120–160), normal (200–260), grande (350–450, tope 500).
+- **Se entrega dentro de un bloque de código de cuatro backticks**, para que al
+  copiar y pegar en GitHub llegue el markdown en crudo y no el texto ya renderizado.
+
+Si quieres adaptarlo a tu estilo, edita `prompts/fase-5-auditoria-pr.md`. Lo que más
+mueve la aguja es cambiar los ejemplos de la sección "EJEMPLOS DE REFERENCIA" por
+descripciones de PR tuyas: el modelo imita esa voz más que cualquier instrucción.
 
 ---
 
@@ -174,10 +226,15 @@ Se cargan desde el archivo `.env` de la raíz del repo (o desde el bloque `"env"
 |----------|-------------|-------------|
 | `ORQUESTADOR_DOCS_PATH` | `C:\Users\Usuario general\OneDrive - Abogados Manuel Solis\Documentos\DOCUMENTACIÓN` | Ruta a la carpeta raíz de la Documentación en OneDrive. **Cámbiala en cada dispositivo.** |
 | `ORQUESTADOR_REPOS_PATH` | `C:\proyectos` | Ruta a la carpeta donde están tus repositorios de código. |
+| `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
 
 ---
 
 ## 🧑‍💻 Desarrollo (si modificas el código)
+
+> **Ojo:** esto aplica solo a cambios en el **código**. Si lo único que tocaste fue
+> un prompt de `prompts/*.md`, **no hace falta compilar ni reiniciar nada** — se leen
+> en cada llamada.
 
 El código fuente está en `src/index.ts`. Cursor ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
 
