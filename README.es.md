@@ -28,7 +28,9 @@ flowchart TD
     F5 --> PR([Auditoría y descripción del PR, en el chat])
 ```
 
-**La compuerta está en la fase 2**, y es lo que le da el nombre al servidor: ahí se detiene y no avanza hasta que respondas. No es una sugerencia de que pregunte — es que la fase no cierra sin tus respuestas, y lo que decidas queda escrito con su fundamento.
+**La parada obligatoria está en la fase 2**: ahí se detiene y no avanza hasta que respondas. No es una sugerencia de que pregunte — es que la fase no cierra sin tus respuestas, y lo que decidas queda escrito con su fundamento.
+
+Y entre una fase y otra hay una **compuerta**, que es lo que le da el nombre al servidor: si pides una fase saltándote la anterior, el servidor lo detecta y avisa ([ver abajo](#-la-compuerta-saltarse-una-fase-deja-de-ser-invisible)).
 
 En la fase 5 la IA solo lee. **Los commits y el PR los haces tú**, siempre.
 
@@ -293,6 +295,31 @@ Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto 
 
 ---
 
+## 🚦 La compuerta: saltarse una fase deja de ser invisible
+
+Si pides una fase por delante de la que te toca, el prompt llega con un aviso al principio:
+
+```
+## ATENCIÓN — COMPUERTA DE FASE
+
+Pediste la Fase 4, pero la tarea "login-sso" no tiene los documentos de fases anteriores:
+
+- Fase 3: falta `03 - Plan Técnico.md`
+
+Esta tarea va en la Fase 3 (Plan Técnico). NO hagas el trabajo de la Fase 4 sobre
+documentos que no existen ni te los inventes a partir del contexto del chat.
+```
+
+**Avisa, no bloquea.** El prompt se entrega igual, así que el día que quieras saltarte una fase a propósito en un cambio trivial, puedes. Lo que cambia es que ya no pasa desapercibido.
+
+Tres cosas que **no** hace, a propósito:
+
+- **No estorba volver atrás.** Si vas en la Fase 5 y pides la 2 para corregir decisiones, eso no es saltarse nada y no dice nada. Solo mira huecos hacia atrás.
+- **No te obliga a escribir nada más.** Sigues escribiendo `/f4` a secas. Quien averigua de qué tarea se habla es el servidor, con el puntero que ya mantiene — no el modelo preguntándotelo.
+- **No se calla cuando no puede comprobar.** Si tienes varios proyectos con tarea activa y no se indicó cuál, lo dice en vez de fingir que todo está en orden.
+
+---
+
 ## 🛠️ Tools Disponibles
 
 | Tool | Qué hace |
@@ -301,7 +328,7 @@ Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto 
 | `get_active_task` | Devuelve la tarea activa y **en qué fase va**, deducida de los documentos que ya tiene. Sin `project` responde la de cada proyecto. Úsalo al abrir un chat nuevo o si se perdió el contexto. |
 | `list_tasks` | Lista las tareas que existen y la fase de cada una, de la más reciente a la más antigua. Para retomar algo viejo o ver qué quedó a medias. |
 | `switch_task` | Cambia cuál es la tarea activa de un proyecto. **No toca ningún archivo**: es la forma correcta de retomar una tarea que ya existe. |
-| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). |
+| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). Comprueba de paso la **compuerta**: si pasas `project` y te saltaste una fase, el prompt llega con el aviso al principio. |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo. Mismos parámetros que `read_central_doc` + `content`. |
 | `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde BOS consultar cómo Kanban maneja un endpoint) sin cambiar de ventana. |
