@@ -12,6 +12,56 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-08 — Los proyectos son las carpetas que existen, no una lista
+
+**Decisión.** Se borra `PROJECT_DOC_DIRS`. Es proyecto la carpeta que contenga la subcarpeta
+de tareas. Un proyecto inexistente se rechaza mostrando los válidos; para estrenar uno hay que
+pasar `crear_proyecto: true` a `start_task`.
+
+**Por qué.** La tabla no restringía nada: era una tabla de alias, y como `bos`, `crm` y
+`kanban` coincidían con su propio nombre en mayúsculas, no hacía absolutamente nada. Se
+comprobó pidiendo `project: "inventado"`, que resolvía `INVENTADO/Proyectos/...` sin quejarse.
+El problema real no era que los proyectos estuvieran cableados sino que **no había validación
+ninguna**: un typo en `/f1` creaba una carpeta suelta en la Documentación en silencio.
+
+El disco ya es la fuente de verdad. Una lista declarada se desincroniza de él, y el día que
+creas una carpeta y olvidas declararla falla sin que se entienda por qué.
+
+**La puerta de `crear_proyecto`.** Sin ella, validar sería imposible de estrenar: el primer
+proyecto nunca existiría. Va como bandera explícita y no como comportamiento por defecto
+porque el caso que hay que evitar —el typo— es mucho más frecuente que el caso legítimo.
+
+**Qué se descartó.** Declarar los proyectos en un `orquestador.config.json`, que es lo que
+proponía la [issue #3](https://github.com/Montse2308/MCP_orquestador/issues/3): agrega un
+archivo que mantener para reproducir peor lo que el disco ya sabe.
+
+---
+
+## 2026-08-08 — El nombre del documento lo declara el prompt de su fase
+
+**Decisión.** Cada `prompts/fase-N-*.md` declara en una cabecera cómo se llama el documento
+que produce. `get_phase_prompt` la lee y le entrega al modelo el nombre exacto del documento
+de la fase y los de las anteriores. Los comandos `/f1`–`/f5` dejan de nombrar archivos.
+
+**Por qué.** El nombre vivía duplicado en el prompt y en el comando, y se desincronizó de
+verdad: al agregar el contrato de salida a las fases 2 y 4, los comandos siguieron sin escribir
+esos documentos. Como los comandos viven en la carpeta del usuario de cada dispositivo y los
+prompts en el repo, la copia que se desincroniza es además la que no se puede arreglar con un
+`git pull`. Quitando el nombre del comando, el comando deja de cambiar.
+
+**Por qué en el prompt y no en un archivo de configuración.** El prompt ya es donde se describe
+ese documento, se lee en vivo sin recompilar, y así el dato no se separa de lo que lo explica.
+Un archivo de configuración habría sido un tercer lugar para el mismo nombre.
+
+**Qué se descartó.** `orquestador.config.json` con proyectos, subcarpeta y nombres de
+documentos, que era la propuesta de la #3. Con los proyectos autodetectados y los nombres en el
+prompt, el archivo se quedaba con una sola cadena dentro —la subcarpeta de tareas— y esa cabe
+en una variable de entorno. La contra asumida: la subcarpeta es una convención de organización,
+no una ruta de dispositivo, así que el `.env` deja de ser estrictamente "lo que cambia por
+equipo". Se aceptó para no introducir un archivo de configuración por un solo valor.
+
+---
+
 ## 2026-08-08 — Sin rutas por defecto, y el error se entrega en la tool
 
 **Decisión.** `ORQUESTADOR_DOCS_PATH` y `ORQUESTADOR_REPOS_PATH` dejan de tener valor por

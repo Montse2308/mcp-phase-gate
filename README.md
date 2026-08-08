@@ -209,8 +209,16 @@ Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto 
 | `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde BOS consultar cómo Kanban maneja un endpoint) sin cambiar de ventana. |
 
 ### Cómo el servidor arma las rutas
-- **Documentación:** `ORQUESTADOR_DOCS_PATH` / `<PROYECTO>` / `Proyectos` / `<tarea>` / `<archivo>`
+- **Documentación:** `ORQUESTADOR_DOCS_PATH` / `<PROYECTO>` / `ORQUESTADOR_TASKS_SUBDIR` / `<tarea>` / `<archivo>`
 - **Repos de código:** `ORQUESTADOR_REPOS_PATH` / `<repo>` / `<archivo>`
+
+### Qué cuenta como proyecto
+
+No hay ninguna lista de proyectos que mantener. **Es proyecto la carpeta que contenga la subcarpeta de tareas**, así que dar de alta uno nuevo es crearle esa subcarpeta y ya. Las carpetas que no la tengan —credenciales, material compartido, archivo muerto— quedan fuera solas.
+
+Un proyecto que no existe se rechaza mostrando la lista de los que sí, en vez de crear una carpeta suelta. Para **estrenar** un proyecto hay que pedirlo a propósito: `start_task` acepta `crear_proyecto: true`, y sin esa bandera un nombre mal escrito no ensucia tu Documentación.
+
+> Si dejas `ORQUESTADOR_TASKS_SUBDIR` vacío, la regla no se puede aplicar y **cualquier** carpeta cuenta como proyecto.
 
 ---
 
@@ -232,8 +240,23 @@ prompts/
 `get_phase_prompt` ya recibe la versión nueva — sin `npm run build` y sin reiniciar
 Cursor. Eso permite afinar el comportamiento de una fase probándolo al momento.
 
+Cada fase declara, en una cabecera al inicio del `.md`, cómo se llama el documento que produce:
+
+```markdown
+---
+documento: 02 - Decisiones.md
+---
+
+# Decisiones
+```
+
+`get_phase_prompt` lee esa cabecera y le entrega al modelo, al final del prompt, el nombre exacto del documento de la fase y los de las fases anteriores. **Por eso los comandos `/f1`–`/f5` ya no nombran ningún archivo:** el nombre vive en un solo sitio, y cambiar un prompt no obliga a editar además un comando en cada dispositivo. Una fase sin `documento` —como la 5, que entrega en el chat— se anuncia como tal.
+
+La fase 1 declara además `documento_inicial`, que es el archivo que escribe `start_task` con el contexto.
+
 Reglas del formato:
 - El archivo debe llamarse `fase-<N>-<lo-que-sea>.md` (también acepta `phase-<N>-...`).
+- La cabecera es opcional y no se filtra al prompt: se quita antes de entregarlo.
 - **El número de fases no está cableado:** si agregas un `fase-6-despliegue.md`, la
   fase 6 existe de inmediato.
 - El primer encabezado `# Título` del archivo es el nombre que aparece en la
@@ -280,6 +303,7 @@ Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a c
 |----------|-------------|-------------|
 | `ORQUESTADOR_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación en OneDrive. **Distinta en cada dispositivo.** |
 | `ORQUESTADOR_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
+| `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subcarpeta donde viven las tareas dentro de cada proyecto. Vacía = las tareas cuelgan directo del proyecto. Es además la regla que decide qué carpeta cuenta como proyecto (ver abajo). |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
 | `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guarda la tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas o para forzar una ubicación concreta. |
 

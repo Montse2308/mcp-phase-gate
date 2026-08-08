@@ -1,3 +1,7 @@
+---
+documento: 02 - Decisiones.md
+---
+
 # Decisiones
 
 ## ROL DE COMPORTAMIENTO (GLOBAL)
