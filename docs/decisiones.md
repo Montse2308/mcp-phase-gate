@@ -12,6 +12,33 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-07 — La configuración por dispositivo no vive en el repo
+
+**Decisión.** El `.cursor/mcp.json` sale del repositorio y queda gitignoreado. La
+configuración que cambia de un equipo a otro vive en la carpeta del usuario
+(`~/.cursor/mcp.json`); el repo solo la documenta, en el Paso 4 del README y en la tabla de
+lo que vive fuera del repo.
+
+**Por qué.** El archivo commiteado apuntaba a `C:\proyectos\yo\MCP_orquestador\build\index.js`:
+la ruta correcta en un dispositivo y una carpeta inexistente en el otro. No era una ruta
+desactualizada, era una ruta que **no puede ser cierta en las dos máquinas a la vez** —
+depende de dónde se clonó y, encima, señala dentro de `build/`, que está gitignoreado. Y al
+declarar un servidor con el mismo nombre que el de la config de usuario, el archivo del
+proyecto ganaba y dejaba el MCP muerto al abrir este repo. Es la misma razón por la que las
+rutas de OneDrive viven en `.env` y no en el código.
+
+**Qué se descartó.** Corregir la ruta al valor del otro dispositivo: habría movido el bug de
+equipo en lugar de quitarlo. Y dejarlo como `.cursor/mcp.json.example`: el Paso 4 del README
+ya trae el JSON completo, y de dos copias del mismo contenido una acaba envejeciendo.
+
+**Lo que esta decisión no resuelve.** Los comandos `/f1`–`/f5` siguen viviendo solo en la
+carpeta del usuario, porque Cursor no los lee de otro lado. Editar una fase en un equipo deja
+al otro con la versión vieja, y eso sí es un problema de flujo, no de configuración. Queda
+como issue abierto; entretanto su contenido está copiado en
+[`comandos-cursor.md`](comandos-cursor.md).
+
+---
+
 ## 2026-08-07 — La Fase 4 hace; el documento es el recibo
 
 **Decisión.** El prompt de la Fase 4 pone casi todo su peso en cómo ejecutar y cómo
