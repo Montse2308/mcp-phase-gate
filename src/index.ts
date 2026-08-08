@@ -18,16 +18,65 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // quiet: true evita que dotenv v17 imprima su banner en stdout, que es el canal del JSON-RPC.
 dotenv.config({ path: path.join(__dirname, "..", ".env"), quiet: true });
 
-// Paths absolutos del entorno.
-// Son configurables por variable de entorno (vía .env o el bloque "env" del mcp.json)
-// para poder usar el MCP en distintos dispositivos sin recompilar.
-// Si la variable no está definida, se usa la ruta por defecto de la compu actual.
-const DOCS_BASE_PATH =
-  process.env.ORQUESTADOR_DOCS_PATH ||
-  "C:\\Users\\Usuario general\\OneDrive - Abogados Manuel Solis\\Documentos\\DOCUMENTACIÓN";
-const REPOS_BASE_PATH =
-  process.env.ORQUESTADOR_REPOS_PATH ||
-  "C:\\proyectos";
+// Paths absolutos del entorno. Se configuran por variable de entorno (vía .env o el bloque
+// "env" del mcp.json) para poder usar el MCP en distintos dispositivos sin recompilar.
+//
+// No tienen valor por defecto, a propósito. Un default es siempre la ruta del equipo de
+// quien escribió el código: en cualquier otro dispositivo el servidor arrancaba "bien" y el
+// error salía mucho después, dentro de una tool, disfrazado de "no encontré el archivo" y
+// sin mencionar que lo que faltaba era configurar una variable.
+type RutaRequerida = { variable: string; apuntaA: string };
+
+const DOCS: RutaRequerida = {
+  variable: "ORQUESTADOR_DOCS_PATH",
+  apuntaA: "la carpeta raíz de la Documentación Central",
+};
+
+const REPOS: RutaRequerida = {
+  variable: "ORQUESTADOR_REPOS_PATH",
+  apuntaA: "la carpeta que contiene tus repositorios de código",
+};
+
+// Se resuelve y valida en cada llamada, no una vez al arrancar. Así el servidor se queda en
+// pie aunque falte configuración, las tools que no dependen de estas rutas siguen sirviendo,
+// y el error llega al chat —donde está el usuario— en vez de quedarse enterrado en un log.
+function requireBasePath({ variable, apuntaA }: RutaRequerida): string {
+  const valor = process.env[variable]?.trim();
+
+  if (!valor) {
+    throw new Error(
+      `Falta la variable ${variable}, que debe apuntar a ${apuntaA}. Defínela en el archivo ` +
+        `.env de la raíz del repo, o en el bloque "env" del mcp.json de tu cliente.`
+    );
+  }
+
+  const ruta = path.resolve(valor);
+
+  // Una variable definida pero incorrecta falla igual de tarde que una ausente, así que la
+  // existencia se comprueba aquí. El caso del encoding ya mordió una vez y no es adivinable.
+  if (!fs.existsSync(ruta)) {
+    throw new Error(
+      `${variable} apunta a "${ruta}", que no existe en este equipo. Corrige la ruta en el .env. ` +
+        `Si lleva acentos, revisa que el .env esté guardado en UTF-8 sin BOM: en UTF-16 los ` +
+        `acentos llegan rotos y la carpeta parece no existir.`
+    );
+  }
+
+  if (!fs.statSync(ruta).isDirectory()) {
+    throw new Error(`${variable} apunta a "${ruta}", que es un archivo y no una carpeta.`);
+  }
+
+  return ruta;
+}
+
+// Comprueba que una ruta quede dentro de otra. No sirve startsWith, y falla en las dos
+// direcciones: con base "C:\PROYECTOS\TRABAJO" deja pasar "C:\PROYECTOS\TRABAJO_VIEJO",
+// que empieza igual sin estar dentro; y rechaza rutas válidas cuando la base viene escrita
+// con otras mayúsculas. Comparar la ruta relativa resuelve ambos.
+function estaDentro(base: string, ruta: string): boolean {
+  const relativa = path.relative(path.resolve(base), path.resolve(ruta));
+  return relativa === "" || (!relativa.startsWith("..") && !path.isAbsolute(relativa));
+}
 
 // Subcarpeta fija donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>)
 const TASKS_SUBDIR = "Proyectos";
@@ -109,11 +158,11 @@ const PROJECT_DOC_DIRS: Record<string, string> = {
 };
 
 // Opción A: la ruta de una tarea SIEMPRE se arma aquí, en un solo lugar.
-// Estructura: <DOCS_BASE_PATH>/<PROYECTO>/<TASKS_SUBDIR>/<tarea>
+// Estructura: <ORQUESTADOR_DOCS_PATH>/<PROYECTO>/<TASKS_SUBDIR>/<tarea>
 function resolveTaskFolder(project: string, taskName: string): string {
   const proj = String(project).toLowerCase();
   const baseFolder = PROJECT_DOC_DIRS[proj] || proj.toUpperCase();
-  return path.join(DOCS_BASE_PATH, baseFolder, TASKS_SUBDIR, taskName);
+  return path.join(requireBasePath(DOCS), baseFolder, TASKS_SUBDIR, taskName);
 }
 
 // Opción B: guarda cuál es la tarea activa para sobrevivir cambios de chat / pérdida de contexto.
@@ -140,7 +189,7 @@ function resolveDocPath(args: any): string {
   }
 
   if (args?.file_path) {
-    return path.join(DOCS_BASE_PATH, String(args.file_path));
+    return path.join(requireBasePath(DOCS), String(args.file_path));
   }
 
   throw new Error("Debes proporcionar (project + task_name + file_name) o bien file_path.");
@@ -302,7 +351,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "read_cross_repo",
-        description: "Permite leer archivos de otros repositorios locales en C:/proyectos.",
+        description: "Lee archivos de otros repositorios locales, dentro de la carpeta configurada en ORQUESTADOR_REPOS_PATH.",
         inputSchema: {
           type: "object",
           properties: {
@@ -373,11 +422,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "read_central_doc") {
+      const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(args);
 
-      // Simple security check to avoid traversing outside DOCS_BASE_PATH
-      if (!fullPath.startsWith(DOCS_BASE_PATH)) {
-        throw new Error("Acceso denegado fuera de la carpeta DOCUMENTACIÓN.");
+      if (!estaDentro(docsBase, fullPath)) {
+        throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 
       const content = fs.readFileSync(fullPath, "utf-8");
@@ -388,10 +437,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (name === "write_central_doc") {
       const content = String(args?.content);
+      const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(args);
 
-      if (!fullPath.startsWith(DOCS_BASE_PATH)) {
-        throw new Error("Acceso denegado fuera de la carpeta DOCUMENTACIÓN.");
+      if (!estaDentro(docsBase, fullPath)) {
+        throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
@@ -405,10 +455,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "read_cross_repo") {
       const repoName = String(args?.repo_name);
       const filePath = String(args?.file_path);
-      const fullPath = path.join(REPOS_BASE_PATH, repoName, filePath);
+      const reposBase = requireBasePath(REPOS);
+      const fullPath = path.join(reposBase, repoName, filePath);
 
-      if (!fullPath.startsWith(REPOS_BASE_PATH)) {
-        throw new Error("Acceso denegado fuera de la carpeta C:/proyectos.");
+      if (!estaDentro(reposBase, fullPath)) {
+        throw new Error(`Acceso denegado: la ruta queda fuera de ${reposBase}.`);
       }
 
       const content = fs.readFileSync(fullPath, "utf-8");
@@ -426,8 +477,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Deja en el log el estado de cada ruta al arrancar. No aborta: el servidor sigue en pie y
+// el error real se entrega al llamar la tool. Esto es solo para que, cuando alguien acabe
+// abriendo el log, el motivo ya esté ahí escrito.
+function reportarRutas(): void {
+  for (const requerida of [DOCS, REPOS]) {
+    try {
+      console.error(`[orquestador] ${requerida.variable} = ${requireBasePath(requerida)}`);
+    } catch (error: any) {
+      console.error(`[orquestador] SIN CONFIGURAR: ${error.message}`);
+    }
+  }
+}
+
 async function main() {
   migrateLegacyState();
+  reportarRutas();
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
