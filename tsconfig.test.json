@@ -1,0 +1,14 @@
+{
+  // Los tests se compilan aparte para que el paquete que se publica no los lleve dentro.
+  // La raíz sube a "." para poder compilar src/ y test/ juntos conservando la estructura:
+  // así un `from "../src/paths.js"` dentro de un test sigue resolviendo tras compilar.
+  "extends": "./tsconfig.json",
+  "include": ["src", "test"],
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./build-test",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  }
+}

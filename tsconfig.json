@@ -1,5 +1,9 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file
+
+  // Solo src: sin esto, tsc toma todos los .ts del proyecto —incluidos los de test/—
+  // y "rootDir": "./src" deja de cuadrar. Los tests se compilan con tsconfig.test.json.
+  "include": ["src"],
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",

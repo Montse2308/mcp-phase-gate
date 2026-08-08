@@ -1,0 +1,36 @@
+name: CI
+
+# En cada PR, y en master al mergear. No se corre en cada push a una rama suelta a propósito:
+# el flujo de este repo siempre pasa por un PR, así que un push a una rama sin PR abierto se
+# revisaría dos veces al abrirlo y ninguna antes.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 es la versión mínima soportada: los tests usan los patrones glob de `node --test`,
+        # que no existen antes. 24 es la que traen los equipos nuevos.
+        node-version: [22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      # El build va aparte del test para que un fallo de compilación del servidor se distinga
+      # de un test en rojo: son dos problemas distintos y el log lo tiene que decir solo.
+      - run: npm run build
+
+      - run: npm test
