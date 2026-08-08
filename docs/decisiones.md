@@ -12,6 +12,46 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-08 — La compuerta avisa, no bloquea, y la resuelve el servidor
+
+**Decisión.** `get_phase_prompt` comprueba que no se esté saltando una fase y, si la hay,
+entrega el prompt **con un aviso pegado al principio**. No bloquea. La comprobación es una sola
+comparación: `fase pedida > siguienteFase`.
+
+**Por qué avisar y no bloquear.** Hoy no hay compuerta ninguna, así que avisar es estrictamente
+mejor que el presente y no rompe ningún flujo. Bloquear estorbaría el día que haga falta
+saltarse una fase a propósito en un cambio trivial, y **todavía no hay dato de cuántas veces
+pasa eso**. Avisar lo genera: si con el uso se ve que los avisos se ignoran, subir a bloquear es
+un cambio pequeño y para entonces se sabrá si hace falta una escotilla de escape.
+
+**Por qué la comparación es contra `siguienteFase`.** Porque ya es "la primera fase cuyo
+documento falta", así que de ella sale gratis el caso que más fácil se implementa mal: volver a
+una fase anterior para corregirla no es saltarse nada, y no se estorba. La compuerta mira
+**huecos hacia atrás**, no el número que se pide. Implementarla como "no puedes pedir un número
+mayor al que te toca" habría vuelto el flujo insoportable en dos días.
+
+**Quién averigua de qué tarea se habla: el servidor.** `get_phase_prompt` recibía solo un
+número y no podía consultar nada. La restricción que mandó sobre el diseño es que **el flujo
+normal no se toca: se sigue escribiendo `/f4` y nada más**. Si el modelo tuviera que mandar la
+tarea y no lograra deducirla, acabaría preguntándosela al usuario en cada fase, y escribir
+`/f4` para que contesten "¿en qué tarea estamos?" es peor que no tener compuerta. El puntero por
+proyecto ya está guardado en el servidor, así que lo resuelve él.
+
+`project` y `task_name` existen como parámetros, pero **solo como anulación manual**. La
+diferencia con "parámetros opcionales" a secas es la que importa: si no vienen, el servidor no
+se rinde en silencio — usa su puntero. Solo se queda sin comprobar cuando de verdad no puede
+saberlo (varios proyectos con tarea activa y ninguno indicado), y en ese caso lo dice en voz
+alta en vez de fingir que todo está en orden.
+
+**Descartado.** Bloquear de entrada; una variable de entorno con los tres modos, que sería una
+perilla que documentar en dos README antes de saber si se necesita; y que fuera el modelo quien
+resolviera la tarea, por la fricción de arriba.
+
+**Consecuencia.** Los cinco comandos pasan ahora el `project` en el que se trabaja — dato que
+el modelo tiene sin preguntar, porque la ventana está abierta en ese repositorio.
+
+---
+
 ## 2026-08-08 — La fase de cada tarea se deduce de sus documentos, no se guarda
 
 **Decisión.** No hay ningún registro que diga en qué fase va cada tarea. El servidor mira qué

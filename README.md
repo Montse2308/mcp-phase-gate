@@ -30,7 +30,9 @@ flowchart TD
     F5 --> PR([Audit and PR description, in the chat])
 ```
 
-**The gate is phase 2**, and it's what gives the server its name: it stops there and will not move on until you answer. This isn't a polite suggestion to ask questions — the phase does not close without your answers, and whatever you decide gets written down with its rationale.
+**The mandatory stop is phase 2**: it halts there and will not move on until you answer. This isn't a polite suggestion to ask questions — the phase does not close without your answers, and whatever you decide gets written down with its rationale.
+
+And between one phase and the next there is a **gate**, which is what gives the server its name: ask for a phase while skipping the previous one and the server notices and warns you ([see below](#-the-gate-skipping-a-phase-stops-being-invisible)).
 
 In phase 5 the AI only reads. **You always make the commits and open the PR.**
 
@@ -238,6 +240,31 @@ The exact contents of all five are also in [`docs/comandos-de-fase.md`](docs/com
 
 ---
 
+## 🚦 The gate: skipping a phase stops being invisible
+
+Ask for a phase ahead of the one you're on and the prompt arrives with a warning on top:
+
+```
+## ATENCIÓN — COMPUERTA DE FASE
+
+Pediste la Fase 4, pero la tarea "login-sso" no tiene los documentos de fases anteriores:
+
+- Fase 3: falta `03 - Plan Técnico.md`
+
+Esta tarea va en la Fase 3 (Plan Técnico). NO hagas el trabajo de la Fase 4 sobre
+documentos que no existen ni te los inventes a partir del contexto del chat.
+```
+
+**It warns, it doesn't block.** The prompt is still delivered, so the day you want to skip a phase deliberately on a trivial change, you can. What changed is that it no longer goes unnoticed.
+
+Three things it deliberately does **not** do:
+
+- **It doesn't get in the way of going back.** On Phase 5 and asking for Phase 2 to fix decisions isn't skipping anything, and it stays quiet. It only looks for gaps behind you.
+- **It doesn't make you type anything extra.** You still type `/f4` and nothing else. Working out which task you mean is the server's job, using the pointer it already keeps — not the model asking you.
+- **It doesn't go quiet when it can't check.** If several projects have an active task and none was named, it says so instead of pretending everything is in order.
+
+---
+
 ## 🛠️ Available tools
 
 | Tool | What it does |
@@ -246,7 +273,7 @@ The exact contents of all five are also in [`docs/comandos-de-fase.md`](docs/com
 | `get_active_task` | Returns the active task and **which phase it's on**, derived from the documents it already has. Without `project` it answers for every project. Use it when opening a new chat or after losing track. |
 | `list_tasks` | Lists the tasks that exist and each one's phase, most recently touched first. For picking up something old or seeing what was left half-done. |
 | `switch_task` | Changes which task is active for a project. **Touches no files**: it's the correct way to resume an existing task. |
-| `get_phase_prompt` | Returns the behaviour rules for a phase (1–5), with the global rules prepended and the exact document filenames appended. The text lives in `prompts/`. |
+| `get_phase_prompt` | Returns the behaviour rules for a phase (1–5), with the global rules prepended and the exact document filenames appended. The text lives in `prompts/`. It also checks the **gate**: pass `project` and, if you skipped a phase, the prompt arrives with the warning on top. |
 | `read_central_doc` | Reads a file from the central documentation. **Recommended:** pass `project` + `task_name` + `file_name` and let the server build the path. It also accepts a relative `file_path`. |
 | `write_central_doc` | Writes/overwrites a file. Same parameters as `read_central_doc` plus `content`. |
 | `read_cross_repo` | Reads files from your other local repos, so you can check how another codebase solved something without switching windows. |

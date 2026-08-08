@@ -5,7 +5,10 @@ import * as path from "node:path";
 
 import type { PhaseFile } from "../src/phases.js";
 import {
+  avisoDeCompuerta,
+  avisoDeSalto,
   describeEstado,
+  detectarSalto,
   estadoDeTarea,
   guardarPuntero,
   leerPunteros,
@@ -312,5 +315,147 @@ describe("tareaActiva", () => {
 
     assert.equal(tareaActiva("BOS", FASES)?.estado.taskName, "login-sso");
     assert.equal(tareaActiva("CRM", FASES)?.estado.taskName, "reporte-comisiones");
+  });
+});
+
+// La compuerta es una comparación contra la fase deducida. De ahí sale gratis el caso que
+// más fácil se implementa mal: volver a una fase anterior para corregirla no es un salto.
+describe("detectarSalto", () => {
+  function estadoCon(documentos: string[]) {
+    const docs = docsTemporales();
+    crearProyecto(docs, "BOS");
+    const carpeta = crearTarea(docs, "BOS", "login-sso", documentos);
+    return estadoDeTarea("login-sso", carpeta, FASES);
+  }
+
+  it("pedir una fase por delante de la que toca es un salto", () => {
+    const estado = estadoCon(["01 - Análisis Técnico.md", "02 - Decisiones.md"]); // va en 3
+
+    const salto = detectarSalto(4, estado, FASES);
+
+    assert.equal(salto?.fasePedida, 4);
+    assert.equal(salto?.siguienteFase, 3);
+    assert.deepEqual(salto?.faltan, [{ fase: 3, documento: "03 - Plan Técnico.md" }]);
+  });
+
+  it("pedir la fase que toca no es salto", () => {
+    assert.equal(detectarSalto(3, estadoCon(["01 - Análisis Técnico.md", "02 - Decisiones.md"]), FASES), null);
+  });
+
+  it("volver a una fase anterior para corregirla no es salto", () => {
+    const estado = estadoCon(["01 - Análisis Técnico.md", "02 - Decisiones.md"]); // va en 3
+
+    assert.equal(detectarSalto(2, estado, FASES), null);
+    assert.equal(detectarSalto(1, estado, FASES), null);
+  });
+
+  it("lista todas las fases anteriores que faltan, no solo la inmediata", () => {
+    const salto = detectarSalto(4, estadoCon(["00 - Contexto Inicial.md"]), FASES);
+
+    assert.deepEqual(salto?.faltan.map((f) => f.fase), [1, 2, 3]);
+  });
+
+  it("una tarea terminada no tiene huecos, así que nada es salto", () => {
+    assert.equal(detectarSalto(2, estadoCon(TODOS), FASES), null);
+  });
+
+  it("sin fases con documento no hay nada contra qué comparar", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "BOS");
+    const carpeta = crearTarea(docs, "BOS", "x");
+
+    assert.equal(detectarSalto(4, estadoDeTarea("x", carpeta, new Map()), new Map()), null);
+  });
+});
+
+describe("avisoDeSalto", () => {
+  it("nombra la tarea, el documento que falta y la fase real", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "BOS");
+    const carpeta = crearTarea(docs, "BOS", "login-sso", ["01 - Análisis Técnico.md"]);
+    const salto = detectarSalto(4, estadoDeTarea("login-sso", carpeta, FASES), FASES);
+
+    const aviso = avisoDeSalto(salto!, "login-sso", FASES);
+
+    assert.equal(aviso.includes("login-sso"), true);
+    assert.equal(aviso.includes("02 - Decisiones.md"), true);
+    assert.equal(aviso.includes("03 - Plan Técnico.md"), true);
+    assert.equal(aviso.includes("Fase 2 (Decisiones)"), true);
+  });
+});
+
+describe("avisoDeCompuerta", () => {
+  function montarDosProyectos() {
+    const docs = docsTemporales();
+    estadoTemporal();
+    crearProyecto(docs, "BOS");
+    crearProyecto(docs, "CRM");
+    crearTarea(docs, "BOS", "login-sso", ["01 - Análisis Técnico.md", "02 - Decisiones.md"]);
+    crearTarea(docs, "CRM", "reporte", TODOS);
+    return docs;
+  }
+
+  it("con project explícito avisa del salto de su tarea activa", () => {
+    montarDosProyectos();
+    guardarPuntero("BOS", "login-sso");
+
+    const aviso = avisoDeCompuerta(4, FASES, { project: "bos" });
+
+    assert.equal(aviso?.includes("COMPUERTA DE FASE"), true);
+    assert.equal(aviso?.includes("03 - Plan Técnico.md"), true);
+  });
+
+  it("calla cuando la fase pedida es la que toca", () => {
+    montarDosProyectos();
+    guardarPuntero("BOS", "login-sso");
+
+    assert.equal(avisoDeCompuerta(3, FASES, { project: "bos" }), null);
+  });
+
+  // El flujo normal es escribir "/f4" y ya: si el servidor no pudiera resolver la tarea solo,
+  // el modelo acabaría preguntándosela al usuario en cada fase.
+  it("sin project lo resuelve solo si hay un único proyecto con tarea activa", () => {
+    montarDosProyectos();
+    guardarPuntero("BOS", "login-sso");
+
+    assert.equal(avisoDeCompuerta(4, FASES)?.includes("COMPUERTA DE FASE"), true);
+  });
+
+  it("sin project y con varios punteros lo dice en voz alta en vez de callar", () => {
+    montarDosProyectos();
+    guardarPuntero("BOS", "login-sso");
+    guardarPuntero("CRM", "reporte");
+
+    const aviso = avisoDeCompuerta(4, FASES);
+
+    assert.equal(aviso?.includes("no se comprobó la compuerta"), true);
+    assert.equal(aviso?.includes("`project`"), true);
+  });
+
+  it("sin ninguna tarea activa todavía no hay nada que avisar", () => {
+    montarDosProyectos();
+
+    assert.equal(avisoDeCompuerta(4, FASES), null);
+  });
+
+  it("task_name comprueba contra otra tarea distinta de la activa", () => {
+    const docs = montarDosProyectos();
+    crearTarea(docs, "BOS", "otra", ["01 - Análisis Técnico.md"]);
+    guardarPuntero("BOS", "login-sso");
+
+    // La activa (login-sso) va en la 3; "otra" va en la 2. Que el aviso hable de "otra"
+    // demuestra que se comprobó contra ella y no contra la activa.
+    const aviso = avisoDeCompuerta(4, FASES, { project: "bos", taskName: "otra" });
+
+    assert.equal(aviso?.includes("otra"), true);
+    assert.equal(aviso?.includes("02 - Decisiones.md"), true);
+  });
+
+  it("un proyecto sin tareas no produce aviso", () => {
+    const docs = docsTemporales();
+    estadoTemporal();
+    crearProyecto(docs, "BOS");
+
+    assert.equal(avisoDeCompuerta(4, FASES, { project: "bos" }), null);
   });
 });

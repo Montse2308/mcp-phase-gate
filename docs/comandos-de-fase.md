@@ -50,7 +50,7 @@ Datos de la tarea (tómalos del texto que escribí después del comando; si falt
 
 Pasos:
 1. Llama a la tool `start_task` del mcp-orquestador con project, task_name e initial_context.
-2. Llama a `get_phase_prompt(1)` y asume ese rol de comportamiento.
+2. Llama a `get_phase_prompt(1)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol de comportamiento.
 3. Analiza el código actual de este repositorio para entender el impacto del requerimiento.
 4. Guarda el análisis técnico y funcional con `write_central_doc`, usando el nombre de archivo exacto que te indicó `get_phase_prompt`.
 
@@ -64,7 +64,7 @@ Vas a iniciar la FASE 2 (Decisiones) del flujo del mcp-orquestador.
 
 Pasos:
 1. Si no sabes cuál es la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
-2. Llama a `get_phase_prompt(2)` y asume ese rol.
+2. Llama a `get_phase_prompt(2)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol.
 3. Lee el documento de la Fase 1 con `read_central_doc`; `get_phase_prompt` te dio su nombre exacto.
 4. Identifica lagunas técnicas, riesgos y dependencias con el código existente.
 5. Hazme la lista de preguntas críticas de decisión, explicándome las implicaciones de cada una.
@@ -81,7 +81,7 @@ Vas a iniciar la FASE 3 (Plan Técnico) del flujo del mcp-orquestador.
 
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
-2. Llama a `get_phase_prompt(3)` y asume ese rol.
+2. Llama a `get_phase_prompt(3)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol.
 3. Lee los documentos de las fases anteriores con `read_central_doc`; `get_phase_prompt` te dio sus nombres exactos.
 4. Comprueba contra el código real lo que el plan va a afirmar, ANTES de escribirlo.
 5. Con las decisiones ya tomadas, genera el plan de implementación paso a paso (archivos a crear/modificar), respetando "Cero Rupturas".
@@ -96,7 +96,7 @@ Vas a iniciar la FASE 4 (Ejecución) del flujo del mcp-orquestador.
 
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
-2. Llama a `get_phase_prompt(4)` y asume ese rol.
+2. Llama a `get_phase_prompt(4)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol.
 3. Lee el plan técnico de la Fase 3 con `read_central_doc` —`get_phase_prompt` te dio su nombre exacto— y ejecútalo paso a paso, aplicando las reglas del repositorio actual.
 4. Verifica ejecutando lo que se pueda ejecutar, no describiendo. Al terminar cada bloque de cambios, dime cómo verificar lo que solo yo puedo verificar antes de avanzar.
 5. Al cerrar, guarda el documento de la fase con `write_central_doc`, con el nombre que te indicó `get_phase_prompt` y la estructura que pide el prompt.
@@ -113,7 +113,7 @@ Commits a auditar: tómalos del texto que escribí después del comando (ej. "lo
 
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name): la auditoría se guarda en su carpeta.
-2. Llama a `get_phase_prompt(5)` y asume ese rol de auditor externo.
+2. Llama a `get_phase_prompt(5)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol de auditor externo.
 3. Inspecciona los commits indicados usando SOLO lectura (git diff / git log de solo lectura, leer archivos). Nunca hagas commits, push ni subas PRs; de eso me encargo yo.
 4. Entrégame en el chat:
    - La AUDITORÍA con el formato del revisor, dejando clarísimo si hay cambios BLOQUEANTES para subir el PR.

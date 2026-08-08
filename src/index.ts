@@ -28,6 +28,7 @@ import {
   nombreContextoInicial,
 } from "./phases.js";
 import {
+  avisoDeCompuerta,
   describeEstado,
   guardarPuntero,
   limpiarEstadoViejo,
@@ -79,11 +80,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_phase_prompt",
-        description: `Obtiene el prompt maestro de comportamiento según la fase. Fases disponibles — ${PHASES_DESCRIPTION}.`,
+        description: `Obtiene el prompt maestro de comportamiento según la fase. Fases disponibles — ${PHASES_DESCRIPTION}. Comprueba además que no te estés saltando una fase: si faltan documentos anteriores, el prompt llega con un aviso al principio.`,
         inputSchema: {
           type: "object",
           properties: {
-            phase: { type: "number", description: `Número de la fase. Disponibles: ${PHASES_DESCRIPTION}.` }
+            phase: { type: "number", description: `Número de la fase. Disponibles: ${PHASES_DESCRIPTION}.` },
+            project: { type: "string", description: `Proyecto en el que estás trabajando: ${PROJECTS_DESCRIPTION}. Pásalo siempre que lo sepas —lo sabes por el repositorio que tienes abierto— para que se pueda comprobar que no te saltas una fase. La tarea se toma de la activa de ese proyecto.` },
+            task_name: { type: "string", description: "Solo si quieres comprobar contra una tarea distinta de la activa del proyecto. Normalmente se omite." }
           },
           required: ["phase"],
         },
@@ -226,8 +229,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!Number.isInteger(phase)) {
         throw new Error(`Debes indicar un número de fase. Disponibles: ${PHASES_DESCRIPTION}.`);
       }
+
+      const prompt = loadPhasePrompt(phase);
+
+      // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
+      // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
+      let aviso: string | null = null;
+      try {
+        aviso = avisoDeCompuerta(phase, discoverPhases(), {
+          ...(args?.project ? { project: String(args.project) } : {}),
+          ...(args?.task_name ? { taskName: String(args.task_name) } : {}),
+        });
+      } catch (error: any) {
+        console.error(`[orquestador] No se pudo comprobar la compuerta: ${error.message}`);
+      }
+
       return {
-        content: [{ type: "text", text: loadPhasePrompt(phase) }],
+        content: [{ type: "text", text: aviso ? `${aviso}\n\n${prompt}` : prompt }],
       };
     }
 

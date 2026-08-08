@@ -15,7 +15,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MODULE_DIR, stateDir, stateFile } from "./config.js";
-import { tasksRootPath } from "./paths.js";
+import { findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
 import type { PhaseFile } from "./phases.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
@@ -218,4 +218,115 @@ export function tareaActiva(
   }
 
   return { estado: tareas[0] as EstadoTarea, origen: "deducida" };
+}
+
+// ─── Compuerta de fase ──────────────────────────────────────────────────────
+// El repo se llama `phase-gate` pero durante mucho tiempo la compuerta no existió en el
+// código: se podía pedir el prompt de la Fase 4 sin ningún documento previo, y lo único que
+// pasaba era que la lectura del plan fallaba con un ENOENT. A partir de ahí el comportamiento
+// dependía del modelo: uno se detenía a avisar, otro se inventaba el plan que debía leer.
+//
+// La comprobación es una sola comparación contra la fase deducida, porque `siguienteFase` ya
+// es "la primera fase cuyo documento falta". De ahí sale gratis el caso delicado: volver a una
+// fase anterior para corregirla no es saltarse nada, y no se estorba.
+export type Salto = {
+  fasePedida: number;
+  siguienteFase: number;
+  faltan: { fase: number; documento: string }[];
+};
+
+export function detectarSalto(
+  fasePedida: number,
+  estado: EstadoTarea,
+  phases: Map<number, PhaseFile>
+): Salto | null {
+  // Sin fases con documento no hay nada contra lo que comparar; y una tarea terminada no
+  // tiene huecos, así que ninguna fase que se pida puede ser un salto.
+  if (estado.siguienteFase === null) return null;
+
+  // Pedir la fase que toca, o una anterior, es legítimo. Solo se mira hacia adelante.
+  if (fasePedida <= estado.siguienteFase) return null;
+
+  const faltan = [...phases.entries()]
+    .filter(([numero, datos]) => numero < fasePedida && datos.documento && !estado.fasesHechas.includes(numero))
+    .sort((a, b) => a[0] - b[0])
+    .map(([numero, datos]) => ({ fase: numero, documento: datos.documento as string }));
+
+  return { fasePedida, siguienteFase: estado.siguienteFase, faltan };
+}
+
+// El aviso va al principio del prompt, no en un campo aparte, porque lo tiene que leer el
+// modelo como parte de sus instrucciones. Avisa y entrega igual: bloquear estorbaría el día
+// que haga falta saltarse una fase a propósito, y hoy no hay dato de cuántas veces pasa.
+// Resuelve de qué tarea se está hablando y devuelve el aviso, o null si no hay nada que decir.
+//
+// Quién hace este trabajo es la decisión de diseño de la compuerta: lo hace el servidor, no el
+// modelo. El puntero por proyecto ya está guardado aquí, así que pedírselo al modelo sería
+// trabajo de más y una vía de fricción — si no lograra deducirlo acabaría preguntándoselo al
+// usuario en cada fase, y escribir "/f4" para que te contesten "¿en qué tarea estamos?" es peor
+// que no tener compuerta.
+//
+// `project` y `taskName` son solo anulación manual, para comprobar contra una tarea distinta de
+// la activa. Sin ellos se usa el puntero; y cuando de verdad no se puede saber se dice en voz
+// alta, en vez de callar como si todo estuviera en orden.
+export function avisoDeCompuerta(
+  fasePedida: number,
+  phases: Map<number, PhaseFile>,
+  opciones: { project?: string; taskName?: string } = {}
+): string | null {
+  let carpetaProyecto: string;
+
+  if (opciones.project) {
+    carpetaProyecto = requireProjectFolder(opciones.project);
+  } else {
+    // Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa.
+    const conPuntero = Object.keys(leerPunteros());
+
+    if (conPuntero.length === 0) return null; // Nada empezado: no hay nada que comprobar.
+
+    if (conPuntero.length > 1) {
+      return (
+        "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
+        "proyectos con tarea activa. Pasa `project` para que se compruebe."
+      );
+    }
+
+    const encontrada = findProjectFolder(conPuntero[0] as string);
+    if (!encontrada) return null; // Puntero de un proyecto que ya no existe: se ignora.
+    carpetaProyecto = encontrada;
+  }
+
+  const estado = opciones.taskName
+    ? listarTareas(carpetaProyecto, phases).find((tarea) => tarea.taskName === opciones.taskName)
+    : tareaActiva(carpetaProyecto, phases)?.estado;
+
+  if (!estado) return null; // Proyecto sin tareas, o un nombre de tarea que no existe.
+
+  const salto = detectarSalto(fasePedida, estado, phases);
+  return salto ? avisoDeSalto(salto, estado.taskName, phases) : null;
+}
+
+export function avisoDeSalto(
+  salto: Salto,
+  taskName: string,
+  phases: Map<number, PhaseFile>
+): string {
+  const titulo = phases.get(salto.siguienteFase)?.title;
+  const vaEn = titulo ? `Fase ${salto.siguienteFase} (${titulo})` : `Fase ${salto.siguienteFase}`;
+
+  const lista = salto.faltan.map(({ fase, documento }) => `- Fase ${fase}: falta \`${documento}\``);
+
+  return [
+    "## ATENCIÓN — COMPUERTA DE FASE",
+    "",
+    `Pediste la Fase ${salto.fasePedida}, pero la tarea "${taskName}" no tiene los documentos de fases anteriores:`,
+    "",
+    ...lista,
+    "",
+    `Esta tarea va en la ${vaEn}. NO hagas el trabajo de la Fase ${salto.fasePedida} sobre documentos que no existen ` +
+      "ni te los inventes a partir del contexto del chat.",
+    "",
+    "Díselo al usuario antes de nada y pregúntale si prefiere hacer primero la fase que falta o continuar de todos " +
+      "modos. Lo que sigue es el prompt de la fase que pediste: aplícalo solo después de resolver esto con el usuario.",
+  ].join("\n");
 }
