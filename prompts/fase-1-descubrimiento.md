@@ -1,3 +1,8 @@
+---
+documento: 01 - Análisis Técnico.md
+documento_inicial: 00 - Contexto Inicial.md
+---
+
 # Descubrimiento
 
 ## ROL DE COMPORTAMIENTO (GLOBAL)

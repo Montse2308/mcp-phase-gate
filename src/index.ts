@@ -78,8 +78,11 @@ function estaDentro(base: string, ruta: string): boolean {
   return relativa === "" || (!relativa.startsWith("..") && !path.isAbsolute(relativa));
 }
 
-// Subcarpeta fija donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>)
-const TASKS_SUBDIR = "Proyectos";
+// Subcarpeta donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>).
+// Es una convención de organización, no una ruta de dispositivo, pero vive en el entorno
+// para no tener que introducir un archivo de configuración por una sola cadena.
+// Vacía a propósito significa que las tareas cuelgan directo del proyecto.
+const TASKS_SUBDIR = process.env.ORQUESTADOR_TASKS_SUBDIR?.trim() ?? "Proyectos";
 
 // Carpeta con los prompts de las fases, en archivos .md sueltos.
 // Vivir fuera del código permite afinar el texto de una fase sin recompilar:
@@ -150,19 +153,61 @@ const server = new Server(
   }
 );
 
-// Mapeo de proyectos a sus rutas de documentación
-const PROJECT_DOC_DIRS: Record<string, string> = {
-  bos: "BOS",
-  crm: "CRM",
-  kanban: "KANBAN",
-};
+// ─── Proyectos ──────────────────────────────────────────────────────────────
+// Los proyectos no se declaran en ninguna parte: son las carpetas que existen. Antes había
+// una tabla con bos/crm/kanban que no restringía nada —cualquier nombre inventado resolvía
+// una ruta y start_task le creaba la carpeta— porque solo era una tabla de alias y los tres
+// nombres coincidían con su propio nombre en mayúsculas.
+//
+// Es proyecto la carpeta que contenga la subcarpeta de tareas. Esa regla deja fuera sola a
+// las carpetas que no son proyectos, y da de alta uno nuevo con solo crearle su subcarpeta.
+// Si TASKS_SUBDIR está vacío la regla no se puede aplicar y vale cualquier carpeta.
+function discoverProjects(): Map<string, string> {
+  const proyectos = new Map<string, string>(); // clave en minúsculas -> nombre real de la carpeta
+  const base = requireBasePath(DOCS);
+
+  for (const entrada of fs.readdirSync(base, { withFileTypes: true })) {
+    if (!entrada.isDirectory()) continue;
+    if (TASKS_SUBDIR && !fs.existsSync(path.join(base, entrada.name, TASKS_SUBDIR))) continue;
+    proyectos.set(entrada.name.toLowerCase(), entrada.name);
+  }
+
+  return proyectos;
+}
+
+function describeProjects(): string {
+  try {
+    const nombres = [...discoverProjects().values()].sort();
+    return nombres.length ? nombres.join(", ") : "(ninguno todavía)";
+  } catch {
+    // Sin ORQUESTADOR_DOCS_PATH configurada no se pueden listar; el error real lo da la tool.
+    return "(no se pudieron leer: revisa ORQUESTADOR_DOCS_PATH)";
+  }
+}
+
+// Devuelve el nombre real de la carpeta, respetando mayúsculas, o null si no existe.
+function findProjectFolder(project: string): string | null {
+  return discoverProjects().get(String(project).trim().toLowerCase()) ?? null;
+}
+
+function requireProjectFolder(project: string): string {
+  const carpeta = findProjectFolder(project);
+  if (!carpeta) {
+    throw new Error(
+      `No existe el proyecto "${project}". Los proyectos disponibles son: ${describeProjects()}.`
+    );
+  }
+  return carpeta;
+}
 
 // Opción A: la ruta de una tarea SIEMPRE se arma aquí, en un solo lugar.
 // Estructura: <ORQUESTADOR_DOCS_PATH>/<PROYECTO>/<TASKS_SUBDIR>/<tarea>
+function taskFolderPath(carpetaProyecto: string, taskName: string): string {
+  return path.join(requireBasePath(DOCS), carpetaProyecto, TASKS_SUBDIR, taskName);
+}
+
 function resolveTaskFolder(project: string, taskName: string): string {
-  const proj = String(project).toLowerCase();
-  const baseFolder = PROJECT_DOC_DIRS[proj] || proj.toUpperCase();
-  return path.join(requireBasePath(DOCS), baseFolder, TASKS_SUBDIR, taskName);
+  return taskFolderPath(requireProjectFolder(project), taskName);
 }
 
 // Opción B: guarda cuál es la tarea activa para sobrevivir cambios de chat / pérdida de contexto.
@@ -205,7 +250,37 @@ const GLOBAL_RULES_FILE = "global-rules.md";
 // para que un juego de prompts en inglés funcione sin tocar el código.
 const PHASE_FILE_PATTERN = /^(?:fase|phase)-(\d+)[-.]/i;
 
-type PhaseFile = { file: string; title: string };
+// Cabecera opcional al inicio del .md, entre líneas de ---, con "clave: valor".
+// Ahí cada fase declara cómo se llama el documento que produce. Vive pegada al prompt que
+// describe ese documento —no en un archivo de configuración aparte— para que el nombre exista
+// en un solo lugar y se lea en vivo, sin recompilar, igual que el resto del prompt.
+const PHASE_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
+type PhaseFile = {
+  file: string;
+  title: string;
+  documento?: string | undefined;         // el que produce la fase (la 5 no produce ninguno)
+  documentoInicial?: string | undefined;  // solo la fase 1: el archivo que escribe start_task
+};
+
+function parsePhaseFile(fullPath: string): { meta: Record<string, string>; cuerpo: string } {
+  const crudo = fs.readFileSync(fullPath, "utf-8");
+  const encontrada = crudo.match(PHASE_FRONTMATTER);
+
+  if (!encontrada) return { meta: {}, cuerpo: crudo };
+
+  const meta: Record<string, string> = {};
+  for (const linea of (encontrada[1] ?? "").split(/\r?\n/)) {
+    const corte = linea.indexOf(":");
+    if (corte === -1) continue;
+    meta[linea.slice(0, corte).trim()] = linea
+      .slice(corte + 1)
+      .trim()
+      .replace(/^["']|["']$/g, "");
+  }
+
+  return { meta, cuerpo: crudo.slice(encontrada[0].length) };
+}
 
 // Descubre las fases disponibles a partir de los archivos de PROMPTS_PATH.
 // El número de fases no está cableado: agregar un "fase-6-*.md" basta para
@@ -224,26 +299,40 @@ function discoverPhases(): Map<number, PhaseFile> {
     const phaseNumber = Number(match[1]);
     if (phases.has(phaseNumber)) continue; // gana el primero por orden alfabético
 
+    let meta: Record<string, string> = {};
+    let cuerpo = "";
+    try {
+      ({ meta, cuerpo } = parsePhaseFile(path.join(PROMPTS_PATH, file)));
+    } catch {
+      // Si el archivo no se puede leer aquí, el error real se reporta al invocar la fase.
+    }
+
     phases.set(phaseNumber, {
       file,
-      title: readPhaseTitle(path.join(PROMPTS_PATH, file), file),
+      title: readPhaseTitle(cuerpo, file),
+      documento: meta.documento || undefined,
+      documentoInicial: meta.documento_inicial || undefined,
     });
   }
 
   return phases;
 }
 
-// El título es el primer encabezado "# ..." del archivo; si no lo hay, se
-// deriva del nombre del archivo para que la descripción de la tool siga siendo útil.
-function readPhaseTitle(fullPath: string, fileName: string): string {
-  try {
-    for (const line of fs.readFileSync(fullPath, "utf-8").split(/\r?\n/)) {
-      if (line.startsWith("# ")) return line.slice(2).trim();
-    }
-  } catch {
-    // Si el archivo no se puede leer aquí, el error real se reporta al invocar la fase.
+// El título es el primer encabezado "# ..." del cuerpo; si no lo hay, se deriva del nombre
+// del archivo para que la descripción de la tool siga siendo útil.
+function readPhaseTitle(cuerpo: string, fileName: string): string {
+  for (const line of cuerpo.split(/\r?\n/)) {
+    if (line.startsWith("# ")) return line.slice(2).trim();
   }
   return fileName.replace(PHASE_FILE_PATTERN, "").replace(/\.md$/i, "");
+}
+
+// Nombre del archivo de contexto inicial que escribe start_task. Lo declara la fase 1 en su
+// cabecera; la constante es solo el respaldo para un juego de prompts que no lo declare.
+const CONTEXTO_INICIAL_POR_DEFECTO = "00 - Contexto Inicial.md";
+
+function nombreContextoInicial(): string {
+  return discoverPhases().get(1)?.documentoInicial || CONTEXTO_INICIAL_POR_DEFECTO;
 }
 
 // Se lee en cada llamada (no se cachea) para poder afinar un prompt y probarlo
@@ -268,9 +357,45 @@ function loadPhasePrompt(phase: number): string {
     parts.push(fs.readFileSync(globalRulesPath, "utf-8").trim());
   }
 
-  parts.push(fs.readFileSync(path.join(PROMPTS_PATH, entry.file), "utf-8").trim());
+  parts.push(parsePhaseFile(path.join(PROMPTS_PATH, entry.file)).cuerpo.trim());
+
+  const archivos = describePhaseFiles(available, phase);
+  if (archivos) parts.push(archivos);
 
   return parts.join("\n\n");
+}
+
+// Bloque que se añade al final del prompt con los nombres exactos de los documentos: el que
+// produce esta fase y los de las anteriores, que son los que hay que leer. Va aquí y no en el
+// comando del cliente para que el nombre viva en un solo sitio; así afinar un prompt no obliga
+// a editar además un comando en cada dispositivo.
+function describePhaseFiles(available: Map<number, PhaseFile>, phase: number): string {
+  const propio = available.get(phase)?.documento;
+
+  const previos = [...available.entries()]
+    .filter(([numero, datos]) => numero < phase && datos.documento)
+    .sort((a, b) => a[0] - b[0])
+    .map(([numero, datos]) => `- Fase ${numero}: \`${datos.documento}\``);
+
+  if (!propio && previos.length === 0) return "";
+
+  const lineas = ["## ARCHIVOS DE ESTA TAREA (nombres exactos)"];
+
+  if (previos.length) {
+    lineas.push("", "Documentos de las fases anteriores, léelos con `read_central_doc`:", ...previos);
+  }
+
+  if (propio) {
+    lineas.push(
+      "",
+      `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
+        "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
+    );
+  } else {
+    lineas.push("", "Esta fase no deja documento en la Documentación Central: su salida va en el chat.");
+  }
+
+  return lineas.join("\n");
 }
 
 // La lista de tools es estática, así que la descripción se arma una sola vez al arrancar.
@@ -286,6 +411,11 @@ function describePhases(): string {
 
 const PHASES_DESCRIPTION = describePhases();
 
+// La lista de tools se arma una sola vez al arrancar, así que esta foto de los proyectos
+// puede quedarse vieja si creas una carpeta con Cursor abierto. Es orientativa: la lista
+// que manda es la que devuelven las tools al rechazar un proyecto inexistente.
+const PROJECTS_DESCRIPTION = describeProjects();
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -295,9 +425,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            project: { type: "string", description: "Proyecto (bos, crm, kanban)" },
+            project: { type: "string", description: `Proyecto. Tiene que ser uno de los que ya existen: ${PROJECTS_DESCRIPTION}. Si no lo es, la tool te devuelve la lista actualizada.` },
             task_name: { type: "string", description: "Nombre de la tarea (creará una carpeta con este nombre)" },
-            initial_context: { type: "string", description: "El contexto, correo o requerimiento inicial completo" }
+            initial_context: { type: "string", description: "El contexto, correo o requerimiento inicial completo" },
+            crear_proyecto: { type: "boolean", description: "Solo para ESTRENAR un proyecto que todavía no existe. Déjalo sin poner salvo que el usuario te haya dicho explícitamente que quiere crear un proyecto nuevo: sirve para que un nombre mal escrito no cree una carpeta suelta en la Documentación." }
           },
           required: ["project", "task_name", "initial_context"],
         },
@@ -327,7 +458,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            project: { type: "string", description: "Proyecto (bos, crm, kanban). Úsalo junto con task_name y file_name." },
+            project: { type: "string", description: `Proyecto, uno de los existentes: ${PROJECTS_DESCRIPTION}. Úsalo junto con task_name y file_name.` },
             task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
             file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
             file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN (ej. 'BOS/Proyectos/tarea/01-analisis.md'). Solo si no usas project+task_name." }
@@ -340,7 +471,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            project: { type: "string", description: "Proyecto (bos, crm, kanban). Úsalo junto con task_name y file_name." },
+            project: { type: "string", description: `Proyecto, uno de los existentes: ${PROJECTS_DESCRIPTION}. Úsalo junto con task_name y file_name.` },
             task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
             file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
             file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN. Solo si no usas project+task_name." },
@@ -370,24 +501,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     if (name === "start_task") {
-      const proj = String(args?.project).toLowerCase();
+      const proj = String(args?.project).trim();
       const taskName = String(args?.task_name);
       const context = String(args?.initial_context);
 
-      const taskFolderPath = resolveTaskFolder(proj, taskName);
+      // Estrenar proyecto tiene que ser deliberado: sin esta puerta, un nombre mal escrito
+      // creaba una carpeta suelta en la Documentación y nadie se enteraba hasta buscarla.
+      let carpetaProyecto = findProjectFolder(proj);
+      let estrenado = false;
 
-      if (!fs.existsSync(taskFolderPath)) {
-        fs.mkdirSync(taskFolderPath, { recursive: true });
+      if (!carpetaProyecto) {
+        if (args?.crear_proyecto !== true) {
+          throw new Error(
+            `No existe el proyecto "${proj}". Los proyectos disponibles son: ${describeProjects()}. ` +
+              `Si el usuario te confirmó que quiere estrenar el proyecto "${proj.toUpperCase()}", ` +
+              `vuelve a llamar a start_task con crear_proyecto: true.`
+          );
+        }
+        carpetaProyecto = proj.toUpperCase();
+        estrenado = true;
       }
 
-      const filePath = path.join(taskFolderPath, "00 - Contexto Inicial.md");
+      const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
+
+      if (!fs.existsSync(carpetaTarea)) {
+        fs.mkdirSync(carpetaTarea, { recursive: true });
+      }
+
+      const filePath = path.join(carpetaTarea, nombreContextoInicial());
       fs.writeFileSync(filePath, context, "utf-8");
 
       // Opción B: recordar esta como la tarea activa.
-      setActiveTask(proj, taskName, taskFolderPath);
+      setActiveTask(carpetaProyecto, taskName, carpetaTarea);
+
+      const aviso = estrenado ? `\nProyecto "${carpetaProyecto}" estrenado.` : "";
 
       return {
-        content: [{ type: "text", text: `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${filePath}\nTarea activa registrada (proyecto: ${proj}).` }],
+        content: [{ type: "text", text: `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${filePath}\nTarea activa registrada (proyecto: ${carpetaProyecto}).${aviso}` }],
       };
     }
 
