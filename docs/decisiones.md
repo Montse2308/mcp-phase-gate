@@ -12,6 +12,53 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-08 — README bilingüe completo, asumiendo el costo de la duplicación
+
+**Decisión.** `README.md` en inglés y `README.es.md` en español, los dos completos. Ambos
+abren explicando qué problema resuelve, por qué las fases y para quién es, antes de la
+instalación, con un diagrama de las cinco fases.
+
+**Por qué.** Los prompts —que son el producto real— están en español y se quedan así, pero la
+documentación en un solo idioma decide por adelantado quién puede usar el proyecto. Con el
+repo aún sin publicar, la decisión se toma ahora para no reescribirlo después.
+
+**El costo, asumido a sabiendas.** Son dos documentos de cuatrocientas líneas que hay que
+cambiar juntos, y ese es exactamente el problema que este repo ya resolvió dos veces: la ruta
+duplicada entre el `mcp.json` y el `.env`, y el nombre del documento duplicado entre el prompt
+y el comando. Aquí no hay forma de tener una sola fuente sin generar traducciones automáticas,
+así que se acepta el riesgo y se mitiga con una línea en la tabla "Dónde está cada cosa" de
+cada README que recuerda cambiar el otro. Si con el tiempo uno envejece, la salida es reducir
+el español a un resumen que apunte al inglés, no seguir manteniendo dos completos.
+
+**Qué se descartó.** Un README en español con solo una introducción en inglés, que evitaba la
+duplicación pero dejaba a quien llega de fuera sin poder instalarlo sin traducir.
+
+**De paso.** La sección "Guía de Uso Diario" seguía nombrando `01 - Análisis Técnico.md` y
+`bos | crm | kanban` a mano — restos de antes de que el servidor entregara los nombres y
+detectara los proyectos. Documentación que contradecía al código.
+
+---
+
+## 2026-08-08 — Licencia MIT
+
+**Decisión.** MIT, a nombre de la autora. El `package.json` pasa de `"ISC"` a `"MIT"`.
+
+**Por qué.** El `ISC` que había no lo eligió nadie: es el valor por defecto de `npm init`. O
+sea que el manifiesto declaraba una licencia que no existía como archivo y que nunca se
+decidió. MIT es la más corta, la más común en herramientas de desarrollo, y no le pone
+condiciones a quien quiera usar esto en su trabajo.
+
+**Qué se descartó.** Apache-2.0, cuya concesión de patentes no aporta gran cosa en un proyecto
+de este tamaño y cuyo texto largo intimida en un repo pequeño. Y GPL-3.0, que habría impedido
+que alguien cerrara un derivado, a cambio de que muchas empresas lo descarten por política.
+
+**Lo que esta decisión no resuelve.** Si los derechos son de la autora o de la organización
+para la que se construyó el flujo. Se planteó antes de escribir el archivo y la decisión de
+firmar a título personal fue suya; queda anotado aquí porque es lo que habría que revisar
+antes de hacer público el repositorio, no después.
+
+---
+
 ## 2026-08-08 — El servidor se llama `phase-gate` y deja de presuponer Cursor
 
 **Decisión.** El servidor pasa de anunciarse como `cursor-mcp-orchestrator` a `phase-gate`. El

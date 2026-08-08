@@ -1,7 +1,7 @@
 {
   "name": "mcp_orquestador",
   "version": "1.0.0",
-  "description": "",
+  "description": "Servidor MCP que parte cada requerimiento en cinco fases con compuerta y obliga a que cada una deje su documento en una documentación central.",
   "main": "build/index.js",
   "scripts": {
     "build": "tsc",
@@ -14,8 +14,8 @@
     "url": "git+https://github.com/Montse2308/MCP_orquestador.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Montserrat Ximena Hernández Gallegos",
+  "license": "MIT",
   "type": "module",
   "bugs": {
     "url": "https://github.com/Montse2308/MCP_orquestador/issues"
