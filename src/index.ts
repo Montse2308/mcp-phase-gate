@@ -78,6 +78,27 @@ function estaDentro(base: string, ruta: string): boolean {
   return relativa === "" || (!relativa.startsWith("..") && !path.isAbsolute(relativa));
 }
 
+// ─── Identidad del servidor ─────────────────────────────────────────────────
+// Es lo que el cliente muestra en su panel de MCP. Se llamaba "cursor-mcp-orchestrator",
+// que era doblemente equivocado: el servidor habla MCP estándar y funciona igual en VS Code
+// o Claude Code, donde leer "cursor-" desorienta; y "orchestrator" no dice qué orquesta.
+// "phase-gate" es el término de ingeniería de procesos para avanzar por fases sin poder
+// saltarse la anterior, que es exactamente lo que hace este flujo.
+//
+// Ojo: esto es metadato. Quien identifica al servidor y da el prefijo a las tools es la clave
+// del archivo de configuración del cliente, así que renombrar aquí no rompe ningún registro.
+const SERVER_NAME = "phase-gate";
+
+// La versión sale del package.json para no tener el mismo número en dos sitios.
+const SERVER_VERSION = ((): string => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"));
+    return typeof pkg.version === "string" ? pkg.version : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+
 // Subcarpeta donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>).
 // Es una convención de organización, no una ruta de dispositivo, pero vive en el entorno
 // para no tener que introducir un archivo de configuración por una sola cadena.
@@ -143,8 +164,8 @@ function migrateLegacyState(): void {
 
 const server = new Server(
   {
-    name: "cursor-mcp-orchestrator",
-    version: "1.0.0",
+    name: SERVER_NAME,
+    version: SERVER_VERSION,
   },
   {
     capabilities: {
@@ -412,7 +433,7 @@ function describePhases(): string {
 const PHASES_DESCRIPTION = describePhases();
 
 // La lista de tools se arma una sola vez al arrancar, así que esta foto de los proyectos
-// puede quedarse vieja si creas una carpeta con Cursor abierto. Es orientativa: la lista
+// puede quedarse vieja si creas una carpeta con el cliente abierto. Es orientativa: la lista
 // que manda es la que devuelven las tools al rechazar un proyecto inexistente.
 const PROJECTS_DESCRIPTION = describeProjects();
 

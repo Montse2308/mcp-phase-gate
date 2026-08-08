@@ -12,6 +12,40 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-08 — El servidor se llama `phase-gate` y deja de presuponer Cursor
+
+**Decisión.** El servidor pasa de anunciarse como `cursor-mcp-orchestrator` a `phase-gate`. El
+README documenta el registro en Cursor, VS Code y Claude Code, y los comandos de fase se
+versionan en `.claude/commands/`.
+
+**Por qué el nombre.** Era equivocado por partida doble. Por un lado, el servidor habla MCP
+estándar y funciona igual en VS Code o Claude Code, donde leer `cursor-` en el panel
+desorienta; se comprobó registrándolo en VS Code, que muestra literalmente ese texto. Por otro,
+"orchestrator" no dice qué orquesta: cualquier MCP que llame a varias cosas en orden es un
+orquestador. `phase-gate` es el término de ingeniería de procesos para avanzar por fases sin
+poder saltarse la anterior, que es exactamente lo que hace este flujo, incluida la Fase 2 que
+se detiene a esperar respuestas.
+
+**Por qué renombrar no rompe nada.** El nombre del servidor es metadato del `initialize`. Quien
+lo identifica, y quien prefija sus tools, es la clave del archivo de configuración del cliente
+—`mcp-orquestador`, que no cambia—. Los registros existentes siguen funcionando.
+
+**Los tres clientes documentados son los tres que se probaron.** Windsurf queda fuera a
+propósito: no está instalado en ninguno de los dos equipos y la propia
+[issue #10](https://github.com/Montse2308/MCP_orquestador/issues/10) pide no listar un cliente
+sin verificarlo.
+
+**El hallazgo de Claude Code.** Es el único de los tres cuyo archivo de registro admite ruta
+**relativa**, porque lanza el servidor desde la carpeta del proyecto. Eso lo vuelve el primer
+archivo de configuración que se puede versionar y sirve igual en cualquier máquina, en vez de
+llevar la ruta absoluta de un equipo concreto. Sus comandos de fase también viven en el repo,
+así que en ese cliente el problema de mantener las copias sincronizadas a mano no existe.
+
+**Qué se descartó.** Conservar "cursor" en el nombre, que era la primera intuición: hace que el
+panel de los otros dos clientes muestre el nombre de un editor que no es el que estás usando.
+
+---
+
 ## 2026-08-08 — Los proyectos son las carpetas que existen, no una lista
 
 **Decisión.** Se borra `PROJECT_DOC_DIRS`. Es proyecto la carpeta que contenga la subcarpeta
@@ -131,7 +165,7 @@ ya trae el JSON completo, y de dos copias del mismo contenido una acaba envejeci
 carpeta del usuario, porque Cursor no los lee de otro lado. Editar una fase en un equipo deja
 al otro con la versión vieja, y eso sí es un problema de flujo, no de configuración. Queda
 como issue abierto; entretanto su contenido está copiado en
-[`comandos-cursor.md`](comandos-cursor.md).
+[`comandos-de-fase.md`](comandos-de-fase.md).
 
 ---
 
