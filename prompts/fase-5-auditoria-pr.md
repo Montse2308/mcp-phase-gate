@@ -1,3 +1,7 @@
+---
+documento: 05 - Auditoría.md
+---
+
 # Auditoría / Pre-PR
 
 ## ROL DE COMPORTAMIENTO (GLOBAL)
@@ -190,6 +194,15 @@ El filtro decía "Fecha de alta" pero en realidad filtra por fecha de pago, lo q
 
 ## ENTREGA
 - Entrega ambas salidas en el chat para que el usuario las copie. La SALIDA 2 va
-  obligatoriamente dentro del bloque de cuatro backticks descrito arriba.
-- NO escribas en la Documentación Central a menos que el usuario te lo pida
-  explícitamente.
+  obligatoriamente dentro del bloque de cuatro backticks descrito arriba. El chat
+  sigue siendo la entrega principal: es de donde el usuario copia y pega.
+- Además, guarda el documento de esta fase con `write_central_doc` en la carpeta de
+  la tarea, con el nombre exacto que se indica al final de este prompt. Contiene, en
+  este orden: la AUDITORÍA completa y debajo la DESCRIPCIÓN del PR, las dos tal cual
+  las entregaste. Es el archivo de la auditoría, no un resumen: no recortes ni
+  reescribas lo que ya dijiste en el chat.
+- Si después de entregar corriges algo —porque el usuario te señaló un error o
+  cambiaste la descripción—, vuelve a guardar el documento. El archivo tiene que
+  reflejar la versión final, no el primer intento.
+- Aparte de ese documento, NO escribas nada más en la Documentación Central ni en el
+  repositorio de código.
