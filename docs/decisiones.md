@@ -12,6 +12,52 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-08 — Sin rutas por defecto, y el error se entrega en la tool
+
+**Decisión.** `ORQUESTADOR_DOCS_PATH` y `ORQUESTADOR_REPOS_PATH` dejan de tener valor por
+defecto. Si falta una, o apunta a algo que no existe o que no es una carpeta, **el servidor
+arranca igual** y son las tools que dependen de esa ruta las que devuelven el error, con el
+nombre de la variable y dónde configurarla. `get_phase_prompt`, que no necesita rutas, sigue
+funcionando.
+
+**Por qué.** El default era la ruta del equipo de quien escribió el código. En cualquier otro
+dispositivo el servidor arrancaba "bien" y el error salía mucho después, dentro de una tool,
+disfrazado de "no encontré el archivo" y sin mencionar que faltaba configurar algo.
+
+Lo de entregar el error en la tool y no al arrancar es contra lo que decía la
+[issue #6](https://github.com/Montse2308/MCP_orquestador/issues/6), y se decidió a
+propósito: si el proceso muere, el cliente solo lo pinta en rojo y el motivo se queda en un
+log que hay que ir a buscar. Devolviéndolo en la tool, el mensaje llega al chat, que es donde
+está la usuaria. El log también lo escribe al arrancar, para cuando alguien sí abra el log.
+
+**Por qué se valida que la carpeta exista, no solo que la variable esté definida.** Una
+variable con un typo falla igual de tarde que una ausente. Y hay un caso que ya mordió una
+vez y no es adivinable: un `.env` guardado en UTF-16 hace que la `Ó` de `DOCUMENTACIÓN`
+llegue rota, así que la ruta "no existe" aunque en el Explorador se vea idéntica. El mensaje
+de error lo nombra.
+
+**Qué se descartó.** Salir del proceso al arrancar, por lo de arriba. Y arrancar dejando solo
+una advertencia en el log: es lo mismo que hay hoy, un aviso que nadie ve.
+
+---
+
+## 2026-08-08 — La contención de rutas se comprueba con path.relative, no con startsWith
+
+**Decisión.** Las tres comprobaciones de "esta ruta está dentro de la carpeta permitida" pasan
+de `startsWith` a comparar la ruta relativa entre ambas.
+
+**Por qué.** `startsWith` es comparación de texto sobre algo que no es texto, y fallaba en las
+dos direcciones. Dejaba pasar la carpeta hermana con prefijo común —con base
+`C:\PROYECTOS\TRABAJO`, la ruta `C:\PROYECTOS\TRABAJO_VIEJO` empieza igual sin estar dentro,
+que es la [issue #7](https://github.com/Montse2308/MCP_orquestador/issues/7)— y además
+rechazaba rutas legítimas cuando la base venía escrita con otras mayúsculas, cosa que no
+estaba reportada y se encontró al probar el arreglo.
+
+**Qué se descartó.** Normalizar a minúsculas y seguir con `startsWith`: arregla el caso de las
+mayúsculas y deja intacto el de la carpeta hermana, que es el que importa.
+
+---
+
 ## 2026-08-07 — La configuración por dispositivo no vive en el repo
 
 **Decisión.** El `.cursor/mcp.json` sale del repositorio y queda gitignoreado. La

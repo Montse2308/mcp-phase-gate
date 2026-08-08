@@ -38,7 +38,7 @@ El código es idéntico en todos lados; lo único que cambia entre tu **compu de
 ### Requisitos previos
 - **Node.js** instalado (versión 18 o superior). Verifícalo con `node -v`.
 - **Git** instalado.
-- El **OneDrive de la oficina** ("Abogados Manuel Solis") sincronizado en el dispositivo, con la carpeta `DOCUMENTACIÓN` disponible localmente.
+- El **OneDrive de tu organización** sincronizado en el dispositivo, con la carpeta de Documentación disponible localmente.
 - **Cursor** instalado.
 
 ### Paso 1 — Clonar el repositorio
@@ -68,13 +68,17 @@ La ruta de la Documentación cambia según el usuario de Windows del equipo, as�
 copy .env.example .env
 ```
 
-2. Averigua tu ruta real: abre el Explorador, navega hasta la carpeta `DOCUMENTACIÓN` dentro del OneDrive de la oficina, haz clic en la barra de direcciones y copia la ruta completa.
+2. Averigua tu ruta real: abre el Explorador, navega hasta tu carpeta de Documentación dentro del OneDrive de la organización, haz clic en la barra de direcciones y copia la ruta completa.
 3. Edita el `.env` y pon tus valores (aquí las barras invertidas van **simples**, sin comillas):
 
 ```ini
-ORQUESTADOR_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - Abogados Manuel Solis\Documentos\DOCUMENTACIÓN
+ORQUESTADOR_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN
 ORQUESTADOR_REPOS_PATH=C:\proyectos
 ```
+
+**Las dos son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
+
+> Guarda el `.env` en **UTF-8 sin BOM**. Si lo creas desde PowerShell con `>` sale en UTF-16, los acentos de `DOCUMENTACIÓN` llegan rotos y la ruta "no existe" aunque la veas bien.
 
 ### Paso 4 — Registrar el MCP en Cursor
 Como las rutas viven en el `.env`, el `mcp.json` queda genérico (solo apunta al `build/index.js`). Edita `C:\Users\<TU_USUARIO>\.cursor\mcp.json` (créalo si no existe):
@@ -268,12 +272,14 @@ descripciones de PR tuyas: el modelo imita esa voz más que cualquier instrucci�
 
 ## ⚙️ Variables de entorno
 
-Se cargan desde el archivo `.env` de la raíz del repo (o desde el bloque `"env"` del `mcp.json`). Si ninguna está definida, se usan los valores por defecto de la compu original.
+Se cargan desde el archivo `.env` de la raíz del repo (o desde el bloque `"env"` del `mcp.json`).
+
+Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a carpetas que solo existen en tu equipo, así que cualquier default sería la ruta de la máquina de otra persona. Si falta una, o apunta a algo que no existe o que no es una carpeta, las tools que la usan devuelven el nombre de la variable y dónde configurarla. Las que no dependen de ella —como `get_phase_prompt`— siguen funcionando.
 
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
-| `ORQUESTADOR_DOCS_PATH` | `C:\Users\Usuario general\OneDrive - Abogados Manuel Solis\Documentos\DOCUMENTACIÓN` | Ruta a la carpeta raíz de la Documentación en OneDrive. **Cámbiala en cada dispositivo.** |
-| `ORQUESTADOR_REPOS_PATH` | `C:\proyectos` | Ruta a la carpeta donde están tus repositorios de código. |
+| `ORQUESTADOR_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación en OneDrive. **Distinta en cada dispositivo.** |
+| `ORQUESTADOR_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
 | `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guarda la tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas o para forzar una ubicación concreta. |
 
