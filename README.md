@@ -84,7 +84,7 @@ Como las rutas viven en el `.env`, el `mcp.json` queda genérico (solo apunta al
   "mcpServers": {
     "mcp-orquestador": {
       "command": "node",
-      "args": ["C:\\proyectos\\yo\\MCP_orquestador\\build\\index.js"]
+      "args": ["C:\\<DONDE_CLONASTE>\\MCP_orquestador\\build\\index.js"]
     }
   }
 }
@@ -111,6 +111,45 @@ Ajusta la ruta dentro de `args` según dónde clonaste el repo en este equipo. (
 
   Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
 - **Regla de oro:** deja que OneDrive termine de sincronizar antes de empezar a trabajar en el otro equipo, para no crear conflictos de archivos.
+
+---
+
+## 🧩 Lo que vive FUERA del repo (una copia por dispositivo)
+
+`git pull` **no** actualiza estas cuatro cosas. Si algo dejó de funcionar después de jalar
+cambios, la causa está casi siempre aquí.
+
+| Qué | Dónde | Por qué no está en el repo |
+|-----|-------|----------------------------|
+| El servidor compilado | `build/` en tu clon | Está gitignoreado. **Después de cada `git pull` que traiga cambios en `src/`, corre `npm run build`** o Cursor seguirá ejecutando la versión anterior. |
+| Las rutas de este equipo | `.env` en la raíz (Paso 3) | Cambian el usuario de Windows y la carpeta de OneDrive. |
+| El registro del MCP en Cursor | `C:\Users\<TU_USUARIO>\.cursor\mcp.json` (Paso 4) | Contiene la ruta absoluta a `build/index.js`, que además de depender de dónde clonaste apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos: en un dispositivo el clon está en `C:\PROYECTOS\MCP_orquestador` y en otro en `C:\proyectos\yo\MCP_orquestador`. Ver [`docs/decisiones.md`](docs/decisiones.md). |
+| Los comandos `/f1`–`/f5` | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | Cursor solo los lee de la carpeta del usuario. Hoy se copian a mano en cada equipo; volverlos portables es un [issue pendiente](https://github.com/Montse2308/MCP_orquestador/issues). |
+
+### Los comandos de fase, para poder recrearlos
+
+Cada archivo se invoca en el chat de Cursor escribiendo `/f1`, `/f2`, etc. **Son solo
+orquestación**: dicen qué tools llamar y con qué nombre guardar el documento. El
+comportamiento y la estructura de cada documento los dicta el prompt de la fase en
+`prompts/`, así que afinar una fase casi nunca obliga a tocar su comando.
+
+Lo que hace cada uno:
+
+| Comando | Llama a | Documento que deja |
+|---------|---------|--------------------|
+| `/f1` | `start_task` + `get_phase_prompt(1)` | `01 - Análisis Técnico.md` |
+| `/f2` | `get_phase_prompt(2)`, lee el 01 | `02 - Decisiones.md`, después de que respondas las preguntas |
+| `/f3` | `get_phase_prompt(3)`, lee el 01 y el 02 | `03 - Plan Técnico.md` |
+| `/f4` | `get_phase_prompt(4)`, lee el 03 | `04 - Ejecución.md`, corto y al final |
+| `/f5` | `get_phase_prompt(5)` | Ninguno: la auditoría y la descripción del PR van en el chat |
+
+`/f1` y `/f5` esperan datos después del comando: `/f1` necesita project, task_name y el
+requerimiento completo; `/f5`, cuáles commits auditar. Los otros tres arrancan de
+`get_active_task`.
+
+El contenido exacto de los cinco archivos está en
+[`docs/comandos-cursor.md`](docs/comandos-cursor.md), listo para copiar y pegar en un
+equipo nuevo.
 
 ---
 
@@ -265,5 +304,6 @@ Scripts disponibles:
 |------------|-------|
 | Lo que el proyecto hace hoy | Este README |
 | Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
+| Los comandos `/f1`–`/f5`, para recrearlos en otro equipo | [`docs/comandos-cursor.md`](docs/comandos-cursor.md) |
 | Lo que falta por hacer | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
 | Lo que ya se hizo | El historial de commits y los PRs mergeados |

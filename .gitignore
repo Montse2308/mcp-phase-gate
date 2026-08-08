@@ -6,6 +6,10 @@ dist/
 .env
 .env.local
 
+# Config del MCP por dispositivo: vive en ~/.cursor/mcp.json, no en el repo
+# (la ruta al build/index.js cambia en cada equipo)
+.cursor/mcp.json
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
