@@ -1,17 +1,20 @@
-# Los comandos de fase de Cursor
+# Los comandos de fase
 
-Copia de referencia de los cinco comandos que disparan el flujo. **No son la fuente de
-verdad**: Cursor solo los lee de la carpeta del usuario, así que la copia que se ejecuta es
-la de cada equipo. Este archivo existe para dos cosas: saber qué hace cada comando sin
-abrir la carpeta oculta, y poder recrearlos en un dispositivo nuevo sin escribirlos de
-memoria.
+Los cinco comandos que disparan el flujo, con su contenido completo. Se invocan escribiendo
+`/f1`, `/f2`… en el chat. Este archivo existe para leerlos sin abrir la carpeta donde vivan y
+para poder recrearlos en un dispositivo nuevo sin escribirlos de memoria.
 
-Van en `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` (un archivo por comando, el nombre
-del archivo es el nombre del comando). Se invocan escribiendo `/f1`, `/f2`… en el chat.
+**Dónde viven según el cliente:**
 
-> Si editas un comando en un equipo, la copia del otro **no** se actualiza. Mantenerlos
-> sincronizados es hoy un paso manual; volverlos portables es un
-> [issue pendiente](https://github.com/Montse2308/MCP_orquestador/issues).
+| Cliente | Dónde | ¿Se sincroniza con git? |
+|---------|-------|-------------------------|
+| Claude Code | [`.claude/commands/`](../.claude/commands) del proyecto, o `~/.claude/commands/` para usarlos desde cualquiera | **Sí** los del proyecto: son parte del repo |
+| Cursor | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | No: Cursor solo los lee de la carpeta del usuario |
+| VS Code | No tiene comandos de barra propios | No: se pega el contenido en el chat |
+
+La copia de `.claude/commands/` es la que manda. Las demás son copias que hay que mantener a
+mano, y **si editas una en un equipo, la del otro no se entera** — por eso conviene copiar
+desde aquí en vez de editar cada una por su lado.
 
 ## Qué carga cada uno, y qué no
 

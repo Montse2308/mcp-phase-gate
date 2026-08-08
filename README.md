@@ -1,6 +1,8 @@
-# 🧠 MCP Orquestador para Cursor
+# 🧠 MCP Orquestador
 
-Este servidor MCP (Model Context Protocol) es el "cerebro central" de tu entorno de desarrollo. Conecta a Cursor con tu **Documentación Central** (en OneDrive) y aplica reglas estrictas de arquitectura ("Cero Rupturas") y convenciones de código según el repositorio en el que trabajes (BOS, CRM o Kanban).
+Este servidor MCP (Model Context Protocol) es el "cerebro central" de tu entorno de desarrollo. Conecta tu editor con una **Documentación Central** (en OneDrive o donde la tengas) y aplica reglas estrictas de arquitectura ("Cero Rupturas") y las convenciones del repositorio en el que estés trabajando.
+
+Habla MCP estándar, así que funciona en cualquier cliente compatible. Está **probado en Cursor, VS Code y Claude Code** — ver [Paso 4](#paso-4--registrar-el-mcp-en-tu-cliente). En el panel del cliente se identifica como `phase-gate`.
 
 Divide cada requerimiento en **5 fases** para evitar que la IA rompa código existente, obligarla a preguntarte antes de decisiones críticas y, al final, auditar los cambios antes de subir el PR.
 
@@ -39,7 +41,7 @@ El código es idéntico en todos lados; lo único que cambia entre tu **compu de
 - **Node.js** instalado (versión 18 o superior). Verifícalo con `node -v`.
 - **Git** instalado.
 - El **OneDrive de tu organización** sincronizado en el dispositivo, con la carpeta de Documentación disponible localmente.
-- **Cursor** instalado.
+- **Un cliente MCP**: Cursor, VS Code o Claude Code.
 
 ### Paso 1 — Clonar el repositorio
 Elige una carpeta (recomendado mantener la misma estructura en ambos equipos, ej. `C:\proyectos\yo`):
@@ -57,7 +59,7 @@ npm install
 npm run build
 ```
 
-Esto crea `build/index.js`, que es lo que Cursor va a ejecutar.
+Esto crea `build/index.js`, que es lo que el cliente va a ejecutar.
 
 ### Paso 3 — Crear tu archivo `.env` con las rutas de ESTE equipo
 La ruta de la Documentación cambia según el usuario de Windows del equipo, así que se configura por dispositivo en un archivo `.env` (que NO se sube al repo).
@@ -80,8 +82,14 @@ ORQUESTADOR_REPOS_PATH=C:\proyectos
 
 > Guarda el `.env` en **UTF-8 sin BOM**. Si lo creas desde PowerShell con `>` sale en UTF-16, los acentos de `DOCUMENTACIÓN` llegan rotos y la ruta "no existe" aunque la veas bien.
 
-### Paso 4 — Registrar el MCP en Cursor
-Como las rutas viven en el `.env`, el `mcp.json` queda genérico (solo apunta al `build/index.js`). Edita `C:\Users\<TU_USUARIO>\.cursor\mcp.json` (créalo si no existe):
+### Paso 4 — Registrar el MCP en tu cliente
+
+Como las rutas viven en el `.env`, la configuración del cliente queda genérica: solo apunta al `build/index.js`. **La clave que le pongas (`mcp-orquestador` en los ejemplos) es la que identifica al servidor y la que prefija sus tools** — el nombre que el servidor declara de sí mismo, `phase-gate`, es solo lo que verás en el panel.
+
+En los tres casos, ajusta la ruta según dónde clonaste el repo. Recuerda que en JSON cada `\` va doble `\\`.
+
+<details open>
+<summary><b>Cursor</b> — <code>C:\Users\&lt;TU_USUARIO&gt;\.cursor\mcp.json</code> (créalo si no existe)</summary>
 
 ```json
 {
@@ -93,15 +101,51 @@ Como las rutas viven en el `.env`, el `mcp.json` queda genérico (solo apunta al
   }
 }
 ```
+</details>
 
-Ajusta la ruta dentro de `args` según dónde clonaste el repo en este equipo. (Recuerda: en JSON cada `\` va doble `\\`.)
+<details>
+<summary><b>VS Code</b> — <code>C:\Users\&lt;TU_USUARIO&gt;\AppData\Roaming\Code\User\mcp.json</code></summary>
 
-> **Alternativa sin `.env`:** si prefieres, puedes omitir el `.env` y poner las rutas directamente en un bloque `"env"` dentro del `mcp.json`. Si defines la variable en ambos lados, la del `mcp.json` tiene prioridad.
+Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay que declarar `type`.
+
+```json
+{
+  "servers": {
+    "mcp-orquestador": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:\\<DONDE_CLONASTE>\\MCP_orquestador\\build\\index.js"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Claude Code</b> — <code>.mcp.json</code> en la raíz del proyecto</summary>
+
+Claude Code lee un `.mcp.json` del proyecto en el que estés. Como lo lanza desde esa carpeta, aquí la ruta puede ser **relativa** — y ese es el único de los tres archivos que no lleva ruta absoluta, así que sirve igual en cualquier máquina:
+
+```json
+{
+  "mcpServers": {
+    "mcp-orquestador": {
+      "command": "node",
+      "args": ["build/index.js"]
+    }
+  }
+}
+```
+
+Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, registra el servidor con ruta absoluta en tu configuración de usuario (`claude mcp add`) o pon un `.mcp.json` en cada proyecto.
+</details>
+
+> **Alternativa sin `.env`:** puedes omitir el `.env` y poner las rutas en un bloque `"env"` dentro de la configuración del cliente. Si defines la variable en ambos lados, la del cliente tiene prioridad.
 
 ### Paso 5 — Reiniciar y verificar
-1. Reinicia Cursor (o ve a **Settings → MCP** y desactiva/activa `mcp-orquestador`).
-2. En Settings → MCP debe aparecer `mcp-orquestador` en verde/activo con sus tools listadas.
-3. Prueba pidiéndole al chat: *"Usa la tool `get_active_task` del mcp-orquestador"* — debe responder (aunque diga que no hay tarea activa aún).
+1. Reinicia el cliente, o desactiva y vuelve a activar el servidor en su panel de MCP.
+2. Debe aparecer activo con sus 6 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
+3. Pruébalo pidiendo en el chat: *"Usa la tool `get_active_task` del mcp-orquestador"* — debe responder, aunque sea para decir que no hay tarea activa todavía.
 
 ---
 
@@ -125,44 +169,52 @@ cambios, la causa está casi siempre aquí.
 
 | Qué | Dónde | Por qué no está en el repo |
 |-----|-------|----------------------------|
-| El servidor compilado | `build/` en tu clon | Está gitignoreado. **Después de cada `git pull` que traiga cambios en `src/`, corre `npm run build`** o Cursor seguirá ejecutando la versión anterior. |
+| El servidor compilado | `build/` en tu clon | Está gitignoreado. **Después de cada `git pull` que traiga cambios en `src/`, corre `npm run build`** o el cliente seguirá ejecutando la versión anterior. |
 | Las rutas de este equipo | `.env` en la raíz (Paso 3) | Cambian el usuario de Windows y la carpeta de OneDrive. |
-| El registro del MCP en Cursor | `C:\Users\<TU_USUARIO>\.cursor\mcp.json` (Paso 4) | Contiene la ruta absoluta a `build/index.js`, que además de depender de dónde clonaste apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos: en un dispositivo el clon está en `C:\PROYECTOS\MCP_orquestador` y en otro en `C:\proyectos\yo\MCP_orquestador`. Ver [`docs/decisiones.md`](docs/decisiones.md). |
-| Los comandos `/f1`–`/f5` | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | Cursor solo los lee de la carpeta del usuario. Hoy se copian a mano en cada equipo; volverlos portables es un [issue pendiente](https://github.com/Montse2308/MCP_orquestador/issues). |
+| El registro del MCP | La configuración de tu cliente (Paso 4) | En Cursor y VS Code contiene la ruta absoluta a `build/index.js`, que depende de dónde clonaste y apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos. Ver [`docs/decisiones.md`](docs/decisiones.md). La excepción es el `.mcp.json` de Claude Code, que va con ruta relativa. |
+| Los comandos `/f1`–`/f5` en **Cursor** | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | Cursor solo los lee de la carpeta del usuario, así que se copian a mano en cada equipo. En **Claude Code** no aplica: están versionados en `.claude/commands/` y llegan con el `git pull`. |
 
-### Los comandos de fase, para poder recrearlos
+### Los comandos de fase
 
-Cada archivo se invoca en el chat de Cursor escribiendo `/f1`, `/f2`, etc. **Son solo
-orquestación**: dicen qué tools llamar y con qué nombre guardar el documento. El
-comportamiento y la estructura de cada documento los dicta el prompt de la fase en
-`prompts/`, así que afinar una fase casi nunca obliga a tocar su comando.
+Se invocan en el chat escribiendo `/f1`, `/f2`, etc. **Son solo orquestación**: dicen qué
+tools llamar y en qué orden. El comportamiento, la estructura del documento y su nombre de
+archivo los dicta el prompt de la fase en `prompts/`, así que afinar una fase no obliga a
+tocar su comando.
 
 Lo que hace cada uno:
 
 | Comando | Llama a | Documento que deja |
 |---------|---------|--------------------|
-| `/f1` | `start_task` + `get_phase_prompt(1)` | `01 - Análisis Técnico.md` |
-| `/f2` | `get_phase_prompt(2)`, lee el 01 | `02 - Decisiones.md`, después de que respondas las preguntas |
-| `/f3` | `get_phase_prompt(3)`, lee el 01 y el 02 | `03 - Plan Técnico.md` |
-| `/f4` | `get_phase_prompt(4)`, lee el 03 | `04 - Ejecución.md`, corto y al final |
+| `/f1` | `start_task` + `get_phase_prompt(1)` | El de la Fase 1 |
+| `/f2` | `get_phase_prompt(2)`, lee el de la Fase 1 | El de la Fase 2, después de que respondas las preguntas |
+| `/f3` | `get_phase_prompt(3)`, lee los anteriores | El de la Fase 3 |
+| `/f4` | `get_phase_prompt(4)`, lee el plan | El de la Fase 4, corto y al final |
 | `/f5` | `get_phase_prompt(5)` | Ninguno: la auditoría y la descripción del PR van en el chat |
+
+Ningún comando nombra un archivo: el nombre lo declara la cabecera del prompt de cada fase
+y `get_phase_prompt` se lo entrega al modelo.
 
 `/f1` y `/f5` esperan datos después del comando: `/f1` necesita project, task_name y el
 requerimiento completo; `/f5`, cuáles commits auditar. Los otros tres arrancan de
 `get_active_task`.
 
-El contenido exacto de los cinco archivos está en
-[`docs/comandos-cursor.md`](docs/comandos-cursor.md), listo para copiar y pegar en un
-equipo nuevo.
+**Dónde ponerlos según el cliente:**
+
+- **Claude Code:** ya están en [`.claude/commands/`](.claude/commands), versionados. Funcionan al abrir este repo sin configurar nada. Para usarlos desde tus otros proyectos, cópialos a `C:\Users\<TU_USUARIO>\.claude\commands\`.
+- **Cursor:** cópialos a `C:\Users\<TU_USUARIO>\.cursor\commands\`. Desde ahí sirven en todos tus proyectos.
+- **VS Code:** no tiene comandos de barra propios; pega el contenido del archivo en el chat.
+
+El contenido exacto de los cinco está también en
+[`docs/comandos-de-fase.md`](docs/comandos-de-fase.md), para leerlos sin abrir la carpeta.
 
 ---
 
 ## 🚀 Guía de Uso Diario (Prompts Plantilla)
 
-Cuando empieces un requerimiento nuevo, abre un chat en Cursor y copia/pega estas plantillas reemplazando lo que está entre `{ }`.
+Cuando empieces un requerimiento nuevo, abre un chat en tu cliente y copia/pega estas plantillas reemplazando lo que está entre `{ }`.
 
 ### 🔍 FASE 1: Inicialización y Descubrimiento
-Cursor crea la estructura de carpetas y analiza tu código actual.
+El servidor crea la estructura de carpetas y analiza tu código actual.
 
 > Usa el mcp-orquestador para ejecutar la tool `start_task`.
 > - project: "{ bos | crm | kanban }"
@@ -237,8 +289,8 @@ prompts/
 ```
 
 **Se leen en cada llamada.** Si editas un `.md`, la siguiente vez que la IA invoque
-`get_phase_prompt` ya recibe la versión nueva — sin `npm run build` y sin reiniciar
-Cursor. Eso permite afinar el comportamiento de una fase probándolo al momento.
+`get_phase_prompt` ya recibe la versión nueva — sin `npm run build` y sin reiniciar el
+cliente. Eso permite afinar el comportamiento de una fase probándolo al momento.
 
 Cada fase declara, en una cabecera al inicio del `.md`, cómo se llama el documento que produce:
 
@@ -315,13 +367,13 @@ Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a c
 > un prompt de `prompts/*.md`, **no hace falta compilar ni reiniciar nada** — se leen
 > en cada llamada.
 
-El código fuente está en `src/index.ts`. Cursor ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
+El código fuente está en `src/index.ts`. El cliente ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
 
 ```bash
 npm run build
 ```
 
-Y luego reinicia el MCP en Cursor para que cargue la nueva versión.
+Y luego reinicia el MCP en tu cliente para que cargue la nueva versión.
 
 Scripts disponibles:
 - `npm run build` → compila TypeScript a `build/`.
@@ -334,6 +386,6 @@ Scripts disponibles:
 |------------|-------|
 | Lo que el proyecto hace hoy | Este README |
 | Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
-| Los comandos `/f1`–`/f5`, para recrearlos en otro equipo | [`docs/comandos-cursor.md`](docs/comandos-cursor.md) |
+| Los comandos `/f1`–`/f5`, para recrearlos en otro equipo | [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
 | Lo que falta por hacer | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
 | Lo que ya se hizo | El historial de commits y los PRs mergeados |
