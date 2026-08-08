@@ -51,10 +51,12 @@ DOCUMENTACIÓN/
 ├── BOS/
 │   └── Proyectos/
 │       └── <nombre_de_la_tarea>/
-│           ├── 00 - Contexto Inicial.md
-│           ├── 01 - Análisis Técnico.md
-│           ├── 03 - Plan Técnico.md
-│           └── ...
+│           ├── 00 - Contexto Inicial.md   ← lo escribe start_task
+│           ├── 01 - Análisis Técnico.md   ← Fase 1
+│           ├── 02 - Decisiones.md         ← Fase 2
+│           ├── 03 - Plan Técnico.md       ← Fase 3
+│           ├── 04 - Ejecución.md          ← Fase 4
+│           └── 05 - Auditoría.md          ← Fase 5
 ├── CRM/
 │   └── Proyectos/
 │       └── <nombre_de_la_tarea>/
@@ -178,7 +180,7 @@ Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, regi
 
 ### Paso 5 — Reiniciar y verificar
 1. Reinicia el cliente, o desactiva y vuelve a activar el servidor en su panel de MCP.
-2. Debe aparecer activo con sus 6 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
+2. Debe aparecer activo con sus 8 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
 3. Pruébalo pidiendo en el chat: *"Usa la tool `get_active_task` del mcp-orquestador"* — debe responder, aunque sea para decir que no hay tarea activa todavía.
 
 ---
@@ -186,12 +188,14 @@ Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, regi
 ## 🔄 Trabajar en varios dispositivos sin perder el hilo
 
 - Si la **Documentación** vive en una carpeta sincronizada (OneDrive, Drive, Dropbox), viaja sola entre tus equipos. Lo único distinto en cada uno es el archivo `.env` (Paso 3), que es local y no se sube al repo.
-- El servidor recuerda cuál es la **tarea activa** (ver `get_active_task`). Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
-  - **Windows:** `%APPDATA%\mcp-orquestador\active_task.json`
-  - **macOS:** `~/Library/Application Support/mcp-orquestador/active_task.json`
-  - **Linux:** `~/.local/state/mcp-orquestador/active_task.json`
+- El servidor recuerda cuál es la **tarea activa de cada proyecto** (ver `get_active_task`). Es un puntero por proyecto, no uno solo: puedes tener una ventana en BOS y otra en CRM sin que se pisen. Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
+  - **Windows:** `%APPDATA%\mcp-orquestador\active-tasks.json`
+  - **macOS:** `~/Library/Application Support/mcp-orquestador/active-tasks.json`
+  - **Linux:** `~/.local/state/mcp-orquestador/active-tasks.json`
 
   Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
+- **La fase no se guarda: se deduce.** El servidor mira qué documentos tiene ya la carpeta de la tarea y de ahí saca en qué fase vas, porque cada fase declara cómo se llama el suyo. Por eso el dato nunca se desincroniza: si borras `02 - Decisiones.md` porque quedó mal, la tarea vuelve sola a la Fase 2.
+- Y si el archivo de punteros se pierde —equipo nuevo, o lo borraste—, `get_active_task` no se queda mudo: propone la tarea con actividad más reciente y **te avisa de que es una deducción**, para que la confirmes antes de escribir.
 - **Regla de oro:** deja que OneDrive termine de sincronizar antes de empezar a trabajar en el otro equipo, para no crear conflictos de archivos.
 
 ---
@@ -223,13 +227,13 @@ Lo que hace cada uno:
 | `/f2` | `get_phase_prompt(2)`, lee el de la Fase 1 | El de la Fase 2, después de que respondas las preguntas |
 | `/f3` | `get_phase_prompt(3)`, lee los anteriores | El de la Fase 3 |
 | `/f4` | `get_phase_prompt(4)`, lee el plan | El de la Fase 4, corto y al final |
-| `/f5` | `get_phase_prompt(5)` | Ninguno: la auditoría y la descripción del PR van en el chat |
+| `/f5` | `get_phase_prompt(5)` | El de la Fase 5: la auditoría y la descripción del PR, que además van en el chat |
 
 Ningún comando nombra un archivo: el nombre lo declara la cabecera del prompt de cada fase
 y `get_phase_prompt` se lo entrega al modelo.
 
 `/f1` y `/f5` esperan datos después del comando: `/f1` necesita project, task_name y el
-requerimiento completo; `/f5`, cuáles commits auditar. Los otros tres arrancan de
+requerimiento completo; `/f5`, cuáles commits auditar. Los otros cuatro arrancan de
 `get_active_task`.
 
 **Dónde ponerlos según el cliente:**
@@ -293,8 +297,10 @@ Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto 
 
 | Tool | Qué hace |
 |------|----------|
-| `start_task` | Crea la carpeta de la tarea (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y registra la tarea como **activa**. |
-| `get_active_task` | Devuelve la tarea activa actual (proyecto, nombre y ruta). Úsalo al abrir un chat nuevo o si se perdió el contexto de dónde escribir. |
+| `start_task` | Crea la carpeta de una tarea **nueva** (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y la deja como **activa de su proyecto**. Si la tarea ya existe se niega y te manda a `switch_task`, para no reescribir el contexto inicial. |
+| `get_active_task` | Devuelve la tarea activa y **en qué fase va**, deducida de los documentos que ya tiene. Sin `project` responde la de cada proyecto. Úsalo al abrir un chat nuevo o si se perdió el contexto. |
+| `list_tasks` | Lista las tareas que existen y la fase de cada una, de la más reciente a la más antigua. Para retomar algo viejo o ver qué quedó a medias. |
+| `switch_task` | Cambia cuál es la tarea activa de un proyecto. **No toca ningún archivo**: es la forma correcta de retomar una tarea que ya existe. |
 | `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo. Mismos parámetros que `read_central_doc` + `content`. |
@@ -397,7 +403,7 @@ Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a c
 | `ORQUESTADOR_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
 | `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subcarpeta donde viven las tareas dentro de cada proyecto. Vacía = las tareas cuelgan directo del proyecto. Es además la regla que decide qué carpeta cuenta como proyecto (ver abajo). |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
-| `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guarda la tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas o para forzar una ubicación concreta. |
+| `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas o para forzar una ubicación concreta. |
 
 ---
 
@@ -407,7 +413,17 @@ Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a c
 > un prompt de `prompts/*.md`, **no hace falta compilar ni reiniciar nada** — se leen
 > en cada llamada.
 
-El código fuente está en `src/index.ts`. El cliente ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
+El código fuente está en `src/`, repartido por responsabilidad:
+
+| Archivo | De qué se encarga |
+|---------|-------------------|
+| `config.ts` | Rutas del entorno, dónde vive el estado, identidad del servidor |
+| `paths.ts` | Cómo se arma cada ruta y la comprobación de que no se salga de su base |
+| `phases.ts` | Descubrir las fases y armar el prompt de cada una |
+| `tasks.ts` | Qué tareas existen, en qué fase va cada una y cuál está activa |
+| `index.ts` | Las tools del servidor. No calcula nada: traduce entre el protocolo y lo anterior |
+
+El cliente ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
 
 ```bash
 npm run build
@@ -417,8 +433,13 @@ Y luego reinicia el MCP en tu cliente para que cargue la nueva versión.
 
 Scripts disponibles:
 - `npm run build` → compila TypeScript a `build/`.
+- `npm test` → compila los tests y los corre con el runner de Node (necesita **Node 22 o superior**).
 - `npm start` → ejecuta el servidor compilado.
 - `npm run dev` → ejecuta directo desde TypeScript con `ts-node`.
+
+Los tests viven en `test/` y no necesitan ninguna dependencia extra: usan `node:test`, que
+viene con Node. Montan una Documentación Central de mentira en una carpeta temporal, así que
+no tocan la tuya. El CI los corre en cada PR.
 
 ### Dónde está cada cosa
 
@@ -427,6 +448,7 @@ Scripts disponibles:
 | Lo que el proyecto hace hoy | Este README (y su gemelo en inglés, [`README.md`](README.md) — **si cambias uno, cambia el otro**) |
 | Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
 | Los comandos `/f1`–`/f5`, para recrearlos en otro equipo | [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
+| Que un cambio no rompió nada | [`test/`](test), con `npm test`. El CI los corre en cada PR |
 | Lo que falta por hacer | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
 | Lo que ya se hizo | El historial de commits y los PRs mergeados |
 

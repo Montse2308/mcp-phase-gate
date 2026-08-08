@@ -12,6 +12,100 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-08 — La fase de cada tarea se deduce de sus documentos, no se guarda
+
+**Decisión.** No hay ningún registro que diga en qué fase va cada tarea. El servidor mira qué
+documentos existen en la carpeta y lo deduce: la fase siguiente es la primera cuyo documento
+falta. Las tareas tampoco se listan de un archivo — son las carpetas que hay bajo la
+subcarpeta de tareas del proyecto.
+
+**Por qué.** Guardarlo sería tener dos copias de la misma verdad, y la copia guardada
+dependería de que el modelo se acordara de reportar cada avance. Deducirlo del disco lo
+convierte en un hecho comprobable: si borras `02 - Decisiones.md` porque quedó mal, la tarea
+vuelve sola a la Fase 2 sin que nadie tenga que corregir un registro. También aparecen las
+tareas creadas a mano, sin pasar por `start_task`.
+
+Fue posible porque el nombre del documento ya estaba declarado en la cabecera de cada prompt
+—decisión anterior, tomada para que el nombre viviera en un solo sitio—, así que la
+información necesaria para deducir la fase ya existía.
+
+**Qué se descartó.** Un registro de tareas con su fase dentro del archivo de estado, que es lo
+que pedía el issue original. Se descartó al ver que obligaba a que `get_phase_prompt` recibiera
+`project` y `task_name` para poder anotar el avance: el dato quedaba *best-effort*, cierto solo
+mientras el modelo no se distrajera, y una tarea podía decir "fase 2" llevando la 4.
+
+**Límites, asumidos.** La granularidad es "fases terminadas", no "a media fase". Y si algún día
+se renombra un documento en la cabecera de un prompt, las tareas viejas se ven menos avanzadas
+de lo que están, porque el archivo con el nombre nuevo no existe.
+
+---
+
+## 2026-08-08 — El estado se reduce a un puntero de tarea activa por proyecto
+
+**Decisión.** El archivo de estado deja de ser un objeto con la tarea activa global y pasa a
+ser un mapa `{ proyecto: tarea }`, en `active-tasks.json`. Se escribe a un temporal y se
+renombra, para que un corte a media escritura no lo deje partido.
+
+**Por qué.** Con un solo puntero, dos ventanas abiertas a la vez se lo pisaban: la segunda en
+llamar a `start_task` le cambiaba la tarea activa a la primera, y cuando la primera perdía el
+contexto y preguntaba dónde estaba, se le contestaba con total seguridad la tarea de la otra.
+Un puntero por proyecto los vuelve independientes, que es como se trabaja en la práctica: las
+tareas paralelas son de cosas distintas.
+
+Se quedó en puntero —y no en registro— porque, con la fase ya deducida del disco, es lo único
+que el disco no puede saber: cuál de las tareas te importa ahora.
+
+**Consecuencia.** El formato anterior no se migra: se borra al arrancar. Perder los punteros
+cuesta un `switch_task`, y no valía la pena escribir —ni mantener— una conversión para eso.
+Eso dejó sin sentido la migración desde `build/` de la entrada del 2026-08-07, que rescataba con
+cuidado un archivo cuyo contenido de todos modos se iba a descartar; se eliminó.
+
+**Descartado.** Bloquear el archivo mientras se escribe. Queda una ventana mínima en la que dos
+procesos simultáneos podrían perder el puntero del otro, pero el costo de eso es un
+`switch_task`, mientras que un lock mal soltado deja el servidor inservible.
+
+---
+
+## 2026-08-08 — La Fase 5 deja documento y `start_task` se niega a pisar una tarea
+
+**Decisión.** La Fase 5 pasa a guardar `05 - Auditoría.md` con la auditoría y la descripción del
+PR, además de entregarlas en el chat como hasta ahora. Y `start_task` falla si la tarea ya
+tiene contexto inicial, remitiendo a `switch_task`.
+
+**Por qué.** Son dos consecuencias de deducir la fase del disco. La primera: si la Fase 5 no
+dejaba rastro, una tarea acabada se quedaba para siempre en "lista para la fase 5" y no había
+forma de verla terminada. La segunda: retomar una tarea con `start_task` reescribía su
+`00 - Contexto Inicial.md` sin preguntar —el único documento que no se puede regenerar leyendo
+el código—, así que hacía falta una forma no destructiva de cambiar de tarea, y esa es
+`switch_task`.
+
+**De regalo.** El texto del PR queda archivado en la carpeta de la tarea en vez de vivir solo en
+el chat, que es de donde se perdía al cambiar de dispositivo.
+
+---
+
+## 2026-08-08 — El código se parte en módulos para poder probarlo
+
+**Decisión.** `src/index.ts` se divide en `config.ts` (entorno y estado), `paths.ts` (rutas),
+`phases.ts` (fases y prompts) y `tasks.ts` (tareas y tarea activa). `index.ts` se queda con las
+tools y no calcula nada. Lo que se leía del entorno al importar el módulo pasa a leerse en cada
+llamada.
+
+**Por qué.** Un solo archivo que llama a `main()` al cargarse no se puede importar sin arrancar
+un servidor, así que no había forma de probar una función sin rodearla de andamios. Las
+funciones de rutas son justo las que más se prestan a romperse en silencio: un error ahí no
+truena, escribe el archivo correctamente en el lugar equivocado.
+
+Leer el entorno de forma perezosa era condición para lo mismo: con los valores capturados al
+importar, un test no puede probar dos configuraciones sin recargar el módulo entero.
+
+**Consecuencia.** Hay tests (`test/`, con `node:test`, sin dependencias nuevas) y un workflow de
+CI que corre build y tests en cada PR. Los tests montan una Documentación Central de mentira en
+una carpeta temporal en vez de simular el sistema de archivos, porque lo que se prueba es
+precisamente el comportamiento contra el disco.
+
+---
+
 ## 2026-08-08 — README bilingüe completo, asumiendo el costo de la duplicación
 
 **Decisión.** `README.md` en inglés y `README.es.md` en español, los dos completos. Ambos

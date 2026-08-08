@@ -112,9 +112,11 @@ Vas a iniciar la FASE 5 (Auditoría / Pre-PR) del flujo del mcp-orquestador.
 Commits a auditar: tómalos del texto que escribí después del comando (ej. "los últimos 6 commits de esta rama" o un rango). Si no especifiqué nada, pregúntame cuáles antes de seguir.
 
 Pasos:
-1. Llama a `get_phase_prompt(5)` y asume ese rol de auditor externo.
-2. Inspecciona los commits indicados usando SOLO lectura (git diff / git log de solo lectura, leer archivos). Nunca hagas commits, push ni subas PRs; de eso me encargo yo.
-3. Entrégame en el chat:
+1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name): la auditoría se guarda en su carpeta.
+2. Llama a `get_phase_prompt(5)` y asume ese rol de auditor externo.
+3. Inspecciona los commits indicados usando SOLO lectura (git diff / git log de solo lectura, leer archivos). Nunca hagas commits, push ni subas PRs; de eso me encargo yo.
+4. Entrégame en el chat:
    - La AUDITORÍA con el formato del revisor, dejando clarísimo si hay cambios BLOQUEANTES para subir el PR.
    - La DESCRIPCIÓN del PR (título + cuerpo), contrastada contra el código real.
+5. Guarda el documento de la fase con `write_central_doc`, con el nombre que te indicó `get_phase_prompt`: lleva la auditoría y la descripción del PR tal cual me las entregaste.
 ```

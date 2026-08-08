@@ -53,10 +53,12 @@ DOCUMENTATION/
 ├── PROJECT-A/
 │   └── Proyectos/
 │       └── <task_name>/
-│           ├── 00 - Contexto Inicial.md
-│           ├── 01 - Análisis Técnico.md
-│           ├── 03 - Plan Técnico.md
-│           └── ...
+│           ├── 00 - Contexto Inicial.md   ← written by start_task
+│           ├── 01 - Análisis Técnico.md   ← Phase 1
+│           ├── 02 - Decisiones.md         ← Phase 2
+│           ├── 03 - Plan Técnico.md       ← Phase 3
+│           ├── 04 - Ejecución.md          ← Phase 4
+│           └── 05 - Auditoría.md          ← Phase 5
 ├── PROJECT-B/
 │   └── Proyectos/
 │       └── <task_name>/
@@ -179,7 +181,7 @@ That covers working inside this repo. To use it from other projects, register th
 
 ### Step 5 — Restart and verify
 1. Restart the client, or toggle the server off and on in its MCP panel.
-2. It should show up active with its 6 tools. In **Cursor** that's Settings → MCP; in **VS Code**, the extensions/MCP view; in **Claude Code**, `/mcp`.
+2. It should show up active with its 8 tools. In **Cursor** that's Settings → MCP; in **VS Code**, the extensions/MCP view; in **Claude Code**, `/mcp`.
 3. Try it from the chat: *"Use the `get_active_task` tool from mcp-orquestador"* — it should answer, even if only to say there's no active task yet.
 
 ---
@@ -187,12 +189,14 @@ That covers working inside this repo. To use it from other projects, register th
 ## 🔄 Working across several machines
 
 - If your documentation lives in a synced folder, it travels on its own. The only per-machine file is `.env` (Step 3), which is local and never committed.
-- The server remembers the **active task** (see `get_active_task`). That record is **local to each machine** and lives in your user data folder, outside the repo, so it survives deleting `build/` or re-cloning:
-  - **Windows:** `%APPDATA%\mcp-orquestador\active_task.json`
-  - **macOS:** `~/Library/Application Support/mcp-orquestador/active_task.json`
-  - **Linux:** `~/.local/state/mcp-orquestador/active_task.json`
+- The server remembers the **active task of each project** (see `get_active_task`). It's one pointer per project, not a single global one: you can have one window on BOS and another on CRM without them clobbering each other. That record is **local to each machine** and lives in your user data folder, outside the repo, so it survives deleting `build/` or re-cloning:
+  - **Windows:** `%APPDATA%\mcp-orquestador\active-tasks.json`
+  - **macOS:** `~/Library/Application Support/mcp-orquestador/active-tasks.json`
+  - **Linux:** `~/.local/state/mcp-orquestador/active-tasks.json`
 
   If you switch machines or chats and the LLM "forgot" where to write, tell it to call `get_active_task`, or just give it `project` + `task_name`.
+- **The phase isn't stored — it's derived.** The server looks at which documents the task folder already has and works out the phase from there, because each phase declares its own document's name. That's why the answer can never drift: delete `02 - Decisiones.md` because it came out wrong and the task drops back to Phase 2 on its own.
+- And if the pointer file is lost — new machine, or you deleted it — `get_active_task` doesn't go silent: it proposes the most recently touched task and **tells you it's a guess**, so you can confirm before writing.
 - **Golden rule:** let the sync finish before starting work on the other machine, to avoid conflicted copies.
 
 ---
@@ -218,11 +222,11 @@ You invoke them by typing `/f1`, `/f2`, etc. in the chat. **They are orchestrati
 | `/f2` | `get_phase_prompt(2)`, reads phase 1's | Phase 2's, after you answer the questions |
 | `/f3` | `get_phase_prompt(3)`, reads the previous ones | Phase 3's |
 | `/f4` | `get_phase_prompt(4)`, reads the plan | Phase 4's, short and at the end |
-| `/f5` | `get_phase_prompt(5)` | None: the audit and PR description go in the chat |
+| `/f5` | `get_phase_prompt(5)` | Phase 5's: the audit and the PR description, which also go in the chat |
 
 No command names a file: the name is declared in each phase prompt's header and `get_phase_prompt` hands it to the model.
 
-`/f1` and `/f5` expect data after the command: `/f1` needs project, task_name and the full requirement; `/f5`, which commits to audit. The other three start from `get_active_task`.
+`/f1` and `/f5` expect data after the command: `/f1` needs project, task_name and the full requirement; `/f5`, which commits to audit. The other four start from `get_active_task`.
 
 **Where to put them, per client:**
 
@@ -238,8 +242,10 @@ The exact contents of all five are also in [`docs/comandos-de-fase.md`](docs/com
 
 | Tool | What it does |
 |------|--------------|
-| `start_task` | Creates the task folder (`<PROJECT>/<tasks subfolder>/<task>`), saves the initial context and registers the task as **active**. |
-| `get_active_task` | Returns the current active task (project, name and path). Use it when opening a new chat or after losing track of where to write. |
+| `start_task` | Creates the folder for a **new** task (`<PROJECT>/<tasks subfolder>/<task>`), saves the initial context and makes it the **active task of its project**. If the task already exists it refuses and points you at `switch_task`, so the initial context is never overwritten. |
+| `get_active_task` | Returns the active task and **which phase it's on**, derived from the documents it already has. Without `project` it answers for every project. Use it when opening a new chat or after losing track. |
+| `list_tasks` | Lists the tasks that exist and each one's phase, most recently touched first. For picking up something old or seeing what was left half-done. |
+| `switch_task` | Changes which task is active for a project. **Touches no files**: it's the correct way to resume an existing task. |
 | `get_phase_prompt` | Returns the behaviour rules for a phase (1–5), with the global rules prepended and the exact document filenames appended. The text lives in `prompts/`. |
 | `read_central_doc` | Reads a file from the central documentation. **Recommended:** pass `project` + `task_name` + `file_name` and let the server build the path. It also accepts a relative `file_path`. |
 | `write_central_doc` | Writes/overwrites a file. Same parameters as `read_central_doc` plus `content`. |
@@ -325,7 +331,7 @@ The first two are **required and have no default**: they point at folders that o
 | `ORQUESTADOR_REPOS_PATH` | **none, required** | Path to the folder holding your code repositories. |
 | `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subfolder where tasks live inside each project. Empty means tasks hang directly off the project. It's also the rule that decides what counts as a project (see above). |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` at the repo root | Folder holding the phase prompts. Only needed if you keep your own set somewhere else. |
-| `ORQUESTADOR_STATE_PATH` | Your user data folder (see above) | Where the active task is stored. Rarely needs touching; useful to isolate state in tests or force a specific location. |
+| `ORQUESTADOR_STATE_PATH` | Your user data folder (see above) | Where the active-task pointers are stored. Rarely needs touching; useful to isolate state in tests or force a specific location. |
 
 ---
 
@@ -333,7 +339,17 @@ The first two are **required and have no default**: they point at folders that o
 
 > **Note:** this applies to **code** changes only. If all you edited was a prompt under `prompts/*.md`, there is **nothing to build and nothing to restart** — they're read on every call.
 
-The source is `src/index.ts`. The client runs the compiled `build/index.js`, so after any change:
+The source lives in `src/`, split by responsibility:
+
+| File | What it handles |
+|------|-----------------|
+| `config.ts` | Environment paths, where state lives, server identity |
+| `paths.ts` | How every path is built, and the check that it stays inside its base |
+| `phases.ts` | Discovering the phases and assembling each one's prompt |
+| `tasks.ts` | Which tasks exist, which phase each is on, and which one is active |
+| `index.ts` | The server's tools. It computes nothing: it translates between the protocol and the above |
+
+The client runs the compiled `build/index.js`, so after any change:
 
 ```bash
 npm run build
@@ -343,8 +359,13 @@ Then restart the MCP server in your client so it picks up the new version.
 
 Available scripts:
 - `npm run build` → compiles TypeScript into `build/`.
+- `npm test` → compiles the tests and runs them with Node's test runner (needs **Node 22+**).
 - `npm start` → runs the compiled server.
 - `npm run dev` → runs straight from TypeScript with `ts-node`.
+
+Tests live in `test/` and need no extra dependency: they use `node:test`, which ships with
+Node. They build a throwaway central-documentation tree in a temp folder, so they never touch
+yours. CI runs them on every PR.
 
 ### Where everything is
 
@@ -353,6 +374,7 @@ Available scripts:
 | What the project does today | This README (and its Spanish twin, [`README.es.md`](README.es.md) — **change one, change the other**) |
 | Why it's designed this way | [`docs/decisiones.md`](docs/decisiones.md) (Spanish) |
 | The `/f1`–`/f5` commands, to recreate them elsewhere | [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) (Spanish) |
+| That a change broke nothing | [`test/`](test), via `npm test`. CI runs them on every PR |
 | What's still missing | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — grouped under the `v1-uso-propio` and `v2-publico` labels |
 | What's already been done | The commit history and merged PRs |
 
