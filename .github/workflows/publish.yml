@@ -23,6 +23,10 @@ jobs:
           node-version: 22 # el mínimo que declara engines
           registry-url: https://registry.npmjs.org
 
+      # Node 22 trae npm 10, que no sabe autenticarse por OIDC. Sin esta línea el publish
+      # pide credenciales y falla con un 401 que no menciona la versión de npm, que es la causa.
+      - run: npm install -g npm@latest
+
       - run: npm ci
 
       # El tag y la versión del package.json tienen que decir lo mismo. Sin esta comprobación,
@@ -38,8 +42,14 @@ jobs:
             exit 1
           fi
 
+      # Sin token. La autenticación va por OIDC: GitHub firma una credencial de un solo uso
+      # que npm valida contra el editor de confianza declarado en la página del paquete —este
+      # repo y este archivo—. No hay ningún secreto que guardar, rotar ni que pueda filtrarse.
+      #
+      # Requiere que el editor de confianza esté configurado en npm ANTES del primer tag. No se
+      # puede configurar sobre un paquete que no existe, así que la primera versión se publicó
+      # a mano; ver la entrada correspondiente en docs/decisiones.md.
+      #
       # No hace falta compilar ni probar aquí: prepublishOnly lo hace, y así publicar a mano
       # desde una laptop pasa por exactamente los mismos pasos que publicar desde CI.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
