@@ -78,12 +78,32 @@ export function tasksSubdir(): string {
   return process.env.ORQUESTADOR_TASKS_SUBDIR?.trim() ?? "Proyectos";
 }
 
-// Carpeta con los prompts de las fases, en archivos .md sueltos.
-// Vivir fuera del código permite afinar el texto de una fase sin recompilar:
-// se edita el .md y la siguiente llamada a get_phase_prompt ya trae la versión nueva.
-// Configurable para que alguien más pueda apuntar a su propio juego de prompts sin forkear.
-export function promptsPath(): string {
-  return process.env.ORQUESTADOR_PROMPTS_PATH || path.join(MODULE_DIR, "..", "prompts");
+// ─── Prompts, en capas ──────────────────────────────────────────────────────
+// Los prompts de las fases viven en archivos .md sueltos. Vivir fuera del código permite
+// afinar el texto de una fase sin recompilar: se edita el .md y la siguiente llamada a
+// get_phase_prompt ya trae la versión nueva.
+//
+// Se cargan en CAPAS, no por reemplazo: primero los del paquete y encima, si existe, la
+// carpeta que declare el usuario. La última capa que declare una fase es la que queda.
+//
+// Antes `ORQUESTADOR_PROMPTS_PATH` sustituía la carpeta entera, y eso solo funcionaba con un
+// clon del repo alrededor, donde editar `prompts/` es lo natural. Instalado desde npm los de
+// fábrica caen dentro de node_modules, donde editarlos no sirve porque la siguiente
+// instalación se los lleva. Reemplazar obligaba entonces a copiar las cinco fases para
+// cambiar una: te quedas con copias congeladas que ya no reciben mejoras y, si se te olvida
+// copiar una, esa fase simplemente deja de existir sin que nada te avise.
+export function defaultPromptsPath(): string {
+  return path.join(MODULE_DIR, "..", "prompts");
+}
+
+// De menor a mayor prioridad. La del usuario va al final: gana.
+export function promptsLayers(): string[] {
+  const capas = [defaultPromptsPath()];
+  const propia = process.env.ORQUESTADOR_PROMPTS_PATH?.trim();
+
+  if (propia) capas.push(path.resolve(propia));
+
+  return capas;
 }
 
 // ─── Estado local ───────────────────────────────────────────────────────────

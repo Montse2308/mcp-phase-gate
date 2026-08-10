@@ -40,7 +40,7 @@ Para quien trabaja sobre **código que ya existe y no se puede romper**, y neces
 
 No es para prototipos desechables ni para arrancar un proyecto de cero: cinco fases para cambiar un color es una ceremonia absurda.
 
-Habla MCP estándar, así que funciona en cualquier cliente compatible. Está **probado en Cursor, VS Code y Claude Code** — ver [Paso 4](#paso-4--registrar-el-mcp-en-tu-cliente).
+Habla MCP estándar, así que funciona en cualquier cliente compatible. Está **probado en Cursor, VS Code y Claude Code** — ver [Instalación](#-instalación).
 
 ---
 
@@ -73,62 +73,30 @@ DOCUMENTACIÓN/
 
 ---
 
-## 💻 Configuración paso a paso (en CUALQUIER dispositivo)
+## 💻 Instalación
 
-El código es idéntico en todos lados; lo único que cambia de un equipo a otro son **las rutas a tus carpetas**, porque el usuario del sistema y la ubicación de la documentación son distintos. Por eso se configuran por variable de entorno y no en el código.
+Hay dos caminos, y llevan al mismo sitio:
+
+- **Con `npx`** — nada que clonar ni compilar, y se actualiza solo. Es el recomendado si solo quieres usarlo.
+- **Desde el código** — si vas a editar los prompts a mano o a contribuir al repo.
+
+El código es idéntico en todos lados; lo único que cambia de un equipo a otro son **las rutas a tus carpetas**, porque el usuario del sistema y dónde tengas la documentación son distintos. Por eso se configuran por variable de entorno y no en el código.
 
 ### Requisitos previos
 - **Node.js 22 o superior** instalado. Verifícalo con `node -v`. Es lo que declara el `package.json` y lo único que CI prueba (22 y 24); las versiones anteriores ya no tienen soporte.
-- **Git** instalado.
 - **Una carpeta para tu documentación**, disponible localmente. Si vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud) viaja sola entre tus equipos, que es como se recomienda usarlo — pero no es obligatorio: al servidor solo le llega una ruta local y le da igual qué haya detrás.
 - **Un cliente MCP**: Cursor, VS Code o Claude Code.
+- **Git**, solo si vas por el camino desde el código.
 
-### Paso 1 — Clonar el repositorio
-Elige una carpeta (recomendado mantener la misma estructura en ambos equipos, ej. `C:\proyectos\yo`):
+---
 
-```bash
-git clone https://github.com/Montse2308/MCP_orquestador.git
-cd MCP_orquestador
-```
+### 🚀 Camino A — con `npx` (recomendado)
 
-### Paso 2 — Instalar dependencias y compilar
-La carpeta `build/` NO se sube al repo (está en `.gitignore`), así que hay que generarla en cada dispositivo:
+No hay nada que instalar: `npx` descarga el paquete la primera vez y lo cachea. Todo se configura en el archivo de tu cliente MCP.
 
-```bash
-npm install
-npm run build
-```
+**La clave que le pongas es la que identifica al servidor y la que prefija sus tools**, así que puedes ponerle la que quieras. En los ejemplos va `mcp-phase-gate`, igual que el nombre del paquete y el que el servidor declara de sí mismo: el mismo nombre en los tres sitios, para que no haya que recordar cuál era cuál.
 
-Esto crea `build/index.js`, que es lo que el cliente va a ejecutar.
-
-### Paso 3 — Crear tu archivo `.env` con las rutas de ESTE equipo
-La ruta de la Documentación cambia de un equipo a otro (el usuario del sistema, la letra de unidad, dónde la tengas), así que se configura por dispositivo en un archivo `.env` (que NO se sube al repo).
-
-1. Copia la plantilla `.env.example` como `.env`:
-
-```bash
-copy .env.example .env
-```
-
-2. Averigua tu ruta real: abre el explorador de archivos, navega hasta tu carpeta de Documentación, haz clic en la barra de direcciones y copia la ruta completa.
-3. Edita el `.env` y pon tus valores (aquí las barras invertidas van **simples**, sin comillas):
-
-```ini
-ORQUESTADOR_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN
-ORQUESTADOR_REPOS_PATH=C:\proyectos
-```
-
-> Ese `ORQUESTADOR_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. Sirve igual `G:\Mi unidad\Documentación`, `D:\Dropbox\Docs` o `C:\Docs` sin nube ninguna: al servidor le llega una ruta local y nunca sabe qué hay detrás.
-
-**Las dos son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
-
-> Guarda el `.env` en **UTF-8 sin BOM**. Si lo creas desde PowerShell con `>` sale en UTF-16, los acentos de `DOCUMENTACIÓN` llegan rotos y la ruta "no existe" aunque la veas bien.
-
-### Paso 4 — Registrar el MCP en tu cliente
-
-Como las rutas viven en el `.env`, la configuración del cliente queda genérica: solo apunta al `build/index.js`. **La clave que le pongas es la que identifica al servidor y la que prefija sus tools**, así que puedes ponerle la que quieras. En los ejemplos va `mcp-phase-gate`, igual que el nombre del paquete y el que el servidor declara de sí mismo: son el mismo nombre en los tres sitios para que no haya que recordar cuál era cuál.
-
-En los tres casos, ajusta la ruta según dónde clonaste el repo. Recuerda que en JSON cada `\` va doble `\\`.
+Recuerda que en JSON cada `\` va doble `\\`.
 
 <details open>
 <summary><b>Cursor</b> — <code>C:\Users\&lt;TU_USUARIO&gt;\.cursor\mcp.json</code> (créalo si no existe)</summary>
@@ -137,8 +105,12 @@ En los tres casos, ajusta la ruta según dónde clonaste el repo. Recuerda que e
 {
   "mcpServers": {
     "mcp-phase-gate": {
-      "command": "node",
-      "args": ["C:\\<DONDE_CLONASTE>\\MCP_orquestador\\build\\index.js"]
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
+        "ORQUESTADOR_REPOS_PATH": "C:\\proyectos"
+      }
     }
   }
 }
@@ -155,8 +127,12 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
   "servers": {
     "mcp-phase-gate": {
       "type": "stdio",
-      "command": "node",
-      "args": ["C:\\<DONDE_CLONASTE>\\MCP_orquestador\\build\\index.js"]
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
+        "ORQUESTADOR_REPOS_PATH": "C:\\proyectos"
+      }
     }
   }
 }
@@ -164,27 +140,67 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
 </details>
 
 <details>
-<summary><b>Claude Code</b> — <code>.mcp.json</code> en la raíz del proyecto</summary>
+<summary><b>Claude Code</b> — de una sola línea</summary>
 
-Claude Code lee un `.mcp.json` del proyecto en el que estés. Como lo lanza desde esa carpeta, aquí la ruta puede ser **relativa** — y ese es el único de los tres archivos que no lleva ruta absoluta, así que sirve igual en cualquier máquina:
-
-```json
-{
-  "mcpServers": {
-    "mcp-phase-gate": {
-      "command": "node",
-      "args": ["build/index.js"]
-    }
-  }
-}
+```bash
+claude mcp add mcp-phase-gate --env ORQUESTADOR_DOCS_PATH="C:\Users\TU_USUARIO\Documentos\DOCUMENTACIÓN" --env ORQUESTADOR_REPOS_PATH="C:\proyectos" -- npx -y mcp-phase-gate
 ```
 
-Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, registra el servidor con ruta absoluta en tu configuración de usuario (`claude mcp add`) o pon un `.mcp.json` en cada proyecto.
+O a mano, en un `.mcp.json` en la raíz del proyecto, con la misma forma que el de Cursor.
 </details>
 
-> **Alternativa sin `.env`:** puedes omitir el `.env` y poner las rutas en un bloque `"env"` dentro de la configuración del cliente. Si defines la variable en ambos lados, la del cliente tiene prioridad.
+Ese `ORQUESTADOR_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. Sirve igual `G:\Mi unidad\Documentación`, `D:\Dropbox\Docs` o `C:\Docs` sin nube ninguna.
 
-### Paso 5 — Reiniciar y verificar
+> **Por este camino no hay archivo `.env`.** El paquete vive dentro de `node_modules`, donde no tiene sentido dejar tu configuración, así que las rutas van **obligatoriamente** en el bloque `"env"`. El `.env` solo existe en el camino de abajo.
+
+**Las dos variables son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
+
+> `npx mcp-phase-gate` escrito directamente en una terminal **parece que se cuelga**, y no está roto: es un servidor MCP esperando mensajes por stdin. Si lo que quieres es comprobar que está ahí, usa `npx mcp-phase-gate --help`.
+
+---
+
+### 🔧 Camino B — desde el código
+
+Necesario solo si vas a editar los prompts del repo directamente o a contribuir. Para *añadir* prompts propios no hace falta: eso se hace superponiendo carpetas, [ver abajo](#-los-prompts-de-las-fases-viven-en-prompts).
+
+**1. Clona y compila.** La carpeta `build/` NO se sube al repo, así que hay que generarla en cada dispositivo:
+
+```bash
+git clone https://github.com/Montse2308/mcp-phase-gate.git
+cd mcp-phase-gate
+npm install
+npm run build
+```
+
+**2. Crea tu `.env`** con las rutas de ESTE equipo (no se sube al repo):
+
+```bash
+copy .env.example .env
+```
+
+Averigua tu ruta real abriendo la carpeta en el explorador y copiando la ruta de la barra de direcciones. Aquí las barras invertidas van **simples**, sin comillas:
+
+```ini
+ORQUESTADOR_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN
+ORQUESTADOR_REPOS_PATH=C:\proyectos
+```
+
+> Guarda el `.env` en **UTF-8 sin BOM**. Si lo creas desde PowerShell con `>` sale en UTF-16, los acentos de `DOCUMENTACIÓN` llegan rotos y la ruta "no existe" aunque la veas bien.
+
+**3. Registra el servidor** igual que en el camino A, pero cambiando `command` y `args` por el `build/index.js` de tu clon, y sin bloque `"env"` (las rutas ya vienen del `.env`):
+
+```json
+"command": "node",
+"args": ["C:\\<DONDE_CLONASTE>\\mcp-phase-gate\\build\\index.js"]
+```
+
+En **Claude Code**, un `.mcp.json` en la raíz de este repo puede usar ruta **relativa** (`"args": ["build/index.js"]`), porque lo lanza desde esa carpeta. Es la única de las tres configuraciones que sirve igual en cualquier máquina.
+
+> Si defines una variable en el `.env` y también en el bloque `"env"` del cliente, gana la del cliente.
+
+---
+
+### ✅ Verificar que funciona
 1. Reinicia el cliente, o desactiva y vuelve a activar el servidor en su panel de MCP.
 2. Debe aparecer activo con sus 8 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
 3. Pruébalo pidiendo en el chat: *"Usa la tool `get_active_task` del mcp-phase-gate"* — debe responder, aunque sea para decir que no hay tarea activa todavía.
@@ -216,8 +232,8 @@ Puede que quieras documentaciones separadas que no se mezclen: una del trabajo y
 {
   "mcpServers": {
     "orquestador-trabajo": {
-      "command": "node",
-      "args": ["C:\\ruta\\a\\MCP_orquestador\\build\\index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
       "env": {
         "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
         "ORQUESTADOR_REPOS_PATH": "C:\\proyectos",
@@ -225,8 +241,8 @@ Puede que quieras documentaciones separadas que no se mezclen: una del trabajo y
       }
     },
     "orquestador-personal": {
-      "command": "node",
-      "args": ["C:\\ruta\\a\\MCP_orquestador\\build\\index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
       "env": {
         "ORQUESTADOR_DOCS_PATH": "G:\\Mi unidad\\Documentación",
         "ORQUESTADOR_REPOS_PATH": "D:\\dev",
@@ -238,7 +254,7 @@ Puede que quieras documentaciones separadas que no se mezclen: una del trabajo y
 }
 ```
 
-Es el mismo `build/index.js` en los dos: lo único que cambia son las rutas. Cada registro puede tener incluso su propia subcarpeta de tareas — arriba, la personal la deja vacía para que las tareas cuelguen directo del proyecto.
+Es el mismo paquete en los dos: lo único que cambia son las rutas. Cada registro puede tener incluso su propia subcarpeta de tareas — arriba, la personal la deja vacía para que las tareas cuelguen directo del proyecto.
 
 > ⚠️ **`ORQUESTADOR_STATE_PATH` tiene que ser distinto en cada registro.** Si se comparte, los punteros de tarea activa se pisan **en silencio**: la clave del estado es el nombre del proyecto, así que dos documentaciones con un proyecto que se llame igual acaban compartiendo entrada y una le contesta a la otra. No da error; simplemente te responde la tarea equivocada.
 
@@ -435,6 +451,27 @@ Reglas del formato:
   descripción de la tool.
 - `global-rules.md` se antepone automáticamente al contenido de la fase.
 
+### Usar tus propios prompts sin perder los de fábrica
+
+`ORQUESTADOR_PROMPTS_PATH` apunta a una carpeta tuya que **se superpone** a la del paquete. No la sustituye.
+
+Si quieres cambiar solo la Fase 2, tu carpeta lleva **un archivo**:
+
+```
+mis-prompts/
+└── fase-2-a-mi-manera.md
+```
+
+Con eso, la Fase 2 es la tuya y las fases 1, 3, 4 y 5 siguen siendo las del paquete — incluidas las mejoras que traigan las versiones nuevas. Antes esto era reemplazo total: para cambiar una fase había que copiar las seis, quedarte con copias congeladas y, si se te olvidaba una, esa fase **desaparecía sin avisar**.
+
+Tres detalles que importan:
+
+- **Se superpone por número de fase, no por nombre de archivo.** Tu `fase-2-a-mi-manera.md` pisa al `fase-2-decisiones.md` del paquete. No tienes que adivinar cómo se llama el original.
+- **También sirve para añadir.** Un `fase-6-despliegue.md` en tu carpeta crea la fase 6, sin tocar nada más.
+- **Tu `global-rules.md` sustituye al del paquete, no se suma.** Concatenar dos juegos de reglas hace imposible saber de qué archivo salió la instrucción que estorbó, justo cuando necesitas saberlo. Si quieres las de fábrica y algo más, cópialas y añade.
+
+Por el camino `npx` esta es la **única** forma de personalizar: los prompts de fábrica viven dentro de `node_modules` y editarlos ahí no sirve, porque la siguiente instalación se los lleva.
+
 ### El contrato de la descripción del PR (Fase 5)
 
 La Fase 5 no solo audita: redacta la descripción del PR bajo un contrato estricto,
@@ -476,7 +513,7 @@ Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a c
 | `ORQUESTADOR_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación. Sincronizada o no, da igual. **Distinta en cada dispositivo.** |
 | `ORQUESTADOR_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
 | `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subcarpeta donde viven las tareas dentro de cada proyecto. Vacía = las tareas cuelgan directo del proyecto. Es además la regla que decide qué carpeta cuenta como proyecto (ver abajo). |
-| `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
+| `ORQUESTADOR_PROMPTS_PATH` | ninguno | Carpeta de prompts propios, que **se superponen** a los del paquete en vez de reemplazarlos: basta con poner los archivos de las fases que quieras cambiar ([ver arriba](#usar-tus-propios-prompts-sin-perder-los-de-fábrica)). |
 | `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas y es **obligatoria si registras el servidor más de una vez** (ver [¿Varias carpetas de Documentación?](#-varias-carpetas-de-documentación-opcional)). |
 
 ---
@@ -523,7 +560,7 @@ no tocan la tuya. El CI los corre en cada PR.
 | Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
 | Los comandos `/f1`–`/f5`, para recrearlos en otro equipo | [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
 | Que un cambio no rompió nada | [`test/`](test), con `npm test`. El CI los corre en cada PR |
-| Lo que falta por hacer | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
+| Lo que falta por hacer | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
 | Lo que ya se hizo | El historial de commits y los PRs mergeados |
 
 ---

@@ -42,7 +42,7 @@ For people working on **code that already exists and must not break**, who need 
 
 It is not for throwaway prototypes or greenfield projects: five phases to change a colour is absurd ceremony.
 
-It speaks standard MCP, so it works with any compatible client. It is **tested on Cursor, VS Code and Claude Code** — see [Step 4](#step-4--register-the-mcp-server-in-your-client).
+It speaks standard MCP, so it works with any compatible client. It is **tested on Cursor, VS Code and Claude Code** — see [Installation](#-installation).
 
 ---
 
@@ -75,59 +75,30 @@ The `Proyectos` level is the tasks subfolder, and its name is configurable — s
 
 ---
 
-## 💻 Setup, step by step (on ANY machine)
+## 💻 Installation
 
-The code is identical everywhere; the only thing that changes between machines is **the paths to your folders**, because the system user and the documentation location differ. That's why they are environment variables and not constants in the code.
+Two routes, same destination:
+
+- **With `npx`** — nothing to clone or build, and it updates itself. Recommended if you just want to use it.
+- **From source** — if you're going to edit the prompts in place, or contribute.
+
+The code is identical everywhere; the only thing that changes between machines is **the paths to your folders**, because the system user and where you keep your documentation differ. That's why they are environment variables and not constants in the code.
 
 ### Prerequisites
 - **Node.js 22 or newer.** Check with `node -v`. That's what `package.json` declares and the only thing CI tests (22 and 24); earlier versions are out of support.
-- **Git**.
-- A folder for your central documentation, available locally. If it lives in a synced folder (OneDrive, Drive, Dropbox) it travels between your machines on its own.
+- A folder for your central documentation, available locally. If it lives in a synced folder (OneDrive, Google Drive, Dropbox, iCloud) it travels between your machines on its own — that's the recommended setup, but not a requirement: the server only ever receives a local path and doesn't know what's behind it.
 - **An MCP client**: Cursor, VS Code or Claude Code.
+- **Git**, only for the from-source route.
 
-### Step 1 — Clone the repository
+---
 
-```bash
-git clone https://github.com/Montse2308/MCP_orquestador.git
-cd MCP_orquestador
-```
+### 🚀 Route A — with `npx` (recommended)
 
-### Step 2 — Install dependencies and build
-`build/` is **not** committed (it's in `.gitignore`), so it has to be generated on every machine:
+Nothing to install: `npx` fetches the package the first time and caches it. Everything is configured in your MCP client's file.
 
-```bash
-npm install
-npm run build
-```
+**The key you give it is what identifies the server and prefixes its tools**, so you can name it whatever you like. The examples use `mcp-phase-gate`, the same as the npm package and the name the server reports for itself — one name in all three places, so there's nothing to remember.
 
-This creates `build/index.js`, which is what the client will run.
-
-### Step 3 — Create your `.env` with THIS machine's paths
-
-1. Copy the template:
-
-```bash
-cp .env.example .env
-```
-
-2. Edit `.env` and set your real paths (single backslashes on Windows, no quotes):
-
-```ini
-ORQUESTADOR_DOCS_PATH=C:\Users\YOUR_USER\OneDrive - YOUR ORGANISATION\Documents\DOCUMENTATION
-ORQUESTADOR_REPOS_PATH=C:\projects
-```
-
-> That `ORQUESTADOR_DOCS_PATH` is only an **example** using a OneDrive folder. `G:\My Drive\Documentation`, `D:\Dropbox\Docs` or plain `C:\Docs` with no cloud at all work just as well: the server receives a local path and never knows what's behind it.
-
-**Both are required and have no default value.** If one is missing, or points at a folder that doesn't exist, the tools that need it say so by name instead of failing later for some unrelated-looking reason.
-
-> On Windows, save `.env` as **UTF-8 without BOM**. Creating it from PowerShell with `>` produces UTF-16, accented characters arrive mangled, and the path "doesn't exist" even though it looks right.
-
-### Step 4 — Register the MCP server in your client
-
-Since the paths live in `.env`, the client config stays generic: it only points at `build/index.js`. **The key you give it is what identifies the server and prefixes its tools**, so you can name it whatever you like. The examples use `mcp-phase-gate`, the same as the npm package and the name the server reports for itself — one name in all three places, so there's nothing to remember.
-
-In all three cases, adjust the path to wherever you cloned the repo. Remember that in JSON every `\` must be doubled as `\\`.
+Remember that in JSON every `\` must be doubled as `\\`.
 
 <details open>
 <summary><b>Cursor</b> — <code>~/.cursor/mcp.json</code> (create it if missing)</summary>
@@ -136,8 +107,12 @@ In all three cases, adjust the path to wherever you cloned the repo. Remember th
 {
   "mcpServers": {
     "mcp-phase-gate": {
-      "command": "node",
-      "args": ["C:\\<WHERE_YOU_CLONED>\\MCP_orquestador\\build\\index.js"]
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\YOUR_USER\\OneDrive - YOUR ORGANISATION\\Documents\\DOCUMENTATION",
+        "ORQUESTADOR_REPOS_PATH": "C:\\projects"
+      }
     }
   }
 }
@@ -154,8 +129,12 @@ Two differences to watch: the top-level key is `servers`, not `mcpServers`, and 
   "servers": {
     "mcp-phase-gate": {
       "type": "stdio",
-      "command": "node",
-      "args": ["C:\\<WHERE_YOU_CLONED>\\MCP_orquestador\\build\\index.js"]
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\YOUR_USER\\OneDrive - YOUR ORGANISATION\\Documents\\DOCUMENTATION",
+        "ORQUESTADOR_REPOS_PATH": "C:\\projects"
+      }
     }
   }
 }
@@ -163,27 +142,67 @@ Two differences to watch: the top-level key is `servers`, not `mcpServers`, and 
 </details>
 
 <details>
-<summary><b>Claude Code</b> — <code>.mcp.json</code> at the project root</summary>
+<summary><b>Claude Code</b> — one line</summary>
 
-Claude Code reads a `.mcp.json` from the project you're in. Since it launches the server from that folder, the path here can be **relative** — making this the only one of the three configs without an absolute path, so it works unchanged on any machine:
-
-```json
-{
-  "mcpServers": {
-    "mcp-phase-gate": {
-      "command": "node",
-      "args": ["build/index.js"]
-    }
-  }
-}
+```bash
+claude mcp add mcp-phase-gate --env ORQUESTADOR_DOCS_PATH="C:\Users\YOUR_USER\Documents\DOCUMENTATION" --env ORQUESTADOR_REPOS_PATH="C:\projects" -- npx -y mcp-phase-gate
 ```
 
-That covers working inside this repo. To use it from other projects, register the server with an absolute path in your user config (`claude mcp add`), or drop a `.mcp.json` into each project.
+Or by hand, in a `.mcp.json` at the project root, shaped like the Cursor one.
 </details>
 
-> **Without `.env`:** you can skip `.env` entirely and put the paths in an `"env"` block inside the client config instead. If a variable is defined in both places, the client's wins.
+That `ORQUESTADOR_DOCS_PATH` is only an **example** using a OneDrive folder. `G:\My Drive\Documentation`, `D:\Dropbox\Docs` or plain `C:\Docs` with no cloud at all work just as well.
 
-### Step 5 — Restart and verify
+> **There is no `.env` on this route.** The package lives inside `node_modules`, which is no place to keep your configuration, so the paths go in the `"env"` block — that's the only option here. The `.env` file only exists on the route below.
+
+**Both variables are required and have no default value.** If one is missing, or points at a folder that doesn't exist, the tools that need it say so by name instead of failing later for some unrelated-looking reason.
+
+> Typing `npx mcp-phase-gate` straight into a terminal **looks like it hangs**, and nothing is broken: it's an MCP server waiting for messages on stdin. If you just want to check it's there, run `npx mcp-phase-gate --help`.
+
+---
+
+### 🔧 Route B — from source
+
+Only needed if you're going to edit the repo's prompts directly, or contribute. You do *not* need it to add prompts of your own: that's done by layering folders, [see below](#-the-phase-prompts-live-in-prompts).
+
+**1. Clone and build.** `build/` is **not** committed, so it has to be generated on every machine:
+
+```bash
+git clone https://github.com/Montse2308/mcp-phase-gate.git
+cd mcp-phase-gate
+npm install
+npm run build
+```
+
+**2. Create your `.env`** with THIS machine's paths (never committed):
+
+```bash
+cp .env.example .env
+```
+
+Single backslashes on Windows, no quotes:
+
+```ini
+ORQUESTADOR_DOCS_PATH=C:\Users\YOUR_USER\OneDrive - YOUR ORGANISATION\Documents\DOCUMENTATION
+ORQUESTADOR_REPOS_PATH=C:\projects
+```
+
+> On Windows, save `.env` as **UTF-8 without BOM**. Creating it from PowerShell with `>` produces UTF-16, accented characters arrive mangled, and the path "doesn't exist" even though it looks right.
+
+**3. Register the server** as in route A, but swapping `command` and `args` for your clone's `build/index.js`, and dropping the `"env"` block (the paths come from `.env` now):
+
+```json
+"command": "node",
+"args": ["C:\\<WHERE_YOU_CLONED>\\mcp-phase-gate\\build\\index.js"]
+```
+
+In **Claude Code**, a `.mcp.json` at this repo's root can use a **relative** path (`"args": ["build/index.js"]`), since it launches the server from that folder. It's the only one of the three configs that works unchanged on any machine.
+
+> If a variable is defined both in `.env` and in the client's `"env"` block, the client's wins.
+
+---
+
+### ✅ Verify it works
 1. Restart the client, or toggle the server off and on in its MCP panel.
 2. It should show up active with its 8 tools. In **Cursor** that's Settings → MCP; in **VS Code**, the extensions/MCP view; in **Claude Code**, `/mcp`.
 3. Try it from the chat: *"Use the `get_active_task` tool from mcp-phase-gate"* — it should answer, even if only to say there's no active task yet.
@@ -215,8 +234,8 @@ You may want separate documentation sets that never mix — one for work and one
 {
   "mcpServers": {
     "orquestador-work": {
-      "command": "node",
-      "args": ["C:\\path\\to\\MCP_orquestador\\build\\index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
       "env": {
         "ORQUESTADOR_DOCS_PATH": "C:\\Users\\YOUR_USER\\OneDrive - YOUR ORGANISATION\\Documents\\DOCUMENTATION",
         "ORQUESTADOR_REPOS_PATH": "C:\\projects",
@@ -224,8 +243,8 @@ You may want separate documentation sets that never mix — one for work and one
       }
     },
     "orquestador-personal": {
-      "command": "node",
-      "args": ["C:\\path\\to\\MCP_orquestador\\build\\index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-phase-gate"],
       "env": {
         "ORQUESTADOR_DOCS_PATH": "G:\\My Drive\\Documentation",
         "ORQUESTADOR_REPOS_PATH": "D:\\dev",
@@ -237,7 +256,7 @@ You may want separate documentation sets that never mix — one for work and one
 }
 ```
 
-It's the same `build/index.js` in both — only the paths differ. Each registration can even have its own tasks subfolder; above, the personal one leaves it empty so tasks hang directly off the project.
+It's the same package in both — only the paths differ. Each registration can even have its own tasks subfolder; above, the personal one leaves it empty so tasks hang directly off the project.
 
 > ⚠️ **`ORQUESTADOR_STATE_PATH` must differ between registrations.** Share it and the active-task pointers clobber each other **silently**: the state is keyed by project name, so two documentation roots holding a project with the same name end up sharing one entry, and one answers for the other. No error is raised — you just get the wrong task back.
 
@@ -374,6 +393,27 @@ Format rules:
 - The first `# Heading` in the file becomes the name shown in the tool description.
 - `global-rules.md` is automatically prepended to the phase content.
 
+### Using your own prompts without losing the packaged ones
+
+`ORQUESTADOR_PROMPTS_PATH` points at a folder of yours that is **layered on top of** the packaged one. It does not replace it.
+
+To change only phase 2, your folder holds **one file**:
+
+```
+my-prompts/
+└── fase-2-my-way.md
+```
+
+Phase 2 is now yours and phases 1, 3, 4 and 5 stay as the packaged ones — including whatever improvements new versions bring. This used to be a full replacement: changing one phase meant copying all six, ending up with frozen copies, and any phase you forgot to copy **disappeared with no warning**.
+
+Three details that matter:
+
+- **Layering is by phase number, not by filename.** Your `fase-2-my-way.md` overrides the package's `fase-2-decisiones.md`. You don't have to guess the original's name.
+- **It also adds.** A `fase-6-deployment.md` in your folder creates phase 6, nothing else needed.
+- **Your `global-rules.md` replaces the packaged one, it doesn't stack.** Concatenating two rule sets makes it impossible to tell which file an unwanted instruction came from, exactly when you need to know. If you want the packaged rules plus extras, copy them and add.
+
+On the `npx` route this is the **only** way to customise: the packaged prompts live inside `node_modules`, where editing them achieves nothing because the next install wipes them.
+
 ### The PR description contract (phase 5)
 
 Phase 5 doesn't only audit: it drafts the PR description under a strict contract, so the result is consistent regardless of which AI model is used.
@@ -402,7 +442,7 @@ The first two are **required and have no default**: they point at folders that o
 | `ORQUESTADOR_DOCS_PATH` | **none, required** | Path to the root of your central documentation. **Different on each machine.** |
 | `ORQUESTADOR_REPOS_PATH` | **none, required** | Path to the folder holding your code repositories. |
 | `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subfolder where tasks live inside each project. Empty means tasks hang directly off the project. It's also the rule that decides what counts as a project (see above). |
-| `ORQUESTADOR_PROMPTS_PATH` | `prompts/` at the repo root | Folder holding the phase prompts. Only needed if you keep your own set somewhere else. |
+| `ORQUESTADOR_PROMPTS_PATH` | none | Folder holding your own prompts. They are **layered on top of** the packaged ones rather than replacing them, so you only drop in the phases you want to change ([see above](#using-your-own-prompts-without-losing-the-packaged-ones)). |
 | `ORQUESTADOR_STATE_PATH` | Your user data folder (see above) | Where the active-task pointers are stored. Rarely needs touching; useful to isolate state in tests, and **required if you register the server more than once** (see [More than one documentation folder?](#-more-than-one-documentation-folder-optional)). |
 
 ---
@@ -447,7 +487,7 @@ yours. CI runs them on every PR.
 | Why it's designed this way | [`docs/decisiones.md`](docs/decisiones.md) (Spanish) |
 | The `/f1`–`/f5` commands, to recreate them elsewhere | [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) (Spanish) |
 | That a change broke nothing | [`test/`](test), via `npm test`. CI runs them on every PR |
-| What's still missing | [Issues](https://github.com/Montse2308/MCP_orquestador/issues) — grouped under the `v1-uso-propio` and `v2-publico` labels |
+| What's still missing | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — grouped under the `v1-uso-propio` and `v2-publico` labels |
 | What's already been done | The commit history and merged PRs |
 
 ---

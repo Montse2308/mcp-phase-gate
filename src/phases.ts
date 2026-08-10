@@ -4,7 +4,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { promptsPath } from "./config.js";
+import { promptsLayers } from "./config.js";
 
 // Las reglas globales se anteponen a cada fase.
 const GLOBAL_RULES_FILE = "global-rules.md";
@@ -20,7 +20,7 @@ export const PHASE_FILE_PATTERN = /^(?:fase|phase)-(\d+)[-.]/i;
 const PHASE_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 export type PhaseFile = {
-  file: string;
+  file: string;                           // ruta completa: con capas ya no basta el nombre
   title: string;
   documento?: string | undefined;         // el que produce la fase
   documentoInicial?: string | undefined;  // solo la fase 1: el archivo que escribe start_task
@@ -45,37 +45,53 @@ export function parsePhaseFile(fullPath: string): { meta: Record<string, string>
   return { meta, cuerpo: crudo.slice(encontrada[0].length) };
 }
 
-// Descubre las fases disponibles a partir de los archivos de la carpeta de prompts.
-// Agregar un "fase-6-*.md" basta para que exista la fase 6.
-export function discoverPhases(): Map<number, PhaseFile> {
+// Descubre las fases disponibles a partir de los archivos de las carpetas de prompts.
+// Agregar un "fase-6-*.md" basta para que exista la fase 6 — también en la carpeta propia,
+// así que superponer no solo permite cambiar fases: permite añadirlas.
+//
+// Las capas se recorren en orden y la última que declare una fase es la que queda. Se
+// superpone POR NÚMERO DE FASE, no por nombre de archivo: el usuario no tiene por qué llamar
+// a su fase 2 igual que el paquete, y obligarle a adivinar el nombre exacto sería una trampa.
+//
+// `capas` es un parámetro y no una lectura directa del entorno para poder probar el
+// comportamiento con carpetas concretas sin depender de qué traiga el paquete instalado.
+export function discoverPhases(capas: string[] = promptsLayers()): Map<number, PhaseFile> {
   const phases = new Map<number, PhaseFile>();
-  const base = promptsPath();
 
-  if (!fs.existsSync(base)) {
-    return phases;
-  }
+  for (const base of capas) {
+    if (!fs.existsSync(base)) continue;
 
-  for (const file of fs.readdirSync(base).sort()) {
-    const match = file.match(PHASE_FILE_PATTERN);
-    if (!match || !file.toLowerCase().endsWith(".md")) continue;
+    // Se resuelve capa por capa: dentro de una, gana el primero por orden alfabético; entre
+    // capas, gana la de más arriba. Sin este mapa intermedio la regla alfabética de la capa
+    // baja bloquearía a la de arriba, que es justo al revés de lo que se quiere.
+    const deEstaCapa = new Map<number, PhaseFile>();
 
-    const phaseNumber = Number(match[1]);
-    if (phases.has(phaseNumber)) continue; // gana el primero por orden alfabético
+    for (const file of fs.readdirSync(base).sort()) {
+      const match = file.match(PHASE_FILE_PATTERN);
+      if (!match || !file.toLowerCase().endsWith(".md")) continue;
 
-    let meta: Record<string, string> = {};
-    let cuerpo = "";
-    try {
-      ({ meta, cuerpo } = parsePhaseFile(path.join(base, file)));
-    } catch {
-      // Si el archivo no se puede leer aquí, el error real se reporta al invocar la fase.
+      const phaseNumber = Number(match[1]);
+      if (deEstaCapa.has(phaseNumber)) continue; // gana el primero por orden alfabético
+
+      const fullPath = path.join(base, file);
+
+      let meta: Record<string, string> = {};
+      let cuerpo = "";
+      try {
+        ({ meta, cuerpo } = parsePhaseFile(fullPath));
+      } catch {
+        // Si el archivo no se puede leer aquí, el error real se reporta al invocar la fase.
+      }
+
+      deEstaCapa.set(phaseNumber, {
+        file: fullPath,
+        title: readPhaseTitle(cuerpo, file),
+        documento: meta.documento || undefined,
+        documentoInicial: meta.documento_inicial || undefined,
+      });
     }
 
-    phases.set(phaseNumber, {
-      file,
-      title: readPhaseTitle(cuerpo, file),
-      documento: meta.documento || undefined,
-      documentoInicial: meta.documento_inicial || undefined,
-    });
+    for (const [numero, datos] of deEstaCapa) phases.set(numero, datos);
   }
 
   return phases;
@@ -94,15 +110,14 @@ export function readPhaseTitle(cuerpo: string, fileName: string): string {
 // cabecera; la constante es solo el respaldo para un juego de prompts que no lo declare.
 export const CONTEXTO_INICIAL_POR_DEFECTO = "00 - Contexto Inicial.md";
 
-export function nombreContextoInicial(): string {
-  return discoverPhases().get(1)?.documentoInicial || CONTEXTO_INICIAL_POR_DEFECTO;
+export function nombreContextoInicial(capas: string[] = promptsLayers()): string {
+  return discoverPhases(capas).get(1)?.documentoInicial || CONTEXTO_INICIAL_POR_DEFECTO;
 }
 
 // Se lee en cada llamada (no se cachea) para poder afinar un prompt y probarlo
 // de inmediato, sin reiniciar el servidor MCP.
-export function loadPhasePrompt(phase: number): string {
-  const base = promptsPath();
-  const available = discoverPhases();
+export function loadPhasePrompt(phase: number, capas: string[] = promptsLayers()): string {
+  const available = discoverPhases(capas);
   const entry = available.get(phase);
 
   if (!entry) {
@@ -110,23 +125,36 @@ export function loadPhasePrompt(phase: number): string {
     throw new Error(
       list
         ? `Fase no válida. Las fases disponibles son: ${list}.`
-        : `No se encontró ningún prompt de fase en ${base}. Verifica que la carpeta 'prompts' exista junto al build.`
+        : `No se encontró ningún prompt de fase en ${capas.join(", ")}. Verifica que la carpeta 'prompts' exista junto al build.`
     );
   }
 
   const parts: string[] = [];
 
-  const globalRulesPath = path.join(base, GLOBAL_RULES_FILE);
-  if (fs.existsSync(globalRulesPath)) {
-    parts.push(fs.readFileSync(globalRulesPath, "utf-8").trim());
+  const globales = resolveGlobalRules(capas);
+  if (globales) {
+    parts.push(fs.readFileSync(globales, "utf-8").trim());
   }
 
-  parts.push(parsePhaseFile(path.join(base, entry.file)).cuerpo.trim());
+  parts.push(parsePhaseFile(entry.file).cuerpo.trim());
 
   const archivos = describePhaseFiles(available, phase);
   if (archivos) parts.push(archivos);
 
   return parts.join("\n\n");
+}
+
+// Las reglas globales de la capa más alta que las tenga. Las tuyas SUSTITUYEN a las de
+// fábrica, no se suman: concatenar dos juegos de reglas hace imposible saber de qué archivo
+// salió la instrucción que estorbó cuando algo sale raro, que es justo el momento en que hay
+// que saberlo. Si quieres las de fábrica y algo más, las copias y añades.
+function resolveGlobalRules(capas: string[]): string | null {
+  for (const base of [...capas].reverse()) {
+    const ruta = path.join(base, GLOBAL_RULES_FILE);
+    if (fs.existsSync(ruta)) return ruta;
+  }
+
+  return null;
 }
 
 // Bloque que se añade al final del prompt con los nombres exactos de los documentos: el que
