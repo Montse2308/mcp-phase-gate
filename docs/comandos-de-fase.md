@@ -41,7 +41,7 @@ tool se llama, o en qué orden**, hay que tocar el comando.
 ## `f1.md` — Descubrimiento
 
 ```markdown
-Vas a iniciar la FASE 1 (Descubrimiento) del flujo del mcp-orquestador.
+Vas a iniciar la FASE 1 (Descubrimiento) del flujo del mcp-phase-gate.
 
 Datos de la tarea (tómalos del texto que escribí después del comando; si falta alguno, pregúntame antes de seguir):
 - project: uno de los proyectos que ya existen. Si no lo reconoce, `start_task` te devuelve la lista; no inventes uno ni pases `crear_proyecto` salvo que yo te diga explícitamente que quiero estrenar un proyecto nuevo.
@@ -49,7 +49,7 @@ Datos de la tarea (tómalos del texto que escribí después del comando; si falt
 - initial_context: el correo / mensaje / requerimiento completo
 
 Pasos:
-1. Llama a la tool `start_task` del mcp-orquestador con project, task_name e initial_context.
+1. Llama a la tool `start_task` del mcp-phase-gate con project, task_name e initial_context.
 2. Llama a `get_phase_prompt(1)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol de comportamiento.
 3. Analiza el código actual de este repositorio para entender el impacto del requerimiento.
 4. Guarda el análisis técnico y funcional con `write_central_doc`, usando el nombre de archivo exacto que te indicó `get_phase_prompt`.
@@ -60,7 +60,7 @@ No escribas código de producción todavía.
 ## `f2.md` — Decisiones
 
 ```markdown
-Vas a iniciar la FASE 2 (Decisiones) del flujo del mcp-orquestador.
+Vas a iniciar la FASE 2 (Decisiones) del flujo del mcp-phase-gate.
 
 Pasos:
 1. Si no sabes cuál es la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
@@ -77,7 +77,7 @@ El documento de la Fase 2 es obligatorio, aunque las decisiones se hayan tomado 
 ## `f3.md` — Plan Técnico
 
 ```markdown
-Vas a iniciar la FASE 3 (Plan Técnico) del flujo del mcp-orquestador.
+Vas a iniciar la FASE 3 (Plan Técnico) del flujo del mcp-phase-gate.
 
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
@@ -92,7 +92,7 @@ Pasos:
 ## `f4.md` — Ejecución
 
 ```markdown
-Vas a iniciar la FASE 4 (Ejecución) del flujo del mcp-orquestador.
+Vas a iniciar la FASE 4 (Ejecución) del flujo del mcp-phase-gate.
 
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
@@ -107,7 +107,7 @@ El entregable de esta fase es el código funcionando; el documento es el recibo,
 ## `f5.md` — Auditoría / Pre-PR
 
 ```markdown
-Vas a iniciar la FASE 5 (Auditoría / Pre-PR) del flujo del mcp-orquestador.
+Vas a iniciar la FASE 5 (Auditoría / Pre-PR) del flujo del mcp-phase-gate.
 
 Commits a auditar: tómalos del texto que escribí después del comando (ej. "los últimos 6 commits de esta rama" o un rango). Si no especifiqué nada, pregúntame cuáles antes de seguir.
 

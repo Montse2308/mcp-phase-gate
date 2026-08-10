@@ -91,7 +91,12 @@ export function promptsPath(): string {
 // carpeta generada: borrarla para recompilar desde cero se llevaba el estado por delante.
 // Además, esta ubicación es la única que funciona cuando el servidor se ejecuta desde un
 // paquete instalado, sin repo alrededor.
-export const APP_DIR_NAME = "mcp-orquestador";
+// Sigue al nombre del paquete: esta ruta aparece escrita en el README, así que dejarla con el
+// nombre viejo obligaba a explicar por qué la carpeta se llama distinto que todo lo demás.
+// El precio de renombrarla es que los punteros guardados con el nombre anterior dejan de verse.
+// No se migran: el puntero se recalcula solo con un `switch_task`, y arrastrar código de
+// migración para un dato que cuesta un comando en recuperarse es más caro que el problema.
+export const APP_DIR_NAME = "mcp-phase-gate";
 
 export function stateDir(): string {
   if (process.env.ORQUESTADOR_STATE_PATH) {
@@ -126,9 +131,14 @@ export function stateFile(): string {
 // "phase-gate" es el término de ingeniería de procesos para avanzar por fases sin poder
 // saltarse la anterior, que es exactamente lo que hace este flujo.
 //
+// Lleva el prefijo "mcp-" para ser exactamente el nombre del paquete en npm y el del repo:
+// tres nombres iguales en vez de tres parecidos, que es lo que obligaba a recordar cuál era
+// cuál. Redundante dentro de un servidor MCP, sí, pero el paquete lo necesita para que se
+// encuentre buscando "mcp" y ganó la igualdad.
+//
 // Ojo: esto es metadato. Quien identifica al servidor y da el prefijo a las tools es la clave
 // del archivo de configuración del cliente, así que renombrar aquí no rompe ningún registro.
-export const SERVER_NAME = "phase-gate";
+export const SERVER_NAME = "mcp-phase-gate";
 
 // La versión sale del package.json para no tener el mismo número en dos sitios.
 export const SERVER_VERSION = ((): string => {
