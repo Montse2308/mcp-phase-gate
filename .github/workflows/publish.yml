@@ -1,0 +1,45 @@
+name: Publicar en npm
+
+# Se dispara con un tag, no con un push a master: publicar es una decisión explícita y no
+# algo que ocurra por mergear. El tag es además el número de versión, así que no hay dos
+# sitios donde decir cuál se publica.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # lo exige --provenance para firmar el paquete
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # el mínimo que declara engines
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # El tag y la versión del package.json tienen que decir lo mismo. Sin esta comprobación,
+      # etiquetar v2.0.1 olvidando subir la versión intenta publicar la 2.0.0 otra vez: npm la
+      # rechaza por duplicada y el error que sale no menciona el tag, que es la causa real.
+      - name: Comprobar que el tag coincide con package.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "El tag es v$TAG pero package.json dice $PKG."
+            echo "Sube la versión en package.json y vuelve a etiquetar."
+            exit 1
+          fi
+
+      # No hace falta compilar ni probar aquí: prepublishOnly lo hace, y así publicar a mano
+      # desde una laptop pasa por exactamente los mismos pasos que publicar desde CI.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

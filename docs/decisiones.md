@@ -12,6 +12,65 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-10 — Publicable en npm: los prompts se superponen en capas
+
+**Decisión.** El paquete gana `bin`, el `index.ts` gana shebang, y `ORQUESTADOR_PROMPTS_PATH`
+deja de **reemplazar** la carpeta de prompts para **superponerse** a ella. Se publica como
+`2.0.0`, sin scope, con un workflow que dispara en tag.
+
+**Por qué las capas.** Con un clon del repo alrededor, reemplazar no molestaba: editabas
+`prompts/` y ya. Instalado desde npm los de fábrica caen dentro de `node_modules`, donde
+editarlos no sirve porque la siguiente instalación se los lleva. Reemplazar obligaba entonces a
+copiar las seis para cambiar una: te quedas con copias congeladas que ya no reciben mejoras y,
+si olvidas copiar una, **esa fase deja de existir sin que nada avise**. Ese modo de fallo
+silencioso es lo que decidió el diseño.
+
+**Por número de fase, no por nombre de archivo.** Superponer por nombre obligaría a adivinar
+cómo se llama el archivo del paquete para poder pisarlo, y a mantenerlo sincronizado si el
+paquete lo renombra. Por número, tu `fase-2-como-yo-quiera.md` pisa al `fase-2-decisiones.md`
+sin que tengas que saber que existe. Sale gratis además que un `fase-6-*.md` propio **añada** la
+fase 6, no solo la reemplace.
+
+**El desempate no cruza capas.** Dentro de una carpeta gana el primer archivo por orden
+alfabético. Aplicar esa regla sobre el conjunto haría que un nombre "temprano" en la capa de
+abajo bloqueara al de arriba, que es exactamente al revés. Por eso cada capa se resuelve entera
+antes de fundirse con la anterior, y hay un test que fija ese caso.
+
+**`global-rules.md` sustituye, no concatena.** Concatenar dos juegos de reglas globales hace
+imposible saber de qué archivo salió la instrucción que estorbó, y ese es justo el momento en
+que hay que saberlo. Quien quiera las de fábrica y algo más, las copia.
+
+**Las capas son un parámetro, no una lectura del entorno.** `discoverPhases(capas)` recibe la
+lista en vez de leerla dentro. Sin eso, cada test dependería de cuántas fases traiga el repo
+hoy: agregar una fase 6 de verdad rompería tests que no hablan de fases.
+
+**`--help` y `--version`.** Un servidor MCP no imprime nada y espera JSON-RPC por stdin.
+Ejecutado a mano en una terminal —que es lo primero que hace quien acaba de leer `npx
+mcp-phase-gate` en el README— parece colgado. Las banderas convierten ese momento en una
+explicación.
+
+**Versión 2.0.0 y no 1.0.0.** Es la primera vez que existe en npm, así que 1.0.0 habría sido lo
+ortodoxo. Pesó más que el número coincida con cómo se piensa el producto: respecto a la versión
+anterior es otra cosa. El costo es que alguien busque una 1.x en npm y no la encuentre.
+
+**Sin scope.** `mcp-phase-gate` estaba libre y da `npx mcp-phase-gate`, corto y decible.
+`@usuaria/mcp-phase-gate` no puede chocar con nadie, pero es largo y hay que acordarse de
+`--access public` o se publica privado.
+
+**El tag manda sobre la versión.** El workflow comprueba que `v2.0.1` y el `package.json` digan
+lo mismo antes de publicar. Sin esa comprobación, etiquetar sin subir la versión intenta
+publicar una versión ya publicada, y el error de npm no menciona el tag, que es la causa real.
+
+**Qué se descartó.** Buscar el `.env` también en el directorio de trabajo, para que el camino
+`npx` pudiera usar archivo. El directorio de trabajo de un servidor MCP lo decide el cliente y
+es impredecible: la configuración funcionaría o no según desde dónde se lanzara. El bloque
+`"env"` del cliente ya resuelve ese caso y es el mecanismo estándar en MCP.
+
+También un `CHANGELOG.md`: un archivo más que mantener a mano y que se desincroniza. Las
+releases de GitHub salen de los tags, y el *por qué* ya vive en este archivo.
+
+---
+
 ## 2026-08-10 — Un solo nombre: `mcp-phase-gate` en el repo, el paquete y el servidor
 
 **Decisión.** El paquete de npm pasa a llamarse `mcp-phase-gate`, `SERVER_NAME` deja de ser

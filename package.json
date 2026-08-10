@@ -1,8 +1,11 @@
 {
   "name": "mcp-phase-gate",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Servidor MCP que parte cada requerimiento en cinco fases con compuerta y obliga a que cada una deje su documento en una documentación central.",
   "main": "build/index.js",
+  "bin": {
+    "mcp-phase-gate": "build/index.js"
+  },
   "files": [
     "build",
     "prompts",
@@ -20,7 +23,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Montse2308/MCP_orquestador.git"
+    "url": "git+https://github.com/Montse2308/mcp-phase-gate.git"
   },
   "keywords": [
     "mcp",
@@ -35,9 +38,9 @@
   "license": "MIT",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/Montse2308/MCP_orquestador/issues"
+    "url": "https://github.com/Montse2308/mcp-phase-gate/issues"
   },
-  "homepage": "https://github.com/Montse2308/MCP_orquestador#readme",
+  "homepage": "https://github.com/Montse2308/mcp-phase-gate#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.2"
