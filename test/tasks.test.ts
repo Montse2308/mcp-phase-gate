@@ -49,8 +49,8 @@ const TODOS = [
 describe("estadoDeTarea", () => {
   it("una tarea recién creada va en la fase 1", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", ["00 - Contexto Inicial.md"]);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", ["00 - Contexto Inicial.md"]);
 
     const estado = estadoDeTarea("login-sso", carpeta, FASES);
 
@@ -60,8 +60,8 @@ describe("estadoDeTarea", () => {
 
   it("deduce la fase de los documentos que existen", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", [
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", [
       "00 - Contexto Inicial.md",
       "01 - Análisis Técnico.md",
       "02 - Decisiones.md",
@@ -77,8 +77,8 @@ describe("estadoDeTarea", () => {
   // quedaba para siempre en "lista para la fase 5" y no había forma de verla terminada.
   it("con todos los documentos, la tarea está terminada", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", TODOS);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", TODOS);
 
     const estado = estadoDeTarea("login-sso", carpeta, FASES);
 
@@ -90,8 +90,8 @@ describe("estadoDeTarea", () => {
   // no podría hacer un registro guardado aparte.
   it("un hueco intermedio manda: la fase siguiente es la primera que falta", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", [
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", [
       "01 - Análisis Técnico.md",
       "03 - Plan Técnico.md",
     ]);
@@ -104,8 +104,8 @@ describe("estadoDeTarea", () => {
 
   it("ignora las fases que no declaran documento", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", ["01 - Análisis Técnico.md"]);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", ["01 - Análisis Técnico.md"]);
 
     const sinDocumento = new Map<number, PhaseFile>([
       [1, { file: "fase-1.md", title: "Descubrimiento", documento: "01 - Análisis Técnico.md" }],
@@ -120,8 +120,8 @@ describe("estadoDeTarea", () => {
 
   it("sin ninguna fase con documento no hay nada que deducir", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso");
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso");
 
     const estado = estadoDeTarea("login-sso", carpeta, new Map());
 
@@ -133,8 +133,8 @@ describe("estadoDeTarea", () => {
 describe("describeEstado", () => {
   it("nombra la fase siguiente con su título", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "x", ["01 - Análisis Técnico.md"]);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "x", ["01 - Análisis Técnico.md"]);
 
     const frase = describeEstado(estadoDeTarea("x", carpeta, FASES), FASES);
 
@@ -144,8 +144,8 @@ describe("describeEstado", () => {
 
   it("dice que está terminada cuando no falta ninguna", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "x", TODOS);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "x", TODOS);
 
     assert.equal(describeEstado(estadoDeTarea("x", carpeta, FASES), FASES).includes("terminada"), true);
   });
@@ -154,29 +154,29 @@ describe("describeEstado", () => {
 describe("listarTareas", () => {
   it("lista las carpetas de tarea, de la más reciente a la más antigua", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    crearTarea(docs, "BOS", "vieja", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-01-01") });
-    crearTarea(docs, "BOS", "reciente", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-08-01") });
-    crearTarea(docs, "BOS", "media", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-04-01") });
+    crearProyecto(docs, "PROYECTO-A");
+    crearTarea(docs, "PROYECTO-A", "vieja", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-01-01") });
+    crearTarea(docs, "PROYECTO-A", "reciente", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-08-01") });
+    crearTarea(docs, "PROYECTO-A", "media", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-04-01") });
 
-    const tareas = listarTareas("BOS", FASES);
+    const tareas = listarTareas("PROYECTO-A", FASES);
 
     assert.deepEqual(tareas.map((tarea) => tarea.taskName), ["reciente", "media", "vieja"]);
   });
 
   it("devuelve vacío si el proyecto todavía no tiene tareas", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
+    crearProyecto(docs, "PROYECTO-A");
 
-    assert.deepEqual(listarTareas("BOS", FASES), []);
+    assert.deepEqual(listarTareas("PROYECTO-A", FASES), []);
   });
 
   it("también ve las tareas creadas a mano, sin pasar por start_task", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    fs.mkdirSync(path.join(docs, "BOS", "Proyectos", "hecha-a-mano"), { recursive: true });
+    crearProyecto(docs, "PROYECTO-A");
+    fs.mkdirSync(path.join(docs, "PROYECTO-A", "Proyectos", "hecha-a-mano"), { recursive: true });
 
-    assert.deepEqual(listarTareas("BOS", FASES).map((t) => t.taskName), ["hecha-a-mano"]);
+    assert.deepEqual(listarTareas("PROYECTO-A", FASES).map((t) => t.taskName), ["hecha-a-mano"]);
   });
 });
 
@@ -186,19 +186,19 @@ describe("punteros de tarea activa", () => {
   it("cada proyecto guarda la suya sin pisar la del otro", () => {
     estadoTemporal();
 
-    guardarPuntero("BOS", "login-sso");
-    guardarPuntero("CRM", "reporte-comisiones");
+    guardarPuntero("PROYECTO-A", "login-sso");
+    guardarPuntero("PROYECTO-B", "reporte-comisiones");
 
-    assert.deepEqual(leerPunteros(), { bos: "login-sso", crm: "reporte-comisiones" });
+    assert.deepEqual(leerPunteros(), { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" });
   });
 
   it("la clave no distingue mayúsculas", () => {
     estadoTemporal();
 
-    guardarPuntero("BOS", "login-sso");
-    guardarPuntero("bos", "otra");
+    guardarPuntero("PROYECTO-A", "login-sso");
+    guardarPuntero("proyecto-a", "otra");
 
-    assert.deepEqual(leerPunteros(), { bos: "otra" });
+    assert.deepEqual(leerPunteros(), { "proyecto-a": "otra" });
   });
 
   it("sin archivo de estado devuelve vacío en vez de fallar", () => {
@@ -218,15 +218,15 @@ describe("punteros de tarea activa", () => {
   it("descarta entradas con forma inesperada y conserva las buenas", () => {
     const carpeta = estadoTemporal();
     fs.mkdirSync(carpeta, { recursive: true });
-    fs.writeFileSync(stateFile(), JSON.stringify({ bos: "login-sso", crm: 42, kanban: "" }), "utf-8");
+    fs.writeFileSync(stateFile(), JSON.stringify({ "proyecto-a": "login-sso", "proyecto-b": 42, "proyecto-c": "" }), "utf-8");
 
-    assert.deepEqual(leerPunteros(), { bos: "login-sso" });
+    assert.deepEqual(leerPunteros(), { "proyecto-a": "login-sso" });
   });
 
   it("no deja el temporal de la escritura atómica", () => {
     const carpeta = estadoTemporal();
 
-    guardarPuntero("BOS", "login-sso");
+    guardarPuntero("PROYECTO-A", "login-sso");
 
     assert.deepEqual(fs.readdirSync(carpeta), ["active-tasks.json"]);
   });
@@ -237,7 +237,7 @@ describe("limpiarEstadoViejo", () => {
     const carpeta = estadoTemporal();
     fs.mkdirSync(carpeta, { recursive: true });
     const viejo = path.join(carpeta, "active_task.json");
-    fs.writeFileSync(viejo, JSON.stringify({ project: "bos", task_name: "x" }), "utf-8");
+    fs.writeFileSync(viejo, JSON.stringify({ project: "proyecto-a", task_name: "x" }), "utf-8");
 
     limpiarEstadoViejo();
 
@@ -255,12 +255,12 @@ describe("tareaActiva", () => {
   it("devuelve la apuntada, aunque no sea la más reciente", () => {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
-    crearTarea(docs, "BOS", "vieja", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-01-01") });
-    crearTarea(docs, "BOS", "reciente", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-08-01") });
+    crearProyecto(docs, "PROYECTO-A");
+    crearTarea(docs, "PROYECTO-A", "vieja", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-01-01") });
+    crearTarea(docs, "PROYECTO-A", "reciente", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-08-01") });
 
-    guardarPuntero("BOS", "vieja");
-    const activa = tareaActiva("BOS", FASES);
+    guardarPuntero("PROYECTO-A", "vieja");
+    const activa = tareaActiva("PROYECTO-A", FASES);
 
     assert.equal(activa?.estado.taskName, "vieja");
     assert.equal(activa?.origen, "puntero");
@@ -269,11 +269,11 @@ describe("tareaActiva", () => {
   it("sin puntero deduce la más reciente y lo declara", () => {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
-    crearTarea(docs, "BOS", "vieja", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-01-01") });
-    crearTarea(docs, "BOS", "reciente", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-08-01") });
+    crearProyecto(docs, "PROYECTO-A");
+    crearTarea(docs, "PROYECTO-A", "vieja", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-01-01") });
+    crearTarea(docs, "PROYECTO-A", "reciente", ["01 - Análisis Técnico.md"], { mtime: new Date("2026-08-01") });
 
-    const activa = tareaActiva("BOS", FASES);
+    const activa = tareaActiva("PROYECTO-A", FASES);
 
     assert.equal(activa?.estado.taskName, "reciente");
     assert.equal(activa?.origen, "deducida");
@@ -283,11 +283,11 @@ describe("tareaActiva", () => {
   it("si el puntero apunta a una tarea que ya no existe, deduce", () => {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
-    crearTarea(docs, "BOS", "existe", ["01 - Análisis Técnico.md"]);
+    crearProyecto(docs, "PROYECTO-A");
+    crearTarea(docs, "PROYECTO-A", "existe", ["01 - Análisis Técnico.md"]);
 
-    guardarPuntero("BOS", "borrada-hace-tiempo");
-    const activa = tareaActiva("BOS", FASES);
+    guardarPuntero("PROYECTO-A", "borrada-hace-tiempo");
+    const activa = tareaActiva("PROYECTO-A", FASES);
 
     assert.equal(activa?.estado.taskName, "existe");
     assert.equal(activa?.origen, "deducida");
@@ -296,25 +296,25 @@ describe("tareaActiva", () => {
   it("sin tareas no hay activa", () => {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
+    crearProyecto(docs, "PROYECTO-A");
 
-    assert.equal(tareaActiva("BOS", FASES), null);
+    assert.equal(tareaActiva("PROYECTO-A", FASES), null);
   });
 
   // La comprobación de extremo a extremo del bug original: dos ventanas, dos proyectos.
   it("dos ventanas en proyectos distintos conservan cada una su tarea", () => {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
-    crearProyecto(docs, "CRM");
-    crearTarea(docs, "BOS", "login-sso", ["01 - Análisis Técnico.md"]);
-    crearTarea(docs, "CRM", "reporte-comisiones", ["01 - Análisis Técnico.md"]);
+    crearProyecto(docs, "PROYECTO-A");
+    crearProyecto(docs, "PROYECTO-B");
+    crearTarea(docs, "PROYECTO-A", "login-sso", ["01 - Análisis Técnico.md"]);
+    crearTarea(docs, "PROYECTO-B", "reporte-comisiones", ["01 - Análisis Técnico.md"]);
 
-    guardarPuntero("BOS", "login-sso");
-    guardarPuntero("CRM", "reporte-comisiones"); // la segunda ventana, después de la primera
+    guardarPuntero("PROYECTO-A", "login-sso");
+    guardarPuntero("PROYECTO-B", "reporte-comisiones"); // la segunda ventana, después de la primera
 
-    assert.equal(tareaActiva("BOS", FASES)?.estado.taskName, "login-sso");
-    assert.equal(tareaActiva("CRM", FASES)?.estado.taskName, "reporte-comisiones");
+    assert.equal(tareaActiva("PROYECTO-A", FASES)?.estado.taskName, "login-sso");
+    assert.equal(tareaActiva("PROYECTO-B", FASES)?.estado.taskName, "reporte-comisiones");
   });
 });
 
@@ -323,8 +323,8 @@ describe("tareaActiva", () => {
 describe("detectarSalto", () => {
   function estadoCon(documentos: string[]) {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", documentos);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", documentos);
     return estadoDeTarea("login-sso", carpeta, FASES);
   }
 
@@ -361,8 +361,8 @@ describe("detectarSalto", () => {
 
   it("sin fases con documento no hay nada contra qué comparar", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "x");
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "x");
 
     assert.equal(detectarSalto(4, estadoDeTarea("x", carpeta, new Map()), new Map()), null);
   });
@@ -371,8 +371,8 @@ describe("detectarSalto", () => {
 describe("avisoDeSalto", () => {
   it("nombra la tarea, el documento que falta y la fase real", () => {
     const docs = docsTemporales();
-    crearProyecto(docs, "BOS");
-    const carpeta = crearTarea(docs, "BOS", "login-sso", ["01 - Análisis Técnico.md"]);
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", ["01 - Análisis Técnico.md"]);
     const salto = detectarSalto(4, estadoDeTarea("login-sso", carpeta, FASES), FASES);
 
     const aviso = avisoDeSalto(salto!, "login-sso", FASES);
@@ -388,18 +388,18 @@ describe("avisoDeCompuerta", () => {
   function montarDosProyectos() {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
-    crearProyecto(docs, "CRM");
-    crearTarea(docs, "BOS", "login-sso", ["01 - Análisis Técnico.md", "02 - Decisiones.md"]);
-    crearTarea(docs, "CRM", "reporte", TODOS);
+    crearProyecto(docs, "PROYECTO-A");
+    crearProyecto(docs, "PROYECTO-B");
+    crearTarea(docs, "PROYECTO-A", "login-sso", ["01 - Análisis Técnico.md", "02 - Decisiones.md"]);
+    crearTarea(docs, "PROYECTO-B", "reporte", TODOS);
     return docs;
   }
 
   it("con project explícito avisa del salto de su tarea activa", () => {
     montarDosProyectos();
-    guardarPuntero("BOS", "login-sso");
+    guardarPuntero("PROYECTO-A", "login-sso");
 
-    const aviso = avisoDeCompuerta(4, FASES, { project: "bos" });
+    const aviso = avisoDeCompuerta(4, FASES, { project: "proyecto-a" });
 
     assert.equal(aviso?.includes("COMPUERTA DE FASE"), true);
     assert.equal(aviso?.includes("03 - Plan Técnico.md"), true);
@@ -407,24 +407,24 @@ describe("avisoDeCompuerta", () => {
 
   it("calla cuando la fase pedida es la que toca", () => {
     montarDosProyectos();
-    guardarPuntero("BOS", "login-sso");
+    guardarPuntero("PROYECTO-A", "login-sso");
 
-    assert.equal(avisoDeCompuerta(3, FASES, { project: "bos" }), null);
+    assert.equal(avisoDeCompuerta(3, FASES, { project: "proyecto-a" }), null);
   });
 
   // El flujo normal es escribir "/f4" y ya: si el servidor no pudiera resolver la tarea solo,
   // el modelo acabaría preguntándosela al usuario en cada fase.
   it("sin project lo resuelve solo si hay un único proyecto con tarea activa", () => {
     montarDosProyectos();
-    guardarPuntero("BOS", "login-sso");
+    guardarPuntero("PROYECTO-A", "login-sso");
 
     assert.equal(avisoDeCompuerta(4, FASES)?.includes("COMPUERTA DE FASE"), true);
   });
 
   it("sin project y con varios punteros lo dice en voz alta en vez de callar", () => {
     montarDosProyectos();
-    guardarPuntero("BOS", "login-sso");
-    guardarPuntero("CRM", "reporte");
+    guardarPuntero("PROYECTO-A", "login-sso");
+    guardarPuntero("PROYECTO-B", "reporte");
 
     const aviso = avisoDeCompuerta(4, FASES);
 
@@ -440,12 +440,12 @@ describe("avisoDeCompuerta", () => {
 
   it("task_name comprueba contra otra tarea distinta de la activa", () => {
     const docs = montarDosProyectos();
-    crearTarea(docs, "BOS", "otra", ["01 - Análisis Técnico.md"]);
-    guardarPuntero("BOS", "login-sso");
+    crearTarea(docs, "PROYECTO-A", "otra", ["01 - Análisis Técnico.md"]);
+    guardarPuntero("PROYECTO-A", "login-sso");
 
     // La activa (login-sso) va en la 3; "otra" va en la 2. Que el aviso hable de "otra"
     // demuestra que se comprobó contra ella y no contra la activa.
-    const aviso = avisoDeCompuerta(4, FASES, { project: "bos", taskName: "otra" });
+    const aviso = avisoDeCompuerta(4, FASES, { project: "proyecto-a", taskName: "otra" });
 
     assert.equal(aviso?.includes("otra"), true);
     assert.equal(aviso?.includes("02 - Decisiones.md"), true);
@@ -454,8 +454,8 @@ describe("avisoDeCompuerta", () => {
   it("un proyecto sin tareas no produce aviso", () => {
     const docs = docsTemporales();
     estadoTemporal();
-    crearProyecto(docs, "BOS");
+    crearProyecto(docs, "PROYECTO-A");
 
-    assert.equal(avisoDeCompuerta(4, FASES, { project: "bos" }), null);
+    assert.equal(avisoDeCompuerta(4, FASES, { project: "proyecto-a" }), null);
   });
 });
