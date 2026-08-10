@@ -117,6 +117,8 @@ ORQUESTADOR_DOCS_PATH=C:\Users\YOUR_USER\OneDrive - YOUR ORGANISATION\Documents\
 ORQUESTADOR_REPOS_PATH=C:\projects
 ```
 
+> That `ORQUESTADOR_DOCS_PATH` is only an **example** using a OneDrive folder. `G:\My Drive\Documentation`, `D:\Dropbox\Docs` or plain `C:\Docs` with no cloud at all work just as well: the server receives a local path and never knows what's behind it.
+
 **Both are required and have no default value.** If one is missing, or points at a folder that doesn't exist, the tools that need it say so by name instead of failing later for some unrelated-looking reason.
 
 > On Windows, save `.env` as **UTF-8 without BOM**. Creating it from PowerShell with `>` produces UTF-16, accented characters arrive mangled, and the path "doesn't exist" even though it looks right.
@@ -191,7 +193,7 @@ That covers working inside this repo. To use it from other projects, register th
 ## 🔄 Working across several machines
 
 - If your documentation lives in a synced folder, it travels on its own. The only per-machine file is `.env` (Step 3), which is local and never committed.
-- The server remembers the **active task of each project** (see `get_active_task`). It's one pointer per project, not a single global one: you can have one window on BOS and another on CRM without them clobbering each other. That record is **local to each machine** and lives in your user data folder, outside the repo, so it survives deleting `build/` or re-cloning:
+- The server remembers the **active task of each project** (see `get_active_task`). It's one pointer per project, not a single global one: you can have one window on one project and another on a different one without them clobbering each other. That record is **local to each machine** and lives in your user data folder, outside the repo, so it survives deleting `build/` or re-cloning:
   - **Windows:** `%APPDATA%\mcp-orquestador\active-tasks.json`
   - **macOS:** `~/Library/Application Support/mcp-orquestador/active-tasks.json`
   - **Linux:** `~/.local/state/mcp-orquestador/active-tasks.json`
@@ -199,7 +201,50 @@ That covers working inside this repo. To use it from other projects, register th
   If you switch machines or chats and the LLM "forgot" where to write, tell it to call `get_active_task`, or just give it `project` + `task_name`.
 - **The phase isn't stored — it's derived.** The server looks at which documents the task folder already has and works out the phase from there, because each phase declares its own document's name. That's why the answer can never drift: delete `02 - Decisiones.md` because it came out wrong and the task drops back to Phase 2 on its own.
 - And if the pointer file is lost — new machine, or you deleted it — `get_active_task` doesn't go silent: it proposes the most recently touched task and **tells you it's a guess**, so you can confirm before writing.
-- **Golden rule:** let the sync finish before starting work on the other machine, to avoid conflicted copies.
+- **Golden rule:** if you use a synced folder, let the sync finish before starting work on the other machine, to avoid conflicted copies.
+
+---
+
+## 🗂️ More than one documentation folder? (optional)
+
+**This is not part of the flow. If one folder is enough for you, skip this section.**
+
+You may want separate documentation sets that never mix — one for work and one for personal projects, say, each somewhere different, or one in the cloud and one not. Nothing new is needed: **register the server more than once** in your client, with a different `env` block each time.
+
+```jsonc
+{
+  "mcpServers": {
+    "orquestador-work": {
+      "command": "node",
+      "args": ["C:\\path\\to\\MCP_orquestador\\build\\index.js"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\YOUR_USER\\OneDrive - YOUR ORGANISATION\\Documents\\DOCUMENTATION",
+        "ORQUESTADOR_REPOS_PATH": "C:\\projects",
+        "ORQUESTADOR_STATE_PATH": "C:\\Users\\YOUR_USER\\.orquestador\\work"
+      }
+    },
+    "orquestador-personal": {
+      "command": "node",
+      "args": ["C:\\path\\to\\MCP_orquestador\\build\\index.js"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "G:\\My Drive\\Documentation",
+        "ORQUESTADOR_REPOS_PATH": "D:\\dev",
+        "ORQUESTADOR_TASKS_SUBDIR": "",
+        "ORQUESTADOR_STATE_PATH": "C:\\Users\\YOUR_USER\\.orquestador\\personal"
+      }
+    }
+  }
+}
+```
+
+It's the same `build/index.js` in both — only the paths differ. Each registration can even have its own tasks subfolder; above, the personal one leaves it empty so tasks hang directly off the project.
+
+> ⚠️ **`ORQUESTADOR_STATE_PATH` must differ between registrations.** Share it and the active-task pointers clobber each other **silently**: the state is keyed by project name, so two documentation roots holding a project with the same name end up sharing one entry, and one answers for the other. No error is raised — you just get the wrong task back.
+
+Two more things that bite and aren't obvious:
+
+- **Mirror mode, not streaming.** Google Drive in *streaming* mode and OneDrive with *Files On-Demand* leave files as placeholders until something opens them. This server lives on listing folders and checking whether files exist, so placeholders make it slow, or make it fail with no network. Keep the documentation folder **downloaded locally** if you can.
+- **Keep code repos out of the synced folder.** Documentation in the cloud is fine. Code isn't: sync competing with git over `.git/` corrupts repositories. Point `ORQUESTADOR_REPOS_PATH` at a local disk.
 
 ---
 
@@ -358,7 +403,7 @@ The first two are **required and have no default**: they point at folders that o
 | `ORQUESTADOR_REPOS_PATH` | **none, required** | Path to the folder holding your code repositories. |
 | `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subfolder where tasks live inside each project. Empty means tasks hang directly off the project. It's also the rule that decides what counts as a project (see above). |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` at the repo root | Folder holding the phase prompts. Only needed if you keep your own set somewhere else. |
-| `ORQUESTADOR_STATE_PATH` | Your user data folder (see above) | Where the active-task pointers are stored. Rarely needs touching; useful to isolate state in tests or force a specific location. |
+| `ORQUESTADOR_STATE_PATH` | Your user data folder (see above) | Where the active-task pointers are stored. Rarely needs touching; useful to isolate state in tests, and **required if you register the server more than once** (see [More than one documentation folder?](#-more-than-one-documentation-folder-optional)). |
 
 ---
 

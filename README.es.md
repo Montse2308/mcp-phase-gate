@@ -50,7 +50,7 @@ Cada tarea vive dentro de una carpeta con esta estructura fija:
 
 ```
 DOCUMENTACIÓN/
-├── BOS/
+├── PROYECTO-A/
 │   └── Proyectos/
 │       └── <nombre_de_la_tarea>/
 │           ├── 00 - Contexto Inicial.md   ← lo escribe start_task
@@ -59,13 +59,15 @@ DOCUMENTACIÓN/
 │           ├── 03 - Plan Técnico.md       ← Fase 3
 │           ├── 04 - Ejecución.md          ← Fase 4
 │           └── 05 - Auditoría.md          ← Fase 5
-├── CRM/
+├── PROYECTO-B/
 │   └── Proyectos/
 │       └── <nombre_de_la_tarea>/
-└── KANBAN/
+└── PROYECTO-C/
     └── Proyectos/
         └── <nombre_de_la_tarea>/
 ```
+
+`PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `ORQUESTADOR_TASKS_SUBDIR` más abajo.
 
 > El servidor arma esta ruta **automáticamente**. Tú (o el LLM) solo indican `project`, `task_name` y `file_name`; no hay que escribir la ruta completa a mano.
 
@@ -78,7 +80,7 @@ El código es idéntico en todos lados; lo único que cambia de un equipo a otro
 ### Requisitos previos
 - **Node.js** instalado (versión 18 o superior). Verifícalo con `node -v`.
 - **Git** instalado.
-- El **OneDrive de tu organización** sincronizado en el dispositivo, con la carpeta de Documentación disponible localmente.
+- **Una carpeta para tu documentación**, disponible localmente. Si vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud) viaja sola entre tus equipos, que es como se recomienda usarlo — pero no es obligatorio: al servidor solo le llega una ruta local y le da igual qué haya detrás.
 - **Un cliente MCP**: Cursor, VS Code o Claude Code.
 
 ### Paso 1 — Clonar el repositorio
@@ -100,7 +102,7 @@ npm run build
 Esto crea `build/index.js`, que es lo que el cliente va a ejecutar.
 
 ### Paso 3 — Crear tu archivo `.env` con las rutas de ESTE equipo
-La ruta de la Documentación cambia según el usuario de Windows del equipo, así que se configura por dispositivo en un archivo `.env` (que NO se sube al repo).
+La ruta de la Documentación cambia de un equipo a otro (el usuario del sistema, la letra de unidad, dónde la tengas), así que se configura por dispositivo en un archivo `.env` (que NO se sube al repo).
 
 1. Copia la plantilla `.env.example` como `.env`:
 
@@ -108,13 +110,15 @@ La ruta de la Documentación cambia según el usuario de Windows del equipo, as�
 copy .env.example .env
 ```
 
-2. Averigua tu ruta real: abre el Explorador, navega hasta tu carpeta de Documentación dentro del OneDrive de la organización, haz clic en la barra de direcciones y copia la ruta completa.
+2. Averigua tu ruta real: abre el explorador de archivos, navega hasta tu carpeta de Documentación, haz clic en la barra de direcciones y copia la ruta completa.
 3. Edita el `.env` y pon tus valores (aquí las barras invertidas van **simples**, sin comillas):
 
 ```ini
 ORQUESTADOR_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN
 ORQUESTADOR_REPOS_PATH=C:\proyectos
 ```
+
+> Ese `ORQUESTADOR_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. Sirve igual `G:\Mi unidad\Documentación`, `D:\Dropbox\Docs` o `C:\Docs` sin nube ninguna: al servidor le llega una ruta local y nunca sabe qué hay detrás.
 
 **Las dos son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
 
@@ -189,8 +193,8 @@ Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, regi
 
 ## 🔄 Trabajar en varios dispositivos sin perder el hilo
 
-- Si la **Documentación** vive en una carpeta sincronizada (OneDrive, Drive, Dropbox), viaja sola entre tus equipos. Lo único distinto en cada uno es el archivo `.env` (Paso 3), que es local y no se sube al repo.
-- El servidor recuerda cuál es la **tarea activa de cada proyecto** (ver `get_active_task`). Es un puntero por proyecto, no uno solo: puedes tener una ventana en BOS y otra en CRM sin que se pisen. Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
+- Si la **Documentación** vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud), viaja sola entre tus equipos. Lo único distinto en cada uno es el archivo `.env` (Paso 3), que es local y no se sube al repo.
+- El servidor recuerda cuál es la **tarea activa de cada proyecto** (ver `get_active_task`). Es un puntero por proyecto, no uno solo: puedes tener una ventana en un proyecto y otra en otro sin que se pisen. Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
   - **Windows:** `%APPDATA%\mcp-orquestador\active-tasks.json`
   - **macOS:** `~/Library/Application Support/mcp-orquestador/active-tasks.json`
   - **Linux:** `~/.local/state/mcp-orquestador/active-tasks.json`
@@ -198,7 +202,50 @@ Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, regi
   Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
 - **La fase no se guarda: se deduce.** El servidor mira qué documentos tiene ya la carpeta de la tarea y de ahí saca en qué fase vas, porque cada fase declara cómo se llama el suyo. Por eso el dato nunca se desincroniza: si borras `02 - Decisiones.md` porque quedó mal, la tarea vuelve sola a la Fase 2.
 - Y si el archivo de punteros se pierde —equipo nuevo, o lo borraste—, `get_active_task` no se queda mudo: propone la tarea con actividad más reciente y **te avisa de que es una deducción**, para que la confirmes antes de escribir.
-- **Regla de oro:** deja que OneDrive termine de sincronizar antes de empezar a trabajar en el otro equipo, para no crear conflictos de archivos.
+- **Regla de oro:** si usas una carpeta sincronizada, deja que termine de sincronizar antes de empezar a trabajar en el otro equipo, para no crear conflictos de archivos.
+
+---
+
+## 🗂️ ¿Varias carpetas de Documentación? (opcional)
+
+**Esto no es parte del flujo. Si con una carpeta te basta, sáltate la sección entera.**
+
+Puede que quieras documentaciones separadas que no se mezclen: una del trabajo y otra de proyectos personales, por ejemplo, cada una en un sitio distinto —o una en la nube y otra no—. No hace falta nada nuevo: **registra el servidor más de una vez** en tu cliente, con un bloque `env` distinto en cada registro.
+
+```jsonc
+{
+  "mcpServers": {
+    "orquestador-trabajo": {
+      "command": "node",
+      "args": ["C:\\ruta\\a\\MCP_orquestador\\build\\index.js"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
+        "ORQUESTADOR_REPOS_PATH": "C:\\proyectos",
+        "ORQUESTADOR_STATE_PATH": "C:\\Users\\TU_USUARIO\\.orquestador\\trabajo"
+      }
+    },
+    "orquestador-personal": {
+      "command": "node",
+      "args": ["C:\\ruta\\a\\MCP_orquestador\\build\\index.js"],
+      "env": {
+        "ORQUESTADOR_DOCS_PATH": "G:\\Mi unidad\\Documentación",
+        "ORQUESTADOR_REPOS_PATH": "D:\\dev",
+        "ORQUESTADOR_TASKS_SUBDIR": "",
+        "ORQUESTADOR_STATE_PATH": "C:\\Users\\TU_USUARIO\\.orquestador\\personal"
+      }
+    }
+  }
+}
+```
+
+Es el mismo `build/index.js` en los dos: lo único que cambia son las rutas. Cada registro puede tener incluso su propia subcarpeta de tareas — arriba, la personal la deja vacía para que las tareas cuelguen directo del proyecto.
+
+> ⚠️ **`ORQUESTADOR_STATE_PATH` tiene que ser distinto en cada registro.** Si se comparte, los punteros de tarea activa se pisan **en silencio**: la clave del estado es el nombre del proyecto, así que dos documentaciones con un proyecto que se llame igual acaban compartiendo entrada y una le contesta a la otra. No da error; simplemente te responde la tarea equivocada.
+
+Dos cosas más que muerden y no son evidentes:
+
+- **Modo espejo, no streaming.** Google Drive en modo *streaming* y OneDrive con *Archivos a Petición* dejan los archivos como marcadores hasta que algo los abre. Este servidor vive de listar carpetas y comprobar si existen archivos, así que con marcadores se vuelve lento o falla cuando no hay red. Si puedes, ten la carpeta de Documentación **descargada localmente**.
+- **Los repos de código, fuera de la carpeta sincronizada.** La Documentación en la nube no da problema. El código sí: la sincronización compitiendo con git sobre `.git/` corrompe repositorios. Que `ORQUESTADOR_REPOS_PATH` apunte a un disco local.
 
 ---
 
@@ -210,7 +257,7 @@ cambios, la causa está casi siempre aquí.
 | Qué | Dónde | Por qué no está en el repo |
 |-----|-------|----------------------------|
 | El servidor compilado | `build/` en tu clon | Está gitignoreado. **Después de cada `git pull` que traiga cambios en `src/`, corre `npm run build`** o el cliente seguirá ejecutando la versión anterior. |
-| Las rutas de este equipo | `.env` en la raíz (Paso 3) | Cambian el usuario de Windows y la carpeta de OneDrive. |
+| Las rutas de este equipo | `.env` en la raíz (Paso 3) | Cambian el usuario del sistema y dónde tengas la carpeta de Documentación. |
 | El registro del MCP | La configuración de tu cliente (Paso 4) | En Cursor y VS Code contiene la ruta absoluta a `build/index.js`, que depende de dónde clonaste y apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos. Ver [`docs/decisiones.md`](docs/decisiones.md). La excepción es el `.mcp.json` de Claude Code, que va con ruta relativa. |
 | Los comandos `/f1`–`/f5` en **Cursor** | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | Cursor solo los lee de la carpeta del usuario, así que se copian a mano en cada equipo. En **Claude Code** no aplica: están versionados en `.claude/commands/` y llegan con el `git pull`. |
 
@@ -331,7 +378,7 @@ Tres cosas que **no** hace, a propósito:
 | `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). Comprueba de paso la **compuerta**: si pasas `project` y te saltaste una fase, el prompt llega con el aviso al principio. |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo. Mismos parámetros que `read_central_doc` + `content`. |
-| `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde BOS consultar cómo Kanban maneja un endpoint) sin cambiar de ventana. |
+| `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde `repo-a` consultar cómo `repo-b` maneja un endpoint) sin cambiar de ventana. |
 
 ### Cómo el servidor arma las rutas
 - **Documentación:** `ORQUESTADOR_DOCS_PATH` / `<PROYECTO>` / `ORQUESTADOR_TASKS_SUBDIR` / `<tarea>` / `<archivo>`
@@ -426,11 +473,11 @@ Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a c
 
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
-| `ORQUESTADOR_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación en OneDrive. **Distinta en cada dispositivo.** |
+| `ORQUESTADOR_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación. Sincronizada o no, da igual. **Distinta en cada dispositivo.** |
 | `ORQUESTADOR_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
 | `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subcarpeta donde viven las tareas dentro de cada proyecto. Vacía = las tareas cuelgan directo del proyecto. Es además la regla que decide qué carpeta cuenta como proyecto (ver abajo). |
 | `ORQUESTADOR_PROMPTS_PATH` | `prompts/` en la raíz del repo | Carpeta de los prompts de fase. Solo hace falta si quieres usar un juego de prompts propio guardado en otro lado. |
-| `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas o para forzar una ubicación concreta. |
+| `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas y es **obligatoria si registras el servidor más de una vez** (ver [¿Varias carpetas de Documentación?](#-varias-carpetas-de-documentación-opcional)). |
 
 ---
 

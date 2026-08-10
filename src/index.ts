@@ -132,7 +132,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             project: { type: "string", description: `Proyecto, uno de los existentes: ${PROJECTS_DESCRIPTION}. Úsalo junto con task_name y file_name.` },
             task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
             file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
-            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN (ej. 'BOS/Proyectos/tarea/01-analisis.md'). Solo si no usas project+task_name." }
+            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN (ej. 'PROYECTO-A/Proyectos/tarea/01-analisis.md'). Solo si no usas project+task_name." }
           },
         },
       },
@@ -157,8 +157,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            repo_name: { type: "string", description: "Nombre del repositorio (ej. 'kanban', 'crm')" },
-            file_path: { type: "string", description: "Ruta relativa del archivo dentro del repositorio (ej. 'Kanban-back/src/main.ts')" }
+            repo_name: { type: "string", description: "Nombre del repositorio (ej. 'repo-a', 'repo-b')" },
+            file_path: { type: "string", description: "Ruta relativa del archivo dentro del repositorio (ej. 'src/main.ts')" }
           },
           required: ["repo_name", "file_path"],
         },

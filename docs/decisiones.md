@@ -12,6 +12,47 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-10 — Varias documentaciones se resuelven registrando el servidor dos veces, no con código
+
+**Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se
+documenta como un patrón de configuración: **registrar el servidor más de una vez** en el
+cliente, con un bloque `env` distinto en cada registro. No se añade nada al código.
+
+De paso se dejan de dar por hecho dos cosas que solo eran ciertas para quien lo escribió: los
+nombres de proyecto reales pasan a `PROYECTO-A/B/C` en README, comentarios, descripciones de
+tools y fixtures, y OneDrive pasa de requisito a recomendación.
+
+**Por qué no hay código.** El servidor nunca ha hablado con OneDrive: recibe una ruta local y no
+sabe si detrás hay una nube, cuál, o ninguna. Así que "soportar Google Drive" no era una
+integración que faltara — era una frase mal escrita en el README. Y las rutas ya son por
+instancia, así que dos registros ya dan dos documentaciones, cada una con su propia subcarpeta
+de tareas. Lo único que faltaba era decirlo.
+
+**El filo que sí había que documentar.** Cada registro necesita su propio
+`ORQUESTADOR_STATE_PATH`. Si se comparte, los punteros se pisan **en silencio**: la clave del
+estado es el nombre del proyecto, así que dos documentaciones con un proyecto homónimo comparten
+entrada y una le contesta a la otra. No da error, devuelve la tarea equivocada.
+
+**Qué se descartó.** Soporte real de múltiples raíces en el código: una lista de rutas en la
+misma variable, o "espacios" declarados en un `config.json` con una tool `use_space`. Esa
+maquinaria existe para cambiar de espacio **dentro de una misma ventana**, y el uso real es
+abrir ventanas distintas — donde dos registros ya alcanzan. Introducir un formato de
+configuración nuevo, migrar el formato del estado y tocar las ocho tools para algo que resuelve
+una sección de README es trabajo que no se paga. Se retoma el día que haga falta cambiar sin
+abrir otra ventana, o que mantener cuatro o cinco bloques de `env` duplicados moleste.
+
+Descartada también una **app de escritorio** para elegir las rutas con interfaz. No sustituiría
+nada: solo escribiría el archivo que el servidor lee, así que el soporte tendría que existir
+igual en el código. Y sería más código que todo el orquestador junto, con firma, tres builds y
+autoactualización encima, para un público que ya edita un `mcp.json` a mano.
+
+**Nota sobre el registro.** Los párrafos históricos que nombraban los proyectos reales se
+reescribieron describiendo su forma, no sustituyendo por nombres inventados: meter placeholders
+en la narración de una decisión pasada volvería ficticio este archivo, que es justo lo que no
+puede ser.
+
+---
+
 ## 2026-08-08 — La compuerta avisa, no bloquea, y la resuelve el servidor
 
 **Decisión.** `get_phase_prompt` comprueba que no se esté saltando una fase y, si la hay,
@@ -167,8 +208,8 @@ el español a un resumen que apunte al inglés, no seguir manteniendo dos comple
 **Qué se descartó.** Un README en español con solo una introducción en inglés, que evitaba la
 duplicación pero dejaba a quien llega de fuera sin poder instalarlo sin traducir.
 
-**De paso.** La sección "Guía de Uso Diario" seguía nombrando `01 - Análisis Técnico.md` y
-`bos | crm | kanban` a mano — restos de antes de que el servidor entregara los nombres y
+**De paso.** La sección "Guía de Uso Diario" seguía nombrando `01 - Análisis Técnico.md` y los
+proyectos a mano, uno por uno — restos de antes de que el servidor entregara los nombres y
 detectara los proyectos. Documentación que contradecía al código.
 
 ---
@@ -233,8 +274,8 @@ panel de los otros dos clientes muestre el nombre de un editor que no es el que 
 de tareas. Un proyecto inexistente se rechaza mostrando los válidos; para estrenar uno hay que
 pasar `crear_proyecto: true` a `start_task`.
 
-**Por qué.** La tabla no restringía nada: era una tabla de alias, y como `bos`, `crm` y
-`kanban` coincidían con su propio nombre en mayúsculas, no hacía absolutamente nada. Se
+**Por qué.** La tabla no restringía nada: era una tabla de alias, y como cada entrada
+coincidía con su propio nombre en mayúsculas, no hacía absolutamente nada. Se
 comprobó pidiendo `project: "inventado"`, que resolvía `INVENTADO/Proyectos/...` sin quejarse.
 El problema real no era que los proyectos estuvieran cableados sino que **no había validación
 ninguna**: un typo en `/f1` creaba una carpeta suelta en la Documentación en silencio.
@@ -336,7 +377,7 @@ desactualizada, era una ruta que **no puede ser cierta en las dos máquinas a la
 depende de dónde se clonó y, encima, señala dentro de `build/`, que está gitignoreado. Y al
 declarar un servidor con el mismo nombre que el de la config de usuario, el archivo del
 proyecto ganaba y dejaba el MCP muerto al abrir este repo. Es la misma razón por la que las
-rutas de OneDrive viven en `.env` y no en el código.
+rutas de la documentación viven en `.env` y no en el código.
 
 **Qué se descartó.** Corregir la ruta al valor del otro dispositivo: habría movido el bug de
 equipo en lugar de quitarlo. Y dejarlo como `.cursor/mcp.json.example`: el Paso 4 del README

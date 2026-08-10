@@ -20,9 +20,9 @@ export function estaDentro(base: string, ruta: string): boolean {
 
 // ─── Proyectos ──────────────────────────────────────────────────────────────
 // Los proyectos no se declaran en ninguna parte: son las carpetas que existen. Antes había
-// una tabla con bos/crm/kanban que no restringía nada —cualquier nombre inventado resolvía
-// una ruta y start_task le creaba la carpeta— porque solo era una tabla de alias y los tres
-// nombres coincidían con su propio nombre en mayúsculas.
+// una tabla fija con los proyectos de quien escribió el código, que no restringía nada
+// —cualquier nombre inventado resolvía una ruta y start_task le creaba la carpeta— porque
+// solo era una tabla de alias y cada entrada coincidía con su propio nombre en mayúsculas.
 //
 // Es proyecto la carpeta que contenga la subcarpeta de tareas. Esa regla deja fuera sola a
 // las carpetas que no son proyectos, y da de alta uno nuevo con solo crearle su subcarpeta.

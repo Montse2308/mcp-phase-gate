@@ -19,7 +19,7 @@ import { findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.
 import type { PhaseFile } from "./phases.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
-// Forma del archivo: { "bos": "login-sso", "crm": "reporte-comisiones" }
+// Forma del archivo: { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" }
 // La clave es el nombre del proyecto en minúsculas; el valor, el nombre de la carpeta de tarea.
 export type Punteros = Record<string, string>;
 

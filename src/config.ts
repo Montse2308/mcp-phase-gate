@@ -15,7 +15,7 @@ import dotenv from "dotenv";
 export const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // Carga el archivo .env de la raíz del repo (un nivel arriba de build/ o src/).
-// Así cada dispositivo define su propia ruta de OneDrive sin tocar el mcp.json.
+// Así cada dispositivo define sus propias rutas sin tocar el mcp.json.
 // quiet: true evita que dotenv v17 imprima su banner en stdout, que es el canal del JSON-RPC.
 dotenv.config({ path: path.join(MODULE_DIR, "..", ".env"), quiet: true });
 
@@ -70,7 +70,7 @@ export function requireBasePath({ variable, apuntaA }: RutaRequerida): string {
   return ruta;
 }
 
-// Subcarpeta donde viven las tareas dentro de cada proyecto (ej. BOS/Proyectos/<tarea>).
+// Subcarpeta donde viven las tareas dentro de cada proyecto (ej. PROYECTO-A/Proyectos/<tarea>).
 // Es una convención de organización, no una ruta de dispositivo, pero vive en el entorno
 // para no tener que introducir un archivo de configuración por una sola cadena.
 // Vacía a propósito significa que las tareas cuelgan directo del proyecto.
