@@ -12,6 +12,44 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-10 — Se publica por OIDC, sin token, y la primera versión sale a mano
+
+**Decisión.** El workflow se autentica con npm por OIDC contra un editor de confianza. No hay
+`NPM_TOKEN` ni ningún otro secreto. La `2.0.0` se publica a mano desde una máquina, con 2FA
+interactivo, porque es la única forma de que exista la página del paquete.
+
+**Por qué a mano la primera.** npm no deja declarar un editor de confianza para un paquete que
+todavía no existe: la configuración vive en la página de ajustes del paquete, y esa página nace
+con la primera publicación. Es una limitación conocida y hay un issue abierto pidiéndola
+([npm/cli#8544](https://github.com/npm/cli/issues/8544)); otros registros como PyPI sí lo
+permiten. Así que la primera versión tiene que salir por otro camino, sí o sí.
+
+**Por qué no un token para esa primera.** Era la alternativa: token → publicar desde CI →
+configurar el editor de confianza → revocar el token. Acaba en el mismo sitio y de propina le
+da sello de procedencia a la `2.0.0`. Se descartó por lo que pasa **si esa secuencia se
+interrumpe**: te quedas con un token que salta el 2FA, con permiso sobre la cuenta entera
+—porque un paquete que no existe no se puede seleccionar en un token granular, hay que dar
+"todos los paquetes"—, vivo en npm y guardado en GitHub, sin ninguna razón. El paso de revocar
+es justo el que se olvida. Publicando a mano no hay estado intermedio que se pueda quedar a
+medias: en el peor caso te quedas publicando a mano, que es incómodo pero no es un riesgo.
+
+npm además está restringiendo esos tokens: cambios de cuenta en agosto de 2026 y publicación
+directa en enero de 2027. Montar ahora lo que hay que desmontar en unos meses no se paga.
+
+**El costo aceptado.** La `2.0.0` no lleva sello de procedencia, porque ese sello solo lo puede
+generar CI —esa es exactamente su gracia—. Es una insignia de confianza en una página web: no
+cambia que el paquete funcione ni quién lo puede instalar, y de la `2.0.1` en adelante sí lo
+llevan. Barato a cambio de no crear la llave.
+
+**El detalle que rompe esto en silencio.** Node 22 trae npm 10, que no sabe autenticarse por
+OIDC. Sin actualizar el CLI en el workflow, el publish falla con un 401 que no menciona la
+versión de npm por ningún lado.
+
+**Ojo con el tag `v2.0.0`.** No se crea. La versión ya está publicada, así que el workflow solo
+intentaría republicarla y npm la rechazaría por duplicada. Los tags empiezan en `v2.0.1`.
+
+---
+
 ## 2026-08-10 — Publicable en npm: los prompts se superponen en capas
 
 **Decisión.** El paquete gana `bin`, el `index.ts` gana shebang, y `ORQUESTADOR_PROMPTS_PATH`
