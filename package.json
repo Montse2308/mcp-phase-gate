@@ -1,19 +1,36 @@
 {
-  "name": "mcp_orquestador",
+  "name": "mcp-phase-gate",
   "version": "1.0.0",
   "description": "Servidor MCP que parte cada requerimiento en cinco fases con compuerta y obliga a que cada una deje su documento en una documentación central.",
   "main": "build/index.js",
+  "files": [
+    "build",
+    "prompts",
+    "!build/**/*.map"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
     "dev": "ts-node src/index.ts",
-    "test": "tsc -p tsconfig.test.json && node --test \"build-test/test/**/*.test.js\""
+    "test": "tsc -p tsconfig.test.json && node --test \"build-test/test/**/*.test.js\"",
+    "prepublishOnly": "npm run build && npm test"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Montse2308/MCP_orquestador.git"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "phase-gate",
+    "workflow",
+    "documentation",
+    "cursor",
+    "claude-code"
+  ],
   "author": "Montserrat Ximena Hernández Gallegos",
   "license": "MIT",
   "type": "module",

@@ -12,6 +12,50 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-10 — Un solo nombre: `mcp-phase-gate` en el repo, el paquete y el servidor
+
+**Decisión.** El paquete de npm pasa a llamarse `mcp-phase-gate`, `SERVER_NAME` deja de ser
+`phase-gate` para ser también `mcp-phase-gate`, y el repo se renombra igual. De paso, el
+`package.json` se prepara para publicarse: `files`, `engines`, `keywords` y `prepublishOnly`.
+
+**Por qué ahora.** Nada está publicado todavía. El nombre de un paquete de npm es lo más caro de
+cambiar una vez que alguien lo instaló, y hoy ese costo es exactamente cero. Esperar a la #11
+para decidirlo habría significado decidirlo mal por prisa o no decidirlo nunca.
+
+**Por qué `mcp-phase-gate` y no `mcp-orquestador`.** Se mantiene el razonamiento de la entrada de
+`phase-gate` más abajo: "orquestador" no dice qué orquesta. Lo que cambia es el prefijo `mcp-`,
+que dentro de un servidor MCP es redundante pero el paquete lo necesita para encontrarse
+buscando "mcp" — y tener **un** nombre en los tres sitios valía más que tener el nombre
+teóricamente perfecto en uno y parecido en los otros.
+
+**Qué se descartó.** `mcp-compuerta`, que es el mismo término en español y ya es el vocabulario
+del repo (`avisoDeCompuerta`, la sección de la compuerta en ambos READMEs). Habría mantenido la
+identidad en español, que es real: los prompts y los documentos de fase lo son. Pesó más que el
+nombre del paquete se entienda fuera del español. También `cinco-fases`, memorable pero con el
+número congelado: el día que las fases cambien, el nombre miente.
+
+**Qué NO se renombró.** El prefijo `ORQUESTADOR_*` de las variables de entorno. El usuario nunca
+lo ve en su cliente —solo en su `.env`—, así que alinearlo rompe configuraciones a cambio de
+nada visible. Si algún día molesta, es una entrada aparte.
+
+**Lo que sí se movió y tiene precio.** `APP_DIR_NAME` sí pasa a `mcp-phase-gate`, porque esa ruta
+está escrita en ambos READMEs y dejarla con el nombre viejo obligaba a explicar por qué la
+carpeta se llama distinto que todo lo demás. El precio es que los punteros guardados bajo el
+nombre anterior dejan de verse. No se migran: se recuperan con un `switch_task`, y arrastrar
+código de migración para un dato que cuesta un comando es más caro que el problema.
+
+**De paso, una contradicción que llevaba tiempo.** Los READMEs pedían Node 18 en los requisitos y
+Node 22 unas secciones más abajo, y CI solo prueba 22 y 24 — nadie ha ejecutado nunca esto en 18.
+Ahora `engines` declara `>=22` y ambos READMEs dicen lo mismo. 18 y 20 ya están fuera de soporte,
+así que no se pierde nada real.
+
+**Sobre `files`.** Sin él, `npm pack` metía 50 archivos y 357 kB: los tests, todo `src/`, los
+`tsconfig`, el workflow de CI, `.claude/commands/` y los 53 kB de este mismo archivo. Y `build/`
+entraba por el comportamiento por defecto de npm pese a estar en el `.gitignore` — funcionaba,
+pero por accidente, que es la peor forma de funcionar. Ahora se declara qué se publica.
+
+---
+
 ## 2026-08-10 — Varias documentaciones se resuelven registrando el servidor dos veces, no con código
 
 **Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se

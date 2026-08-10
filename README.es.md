@@ -2,7 +2,7 @@
 
 *Léelo en [inglés](README.md) · Este es el README en español.*
 
-Un servidor MCP (Model Context Protocol) que parte cada requerimiento en **cinco fases con compuerta** y obliga a que cada una deje su documento antes de pasar a la siguiente. En el panel de tu cliente se identifica como `phase-gate`.
+Un servidor MCP (Model Context Protocol) que parte cada requerimiento en **cinco fases con compuerta** y obliga a que cada una deje su documento antes de pasar a la siguiente. En el panel de tu cliente se identifica como `mcp-phase-gate`.
 
 ## El problema
 
@@ -78,7 +78,7 @@ DOCUMENTACIÓN/
 El código es idéntico en todos lados; lo único que cambia de un equipo a otro son **las rutas a tus carpetas**, porque el usuario del sistema y la ubicación de la documentación son distintos. Por eso se configuran por variable de entorno y no en el código.
 
 ### Requisitos previos
-- **Node.js** instalado (versión 18 o superior). Verifícalo con `node -v`.
+- **Node.js 22 o superior** instalado. Verifícalo con `node -v`. Es lo que declara el `package.json` y lo único que CI prueba (22 y 24); las versiones anteriores ya no tienen soporte.
 - **Git** instalado.
 - **Una carpeta para tu documentación**, disponible localmente. Si vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud) viaja sola entre tus equipos, que es como se recomienda usarlo — pero no es obligatorio: al servidor solo le llega una ruta local y le da igual qué haya detrás.
 - **Un cliente MCP**: Cursor, VS Code o Claude Code.
@@ -126,7 +126,7 @@ ORQUESTADOR_REPOS_PATH=C:\proyectos
 
 ### Paso 4 — Registrar el MCP en tu cliente
 
-Como las rutas viven en el `.env`, la configuración del cliente queda genérica: solo apunta al `build/index.js`. **La clave que le pongas (`mcp-orquestador` en los ejemplos) es la que identifica al servidor y la que prefija sus tools** — el nombre que el servidor declara de sí mismo, `phase-gate`, es solo lo que verás en el panel.
+Como las rutas viven en el `.env`, la configuración del cliente queda genérica: solo apunta al `build/index.js`. **La clave que le pongas es la que identifica al servidor y la que prefija sus tools**, así que puedes ponerle la que quieras. En los ejemplos va `mcp-phase-gate`, igual que el nombre del paquete y el que el servidor declara de sí mismo: son el mismo nombre en los tres sitios para que no haya que recordar cuál era cuál.
 
 En los tres casos, ajusta la ruta según dónde clonaste el repo. Recuerda que en JSON cada `\` va doble `\\`.
 
@@ -136,7 +136,7 @@ En los tres casos, ajusta la ruta según dónde clonaste el repo. Recuerda que e
 ```json
 {
   "mcpServers": {
-    "mcp-orquestador": {
+    "mcp-phase-gate": {
       "command": "node",
       "args": ["C:\\<DONDE_CLONASTE>\\MCP_orquestador\\build\\index.js"]
     }
@@ -153,7 +153,7 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
 ```json
 {
   "servers": {
-    "mcp-orquestador": {
+    "mcp-phase-gate": {
       "type": "stdio",
       "command": "node",
       "args": ["C:\\<DONDE_CLONASTE>\\MCP_orquestador\\build\\index.js"]
@@ -171,7 +171,7 @@ Claude Code lee un `.mcp.json` del proyecto en el que estés. Como lo lanza desd
 ```json
 {
   "mcpServers": {
-    "mcp-orquestador": {
+    "mcp-phase-gate": {
       "command": "node",
       "args": ["build/index.js"]
     }
@@ -187,7 +187,7 @@ Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, regi
 ### Paso 5 — Reiniciar y verificar
 1. Reinicia el cliente, o desactiva y vuelve a activar el servidor en su panel de MCP.
 2. Debe aparecer activo con sus 8 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
-3. Pruébalo pidiendo en el chat: *"Usa la tool `get_active_task` del mcp-orquestador"* — debe responder, aunque sea para decir que no hay tarea activa todavía.
+3. Pruébalo pidiendo en el chat: *"Usa la tool `get_active_task` del mcp-phase-gate"* — debe responder, aunque sea para decir que no hay tarea activa todavía.
 
 ---
 
@@ -195,9 +195,9 @@ Eso vale trabajando dentro de este repo. Para usarlo desde otros proyectos, regi
 
 - Si la **Documentación** vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud), viaja sola entre tus equipos. Lo único distinto en cada uno es el archivo `.env` (Paso 3), que es local y no se sube al repo.
 - El servidor recuerda cuál es la **tarea activa de cada proyecto** (ver `get_active_task`). Es un puntero por proyecto, no uno solo: puedes tener una ventana en un proyecto y otra en otro sin que se pisen. Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
-  - **Windows:** `%APPDATA%\mcp-orquestador\active-tasks.json`
-  - **macOS:** `~/Library/Application Support/mcp-orquestador/active-tasks.json`
-  - **Linux:** `~/.local/state/mcp-orquestador/active-tasks.json`
+  - **Windows:** `%APPDATA%\mcp-phase-gate\active-tasks.json`
+  - **macOS:** `~/Library/Application Support/mcp-phase-gate/active-tasks.json`
+  - **Linux:** `~/.local/state/mcp-phase-gate/active-tasks.json`
 
   Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
 - **La fase no se guarda: se deduce.** El servidor mira qué documentos tiene ya la carpeta de la tarea y de ahí saca en qué fase vas, porque cada fase declara cómo se llama el suyo. Por eso el dato nunca se desincroniza: si borras `02 - Decisiones.md` porque quedó mal, la tarea vuelve sola a la Fase 2.
@@ -308,7 +308,7 @@ el nombre exacto del documento de la fase y los de las anteriores.
 ### 🔍 FASE 1: Inicialización y Descubrimiento
 Crea la carpeta de la tarea, guarda el contexto y analiza tu código actual.
 
-> Usa el mcp-orquestador para ejecutar la tool `start_task`.
+> Usa el mcp-phase-gate para ejecutar la tool `start_task`.
 > - project: "{ uno de tus proyectos existentes }"
 > - task_name: "{ nombre_corto_de_tu_tarea }"
 > - initial_context: "{ Pega aquí el correo, mensaje o requerimiento completo }"

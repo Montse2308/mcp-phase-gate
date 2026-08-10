@@ -2,7 +2,7 @@
 
 *Read this in [Spanish](README.es.md) · This is the English README.*
 
-An MCP (Model Context Protocol) server that splits every incoming requirement into **five gated phases**, and forces each one to leave a written document behind before the next can start. Your client's panel will show it as `phase-gate`.
+An MCP (Model Context Protocol) server that splits every incoming requirement into **five gated phases**, and forces each one to leave a written document behind before the next can start. Your client's panel will show it as `mcp-phase-gate`.
 
 > The server's interface is in English (tool names, parameters). The **phase prompts that drive the AI's behaviour are written in Spanish**, so the documents it produces come out in Spanish. If you want them in another language, translate `prompts/*.md` — no code changes needed.
 
@@ -80,7 +80,7 @@ The `Proyectos` level is the tasks subfolder, and its name is configurable — s
 The code is identical everywhere; the only thing that changes between machines is **the paths to your folders**, because the system user and the documentation location differ. That's why they are environment variables and not constants in the code.
 
 ### Prerequisites
-- **Node.js** 18 or newer. Check with `node -v`.
+- **Node.js 22 or newer.** Check with `node -v`. That's what `package.json` declares and the only thing CI tests (22 and 24); earlier versions are out of support.
 - **Git**.
 - A folder for your central documentation, available locally. If it lives in a synced folder (OneDrive, Drive, Dropbox) it travels between your machines on its own.
 - **An MCP client**: Cursor, VS Code or Claude Code.
@@ -125,7 +125,7 @@ ORQUESTADOR_REPOS_PATH=C:\projects
 
 ### Step 4 — Register the MCP server in your client
 
-Since the paths live in `.env`, the client config stays generic: it only points at `build/index.js`. **The key you give it (`mcp-orquestador` in the examples) is what identifies the server and prefixes its tools** — the name the server reports for itself, `phase-gate`, is only what you'll see in the panel.
+Since the paths live in `.env`, the client config stays generic: it only points at `build/index.js`. **The key you give it is what identifies the server and prefixes its tools**, so you can name it whatever you like. The examples use `mcp-phase-gate`, the same as the npm package and the name the server reports for itself — one name in all three places, so there's nothing to remember.
 
 In all three cases, adjust the path to wherever you cloned the repo. Remember that in JSON every `\` must be doubled as `\\`.
 
@@ -135,7 +135,7 @@ In all three cases, adjust the path to wherever you cloned the repo. Remember th
 ```json
 {
   "mcpServers": {
-    "mcp-orquestador": {
+    "mcp-phase-gate": {
       "command": "node",
       "args": ["C:\\<WHERE_YOU_CLONED>\\MCP_orquestador\\build\\index.js"]
     }
@@ -152,7 +152,7 @@ Two differences to watch: the top-level key is `servers`, not `mcpServers`, and 
 ```json
 {
   "servers": {
-    "mcp-orquestador": {
+    "mcp-phase-gate": {
       "type": "stdio",
       "command": "node",
       "args": ["C:\\<WHERE_YOU_CLONED>\\MCP_orquestador\\build\\index.js"]
@@ -170,7 +170,7 @@ Claude Code reads a `.mcp.json` from the project you're in. Since it launches th
 ```json
 {
   "mcpServers": {
-    "mcp-orquestador": {
+    "mcp-phase-gate": {
       "command": "node",
       "args": ["build/index.js"]
     }
@@ -186,7 +186,7 @@ That covers working inside this repo. To use it from other projects, register th
 ### Step 5 — Restart and verify
 1. Restart the client, or toggle the server off and on in its MCP panel.
 2. It should show up active with its 8 tools. In **Cursor** that's Settings → MCP; in **VS Code**, the extensions/MCP view; in **Claude Code**, `/mcp`.
-3. Try it from the chat: *"Use the `get_active_task` tool from mcp-orquestador"* — it should answer, even if only to say there's no active task yet.
+3. Try it from the chat: *"Use the `get_active_task` tool from mcp-phase-gate"* — it should answer, even if only to say there's no active task yet.
 
 ---
 
@@ -194,9 +194,9 @@ That covers working inside this repo. To use it from other projects, register th
 
 - If your documentation lives in a synced folder, it travels on its own. The only per-machine file is `.env` (Step 3), which is local and never committed.
 - The server remembers the **active task of each project** (see `get_active_task`). It's one pointer per project, not a single global one: you can have one window on one project and another on a different one without them clobbering each other. That record is **local to each machine** and lives in your user data folder, outside the repo, so it survives deleting `build/` or re-cloning:
-  - **Windows:** `%APPDATA%\mcp-orquestador\active-tasks.json`
-  - **macOS:** `~/Library/Application Support/mcp-orquestador/active-tasks.json`
-  - **Linux:** `~/.local/state/mcp-orquestador/active-tasks.json`
+  - **Windows:** `%APPDATA%\mcp-phase-gate\active-tasks.json`
+  - **macOS:** `~/Library/Application Support/mcp-phase-gate/active-tasks.json`
+  - **Linux:** `~/.local/state/mcp-phase-gate/active-tasks.json`
 
   If you switch machines or chats and the LLM "forgot" where to write, tell it to call `get_active_task`, or just give it `project` + `task_name`.
 - **The phase isn't stored — it's derived.** The server looks at which documents the task folder already has and works out the phase from there, because each phase declares its own document's name. That's why the answer can never drift: delete `02 - Decisiones.md` because it came out wrong and the task drops back to Phase 2 on its own.
