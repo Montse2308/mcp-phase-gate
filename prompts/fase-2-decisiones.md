@@ -118,6 +118,7 @@ criterios verificables con el detalle técnico. La Fase 4 los ejecuta.
 | Por qué NO se hizo X | descartaste un enfoque que parecía la opción obvia |
 | Bug preexistente que se corrige de paso | apareció algo roto en la zona que se va a tocar |
 | Deuda técnica fuera de alcance | encontraste algo real que se decidió no atender ahora |
+| Traducción para quien pidió el ticket | el cambio altera una cifra que una persona no técnica usa para tomar decisiones, hace aparecer o desaparecer filas que hoy ve en pantalla, o cambia lo que esa persona ve o cómo lo interpreta. Ver la sección propia, más abajo |
 
 ---
 
@@ -152,6 +153,39 @@ Si una decisión no renuncia a nada, no inventes una implicación con tal de lle
 
 ---
 
+## LA TRADUCCIÓN PARA QUIEN PIDIÓ EL TICKET
+
+El resto del documento se escribe para quien implementa. Esta sección no: se escribe para la
+persona que pidió el ticket, que va a ver el cambio en su pantalla, que no sabe qué hay detrás
+del código, y que es quien tiene que aprobar lo que se decide por negocio y no por técnica.
+
+**Va al final del documento**, después del Estado de cierre. Es la única sección pensada para
+salir de aquí —se lee en voz alta en una llamada o se copia entera—, y en medio del documento
+obliga a recortarla a mano cada vez.
+
+Lleva, en este orden:
+
+1. Qué medía o mostraba ANTES, en lenguaje de negocio. Sin nombres de tabla ni de columna.
+2. Qué va a medir o mostrar DESPUÉS, igual de sencillo.
+3. El antes y el después con cifras reales, sobre una ventana concreta que se nombra.
+4. Quién sube, quién baja y quién queda en cero.
+5. La pregunta que esa persona va a hacer cuando lo vea, contestada por adelantado.
+6. Qué sigue siendo decisión suya, y con qué dato la puede tomar.
+
+El punto 6 se solapa a propósito con las decisiones abiertas y el estado de cierre. No se
+sustituye por una remisión: quien lee esta sección no debería tener que navegar el resto del
+documento para saber qué se espera de él.
+
+Reglas propias de esta sección:
+
+- **Aquí NO va `archivo:línea`.** Es el único lugar del flujo donde esa regla se invierte.
+- Sin jerga técnica. Si una frase no se puede leer en voz alta en una llamada, se reescribe.
+- **No sale a un archivo aparte.** Por larga que quede, va dentro del documento de esta fase:
+  el flujo no siembra archivos sueltos en la carpeta de la tarea, y una explicación que vive
+  junto a las decisiones que explica no se queda desactualizada por su cuenta.
+
+---
+
 ## PROHIBIDO
 
 - Cerrar una decisión que no verificaste pudiendo hacerlo.
@@ -163,6 +197,8 @@ Si una decisión no renuncia a nada, no inventes una implicación con tal de lle
 - Clasificar las decisiones por quién las autoriza. Se documentan las decisiones y su
   fundamento, no una taxonomía de aprobaciones.
 - Dar la fase por cerrada con decisiones críticas abiertas sin decirlo explícitamente.
+- Escribir la traducción para quien pidió el ticket con jerga técnica, o rellenarla por
+  completitud cuando su disparador no se cumplió.
 
 ---
 
@@ -204,5 +240,7 @@ Ejemplos reales de documentos aprobados.
 5. ¿El alcance está cerrado con Incluye y Excluye?
 6. ¿La lista de qué validar cubre todas las superficies afectadas, incluidas las que no
    cambian de código?
-7. ¿Me metí en terreno de la Fase 3 (plan, criterios técnicos) o de la Fase 4 (pasos)?
-8. ¿Declaré si la fase queda cerrada o si faltan respuestas?
+7. ¿El cambio mueve alguna cifra, fila o pantalla que alguien de negocio ve? Si sí, ¿escribí
+   la traducción para quien pidió el ticket, sin que me la pidieran?
+8. ¿Me metí en terreno de la Fase 3 (plan, criterios técnicos) o de la Fase 4 (pasos)?
+9. ¿Declaré si la fase queda cerrada o si faltan respuestas?

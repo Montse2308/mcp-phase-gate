@@ -118,6 +118,33 @@ describe("estadoDeTarea", () => {
     assert.equal(estado.siguienteFase, null); // la 2 no puede completarse, así que no bloquea
   });
 
+  // La carpeta de una tarea puede acabar con archivos que no son documentos de fase: una nota
+  // suelta, un anexo, o una copia en conflicto que dejó el sincronizador de la nube. Ninguno
+  // debe contar como fase hecha ni adelantar la fecha de actividad, o la deducción —que es el
+  // único registro de en qué fase va la tarea— empezaría a mentir por un archivo ajeno.
+  it("un archivo que no declara ninguna fase no altera la deducción", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(
+      docs,
+      "PROYECTO-A",
+      "login-sso",
+      ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md"],
+      { mtime: new Date("2026-01-01T00:00:00Z") }
+    );
+
+    const antes = estadoDeTarea("login-sso", carpeta, FASES);
+
+    fs.writeFileSync(path.join(carpeta, "Anexo 02 - impacto en el reporte.md"), "x", "utf-8");
+    fs.writeFileSync(path.join(carpeta, "02 - Decisiones.md.sync-conflict"), "x", "utf-8");
+
+    const despues = estadoDeTarea("login-sso", carpeta, FASES);
+
+    assert.deepEqual(despues.fasesHechas, [1]);
+    assert.equal(despues.siguienteFase, 2);
+    assert.equal(despues.ultimoCambio, antes.ultimoCambio);
+  });
+
   it("sin ninguna fase con documento no hay nada que deducir", () => {
     const docs = docsTemporales();
     crearProyecto(docs, "PROYECTO-A");
