@@ -12,6 +12,62 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-08-12 — La Fase 2 traduce el cambio para quien pidió el ticket, dentro de su documento
+
+**Decisión.** La Fase 2 gana una sección condicional, "Traducción para quien pidió el ticket",
+que se dispara cuando el cambio mueve una cifra, una fila o una pantalla que una persona no
+técnica usa para decidir. Va al final del documento y se escribe sin jerga y sin `archivo:línea`
+—la única inversión de esa regla en todo el flujo—. Es solo prompt: cero código.
+
+**Por qué existía el hueco.** El flujo producía documentos para dos audiencias: quien implementa
+(fases 1 a 3) y el repositorio (fases 4 y 5). Para la persona que pidió el ticket, nada. En un
+cambio real sobre un reporte de productividad, una columna pasó de 1,031 a 1,899 en la misma
+ventana de fechas, tres personas quedaban en cero y otra se desplomaba de 85 a 7. Sin
+traducción, quien pidió el cambio se entera de eso el día que abre el reporte.
+
+**Por qué en la Fase 2 y no en otra.** Porque ahí es donde se toman las decisiones, y la que
+quedó abierta al cerrar esa fase era justamente de negocio: no se podía cerrar porque no había
+forma de explicarle a esa persona qué implicaba. El dato que la desbloqueó —que una dimensión
+que nadie había mirado concentraba el 93.5% de la calificación, de modo que arreglar las dos
+columnas del ticket movía el resultado un 3.5%— salió de un anexo improvisado, porque a la
+usuaria del flujo se le ocurrió pedirlo. Nada lo contemplaba.
+
+**Por qué no una sexta fase.** Se planteó y se descartó: agregar una fase por esto desbalancea
+el flujo, y el contenido pertenece al momento en que se decide, no a un momento posterior.
+
+**Por qué no sale a un anexo, aunque el issue lo proponía.** La propuesta original permitía
+mandarla a un `Anexo 02 - <tema>.md` si crecía. Se descartó por dos motivos. El primero es que
+"si crece más allá de una sección" no es verificable: el modelo lo interpreta distinto cada vez.
+El segundo pesa más: hoy el flujo **nunca** ha escrito un archivo que no sea el documento de su
+fase, y abrir esa puerta convierte la carpeta de la tarea en un sitio donde aparecen archivos
+que nadie pidió. La explicación vive junto a las decisiones que explica, así que no se
+desactualiza por su cuenta. Si algún día una traducción se vuelve inmanejable dentro del
+documento, se reabre la decisión con ese caso concreto encima de la mesa.
+
+Para el registro, porque era el argumento técnico a favor del anexo y sigue siendo cierto: un
+archivo extra en la carpeta **no** habría roto nada. La deducción de fase compara contra el
+nombre exacto que declara cada prompt (`src/tasks.ts`), así que un archivo con otro nombre ni
+cuenta como fase ni mueve el orden por actividad. Queda cubierto con un test para que siga
+siendo cierto.
+
+**El disparador se escribió más ancho que el caso que lo originó.** El caso era un reporte, pero
+amarrarlo a cifras y filas dejaba fuera lo que cambia de significado sin cambiar de número: un
+estado que pasa a querer decir otra cosa, algo que se renombra y la gente usa a diario, un flujo
+de pantalla con otros pasos. Se cubren con "o cambia lo que esa persona ve o cómo lo interpreta".
+
+**Lo que la hace dispararse sin que se la pidan.** Una pregunta en la autoverificación y una
+línea en PROHIBIDO. Sin eso, la sección existiría en la tabla y seguiría dependiendo de que
+alguien se acordara de pedirla, que es exactamente el problema que se está resolviendo. La línea
+de PROHIBIDO cubre el otro lado: una sección condicional que se rellena por completitud cuando
+no se disparó es peor que no tenerla.
+
+**Lo que no entra.** No sustituye al "Aviso a alguien más" de la Fase 4: ese avisa que una cifra
+va a cambiar, esta explica por qué y qué implica. Conviven, y de momento sin ninguna remisión
+entre ellas. Tampoco cubre la comunicación posterior —el comentario en el gestor de tareas, el
+correo—, que es otro tema.
+
+---
+
 ## 2026-08-10 — Se publica por OIDC, sin token, y la primera versión sale a mano
 
 **Decisión.** El workflow se autentica con npm por OIDC contra un editor de confianza. No hay
