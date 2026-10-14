@@ -189,6 +189,79 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
   });
 });
 
+// SEG-M: write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe. Lo
+// del proyecto (phase-gate.json, .phase-gate/) queda para el CLI y la UI.
+const SOLO_EN_TAREA = /solo escribe dentro de la carpeta de una tarea que ya existe/;
+
+describe("e2e: write_central_doc solo escribe dentro de una tarea (SEG-M)", () => {
+  it("rechaza phase-gate.json del proyecto por file_path", async () => {
+    await debeRechazar("write_central_doc", () => ({ file_path: "PROYECTO-A/phase-gate.json", content: "{}" }), SOLO_EN_TAREA);
+  });
+
+  it("rechaza un archivo en la raíz de la Documentación por file_path", async () => {
+    await debeRechazar("write_central_doc", () => ({ file_path: "nota.md", content: "x" }), SOLO_EN_TAREA);
+  });
+
+  // Antes el mkdir recursivo creaba la carpeta y la tarea aparecía sin contexto inicial.
+  it("rechaza una tarea que no existe sin crear su carpeta", async () => {
+    let docs = "";
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "no-existe", file_name: "01 - Análisis Técnico.md", content: "x" }),
+      SOLO_EN_TAREA,
+      (e) => {
+        docs = e.docs;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(docs, "PROYECTO-A", "Proyectos", "no-existe")), false);
+
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ file_path: "PROYECTO-A/Proyectos/no-existe/01 - Análisis Técnico.md", content: "x" }),
+      SOLO_EN_TAREA
+    );
+  });
+
+  it("rechaza una carpeta con punto dentro de una tarea", async () => {
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: ".phase-gate/estado.json", content: "{}" }),
+      SOLO_EN_TAREA
+    );
+  });
+
+  // Lo crearía una carpeta que list_tasks no ve y en la que write_central_doc no escribe.
+  it("start_task rechaza un task_name que empieza por punto (E1-D1)", async () => {
+    await debeRechazar(
+      "start_task",
+      () => ({ project: "PROYECTO-A", task_name: ".oculta", initial_context: "x" }),
+      /task_name.*empezar por punto/s
+    );
+  });
+
+  it("start_task rechaza estrenar un project que empieza por punto (E1-D1)", async () => {
+    await debeRechazar(
+      "start_task",
+      () => ({ project: ".oculto", task_name: "tarea-x", initial_context: "x", crear_proyecto: true }),
+      /project.*empezar por punto/s
+    );
+  });
+
+  it("con la subcarpeta vacía, .phase-gate/ y .obsidian/ no aparecen en list_tasks", async () => {
+    const e = escenario();
+    fs.mkdirSync(path.join(e.docs, "PROYECTO-A", ".phase-gate"));
+    fs.mkdirSync(path.join(e.docs, ".obsidian"));
+
+    await conServidor({ ...e.env, ORQUESTADOR_TASKS_SUBDIR: "" }, async (llamar) => {
+      const r = await llamar("list_tasks", {});
+      assert.equal(r.isError, false, r.texto);
+      assert.match(r.texto, /PROYECTO-A \(1\)/);
+      assert.doesNotMatch(r.texto, /\.phase-gate/);
+      assert.doesNotMatch(r.texto, /\.obsidian/);
+    });
+  });
+});
+
 // Las dos tools de lectura comparten los límites: cada caso de S9 se prueba en ambas.
 type Lector = {
   tool: string;
@@ -366,6 +439,15 @@ describe("e2e: usos legítimos que siguen funcionando", () => {
       const leido = await llamar("read_central_doc", destino);
       assert.equal(leido.isError, false, leido.texto);
       assert.equal(leido.texto, "recibo L01");
+    });
+  });
+
+  it("file_path a un documento de una tarea que existe sigue valiendo", async () => {
+    const e = escenario();
+    await conServidor(e.env, async (llamar) => {
+      const escrito = await llamar("write_central_doc", { file_path: "PROYECTO-A/Proyectos/tarea-a/01 - Análisis Técnico.md", content: "análisis" });
+      assert.equal(escrito.isError, false, escrito.texto);
+      assert.equal(fs.readFileSync(path.join(e.tareaA, "01 - Análisis Técnico.md"), "utf-8"), "análisis");
     });
   });
 

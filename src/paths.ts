@@ -75,6 +75,20 @@ export function validarSegmento(valor: string, campo: string): string {
   return valor;
 }
 
+// Un proyecto o una tarea que start_task va a crear tampoco puede empezar por punto: las carpetas
+// con punto no son proyecto ni tarea, así que no aparecería en list_tasks y write_central_doc no
+// podría escribir en ella. No va en validarSegmento porque read_central_doc también lo usa, y la
+// lectura no cambia.
+export function validarNombreVisible(valor: string, campo: string): string {
+  if (valor.startsWith(".")) {
+    throw new Error(
+      `${campo} ${JSON.stringify(valor)} no es válido: no puede empezar por punto. Las carpetas ` +
+        `con punto no cuentan como proyecto ni como tarea, así que no se vería después.`
+    );
+  }
+  return valor;
+}
+
 // ─── Proyectos ──────────────────────────────────────────────────────────────
 // Los proyectos no se declaran en ninguna parte: son las carpetas que existen. Antes había
 // una tabla fija con los proyectos de quien escribió el código, que no restringía nada
@@ -84,13 +98,14 @@ export function validarSegmento(valor: string, campo: string): string {
 // Es proyecto la carpeta que contenga la subcarpeta de tareas. Esa regla deja fuera sola a
 // las carpetas que no son proyectos, y da de alta uno nuevo con solo crearle su subcarpeta.
 // Si la subcarpeta está vacía la regla no se puede aplicar y vale cualquier carpeta.
+// Las carpetas con punto nunca son proyecto: .obsidian o .git en la raíz de la Documentación.
 export function discoverProjects(): Map<string, string> {
   const proyectos = new Map<string, string>(); // clave en minúsculas -> nombre real de la carpeta
   const base = requireBasePath(DOCS);
   const subdir = tasksSubdir();
 
   for (const entrada of fs.readdirSync(base, { withFileTypes: true })) {
-    if (!entrada.isDirectory()) continue;
+    if (!entrada.isDirectory() || entrada.name.startsWith(".")) continue;
     if (subdir && !fs.existsSync(path.join(base, entrada.name, subdir))) continue;
     proyectos.set(entrada.name.toLowerCase(), entrada.name);
   }
@@ -165,10 +180,10 @@ export type ArgumentosDeDocumento = {
 // la base: antes "../otra-tarea/x.md" escribía en otra tarea y la comprobación de la tool,
 // que solo miraba la base, lo dejaba pasar.
 //
-// Con file_path basta con no salir de la base (la restricción a carpetas de tarea llega en la
-// Etapa 1), pero sus segmentos también tienen que ser portables: antes creaba dentro de la
-// Documentación un "CON", un "nul.md" o un flujo alterno "nota.md:secreto", que el Explorador
-// y OneDrive no saben manejar.
+// Con file_path aquí basta con no salir de la base (write_central_doc además exige que caiga en
+// una tarea: ubicarEnTarea), pero sus segmentos también tienen que ser portables: antes creaba
+// dentro de la Documentación un "CON", un "nul.md" o un flujo alterno "nota.md:secreto", que el
+// Explorador y OneDrive no saben manejar.
 export function resolveDocPath(args: ArgumentosDeDocumento): string {
   const { project = "", task_name: taskName = "", file_name: fileName = "", file_path: filePath = "" } = args;
 
@@ -195,6 +210,57 @@ export function resolveDocPath(args: ArgumentosDeDocumento): string {
   }
 
   throw new Error("Debes proporcionar (project + task_name + file_name) o bien file_path.");
+}
+
+// ─── Ubicación dentro de una tarea ──────────────────────────────────────────
+export type UbicacionEnTarea = {
+  carpetaProyecto: string; // nombre real de la carpeta del proyecto
+  taskName: string;
+  carpetaTarea: string; // ruta absoluta (real)
+  relativo: string; // ruta dentro de la tarea, con "/" como separador
+};
+
+// Segmentos de `ruta` dentro de `base`, o null si no cae dentro. Las dos ya vienen resueltas.
+function segmentosDentro(base: string, ruta: string): string[] | null {
+  const relativa = path.relative(base, ruta);
+  if (relativa === "") return [];
+  if (relativa.startsWith("..") || path.isAbsolute(relativa)) return null;
+  return relativa.split(/[\\/]/);
+}
+
+// write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe. Con file_path
+// se podía escribir en cualquier lugar de la Documentación, incluido el phase-gate.json del
+// proyecto, y con una tarea mal escrita el mkdir recursivo creaba una carpeta suelta.
+//
+// Se mide sobre rutas reales, como la contención: un enlace interno que lleva a una tarea vale,
+// porque lo que se escribe acaba dentro de ella. La subcarpeta de tareas se compara con la que
+// hay en disco y no con la variable: en Windows y macOS pueden diferir en mayúsculas, y
+// discoverProjects ya da el proyecto por bueno.
+//
+// Devuelve null si la ruta no cae dentro de la carpeta de una tarea existente, o si algún
+// segmento dentro de la tarea empieza por punto (.git, .phase-gate no son documentos).
+export function ubicarEnTarea(rutaAbsoluta: string): UbicacionEnTarea | null {
+  const docsReal = rutaReal(requireBasePath(DOCS));
+  const segmentos = segmentosDentro(docsReal, rutaReal(rutaAbsoluta));
+  if (!segmentos || segmentos.length === 0) return null;
+
+  // El nombre que da el disco tiene que ser el del proyecto, no solo parecerse en mayúsculas.
+  const [proyecto = "", ...resto] = segmentos;
+  const carpetaProyecto = findProjectFolder(proyecto);
+  if (carpetaProyecto !== proyecto) return null;
+
+  const raizProyecto = path.join(docsReal, carpetaProyecto);
+  const subdir = segmentosDentro(raizProyecto, rutaReal(tasksRootPath(carpetaProyecto)));
+  if (!subdir || subdir.some((segmento, i) => resto[i] !== segmento)) return null;
+
+  const [taskName, ...archivo] = resto.slice(subdir.length);
+  if (!taskName || taskName.startsWith(".") || archivo.length === 0) return null;
+  if (archivo.some((segmento) => segmento.startsWith("."))) return null;
+
+  const carpetaTarea = path.join(raizProyecto, ...subdir, taskName);
+  if (!fs.statSync(carpetaTarea, { throwIfNoEntry: false })?.isDirectory()) return null;
+
+  return { carpetaProyecto, taskName, carpetaTarea, relativo: archivo.join("/") };
 }
 
 // ─── Repos ──────────────────────────────────────────────────────────────────

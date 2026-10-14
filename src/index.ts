@@ -26,6 +26,8 @@ import {
   resolveDocPath,
   resolveRepoPath,
   taskFolderPath,
+  ubicarEnTarea,
+  validarNombreVisible,
   validarSegmento,
 } from "./paths.js";
 import {
@@ -153,7 +155,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             project: { type: "string", description: `Proyecto, uno de los existentes: ${PROJECTS_DESCRIPTION}. Úsalo junto con task_name y file_name.` },
             task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
             file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
-            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN. Solo si no usas project+task_name." },
+            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN, que tiene que caer dentro de la carpeta de una tarea que ya existe (ej. 'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Los archivos del proyecto no se escriben con esta tool. Solo si no usas project+task_name." },
             content: { type: "string", description: "Contenido a escribir" }
           },
           required: ["content"],
@@ -203,10 +205,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         // El nombre se vuelve carpeta tal cual: "../evil" la creaba fuera de la Documentación.
         validarSegmento(proj, "project");
+        validarNombreVisible(proj, "project");
         carpetaProyecto = proj.toUpperCase();
         estrenado = true;
       }
 
+      validarNombreVisible(taskName, "task_name");
       const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
       const contextoInicial = path.join(carpetaTarea, nombreContextoInicial());
 
@@ -385,6 +389,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (!estaDentroReal(docsBase, fullPath)) {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
+      }
+
+      // Antes del mkdir: con una tarea mal escrita, el mkdir recursivo creaba su carpeta.
+      const ubicacion = ubicarEnTarea(fullPath);
+      if (!ubicacion) {
+        throw new Error(
+          "write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe " +
+            "(<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/). Los archivos del proyecto, como " +
+            "phase-gate.json, no se escriben con esta tool. Para una tarea nueva, usa start_task."
+        );
       }
 
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });

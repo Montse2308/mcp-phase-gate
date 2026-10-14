@@ -15,6 +15,8 @@ import {
   resolveRepoPath,
   resolveTaskFolder,
   rutaReal,
+  ubicarEnTarea,
+  validarNombreVisible,
   validarSegmento,
 } from "../src/paths.js";
 import {
@@ -67,6 +69,128 @@ describe("discoverProjects", () => {
     assert.equal(findProjectFolder("  PrOyEcTo-A  "), "PROYECTO-A");
     assert.equal(findProjectFolder("noexiste"), null);
   });
+
+  // Con la subcarpeta vacía vale cualquier carpeta, y la Documentación suele tener .obsidian o
+  // .git en la raíz. Tampoco cuenta una carpeta con punto que sí tenga la subcarpeta de tareas.
+  it("una carpeta que empieza por punto no es proyecto", () => {
+    const docs = docsTemporales("");
+    fs.mkdirSync(path.join(docs, "PROYECTO-A"));
+    fs.mkdirSync(path.join(docs, ".obsidian"));
+    fs.mkdirSync(path.join(docs, ".git"));
+
+    assert.deepEqual([...discoverProjects().values()], ["PROYECTO-A"]);
+
+    process.env.ORQUESTADOR_TASKS_SUBDIR = "Proyectos";
+    crearProyecto(docs, "PROYECTO-B");
+    crearProyecto(docs, ".phase-gate");
+
+    assert.deepEqual([...discoverProjects().values()], ["PROYECTO-B"]);
+  });
+});
+
+describe("ubicarEnTarea", () => {
+  it("ubica un archivo de una tarea que existe, también en una subcarpeta", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "login-sso");
+
+    assert.deepEqual(ubicarEnTarea(path.join(tarea, "01 - Análisis Técnico.md")), {
+      carpetaProyecto: "PROYECTO-A",
+      taskName: "login-sso",
+      carpetaTarea: tarea,
+      relativo: "01 - Análisis Técnico.md",
+    });
+    assert.equal(ubicarEnTarea(path.join(tarea, "04 - Ejecución", "L01 - x.md"))?.relativo, "04 - Ejecución/L01 - x.md");
+  });
+
+  // Es SEG-M: phase-gate.json y lo demás del proyecto no se escriben con write_central_doc.
+  it("devuelve null fuera de una carpeta de tarea", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    crearTarea(docs, "PROYECTO-A", "login-sso");
+    fs.mkdirSync(path.join(docs, "Plantillas")); // carpeta suelta, no es proyecto
+
+    for (const relativa of [
+      "nota.md",
+      "PROYECTO-A/phase-gate.json",
+      "PROYECTO-A/Proyectos/nota.md",
+      "PROYECTO-A/Otra/login-sso/x.md",
+      "Plantillas/x.md",
+      "INVENTADO/Proyectos/login-sso/x.md",
+    ]) {
+      assert.equal(ubicarEnTarea(path.join(docs, relativa)), null, relativa);
+    }
+    assert.equal(ubicarEnTarea(docs), null);
+    assert.equal(ubicarEnTarea(path.join(carpetaTemporal("fuera"), "x.md")), null);
+  });
+
+  it("devuelve null si la tarea no existe o si la ruta es la propia carpeta de la tarea", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "login-sso");
+
+    assert.equal(ubicarEnTarea(path.join(docs, "PROYECTO-A", "Proyectos", "no-existe", "x.md")), null);
+    assert.equal(ubicarEnTarea(tarea), null);
+  });
+
+  // .git o .phase-gate dentro de una tarea no son documentos de la tarea, y una carpeta con
+  // punto no es tarea aunque cuelgue de la subcarpeta de tareas.
+  it("devuelve null si algún segmento dentro de la tarea, o la tarea, empieza por punto", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "login-sso");
+    crearTarea(docs, "PROYECTO-A", ".phase-gate");
+
+    for (const relativa of [".oculto.md", ".git/config", ".phase-gate/estado.json", "04 - Ejecución/.borrador.md"]) {
+      assert.equal(ubicarEnTarea(path.join(tarea, relativa)), null, relativa);
+    }
+    assert.equal(ubicarEnTarea(path.join(docs, "PROYECTO-A", "Proyectos", ".phase-gate", "x.md")), null);
+  });
+
+  it("con la subcarpeta vacía, la tarea cuelga del proyecto", () => {
+    const docs = docsTemporales("");
+    const tarea = path.join(docs, "PROYECTO-A", "login-sso");
+    fs.mkdirSync(tarea, { recursive: true });
+    fs.mkdirSync(path.join(docs, "PROYECTO-A", ".phase-gate"));
+
+    assert.equal(ubicarEnTarea(path.join(tarea, "x.md"))?.taskName, "login-sso");
+    assert.equal(ubicarEnTarea(path.join(docs, "PROYECTO-A", ".phase-gate", "x.md")), null);
+    assert.equal(ubicarEnTarea(path.join(docs, "PROYECTO-A", "phase-gate.json")), null);
+  });
+
+  it("acepta una subcarpeta de tareas de varios segmentos", () => {
+    const docs = docsTemporales(path.join("Trabajo", "Proyectos"));
+    const tarea = crearTarea(docs, "PROYECTO-A", "login-sso", [], { subdir: path.join("Trabajo", "Proyectos") });
+
+    assert.equal(ubicarEnTarea(path.join(tarea, "x.md"))?.taskName, "login-sso");
+    assert.equal(ubicarEnTarea(path.join(docs, "PROYECTO-A", "Trabajo", "x.md")), null);
+  });
+
+  // La ubicación se mide sobre la ruta real: un enlace interno que lleva a una tarea vale.
+  it("ubica la ruta real de un enlace interno que lleva a una tarea", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "login-sso");
+    crearSymlink(tarea, path.join(docs, "compartido"));
+
+    const ubicacion = ubicarEnTarea(path.join(docs, "compartido", "nota.md"));
+
+    assert.equal(ubicacion?.taskName, "login-sso");
+    assert.equal(ubicacion?.carpetaTarea, tarea);
+  });
+
+  // En Windows y macOS la carpeta en disco y la variable pueden diferir en mayúsculas, y
+  // discoverProjects ya da el proyecto por bueno. La ruta real trae las del disco.
+  it(
+    "la subcarpeta de tareas no depende de las mayúsculas de la variable",
+    { skip: process.platform === "linux" },
+    () => {
+      const docs = docsTemporales("proyectos");
+      const tarea = crearTarea(docs, "PROYECTO-A", "login-sso");
+
+      assert.equal(ubicarEnTarea(path.join(tarea, "x.md"))?.taskName, "login-sso");
+    }
+  );
 });
 
 describe("resolveTaskFolder", () => {
@@ -354,6 +478,23 @@ describe("validarSegmento", () => {
   it("permite espacios intermedios, acentos, ñ, guiones y paréntesis", () => {
     for (const valor of ["Exponer endpoints", "Tokens login", "Migración de Pagos (ñ)", "login-sso", "CONSOLA", "com10", "conin", "nul-pagos.md"]) {
       assert.equal(validarSegmento(valor, "task_name"), valor);
+    }
+  });
+});
+
+// Lo que start_task crea tiene que verse después: una carpeta con punto no es proyecto ni tarea.
+// No va en validarSegmento porque read_central_doc también lo usa y no cambia en esta etapa.
+describe("validarNombreVisible", () => {
+  it("rechaza un nombre que empieza por punto y nombra el campo", () => {
+    for (const valor of [".oculta", ".phase-gate", ".git"]) {
+      assert.throws(() => validarNombreVisible(valor, "task_name"), /task_name.*empezar por punto/s, valor);
+    }
+    assert.throws(() => validarNombreVisible(".OCULTO", "project"), /project.*empezar por punto/s);
+  });
+
+  it("permite puntos que no van al principio", () => {
+    for (const valor of ["login-sso", "v1.2 pagos", "a.b"]) {
+      assert.equal(validarNombreVisible(valor, "task_name"), valor);
     }
   });
 });

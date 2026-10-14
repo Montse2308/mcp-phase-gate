@@ -205,6 +205,22 @@ describe("listarTareas", () => {
 
     assert.deepEqual(listarTareas("PROYECTO-A", FASES).map((t) => t.taskName), ["hecha-a-mano"]);
   });
+
+  // Con la subcarpeta vacía las tareas cuelgan del proyecto, junto a .phase-gate/ o .git/.
+  it("una carpeta que empieza por punto no es tarea", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    crearTarea(docs, "PROYECTO-A", "real");
+    crearTarea(docs, "PROYECTO-A", ".obsidian");
+
+    assert.deepEqual(listarTareas("PROYECTO-A", FASES).map((t) => t.taskName), ["real"]);
+
+    process.env.ORQUESTADOR_TASKS_SUBDIR = "";
+    fs.mkdirSync(path.join(docs, "PROYECTO-A", ".phase-gate"));
+    fs.mkdirSync(path.join(docs, "PROYECTO-A", ".git"));
+
+    assert.deepEqual(listarTareas("PROYECTO-A", FASES).map((t) => t.taskName), ["Proyectos"]);
+  });
 });
 
 describe("punteros de tarea activa", () => {

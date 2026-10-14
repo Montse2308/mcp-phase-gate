@@ -174,6 +174,8 @@ export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFil
 // ─── Listado ────────────────────────────────────────────────────────────────
 // Las tareas son las carpetas que hay bajo la subcarpeta de tareas del proyecto. Se listan
 // del disco, así que también aparecen las que alguien creó a mano sin pasar por start_task.
+// Las carpetas con punto no son tareas: con la subcarpeta vacía, .phase-gate/ o .git/ del
+// proyecto cuelgan del mismo sitio que ellas.
 export function listarTareas(
   carpetaProyecto: string,
   phases: Map<number, PhaseFile>
@@ -184,7 +186,7 @@ export function listarTareas(
 
   return fs
     .readdirSync(raiz, { withFileTypes: true })
-    .filter((entrada) => entrada.isDirectory())
+    .filter((entrada) => entrada.isDirectory() && !entrada.name.startsWith("."))
     .map((entrada) => estadoDeTarea(entrada.name, path.join(raiz, entrada.name), phases))
     .sort((a, b) => (b.ultimoCambio ?? 0) - (a.ultimoCambio ?? 0));
 }

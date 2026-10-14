@@ -12,6 +12,55 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — `write_central_doc` solo escribe dentro de carpetas de tarea, y las carpetas con punto no son proyecto ni tarea
+
+**Decisión.** `write_central_doc` solo escribe dentro de la carpeta de una tarea **que ya
+existe**: `<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/…`. Da igual que la ruta llegue por
+`project + task_name + file_name` o por `file_path`; lo comprueba `ubicarEnTarea`, sobre la ruta
+real y antes de crear ninguna carpeta. Dentro de la tarea ningún segmento puede empezar por `.`.
+Además, una carpeta cuyo nombre empieza por `.` no es proyecto (`discoverProjects`) ni tarea
+(`listarTareas`). `read_central_doc` no cambia: sigue leyendo cualquier archivo dentro de
+`DOCS`.
+
+**Nueva.** Prepara el manifiesto de la Etapa 3: `phase-gate.json` y `.phase-gate/` se editan solo
+por CLI o UI, nunca con esta tool (decisión SEG-M del plan maestro v3).
+
+**Por qué.** Con `file_path` se escribía en cualquier lugar de la Documentación, también en la
+raíz de un proyecto, donde vivirá su manifiesto: un modelo podía cambiar la configuración del
+flujo que lo gobierna. Y con una tarea mal escrita, el `mkdir` recursivo le creaba la carpeta, y
+la tarea aparecía en `list_tasks` sin contexto inicial. Por el otro lado, con la subcarpeta de
+tareas vacía, `.obsidian/` o `.git/` de la raíz contaban como proyectos, y el futuro
+`.phase-gate/` de un proyecto, como una tarea.
+
+**Por qué sobre la ruta real.** Igual que la contención: un enlace interno que lleva a una tarea
+sigue valiendo, porque lo que se escribe acaba dentro de ella. La subcarpeta de tareas se compara
+con la que hay en disco y no con el texto de la variable: en Windows y macOS pueden diferir en
+mayúsculas, y `discoverProjects` ya daba ese proyecto por bueno.
+
+**Desvío E1-D1 (aprobado por la autora).** Dos cambios que el plan no pedía en este lote:
+
+- `start_task` rechaza un `task_name` que empieza por punto, y un `project` que empieza por
+  punto cuando viene con `crear_proyecto`, con un error que nombra el campo. Si no, crearía una
+  carpeta que `list_tasks` no ve y en la que `write_central_doc` no escribe. La comprobación
+  (`validarNombreVisible`) va en `start_task` y no en `validarSegmento` ni en `taskFolderPath`,
+  porque los dos llegan también a `read_central_doc`, que no cambia en esta etapa.
+- La descripción de `file_path` en `write_central_doc` dice que la ruta tiene que caer dentro de
+  la carpeta de una tarea que ya existe.
+
+**Qué deja de funcionar, a propósito:**
+
+- Escribir con `file_path` fuera de una tarea: en la raíz de `DOCS`, en la raíz de un proyecto
+  o en una carpeta que no es proyecto (`Plantillas/`). Esos archivos se editan a mano.
+- Escribir en una tarea que no existe. Se crea antes con `start_task`, que guarda su contexto
+  inicial.
+- Escribir un archivo o una subcarpeta con punto dentro de una tarea (`.borrador.md`,
+  `.git/…`).
+- Ver como proyecto o como tarea una carpeta con punto que alguien ya usara así: se renombra la
+  carpeta.
+- Crear con `start_task` una tarea, o estrenar un proyecto, cuyo nombre empiece por punto.
+
+---
+
 ## 2026-10-14 — Dependabot agrupa lo menor e ignora las versiones mayores de TypeScript y de los tipos de Node
 
 **Decisión.** En npm, las versiones menores y los parches llegan en un solo PR semanal
