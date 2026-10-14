@@ -136,4 +136,15 @@ describe("prompts publicados", () => {
       assert.equal(loadPhasePrompt(fase, [PROMPTS]).includes("<!--"), false);
     });
   }
+
+  // L04 (#39 y #40): se escriben una vez en las reglas globales, que se anteponen a cada fase.
+  for (const fase of [1, 2, 3, 4, 5]) {
+    it(`get_phase_prompt(${fase}) trae la base de cada decisión y los pendientes heredados`, () => {
+      const prompt = loadPhasePrompt(fase, [PROMPTS]);
+
+      for (const encabezado of ["## EVIDENCIA", "## BASE DE CADA DECISIÓN", "## PENDIENTES HEREDADOS"]) {
+        assert.ok(prompt.includes(`\n${encabezado}\n`), `falta ${encabezado}`);
+      }
+    });
+  }
 });

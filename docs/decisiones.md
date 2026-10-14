@@ -12,6 +12,58 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — Base de cada decisión y pendientes heredados viven en las reglas globales; Cero Rupturas se acota por fase
+
+**Decisión.** `prompts/global-rules.md` gana tres secciones y reescribe una:
+
+- **EVIDENCIA** (nueva): toda afirmación se ancla en un `archivo:línea` o en la salida real de
+  algo ejecutado, con qué se ejecutó y cuándo.
+- **BASE DE CADA DECISIÓN** (nueva, #40): toda `D<n>`, nazca en la fase que nazca, declara su
+  base: `medido` (con fuente y vigencia), `leído en código`, `documentado` o `inferido` (con qué
+  la confirmaría). Una medición contra una fuente no confirmada cuenta como `inferido`, y con
+  varias bases se declara la más débil.
+- **PENDIENTES HEREDADOS** (nueva, #39): cada fase revisa antes de empezar si la anterior dejó
+  lagunas y se las nombra al usuario; y toda fase que cierra con algo sin comprobar lo deja bajo
+  el encabezado exacto `## Validaciones pendientes` y lo dice en el mensaje de cierre.
+- **CERO RUPTURAS**, acotada por fase: fuera de la Fase 4 hay que preguntar antes de cambiar
+  código existente; en la Fase 4, el plan aprobado ya es esa autorización para lo que lista.
+
+Las dos reglas globales que un preset podrá cambiar, `cero-rupturas` y `evidencia`, quedan
+marcadas como ranuras. Base y Pendientes no son ranura: no dependen del dominio. Cada fase las
+ancla con referencias cortas (paso 0, PROHIBIDO, AUTOVERIFICACIÓN) en los lotes de prompts L05
+a L08.
+
+**Nueva** (#39 y #40). Esta es la parte común; las dos issues se cierran con el último lote de
+prompts, el de la Fase 5.
+
+**Por qué en las reglas globales.** Se anteponen a las cinco fases, así que es el único lugar
+donde Base y Pendientes se escriben una vez para todas. #40 nació en la Fase 1, pero una
+decisión puede nacer en cualquier fase y arrastra el mismo problema: sin base declarada, la fase
+siguiente no sabe qué reverificar. #39 tampoco es de una fase: cualquiera puede cerrar con
+lagunas, y la deducción de fase solo mira que el documento exista.
+
+**Por qué `medido` no basta solo.** En la tarea que originó #40, lo "medido" estaba medido
+contra una réplica vieja que nadie había comprobado. Una marca `medido` sin fuente ni vigencia
+habría sido activamente engañosa.
+
+**Por qué Cero Rupturas se acota.** Decía "SIEMPRE pregúntale al usuario primero" sin
+distinguir fases, y en la Fase 4 eso obligaba a pedir permiso por cada cambio que el plan ya
+aprobó. La regla sigue igual de estricta para lo que el plan no contempla.
+
+**Por qué no contradice el rechazo de #39 a un campo `Estado:`.** #39 descartó que la compuerta
+dependiera de un `Estado: cerrada | con pendientes` escrito por el modelo: sería una segunda copia
+de la verdad que el disco ya guarda. `## Validaciones pendientes` es un encabezado del
+documento, no un estado: la deducción de fase no lo lee. Lo mismo vale para el `estado` de los
+recibos de lote: en la 2.1.0 es informativo, y a partir de la Etapa 4 el servidor lo verifica
+contra Git en vez de creérselo.
+
+**Riesgo aceptado (E1-R1).** Un `global-rules.md` propio **sustituye** al de fábrica, no se
+suma, así que quien tenga el suyo pierde estas secciones. Se avisa en el README (L10), en la
+Etapa 2 `doctor` avisará si un override no tiene esos encabezados, y en la Etapa 3 se estudia
+que los overrides operen por ranuras para que nadie las pierda por accidente.
+
+---
+
 ## 2026-10-14 — Un documento de fase se congela cuando existe el de una fase posterior
 
 **Decisión.** Sin `force: true`, `write_central_doc` rechaza escribir:
