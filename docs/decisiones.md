@@ -12,6 +12,26 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — Dependabot agrupa lo menor e ignora las versiones mayores de TypeScript y de los tipos de Node
+
+**Decisión.** En npm, las versiones menores y los parches llegan en un solo PR semanal
+(`menores-y-parches`), y las mayores, sueltas. Las mayores de `typescript` y `@types/node` se
+ignoran. Las acciones de GitHub se actualizan juntas, en el grupo `acciones`.
+
+**Por qué.** Su primera ejecución, al mergear la Etapa 0, abrió seis PR a la vez, uno por
+dependencia. Así, revisar dependencias deja de ser mantenimiento y se vuelve ruido.
+
+- **TypeScript:** un cambio de compilador mayor se decide aparte, no como mantenimiento.
+- **`@types/node`:** los tipos tienen que seguir a la versión mínima que soporta el paquete
+  (`engines.node >=22`). Con los de Node 26 se podría usar sin aviso una API que no existe
+  en Node 22.
+
+**Qué se descartó.** Ignorar todas las versiones mayores. Las de dependencias de runtime, como
+el SDK de MCP, tienen que seguir llegando: suelen traer arreglos de seguridad que no se
+quieren perder.
+
+---
+
 ## 2026-10-14 — El plan maestro v3 se versiona en `docs/`
 
 **Decisión.** El plan de la versión 3 vive en [`docs/plan-maestro-v3.md`](plan-maestro-v3.md),
