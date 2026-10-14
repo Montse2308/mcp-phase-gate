@@ -546,7 +546,7 @@ Scripts disponibles:
 - `npm run build` → compila TypeScript a `build/`.
 - `npm test` → compila los tests y los corre con el runner de Node (necesita **Node 22 o superior**).
 - `npm start` → ejecuta el servidor compilado.
-- `npm run dev` → ejecuta directo desde TypeScript con `ts-node`.
+- `npm run dev` → recompila a `build/` con cada cambio (`tsc --watch`).
 
 Los tests viven en `test/` y no necesitan ninguna dependencia extra: usan `node:test`, que
 viene con Node. Montan una Documentación Central de mentira en una carpeta temporal, así que
