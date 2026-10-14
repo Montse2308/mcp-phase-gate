@@ -5,10 +5,127 @@ se descartó. El objetivo es no tener que reconstruir el razonamiento meses desp
 cuando ya nadie se acuerda de por qué algo quedó así.
 
 Lo que **no** va aquí: el historial de cambios (eso son los commits y los PRs) ni el
-plan de lo que falta (eso son los [issues](https://github.com/Montse2308/MCP_orquestador/issues)).
+plan de lo que falta (eso son los [issues](https://github.com/Montse2308/mcp-phase-gate/issues)).
 
 Formato: una entrada por decisión, la más reciente arriba. Si una decisión se revierte,
 no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja.
+
+---
+
+## 2026-10-14 — El plan maestro v3 se versiona en `docs/`
+
+**Decisión.** El plan de la versión 3 vive en [`docs/plan-maestro-v3.md`](plan-maestro-v3.md),
+versionado con el código. Desde que entra al repo, esa copia es la fuente: cada etapa la
+actualiza en su lote de documentación con el estado de sus lotes y sus desvíos, sin reescribir
+el diseño de las etapas ya cerradas.
+
+**Reemplaza, para este plan,** la entrada del 2026-08-07 "El plan del proyecto vive en Issues,
+no en un archivo".
+
+**Por qué.** Aquella decisión era contra una lista de pendientes —un `TODO.md` que envejece
+mal— y sigue siendo cierta para eso. Este plan es otra cosa: un documento de diseño con
+decisiones, alternativas descartadas, anclas contra el código y verificaciones ejecutadas. Un
+issue no tiene dónde guardar eso, y fuera del repo se separa del código que describe. Como
+activo de ingeniería tiene valor por sí mismo.
+
+**Lo que se mantiene de la anterior.** Los fallos y los pendientes sueltos siguen yendo a
+Issues, y cada etapa puede tener su issue de seguimiento que enlace a su sección del plan.
+
+**Privacidad.** Antes de entrar se revisó el texto entero: sin rutas reales de ningún equipo,
+sin nombres de proyectos o clientes del trabajo y sin datos de terceros.
+
+---
+
+## 2026-10-14 — Los argumentos se validan con zod declarado como dependencia directa, y los schemas son la fuente de la Etapa 2
+
+**Decisión.** Cada tool declara sus argumentos en `src/schemas.ts` con zod, y el servidor los
+valida al entrar, antes de que ninguna tool los use. Un argumento ausente o de otro tipo
+devuelve un error en español que **nombra el campo**. `zod` pasa a ser dependencia directa en
+`package.json`.
+
+**Por qué.** Las tools leían sus argumentos con `String(args?.x)`, que convierte cualquier cosa
+en texto sin quejarse. Sin `task_name`, `start_task` creó la tarea `undefined/` y la dejó
+activa. Sin `content`, `write_central_doc` escribió el documento de la fase y lo dio por
+bueno. Un `repo_name: 7` acabó buscando en la carpeta `7`. Ninguno de esos casos fallaba: el
+error aparecía después, en otra parte y con otra cara.
+
+**Por qué dependencia directa, si ya estaba instalada.** Llegaba como dependencia del SDK de
+MCP. Usarla sin declararla deja la versión en manos de otro paquete: si el SDK la cambia o la
+quita, el servidor se rompe sin que nada en este repo lo diga.
+
+**Por qué shapes y no objetos.** `src/schemas.ts` exporta los campos sueltos (`ZodRawShape`)
+porque es lo que recibe `registerTool` en la migración a `McpServer` de la Etapa 2. Así esa
+migración reutiliza estos schemas tal cual, en vez de reescribirlos.
+
+**Cuánta tolerancia.** `null` en un campo opcional cuenta como ausente (los opcionales son
+`.nullish()`): algunos clientes con modelos en modo estricto mandan `null` en todo campo
+opcional, y rechazarlo los rompería. Un número en texto (`phase: "3"`) **no** se convierte: se
+rechaza con un mensaje que dice qué se espera ("`phase` debe ser un número, por ejemplo 3").
+Es raro, el modelo lo corrige al primer intento, y convertirlo complicaría el JSON Schema que
+la Etapa 2 genera desde estos shapes.
+
+**Qué no cambia.** Los nombres y los parámetros de las tools, y el `inputSchema` que ve el
+cliente. Qué combinación de `project`, `task_name`, `file_name` y `file_path` vale lo sigue
+decidiendo `resolveDocPath`: el schema solo comprueba que cada uno, si viene, sea texto.
+
+---
+
+## 2026-10-14 — La contención se comprueba contra la ruta real y los nombres son un solo segmento portable
+
+**Decisión.** Toda ruta que una tool lee o escribe en la Documentación se compara contra la
+base **después de resolver symlinks y junctions**, de la base y de la ruta (`estaDentroReal`).
+Los nombres de proyecto y de tarea, y cada segmento de `file_name`, tienen que ser **un solo
+segmento de ruta portable** (`validarSegmento`): sin `/` ni `\`, sin `.` ni `..`, sin
+`< > : " | ? *` ni caracteres de control, sin punto ni espacio al final y sin nombres
+reservados de Windows. Con `project + task_name + file_name`, el archivo además tiene que
+quedar dentro de **su tarea**, no solo dentro de la base.
+
+**Complementa** la entrada del 2026-08-08 sobre `path.relative`: la comparación sigue siendo
+relativa, pero entre rutas reales.
+
+**Por qué.** El diagnóstico reprodujo cuatro escapes contra el binario compilado. Un
+`task_name` con `..` sacaba `start_task` de su carpeta. `crear_proyecto` con `"../evil"`
+creaba el proyecto fuera de la raíz, porque `toUpperCase` no valida nada. Un `file_name` como
+`"../otra-tarea/x.md"` escribía en otra tarea, porque la comprobación solo miraba la base. Y
+un symlink dentro de la Documentación que apuntaba fuera dejaba leer y escribir al otro lado:
+su ruta "estaba dentro" como texto, pero su destino no. Los cuatro quedan como casos de
+`test/e2e.test.ts`.
+
+**Por qué es seguro.** Solo se rechazan nombres que ya eran peligrosos o no portables. Un
+nombre con `/` creaba carpetas anidadas que `listarTareas` no ve como tarea, y uno con `:` o
+con punto final se rompe al sincronizar con Windows. Siguen valiendo los espacios, los
+acentos, la `ñ`, los paréntesis y una subcarpeta en `file_name` (`04 - Ejecución/L01 - x.md`).
+También un symlink que no sale de la Documentación y una raíz `DOCS` que es un symlink.
+
+**Un detalle de `rutaReal`.** La ruta que se va a escribir casi nunca existe todavía, así que
+se resuelve el ancestro existente más cercano y se vuelve a unir el resto. "Existe" se mira
+con `lstat`: un enlace roto cuenta como existente, `realpath` falla y la operación se rechaza.
+Con `existsSync` el enlace roto se saltaría, y escribir a través de él crearía su destino, esté
+donde esté.
+
+**Qué se descartó.** Normalizar los nombres (quitar los caracteres prohibidos, recortar el punto
+final) en lugar de rechazarlos. Así dos nombres distintos acaban en la misma carpeta sin que
+nadie se entere, y el error que explica la regla es más barato que esa confusión.
+
+**Ampliado tras la auditoría externa de la Etapa 0.** Dos cambios:
+
+- Los segmentos de `file_path` pasan por la misma validación que los de `file_name`.
+  `file_path` no salía de la base, pero dentro de ella creaba `CON`, `nul.md` o el flujo
+  alterno `nota.md:secreto`, que el Explorador y OneDrive no saben manejar.
+- La lista de nombres reservados suma los que Windows también reserva: `CONIN$`, `CONOUT$`,
+  `COM` y `LPT` con los superíndices `¹²³`, y los espacios antes de la extensión
+  (`nul .txt` sigue siendo NUL).
+
+**Qué deja de funcionar, a propósito:**
+
+- Un `file_name` o un `file_path` con segmentos vacíos o de punto, como `./x.md`, `a//x.md`
+  o `a/../b.md`, aunque no salgan de su carpeta. Basta con escribir la ruta sin ellos.
+- Una tarea creada en Linux o macOS con `:` o con punto final en el nombre: se sigue
+  listando, pero ya no se lee ni se escribe por `file_name`. Ese nombre ya se rompía al
+  sincronizar con Windows; hay que renombrar la carpeta.
+- Un proyecto o una tarea que es un enlace hacia fuera de la Documentación: se rechaza,
+  porque es exactamente el escape de S4. Un enlace que apunta dentro de la Documentación
+  sigue valiendo.
 
 ---
 
@@ -1009,6 +1126,9 @@ una versión anterior.
 ---
 
 ## 2026-08-07 — El plan del proyecto vive en Issues, no en un archivo
+
+> **Reemplazada en parte** el 2026-10-14 por "El plan maestro v3 se versiona en `docs/`": el
+> plan de diseño vive en `docs/plan-maestro-v3.md`. Los pendientes sueltos siguen en Issues.
 
 **Decisión.** Lo que falta por hacer se registra como GitHub Issues, agrupado con las
 labels `v1-uso-propio` y `v2-publico`. No hay `TODO.md` ni sección de roadmap en el README.
