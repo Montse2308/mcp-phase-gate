@@ -107,6 +107,26 @@ donde esté.
 final) en lugar de rechazarlos. Así dos nombres distintos acaban en la misma carpeta sin que
 nadie se entere, y el error que explica la regla es más barato que esa confusión.
 
+**Ampliado tras la auditoría externa de la Etapa 0.** Dos cambios:
+
+- Los segmentos de `file_path` pasan por la misma validación que los de `file_name`.
+  `file_path` no salía de la base, pero dentro de ella creaba `CON`, `nul.md` o el flujo
+  alterno `nota.md:secreto`, que el Explorador y OneDrive no saben manejar.
+- La lista de nombres reservados suma los que Windows también reserva: `CONIN$`, `CONOUT$`,
+  `COM` y `LPT` con los superíndices `¹²³`, y los espacios antes de la extensión
+  (`nul .txt` sigue siendo NUL).
+
+**Qué deja de funcionar, a propósito:**
+
+- Un `file_name` o un `file_path` con segmentos vacíos o de punto, como `./x.md`, `a//x.md`
+  o `a/../b.md`, aunque no salgan de su carpeta. Basta con escribir la ruta sin ellos.
+- Una tarea creada en Linux o macOS con `:` o con punto final en el nombre: se sigue
+  listando, pero ya no se lee ni se escribe por `file_name`. Ese nombre ya se rompía al
+  sincronizar con Windows; hay que renombrar la carpeta.
+- Un proyecto o una tarea que es un enlace hacia fuera de la Documentación: se rechaza,
+  porque es exactamente el escape de S4. Un enlace que apunta dentro de la Documentación
+  sigue valiendo.
+
 ---
 
 ## 2026-08-12 — La Fase 2 traduce el cambio para quien pidió el ticket, dentro de su documento

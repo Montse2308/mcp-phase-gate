@@ -174,6 +174,11 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
     );
   });
 
+  // No sale de DOCS, pero creaba dentro un "CON" que el Explorador y OneDrive no pueden manejar.
+  it("write_central_doc con un file_path que Windows no puede guardar (auditoría, hallazgo 1)", async () => {
+    await debeRechazar("write_central_doc", () => ({ file_path: "PROYECTO-A/CON", content: "x" }), /file_path/);
+  });
+
   it("6 · read_central_doc a través de la misma junction (S4)", async () => {
     const respuesta = await debeRechazar(
       "read_central_doc",
@@ -265,6 +270,11 @@ describe("e2e: argumentos validados antes de usarlos (S6)", () => {
   // convertirlo complicaría el JSON Schema que la Etapa 2 genera desde los shapes.
   it("get_phase_prompt rechaza un número en texto (phase: \"3\") diciendo qué espera", async () => {
     await debeRechazar("get_phase_prompt", () => ({ phase: "3" }), /`phase` debe ser un número, por ejemplo 3/);
+  });
+
+  // zod lo reporta como too_big y el mensaje salía en inglés.
+  it("get_phase_prompt con un número enorme responde en español nombrando el campo", async () => {
+    await debeRechazar("get_phase_prompt", () => ({ phase: 1e20 }), /`phase` es demasiado grande/);
   });
 
   it("un tipo equivocado también nombra el campo", async () => {

@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { execFileSync } from "node:child_process";
 
 import {
   LIMITE_LECTURA_BYTES,
@@ -163,10 +164,34 @@ describe("resolveDocPath", () => {
     );
   });
 
-  it("rechaza un file_path que sale de la Documentación", () => {
+  it("rechaza un file_path con ..", () => {
     docsTemporales();
 
-    assert.throws(() => resolveDocPath({ file_path: "../fuera.md" }), /Acceso denegado/);
+    assert.throws(() => resolveDocPath({ file_path: "../fuera.md" }), /file_path/);
+    assert.throws(() => resolveDocPath({ file_path: "PROYECTO-A/../PROYECTO-B/x.md" }), /file_path/);
+  });
+
+  // file_path no sale de la base, pero creaba dentro de ella nombres que Windows, el
+  // Explorador y OneDrive no pueden manejar: CON, nul.md, un flujo alterno "nota.md:secreto"…
+  it("rechaza en file_path los segmentos que Windows no puede guardar", () => {
+    docsTemporales();
+
+    for (const filePath of ["PROYECTO-A/CON/x.md", "PROYECTO-A/nul.md", "a/nota.md:secreto", "C:x.md", "PROYECTO-A/tarea./x.md"]) {
+      assert.throws(() => resolveDocPath({ file_path: filePath }), /file_path/, `debía rechazar ${filePath}`);
+    }
+  });
+
+  it("rechaza un file_path absoluto", () => {
+    const docs = docsTemporales();
+
+    assert.throws(() => resolveDocPath({ file_path: path.join(docs, "x.md") }), /file_path.*absolut/s);
+  });
+
+  it("rechaza un file_path que sale de la Documentación por un enlace", () => {
+    const docs = docsTemporales();
+    crearSymlink(carpetaTemporal("fuera"), path.join(docs, "enlace"));
+
+    assert.throws(() => resolveDocPath({ file_path: "enlace/x.md" }), /Acceso denegado/);
   });
 
   it("rechaza un task_name que no es un solo segmento", () => {
@@ -268,6 +293,19 @@ describe("leerTextoAcotado", () => {
 
     assert.equal(leerTextoAcotado(archivo), "Migración de Pagos (ñ)");
   });
+
+  it("rechaza una carpeta", () => {
+    assert.throws(() => leerTextoAcotado(carpetaTemporal("lectura")), /no es un archivo/);
+  });
+
+  // Un FIFO dice pesar 0 bytes y leerlo se bloquea hasta que alguien escribe: la tool se
+  // quedaba colgada. Solo existen en Linux y macOS.
+  it("rechaza un FIFO sin quedarse bloqueada", { skip: process.platform === "win32" }, () => {
+    const fifo = path.join(carpetaTemporal("lectura"), "tuberia");
+    execFileSync("mkfifo", [fifo]);
+
+    assert.throws(() => leerTextoAcotado(fifo), /no es un archivo/);
+  });
 });
 
 describe("validarSegmento", () => {
@@ -296,6 +334,13 @@ describe("validarSegmento", () => {
     ["lpt9.md", "reservado LPT9 con extensión"],
     ["PRN", "reservado PRN"],
     ["aux", "reservado AUX"],
+    // Windows también reserva los superíndices ¹²³ en COM y LPT, y las consolas CONIN$ y
+    // CONOUT$; y no cuenta los espacios que haya antes de la extensión.
+    ["COM¹", "reservado COM¹"],
+    ["lpt³.txt", "reservado LPT³ con extensión"],
+    ["CONIN$", "reservado CONIN$"],
+    ["conout$.log", "reservado CONOUT$ con extensión"],
+    ["nul .txt", "reservado NUL con espacio antes de la extensión"],
   ];
 
   for (const [valor, regla] of rechazados) {
@@ -307,7 +352,7 @@ describe("validarSegmento", () => {
   }
 
   it("permite espacios intermedios, acentos, ñ, guiones y paréntesis", () => {
-    for (const valor of ["Exponer endpoints", "Tokens login", "Migración de Pagos (ñ)", "login-sso", "CONSOLA", "com10"]) {
+    for (const valor of ["Exponer endpoints", "Tokens login", "Migración de Pagos (ñ)", "login-sso", "CONSOLA", "com10", "conin", "nul-pagos.md"]) {
       assert.equal(validarSegmento(valor, "task_name"), valor);
     }
   });

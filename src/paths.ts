@@ -50,7 +50,9 @@ export function estaDentroReal(base: string, ruta: string): boolean {
 // sincronización (caracteres reservados, punto o espacio final, CON, NUL…).
 const CARACTERES_RESERVADOS = /[<>:"|?*]/;
 const CARACTERES_DE_CONTROL = /[\u0000-\u001f\u007f]/;
-const NOMBRES_RESERVADOS_WINDOWS = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+// Windows también reserva COM y LPT con los superíndices ¹²³, y las consolas CONIN$ y CONOUT$.
+// Los espacios antes de la extensión no cuentan: "nul .txt" sigue siendo NUL.
+const NOMBRES_RESERVADOS_WINDOWS = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³]) *(\..*)?$/i;
 
 export function validarSegmento(valor: string, campo: string): string {
   const incumple = (regla: string): never => {
@@ -67,7 +69,7 @@ export function validarSegmento(valor: string, campo: string): string {
   if (CARACTERES_RESERVADOS.test(valor)) incumple('no puede llevar ninguno de < > : " | ? *');
   if (/[. ]$/.test(valor)) incumple("no puede terminar en punto ni en espacio");
   if (NOMBRES_RESERVADOS_WINDOWS.test(valor)) {
-    incumple("es un nombre reservado de Windows (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9)");
+    incumple("es un nombre reservado de Windows (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM1–COM9, LPT1–LPT9)");
   }
 
   return valor;
@@ -142,24 +144,37 @@ export function tasksRootPath(carpetaProyecto: string): string {
 // Resuelve la ruta absoluta para read/write. Prioriza project+task_name+file_name;
 // si no, cae al modo legacy con file_path relativo a la Documentación Central.
 //
+// Una ruta relativa hecha de segmentos portables. Cada segmento se valida por separado para que
+// una subcarpeta legítima como "04 - Ejecución/L01 - x.md" siga valiendo.
+function validarRutaRelativa(valor: string, campo: string, relativaA: string): void {
+  if (path.isAbsolute(valor)) {
+    throw new Error(`${campo} no puede ser una ruta absoluta ("${valor}"): es relativo a ${relativaA}.`);
+  }
+  for (const segmento of valor.split(/[\\/]/)) validarSegmento(segmento, campo);
+}
+
+// Los argumentos de read_central_doc y write_central_doc, ya validados por su schema.
+export type ArgumentosDeDocumento = {
+  project?: string | undefined;
+  task_name?: string | undefined;
+  file_name?: string | undefined;
+  file_path?: string | undefined;
+};
+
 // Con file_name la ruta tiene que quedar dentro de la carpeta de la tarea, no solo dentro de
 // la base: antes "../otra-tarea/x.md" escribía en otra tarea y la comprobación de la tool,
-// que solo miraba la base, lo dejaba pasar. Cada segmento se valida por separado para que
-// una subcarpeta legítima como "04 - Ejecución/L01 - x.md" siga valiendo.
-export function resolveDocPath(args: any): string {
-  const project = args?.project ? String(args.project) : "";
-  const taskName = args?.task_name ? String(args.task_name) : "";
-  const fileName = args?.file_name ? String(args.file_name) : "";
+// que solo miraba la base, lo dejaba pasar.
+//
+// Con file_path basta con no salir de la base (la restricción a carpetas de tarea llega en la
+// Etapa 1), pero sus segmentos también tienen que ser portables: antes creaba dentro de la
+// Documentación un "CON", un "nul.md" o un flujo alterno "nota.md:secreto", que el Explorador
+// y OneDrive no saben manejar.
+export function resolveDocPath(args: ArgumentosDeDocumento): string {
+  const { project = "", task_name: taskName = "", file_name: fileName = "", file_path: filePath = "" } = args;
 
   if (project && taskName && fileName) {
     const carpetaTarea = resolveTaskFolder(project, taskName);
-
-    if (path.isAbsolute(fileName)) {
-      throw new Error(
-        `file_name no puede ser una ruta absoluta ("${fileName}"): es relativo a la carpeta de la tarea.`
-      );
-    }
-    for (const segmento of fileName.split(/[\\/]/)) validarSegmento(segmento, "file_name");
+    validarRutaRelativa(fileName, "file_name", "la carpeta de la tarea");
 
     const ruta = path.join(carpetaTarea, fileName);
     if (!estaDentroReal(carpetaTarea, ruta)) {
@@ -168,9 +183,11 @@ export function resolveDocPath(args: any): string {
     return ruta;
   }
 
-  if (args?.file_path) {
+  if (filePath) {
     const docsBase = requireBasePath(DOCS);
-    const ruta = path.join(docsBase, String(args.file_path));
+    validarRutaRelativa(filePath, "file_path", "la Documentación Central");
+
+    const ruta = path.join(docsBase, filePath);
     if (!estaDentroReal(docsBase, ruta)) {
       throw new Error(`Acceso denegado: file_path queda fuera de ${docsBase}.`);
     }
@@ -205,21 +222,58 @@ export const LIMITE_LECTURA_BYTES = 1_048_576;
 // La misma heurística que usa git para decidir si un archivo es binario.
 const BYTES_PARA_DETECTAR_BINARIO = 8000;
 
+// Se lee del descriptor y no de la ruta: tipo, tamaño y contenido salen del mismo archivo
+// abierto. Con statSync seguido de readFileSync, un archivo que crecía entre las dos llamadas
+// se leía entero, sin tope. Y nunca se piden más de LIMITE + 1 bytes, que es lo justo para
+// saber si se pasa. O_NONBLOCK, que no existe en Windows, evita que abrir un FIFO se quede
+// esperando a que alguien escriba en él.
+//
+// Riesgo aceptado: la contención se comprueba sobre la ruta real y aquí se abre la ruta tal
+// cual, así que cambiar un enlace justo entre las dos cosas abriría otro destino. Cerrarlo
+// exige abrir sin seguir enlaces componente a componente, que Node no ofrece de forma portable.
 export function leerTextoAcotado(ruta: string): string {
-  const { size } = fs.statSync(ruta);
-  if (size > LIMITE_LECTURA_BYTES) {
-    throw new Error(
-      `${ruta} pesa ${size} bytes y el límite de lectura es 1 MB (${LIMITE_LECTURA_BYTES} bytes).`
-    );
+  let descriptor: number;
+  try {
+    descriptor = fs.openSync(ruta, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  } catch (error: any) {
+    if (error?.code === "EISDIR") throw new Error(`${ruta} no es un archivo: es una carpeta.`);
+    throw error;
   }
 
-  const contenido = fs.readFileSync(ruta);
-  if (contenido.subarray(0, BYTES_PARA_DETECTAR_BINARIO).includes(0)) {
-    throw new Error(
-      `${ruta} parece binario: tiene un byte NUL en sus primeros ${BYTES_PARA_DETECTAR_BINARIO} bytes. ` +
-        `Estas tools solo leen texto.`
-    );
-  }
+  try {
+    const info = fs.fstatSync(descriptor);
+    if (!info.isFile()) {
+      throw new Error(`${ruta} no es un archivo normal: es una carpeta, un dispositivo o una tubería.`);
+    }
+    if (info.size > LIMITE_LECTURA_BYTES) {
+      throw new Error(
+        `${ruta} pesa ${info.size} bytes y el límite de lectura es 1 MB (${LIMITE_LECTURA_BYTES} bytes).`
+      );
+    }
 
-  return contenido.toString("utf-8");
+    const buffer = Buffer.alloc(LIMITE_LECTURA_BYTES + 1);
+    let leidos = 0;
+    while (leidos < buffer.length) {
+      const bytes = fs.readSync(descriptor, buffer, leidos, buffer.length - leidos, null);
+      if (bytes === 0) break;
+      leidos += bytes;
+    }
+    if (leidos > LIMITE_LECTURA_BYTES) {
+      throw new Error(
+        `${ruta} creció mientras se leía y pasa del límite de lectura de 1 MB (${LIMITE_LECTURA_BYTES} bytes).`
+      );
+    }
+
+    const contenido = buffer.subarray(0, leidos);
+    if (contenido.subarray(0, BYTES_PARA_DETECTAR_BINARIO).includes(0)) {
+      throw new Error(
+        `${ruta} parece binario: tiene un byte NUL en sus primeros ${BYTES_PARA_DETECTAR_BINARIO} bytes. ` +
+          `Estas tools solo leen texto.`
+      );
+    }
+
+    return contenido.toString("utf-8");
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }

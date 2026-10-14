@@ -106,6 +106,9 @@ function describirProblema(issue: z.core.$ZodIssue, recibidos: Record<string, un
   // Los mínimos llevan su mensaje en español en el propio shape ("Falta `task_name`.").
   if (issue.code === "too_small") return issue.message;
 
+  // Los máximos no: el único que puede saltar es el del entero seguro de `phase`.
+  if (issue.code === "too_big") return `${nombre} es demasiado grande.`;
+
   return `${nombre}: ${issue.message}.`;
 }
 
