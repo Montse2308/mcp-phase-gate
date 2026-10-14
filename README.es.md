@@ -1,4 +1,4 @@
-# 🧠 MCP Orquestador
+# mcp-phase-gate
 
 *Léelo en [inglés](README.md) · Este es el README en español.*
 
@@ -25,7 +25,7 @@ flowchart TD
     F2 -- "02 · Decisiones" --> F3
     F3 -- "03 · Plan Técnico" --> F4
     F4 -- "04 · Ejecución" --> F5
-    F5 --> PR([Auditoría y descripción del PR, en el chat])
+    F5 -- "05 · Auditoría" --> PR([descripción del PR, también en el chat])
 ```
 
 **La parada obligatoria está en la fase 2**: ahí se detiene y no avanza hasta que respondas. No es una sugerencia de que pregunte — es que la fase no cierra sin tus respuestas, y lo que decidas queda escrito con su fundamento.
@@ -209,7 +209,7 @@ En **Claude Code**, un `.mcp.json` en la raíz de este repo puede usar ruta **re
 
 ## 🔄 Trabajar en varios dispositivos sin perder el hilo
 
-- Si la **Documentación** vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud), viaja sola entre tus equipos. Lo único distinto en cada uno es el archivo `.env` (Paso 3), que es local y no se sube al repo.
+- Si la **Documentación** vive en una carpeta sincronizada (OneDrive, Google Drive, Dropbox, iCloud), viaja sola entre tus equipos. Lo único distinto en cada uno es el archivo `.env` ([camino B](#-camino-b--desde-el-código), paso 2), que es local y no se sube al repo.
 - El servidor recuerda cuál es la **tarea activa de cada proyecto** (ver `get_active_task`). Es un puntero por proyecto, no uno solo: puedes tener una ventana en un proyecto y otra en otro sin que se pisen. Ese registro es **local de cada dispositivo** y se guarda en la carpeta de datos de tu usuario, fuera del repo, así que sobrevive a borrar `build/` o volver a clonar:
   - **Windows:** `%APPDATA%\mcp-phase-gate\active-tasks.json`
   - **macOS:** `~/Library/Application Support/mcp-phase-gate/active-tasks.json`
@@ -273,8 +273,8 @@ cambios, la causa está casi siempre aquí.
 | Qué | Dónde | Por qué no está en el repo |
 |-----|-------|----------------------------|
 | El servidor compilado | `build/` en tu clon | Está gitignoreado. **Después de cada `git pull` que traiga cambios en `src/`, corre `npm run build`** o el cliente seguirá ejecutando la versión anterior. |
-| Las rutas de este equipo | `.env` en la raíz (Paso 3) | Cambian el usuario del sistema y dónde tengas la carpeta de Documentación. |
-| El registro del MCP | La configuración de tu cliente (Paso 4) | En Cursor y VS Code contiene la ruta absoluta a `build/index.js`, que depende de dónde clonaste y apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos. Ver [`docs/decisiones.md`](docs/decisiones.md). La excepción es el `.mcp.json` de Claude Code, que va con ruta relativa. |
+| Las rutas de este equipo | `.env` en la raíz ([camino B](#-camino-b--desde-el-código), paso 2) | Cambian el usuario del sistema y dónde tengas la carpeta de Documentación. |
+| El registro del MCP | La configuración de tu cliente ([camino A](#-camino-a--con-npx-recomendado), o el paso 3 del [camino B](#-camino-b--desde-el-código)) | En Cursor y VS Code contiene la ruta absoluta a `build/index.js`, que depende de dónde clonaste y apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos. Ver [`docs/decisiones.md`](docs/decisiones.md). La excepción es el `.mcp.json` de Claude Code, que va con ruta relativa. |
 | Los comandos `/f1`–`/f5` en **Cursor** | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | Cursor solo los lee de la carpeta del usuario, así que se copian a mano en cada equipo. En **Claude Code** no aplica: están versionados en `.claude/commands/` y llegan con el `git pull`. |
 
 ### Los comandos de fase
@@ -308,53 +308,8 @@ requerimiento completo; `/f5`, cuáles commits auditar. Los otros cuatro arranca
 - **VS Code:** no tiene comandos de barra propios; pega el contenido del archivo en el chat.
 
 El contenido exacto de los cinco está también en
-[`docs/comandos-de-fase.md`](docs/comandos-de-fase.md), para leerlos sin abrir la carpeta.
-
----
-
-## 🚀 Guía de Uso Diario (Prompts Plantilla)
-
-Lo normal es usar los comandos `/f1` a `/f5` (ver [arriba](#los-comandos-de-fase)), que ya
-llevan todo esto dentro. Estas plantillas son para cuando tu cliente no tenga comandos, o
-para entender qué hace cada fase por debajo. Reemplaza lo que está entre `{ }`.
-
-**Ninguna plantilla nombra un archivo**, a propósito: `get_phase_prompt` le entrega al modelo
-el nombre exacto del documento de la fase y los de las anteriores.
-
-### 🔍 FASE 1: Inicialización y Descubrimiento
-Crea la carpeta de la tarea, guarda el contexto y analiza tu código actual.
-
-> Usa el mcp-phase-gate para ejecutar la tool `start_task`.
-> - project: "{ uno de tus proyectos existentes }"
-> - task_name: "{ nombre_corto_de_tu_tarea }"
-> - initial_context: "{ Pega aquí el correo, mensaje o requerimiento completo }"
->
-> Luego invoca `get_phase_prompt(1)` para asumir tu rol de Fase 1. Analiza el código actual de este repositorio y guarda el análisis con `write_central_doc`, usando el nombre de archivo que te indicó `get_phase_prompt`.
-
-### 🛑 FASE 2: Preguntas y Decisiones (LA COMPUERTA)
-
-> Invoca `get_phase_prompt(2)` para asumir tu rol de Fase 2.
-> Lee el documento de la Fase 1 con `read_central_doc`. Analiza dependencias y posibles fallos con el código existente.
-> Detente y hazme las preguntas críticas antes de planear nada. No escribas código aún.
-> Cuando te responda, valida cada decisión contra el código y guarda el documento de la fase.
-
-*(Aquí tú respondes hasta que ambos estén de acuerdo. La fase no cierra sin eso.)*
-
-### 📝 FASE 3: Plan Técnico Seguro
-
-> Las decisiones están tomadas. Invoca `get_phase_prompt(3)` para asumir tu rol de Fase 3.
-> Lee los documentos de las fases anteriores, comprueba contra el código real lo que el plan va a afirmar, y guárdalo con `write_central_doc`. Haz el paso a paso exacto de los archivos a modificar o crear, respetando "Cero Rupturas".
-
-### 💻 FASE 4: Ejecución del Código
-
-> Invoca `get_phase_prompt(4)` para asumir tu rol de Fase 4 (Ejecución).
-> Lee el plan técnico y ejecútalo paso a paso. Aplica las reglas del repositorio actual, verifica ejecutando lo que se pueda ejecutar, y avísame al terminar cada bloque. Al cerrar, deja el documento de la fase.
-
-### 🔎 FASE 5: Auditoría / Pre-PR
-Antes de subir el PR, la IA revisa tus cambios como un auditor externo estricto para anticipar bloqueos, y te redacta la descripción del PR. **Tú siempre haces los commits y el PR**; la IA solo usa herramientas de **lectura** (nunca commitea, hace push ni sube nada).
-
-> Invoca `get_phase_prompt(5)` para asumir tu rol de Fase 5 (Auditoría / Pre-PR).
-> Audita estos commits: "{ rango o lista de commits, ej. los últimos 6 de esta rama }". Dime si hay cambios BLOQUEANTES para subir el PR y luego redáctame la descripción del PR.
+[`docs/comandos-de-fase.md`](docs/comandos-de-fase.md), para leerlos sin abrir la carpeta o
+pegarlos en un cliente que no tenga comandos.
 
 ---
 
@@ -438,7 +393,7 @@ documento: 02 - Decisiones.md
 # Decisiones
 ```
 
-`get_phase_prompt` lee esa cabecera y le entrega al modelo, al final del prompt, el nombre exacto del documento de la fase y los de las fases anteriores. **Por eso los comandos `/f1`–`/f5` ya no nombran ningún archivo:** el nombre vive en un solo sitio, y cambiar un prompt no obliga a editar además un comando en cada dispositivo. Una fase sin `documento` —como la 5, que entrega en el chat— se anuncia como tal.
+`get_phase_prompt` lee esa cabecera y le entrega al modelo, al final del prompt, el nombre exacto del documento de la fase y los de las fases anteriores. **Por eso los comandos `/f1`–`/f5` ya no nombran ningún archivo:** el nombre vive en un solo sitio, y cambiar un prompt no obliga a editar además un comando en cada dispositivo.
 
 La fase 1 declara además `documento_inicial`, que es el archivo que escribe `start_task` con el contexto.
 

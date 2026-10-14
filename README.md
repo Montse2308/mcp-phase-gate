@@ -1,10 +1,10 @@
-# 🧠 MCP Orquestador
+# mcp-phase-gate
 
 *Read this in [Spanish](README.es.md) · This is the English README.*
 
 An MCP (Model Context Protocol) server that splits every incoming requirement into **five gated phases**, and forces each one to leave a written document behind before the next can start. Your client's panel will show it as `mcp-phase-gate`.
 
-> The server's interface is in English (tool names, parameters). The **phase prompts that drive the AI's behaviour are written in Spanish**, so the documents it produces come out in Spanish. If you want them in another language, translate `prompts/*.md` — no code changes needed.
+> Tool names and most parameters are in English, but the tool descriptions and the server's messages are in Spanish, and so is one parameter: `crear_proyecto`. The **phase prompts that drive the AI's behaviour are written in Spanish**, so the documents it produces come out in Spanish. If you want them in another language, translate `prompts/*.md` — no code changes needed.
 
 ## The problem
 
@@ -27,7 +27,7 @@ flowchart TD
     F2 -- "02 · Decisions" --> F3
     F3 -- "03 · Technical Plan" --> F4
     F4 -- "04 · Execution" --> F5
-    F5 --> PR([Audit and PR description, in the chat])
+    F5 -- "05 · Audit" --> PR([PR description, also in the chat])
 ```
 
 **The mandatory stop is phase 2**: it halts there and will not move on until you answer. This isn't a polite suggestion to ask questions — the phase does not close without your answers, and whatever you decide gets written down with its rationale.
@@ -211,7 +211,7 @@ In **Claude Code**, a `.mcp.json` at this repo's root can use a **relative** pat
 
 ## 🔄 Working across several machines
 
-- If your documentation lives in a synced folder, it travels on its own. The only per-machine file is `.env` (Step 3), which is local and never committed.
+- If your documentation lives in a synced folder, it travels on its own. The only per-machine file is `.env` ([route B](#-route-b--from-source), step 2), which is local and never committed.
 - The server remembers the **active task of each project** (see `get_active_task`). It's one pointer per project, not a single global one: you can have one window on one project and another on a different one without them clobbering each other. That record is **local to each machine** and lives in your user data folder, outside the repo, so it survives deleting `build/` or re-cloning:
   - **Windows:** `%APPDATA%\mcp-phase-gate\active-tasks.json`
   - **macOS:** `~/Library/Application Support/mcp-phase-gate/active-tasks.json`
@@ -274,8 +274,8 @@ Two more things that bite and aren't obvious:
 | What | Where | Why it isn't in the repo |
 |------|-------|--------------------------|
 | The compiled server | `build/` in your clone | It's gitignored. **After every `git pull` that touches `src/`, run `npm run build`** or the client keeps executing the previous version. |
-| This machine's paths | `.env` at the root (Step 3) | The system user and the documentation folder differ per machine. |
-| The MCP registration | Your client's config (Step 4) | In Cursor and VS Code it holds the absolute path to `build/index.js`, which depends on where you cloned and points into a gitignored folder. No single path can be right on every machine. See [`docs/decisiones.md`](docs/decisiones.md). The exception is Claude Code's `.mcp.json`, which uses a relative path. |
+| This machine's paths | `.env` at the root ([route B](#-route-b--from-source), step 2) | The system user and the documentation folder differ per machine. |
+| The MCP registration | Your client's config ([route A](#-route-a--with-npx-recommended), or step 3 of [route B](#-route-b--from-source)) | In Cursor and VS Code it holds the absolute path to `build/index.js`, which depends on where you cloned and points into a gitignored folder. No single path can be right on every machine. See [`docs/decisiones.md`](docs/decisiones.md). The exception is Claude Code's `.mcp.json`, which uses a relative path. |
 | The `/f1`–`/f5` commands in **Cursor** | `~/.cursor/commands/f<N>.md` | Cursor only reads them from the user folder, so they're copied by hand on each machine. Not an issue in **Claude Code**: they're versioned in `.claude/commands/` and arrive with the pull. |
 
 ### The phase commands
@@ -382,7 +382,7 @@ documento: 02 - Decisiones.md
 # Decisiones
 ```
 
-`get_phase_prompt` reads that header and appends, at the end of the prompt, the exact filename for this phase and for the previous ones. **That's why the `/f1`–`/f5` commands no longer name any file:** the name lives in one place, so changing a prompt doesn't force you to edit a command on every machine too. A phase without `documento` — like phase 5, which delivers in the chat — announces itself as such.
+`get_phase_prompt` reads that header and appends, at the end of the prompt, the exact filename for this phase and for the previous ones. **That's why the `/f1`–`/f5` commands no longer name any file:** the name lives in one place, so changing a prompt doesn't force you to edit a command on every machine too.
 
 Phase 1 also declares `documento_inicial`, the file `start_task` writes with the initial context.
 

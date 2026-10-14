@@ -5,7 +5,7 @@ se descartó. El objetivo es no tener que reconstruir el razonamiento meses desp
 cuando ya nadie se acuerda de por qué algo quedó así.
 
 Lo que **no** va aquí: el historial de cambios (eso son los commits y los PRs) ni el
-plan de lo que falta (eso son los [issues](https://github.com/Montse2308/MCP_orquestador/issues)).
+plan de lo que falta (eso son los [issues](https://github.com/Montse2308/mcp-phase-gate/issues)).
 
 Formato: una entrada por decisión, la más reciente arriba. Si una decisión se revierte,
 no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja.
