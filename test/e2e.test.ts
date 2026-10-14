@@ -232,7 +232,89 @@ describe("e2e: lecturas acotadas a su repo y a su tamaño (S5, S9)", () => {
   }
 });
 
+// Los mensajes se comprueban por subcadena —el campo entre comillas invertidas— y no enteros:
+// en la Etapa 2 el SDK antepone su propio prefijo. Sin las comillas, "phase" casaría con el
+// nombre de la tool, que ya va en el prefijo de todo error.
+describe("e2e: argumentos validados antes de usarlos (S6)", () => {
+  it("start_task sin task_name nombra el campo y no crea la tarea \"undefined\"", async () => {
+    let docs = "";
+    await debeRechazar(
+      "start_task",
+      () => ({ project: "PROYECTO-A", initial_context: "x" }),
+      /`task_name`/,
+      (e) => {
+        docs = e.docs;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(docs, "PROYECTO-A", "Proyectos", "undefined")), false);
+  });
+
+  it("get_phase_prompt rechaza phase: \"abc\" nombrando el campo", async () => {
+    await debeRechazar("get_phase_prompt", () => ({ phase: "abc" }), /`phase`/);
+  });
+
+  it("write_central_doc sin content no escribe \"undefined\"", async () => {
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: "01 - Análisis Técnico.md" }),
+      /`content`/
+    );
+  });
+
+  // Se rechaza en vez de convertirlo: es raro, el modelo lo corrige al primer intento, y
+  // convertirlo complicaría el JSON Schema que la Etapa 2 genera desde los shapes.
+  it("get_phase_prompt rechaza un número en texto (phase: \"3\") diciendo qué espera", async () => {
+    await debeRechazar("get_phase_prompt", () => ({ phase: "3" }), /`phase` debe ser un número, por ejemplo 3/);
+  });
+
+  it("un tipo equivocado también nombra el campo", async () => {
+    await debeRechazar("read_cross_repo", () => ({ repo_name: 7, file_path: "src/main.ts" }), /`repo_name`/);
+  });
+});
+
+// La carpeta prompts/ del repo: el servidor compilado en build-test/ no tiene una al lado.
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+
 describe("e2e: usos legítimos que siguen funcionando", () => {
+  it("las tools de fase y de tarea aceptan sus argumentos de siempre", async () => {
+    const e = escenario();
+    await conServidor({ ...e.env, ORQUESTADOR_PROMPTS_PATH: PROMPTS_DEL_REPO }, async (llamar) => {
+      const llamadas: Array<[string, Record<string, unknown>]> = [
+        ["get_phase_prompt", { phase: 1 }],
+        ["get_phase_prompt", { phase: 2, project: "PROYECTO-A", task_name: "tarea-a" }],
+        ["get_active_task", {}],
+        ["get_active_task", { project: "PROYECTO-A" }],
+        ["list_tasks", {}],
+        ["list_tasks", { project: "proyecto-a" }],
+        ["switch_task", { project: "PROYECTO-A", task_name: "tarea-a" }],
+      ];
+
+      for (const [tool, args] of llamadas) {
+        const r = await llamar(tool, args);
+        assert.equal(r.isError, false, `${tool} ${JSON.stringify(args)}: ${r.texto.slice(0, 200)}`);
+      }
+    });
+  });
+
+  // Algunos clientes con modelos en modo estricto mandan null en todo campo opcional.
+  it("null en un campo opcional cuenta como ausente: project: null responde igual que sin project", async () => {
+    const e = escenario();
+    await conServidor({ ...e.env, ORQUESTADOR_PROMPTS_PATH: PROMPTS_DEL_REPO }, async (llamar) => {
+      const pares: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+        ["get_active_task", { project: null }, {}],
+        ["list_tasks", { project: null }, {}],
+        ["get_phase_prompt", { phase: 1, project: null, task_name: null }, { phase: 1 }],
+      ];
+
+      for (const [tool, conNull, sinCampo] of pares) {
+        const a = await llamar(tool, conNull);
+        const b = await llamar(tool, sinCampo);
+        assert.equal(a.isError, false, `${tool} con null: ${a.texto.slice(0, 200)}`);
+        assert.equal(a.texto, b.texto, tool);
+      }
+    });
+  });
+
   it("una lectura normal funciona en las dos tools de lectura", async () => {
     const e = escenario();
     for (const lector of LECTORES) fs.writeFileSync(lector.ruta(e, "normal.md"), `leído por ${lector.tool}`, "utf-8");

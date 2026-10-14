@@ -42,6 +42,7 @@ import {
   listarTareas,
   tareaActiva,
 } from "./tasks.js";
+import { validarLlamada } from "./schemas.js";
 import type { EstadoTarea } from "./tasks.js";
 import type { PhaseFile } from "./phases.js";
 
@@ -178,10 +179,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    if (name === "start_task") {
-      const proj = String(args?.project).trim();
-      const taskName = String(args?.task_name);
-      const context = String(args?.initial_context);
+    // Todo argumento se valida aquí, antes de que ninguna tool lo use. Un campo ausente o de
+    // otro tipo devuelve un error que lo nombra, en vez de convertirse en "undefined".
+    const llamada = validarLlamada(name, args);
+
+    if (llamada.tool === "start_task") {
+      const proj = llamada.args.project; // el schema ya le quitó los espacios
+      const taskName = llamada.args.task_name;
+      const context = llamada.args.initial_context;
 
       // Estrenar proyecto tiene que ser deliberado: sin esta puerta, un nombre mal escrito
       // creaba una carpeta suelta en la Documentación y nadie se enteraba hasta buscarla.
@@ -189,7 +194,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       let estrenado = false;
 
       if (!carpetaProyecto) {
-        if (args?.crear_proyecto !== true) {
+        if (llamada.args.crear_proyecto !== true) {
           throw new Error(
             `No existe el proyecto "${proj}". Los proyectos disponibles son: ${describeProjects()}. ` +
               `Si el usuario te confirmó que quiere estrenar el proyecto "${proj.toUpperCase()}", ` +
@@ -238,12 +243,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "get_phase_prompt") {
-      const phase = Number(args?.phase);
-      if (!Number.isInteger(phase)) {
-        throw new Error(`Debes indicar un número de fase. Disponibles: ${PHASES_DESCRIPTION}.`);
-      }
-
+    if (llamada.tool === "get_phase_prompt") {
+      // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice loadPhasePrompt.
+      const { phase, project, task_name } = llamada.args;
       const prompt = loadPhasePrompt(phase);
 
       // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
@@ -251,8 +253,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       let aviso: string | null = null;
       try {
         aviso = avisoDeCompuerta(phase, discoverPhases(), {
-          ...(args?.project ? { project: String(args.project) } : {}),
-          ...(args?.task_name ? { taskName: String(args.task_name) } : {}),
+          ...(project ? { project } : {}),
+          ...(task_name ? { taskName: task_name } : {}),
         });
       } catch (error: any) {
         console.error(`[orquestador] No se pudo comprobar la compuerta: ${error.message}`);
@@ -263,9 +265,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "get_active_task") {
+    if (llamada.tool === "get_active_task") {
       const phases = discoverPhases();
-      const pedido = args?.project ? String(args.project) : "";
+      const pedido = llamada.args.project ?? "";
 
       // Con proyecto: la suya. Sin proyecto: la de cada uno. Antes había un único puntero
       // global y responder "la activa" a secas obligaba a adivinar cuál de dos ventanas
@@ -305,9 +307,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "list_tasks") {
+    if (llamada.tool === "list_tasks") {
       const phases = discoverPhases();
-      const pedido = args?.project ? String(args.project) : "";
+      const pedido = llamada.args.project ?? "";
 
       const proyectos = pedido
         ? [requireProjectFolder(pedido)]
@@ -337,10 +339,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "switch_task") {
+    if (llamada.tool === "switch_task") {
       const phases = discoverPhases();
-      const carpetaProyecto = requireProjectFolder(String(args?.project));
-      const taskName = String(args?.task_name);
+      const carpetaProyecto = requireProjectFolder(llamada.args.project);
+      const taskName = llamada.args.task_name;
 
       const tareas = listarTareas(carpetaProyecto, phases);
       const encontrada = tareas.find((tarea) => tarea.taskName === taskName);
@@ -362,9 +364,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "read_central_doc") {
+    if (llamada.tool === "read_central_doc") {
       const docsBase = requireBasePath(DOCS);
-      const fullPath = resolveDocPath(args);
+      const fullPath = resolveDocPath(llamada.args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
@@ -376,10 +378,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "write_central_doc") {
-      const content = String(args?.content);
+    if (llamada.tool === "write_central_doc") {
+      const content = llamada.args.content;
       const docsBase = requireBasePath(DOCS);
-      const fullPath = resolveDocPath(args);
+      const fullPath = resolveDocPath(llamada.args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
@@ -393,8 +395,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    if (name === "read_cross_repo") {
-      const fullPath = resolveRepoPath(String(args?.repo_name), String(args?.file_path));
+    if (llamada.tool === "read_cross_repo") {
+      const fullPath = resolveRepoPath(llamada.args.repo_name, llamada.args.file_path);
       const content = leerTextoAcotado(fullPath);
       return {
         content: [{ type: "text", text: content }],

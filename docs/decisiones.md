@@ -12,6 +12,40 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — Los argumentos se validan con zod declarado como dependencia directa, y los schemas son la fuente de la Etapa 2
+
+**Decisión.** Cada tool declara sus argumentos en `src/schemas.ts` con zod, y el servidor los
+valida al entrar, antes de que ninguna tool los use. Un argumento ausente o de otro tipo
+devuelve un error en español que **nombra el campo**. `zod` pasa a ser dependencia directa en
+`package.json`.
+
+**Por qué.** Las tools leían sus argumentos con `String(args?.x)`, que convierte cualquier cosa
+en texto sin quejarse. Sin `task_name`, `start_task` creó la tarea `undefined/` y la dejó
+activa. Sin `content`, `write_central_doc` escribió el documento de la fase y lo dio por
+bueno. Un `repo_name: 7` acabó buscando en la carpeta `7`. Ninguno de esos casos fallaba: el
+error aparecía después, en otra parte y con otra cara.
+
+**Por qué dependencia directa, si ya estaba instalada.** Llegaba como dependencia del SDK de
+MCP. Usarla sin declararla deja la versión en manos de otro paquete: si el SDK la cambia o la
+quita, el servidor se rompe sin que nada en este repo lo diga.
+
+**Por qué shapes y no objetos.** `src/schemas.ts` exporta los campos sueltos (`ZodRawShape`)
+porque es lo que recibe `registerTool` en la migración a `McpServer` de la Etapa 2. Así esa
+migración reutiliza estos schemas tal cual, en vez de reescribirlos.
+
+**Cuánta tolerancia.** `null` en un campo opcional cuenta como ausente (los opcionales son
+`.nullish()`): algunos clientes con modelos en modo estricto mandan `null` en todo campo
+opcional, y rechazarlo los rompería. Un número en texto (`phase: "3"`) **no** se convierte: se
+rechaza con un mensaje que dice qué se espera ("`phase` debe ser un número, por ejemplo 3").
+Es raro, el modelo lo corrige al primer intento, y convertirlo complicaría el JSON Schema que
+la Etapa 2 genera desde estos shapes.
+
+**Qué no cambia.** Los nombres y los parámetros de las tools, y el `inputSchema` que ve el
+cliente. Qué combinación de `project`, `task_name`, `file_name` y `file_path` vale lo sigue
+decidiendo `resolveDocPath`: el schema solo comprueba que cada uno, si viene, sea texto.
+
+---
+
 ## 2026-10-14 — La contención se comprueba contra la ruta real y los nombres son un solo segmento portable
 
 **Decisión.** Toda ruta que una tool lee o escribe en la Documentación se compara contra la
