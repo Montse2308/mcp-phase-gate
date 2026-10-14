@@ -222,7 +222,7 @@ En **Claude Code**, un `.mcp.json` en la raíz de este repo puede usar ruta **re
 
 ---
 
-## 🗂️ ¿Varias carpetas de Documentación? (opcional)
+## 🗂 ¿Varias carpetas de Documentación? (opcional)
 
 **Esto no es parte del flujo. Si con una carpeta te basta, sáltate la sección entera.**
 
@@ -338,7 +338,7 @@ Tres cosas que **no** hace, a propósito:
 
 ---
 
-## 🛠️ Tools Disponibles
+## 🛠 Tools Disponibles
 
 | Tool | Qué hace |
 |------|----------|
@@ -457,7 +457,7 @@ descripciones de PR tuyas: el modelo imita esa voz más que cualquier instrucci�
 
 ---
 
-## ⚙️ Variables de entorno
+## ⚙ Variables de entorno
 
 Se cargan desde el archivo `.env` de la raíz del repo (o desde el bloque `"env"` del `mcp.json`).
 

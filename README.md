@@ -224,7 +224,7 @@ In **Claude Code**, a `.mcp.json` at this repo's root can use a **relative** pat
 
 ---
 
-## 🗂️ More than one documentation folder? (optional)
+## 🗂 More than one documentation folder? (optional)
 
 **This is not part of the flow. If one folder is enough for you, skip this section.**
 
@@ -329,7 +329,7 @@ Three things it deliberately does **not** do:
 
 ---
 
-## 🛠️ Available tools
+## 🛠 Available tools
 
 | Tool | What it does |
 |------|--------------|
@@ -431,7 +431,7 @@ To adapt it to your own style, edit `prompts/fase-5-auditoria-pr.md`. The highes
 
 ---
 
-## ⚙️ Environment variables
+## ⚙ Environment variables
 
 Loaded from the `.env` at the repo root, or from the `"env"` block in your client config.
 
