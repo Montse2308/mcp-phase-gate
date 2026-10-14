@@ -1,6 +1,6 @@
 {
   "name": "mcp-phase-gate",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Servidor MCP que parte cada requerimiento en cinco fases con compuerta y obliga a que cada una deje su documento en una documentación central.",
   "main": "build/index.js",
   "bin": {

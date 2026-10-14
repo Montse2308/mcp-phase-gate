@@ -5,7 +5,7 @@
 | Iteración | **13** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6) y versionado en el repo con revisión de privacidad (iteración 13) |
 | Base del análisis | commit `d7594ea`, árbol limpio |
 | Versión publicada | `2.0.0` |
-| Modo | Planificación (nivel Fase 3) **terminada** y validada. **En ejecución:** Etapa 0, de L01 a L09 hechos; falta L10 (§9.6) |
+| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapa 0 ejecutada** (L01 a L10, §9.6); faltan el PR, el tag `v2.0.1` y la publicación, que hace la autora |
 | Ejecución | La hace el agente local de la autora, lote por lote, con la política `agente-commitea-con-OK` |
 | Fuente | Desde E0 L09, esta copia en `docs/plan-maestro-v3.md` es la fuente del plan (§9.2) |
 
@@ -98,7 +98,7 @@
 
 ### 2.2 Lotes
 
-> **Estado de ejecución:** de L01 a L09 hechos; falta L10. Commits y desvíos en §9.6.
+> **Estado de ejecución:** de L01 a L10 hechos. Commits y desvíos en §9.6.
 
 | Lote | Objetivo | Archivos | Verificación | Commit propuesto |
 |---|---|---|---|---|
@@ -4136,8 +4136,8 @@ Rama `etapa-0/blindaje`, creada desde `master` en `d7594ea`. Un commit por lote,
 | L06 | Hecho | `873ad0a` | 152 (1 omitido fuera de Linux) | — |
 | L07 | Hecho; la CI en Windows se verá tras el push | `b1369f3` | 152 | — |
 | L08 | Hecho | `05615a2` | 159 | — |
-| L09 | Este commit | — | 159 | — |
-| L10 | Pendiente | — | — | — |
+| L09 | Hecho | `9d4e407` | 159 | — |
+| L10 | Hecho en el commit `chore(release): 2.0.1`; el tag `v2.0.1` y la publicación los hace la autora | — | 159 | — |
 
 **Desvíos** (cada uno se decidió con la autora antes de seguir):
 
