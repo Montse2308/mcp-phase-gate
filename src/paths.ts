@@ -7,7 +7,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { DOCS, requireBasePath, tasksSubdir } from "./config.js";
+import { DOCS, REPOS, requireBasePath, tasksSubdir } from "./config.js";
 
 // Comprueba que una ruta quede dentro de otra. No sirve startsWith, y falla en las dos
 // direcciones: con base "C:\PROYECTOS\TRABAJO" deja pasar "C:\PROYECTOS\TRABAJO_VIEJO",
@@ -178,4 +178,48 @@ export function resolveDocPath(args: any): string {
   }
 
   throw new Error("Debes proporcionar (project + task_name + file_name) o bien file_path.");
+}
+
+// ─── Repos ──────────────────────────────────────────────────────────────────
+// Ruta de un archivo dentro de UN repo. Antes la comprobación miraba la carpeta de repos
+// entera, y desde repoA "../repoB/.env" pasaba: estaba dentro de la carpeta de repos. El repo
+// se resuelve a su ruta real para que un repo que es un enlace a otra unidad siga valiendo.
+export function resolveRepoPath(repoName: string, filePath: string): string {
+  validarSegmento(repoName, "repo_name");
+
+  const repo = path.join(requireBasePath(REPOS), repoName);
+  const repoReal = rutaReal(repo);
+  const ruta = path.join(repo, filePath);
+
+  if (!estaDentroReal(repoReal, ruta)) {
+    throw new Error(`Acceso denegado: file_path "${filePath}" queda fuera del repositorio ${repoName}.`);
+  }
+  return ruta;
+}
+
+// ─── Lectura acotada ────────────────────────────────────────────────────────
+// Lo que leen las tools va entero al contexto del modelo. Un volcado de varios megas o un
+// binario no le sirven de nada y se comen la conversación, así que se cortan antes de leer.
+export const LIMITE_LECTURA_BYTES = 1_048_576;
+
+// La misma heurística que usa git para decidir si un archivo es binario.
+const BYTES_PARA_DETECTAR_BINARIO = 8000;
+
+export function leerTextoAcotado(ruta: string): string {
+  const { size } = fs.statSync(ruta);
+  if (size > LIMITE_LECTURA_BYTES) {
+    throw new Error(
+      `${ruta} pesa ${size} bytes y el límite de lectura es 1 MB (${LIMITE_LECTURA_BYTES} bytes).`
+    );
+  }
+
+  const contenido = fs.readFileSync(ruta);
+  if (contenido.subarray(0, BYTES_PARA_DETECTAR_BINARIO).includes(0)) {
+    throw new Error(
+      `${ruta} parece binario: tiene un byte NUL en sus primeros ${BYTES_PARA_DETECTAR_BINARIO} bytes. ` +
+        `Estas tools solo leen texto.`
+    );
+  }
+
+  return contenido.toString("utf-8");
 }

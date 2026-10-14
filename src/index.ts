@@ -19,11 +19,12 @@ import { DOCS, REPOS, SERVER_NAME, SERVER_VERSION, requireBasePath, stateFile } 
 import {
   describeProjects,
   discoverProjects,
-  estaDentro,
   estaDentroReal,
   findProjectFolder,
+  leerTextoAcotado,
   requireProjectFolder,
   resolveDocPath,
+  resolveRepoPath,
   taskFolderPath,
   validarSegmento,
 } from "./paths.js";
@@ -369,7 +370,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 
-      const content = fs.readFileSync(fullPath, "utf-8");
+      const content = leerTextoAcotado(fullPath);
       return {
         content: [{ type: "text", text: content }],
       };
@@ -393,16 +394,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "read_cross_repo") {
-      const repoName = String(args?.repo_name);
-      const filePath = String(args?.file_path);
-      const reposBase = requireBasePath(REPOS);
-      const fullPath = path.join(reposBase, repoName, filePath);
-
-      if (!estaDentro(reposBase, fullPath)) {
-        throw new Error(`Acceso denegado: la ruta queda fuera de ${reposBase}.`);
-      }
-
-      const content = fs.readFileSync(fullPath, "utf-8");
+      const fullPath = resolveRepoPath(String(args?.repo_name), String(args?.file_path));
+      const content = leerTextoAcotado(fullPath);
       return {
         content: [{ type: "text", text: content }],
       };

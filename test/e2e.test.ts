@@ -6,6 +6,7 @@
 //   <raiz>/docs     la Documentación Central, con PROYECTO-A y dos tareas
 //   <raiz>/fuera    lo que ningún ataque debe poder tocar
 //   <raiz>/docs/PROYECTO-A/Proyectos/tarea-a/enlace  ->  <raiz>/fuera
+//   <raiz>/repos    repoA con código y repoB con un .env que repoA no debe poder leer
 // "No crean nada en disco" se comprueba comparando el árbol entero de <raiz> antes y después.
 
 import { strict as assert } from "node:assert";
@@ -27,6 +28,7 @@ type Escenario = {
   raiz: string;
   docs: string;
   fuera: string;
+  repos: string;
   tareaA: string;
   env: Record<string, string>;
 };
@@ -42,13 +44,17 @@ function escenario(): Escenario {
   crearTarea(docs, "PROYECTO-A", "otra-tarea", [CONTEXTO_INICIAL]);
   fs.mkdirSync(fuera, { recursive: true });
   fs.writeFileSync(path.join(fuera, "secreto.env"), "CLAVE=no-debe-salir", "utf-8");
-  fs.mkdirSync(repos, { recursive: true });
+  fs.mkdirSync(path.join(repos, "repoA", "src"), { recursive: true });
+  fs.writeFileSync(path.join(repos, "repoA", "src", "main.ts"), "export const hola = 1;", "utf-8");
+  fs.mkdirSync(path.join(repos, "repoB"), { recursive: true });
+  fs.writeFileSync(path.join(repos, "repoB", ".env"), "TOKEN=de-repo-b", "utf-8");
   crearSymlink(fuera, path.join(tareaA, "enlace"));
 
   return {
     raiz,
     docs,
     fuera,
+    repos,
     tareaA,
     env: {
       ORQUESTADOR_DOCS_PATH: docs,
@@ -104,18 +110,22 @@ async function conServidor(env: Record<string, string>, prueba: (llamar: Llamar)
 }
 
 // Un ataque cerrado: la tool devuelve error, el mensaje dice por qué y el disco no cambia.
+// `preparar` monta lo que el caso necesite antes de tomar la foto del disco.
 async function debeRechazar(
   tool: string,
   args: (e: Escenario) => Record<string, unknown>,
-  motivo: RegExp
+  motivo: RegExp,
+  preparar?: (e: Escenario) => void
 ): Promise<Respuesta> {
   const e = escenario();
+  preparar?.(e);
   let respuesta: Respuesta = { isError: false, texto: "" };
 
   await conServidor(e.env, async (llamar) => {
     const antes = arbol(e.raiz);
     respuesta = await llamar(tool, args(e));
-    assert.equal(respuesta.isError, true, `debía fallar y respondió: ${respuesta.texto}`);
+    // Recortado: si un caso de S9 falla, la respuesta es el megabyte entero.
+    assert.equal(respuesta.isError, true, `debía fallar y respondió: ${respuesta.texto.slice(0, 200)}`);
     assert.match(respuesta.texto, motivo);
     assert.deepEqual(arbol(e.raiz), antes, "el ataque cambió el disco");
   });
@@ -174,7 +184,72 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
   });
 });
 
+// Las dos tools de lectura comparten los límites: cada caso de S9 se prueba en ambas.
+type Lector = {
+  tool: string;
+  ruta: (e: Escenario, nombre: string) => string;
+  args: (nombre: string) => Record<string, unknown>;
+};
+
+const LECTORES: Lector[] = [
+  {
+    tool: "read_central_doc",
+    ruta: (e, nombre) => path.join(e.tareaA, nombre),
+    args: (nombre) => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: nombre }),
+  },
+  {
+    tool: "read_cross_repo",
+    ruta: (e, nombre) => path.join(e.repos, "repoA", nombre),
+    args: (nombre) => ({ repo_name: "repoA", file_path: nombre }),
+  },
+];
+
+const UN_MB = 1_048_576;
+
+describe("e2e: lecturas acotadas a su repo y a su tamaño (S5, S9)", () => {
+  it("read_cross_repo con repo_name \"repoA\" y file_path \"../repoB/.env\" (S5)", async () => {
+    const respuesta = await debeRechazar(
+      "read_cross_repo",
+      () => ({ repo_name: "repoA", file_path: "../repoB/.env" }),
+      /Acceso denegado/
+    );
+    assert.doesNotMatch(respuesta.texto, /de-repo-b/);
+  });
+
+  for (const lector of LECTORES) {
+    it(`${lector.tool} rechaza un archivo de más de 1 MB (S9)`, async () => {
+      await debeRechazar(lector.tool, () => lector.args("grande.md"), /límite/, (e) =>
+        fs.writeFileSync(lector.ruta(e, "grande.md"), Buffer.alloc(UN_MB + 1, "a"))
+      );
+    });
+
+    it(`${lector.tool} rechaza un archivo con byte NUL (S9)`, async () => {
+      const respuesta = await debeRechazar(lector.tool, () => lector.args("binario.md"), /parece binario/, (e) =>
+        fs.writeFileSync(lector.ruta(e, "binario.md"), Buffer.from("cabecera\u0000contenido-binario", "utf-8"))
+      );
+      assert.doesNotMatch(respuesta.texto, /contenido-binario/);
+    });
+  }
+});
+
 describe("e2e: usos legítimos que siguen funcionando", () => {
+  it("una lectura normal funciona en las dos tools de lectura", async () => {
+    const e = escenario();
+    for (const lector of LECTORES) fs.writeFileSync(lector.ruta(e, "normal.md"), `leído por ${lector.tool}`, "utf-8");
+
+    await conServidor(e.env, async (llamar) => {
+      for (const lector of LECTORES) {
+        const leido = await llamar(lector.tool, lector.args("normal.md"));
+        assert.equal(leido.isError, false, leido.texto);
+        assert.equal(leido.texto, `leído por ${lector.tool}`);
+      }
+
+      const codigo = await llamar("read_cross_repo", { repo_name: "repoA", file_path: "src/main.ts" });
+      assert.equal(codigo.isError, false, codigo.texto);
+      assert.equal(codigo.texto, "export const hola = 1;");
+    });
+  });
+
   it("start_task acepta espacios, acentos, ñ y paréntesis en el nombre", async () => {
     const e = escenario();
     await conServidor(e.env, async (llamar) => {

@@ -4,11 +4,14 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 
 import {
+  LIMITE_LECTURA_BYTES,
   discoverProjects,
   estaDentro,
   estaDentroReal,
   findProjectFolder,
+  leerTextoAcotado,
   resolveDocPath,
+  resolveRepoPath,
   resolveTaskFolder,
   rutaReal,
   validarSegmento,
@@ -171,6 +174,99 @@ describe("resolveDocPath", () => {
     crearProyecto(docs, "PROYECTO-A");
 
     assert.throws(() => resolveTaskFolder("proyecto-a", "../../fuera"), /task_name/);
+  });
+});
+
+// Carpeta de repos de mentira con repoA (código) y repoB (un .env que repoA no debe ver).
+function reposTemporales(): string {
+  const repos = carpetaTemporal("repos");
+  fs.mkdirSync(path.join(repos, "repoA", "src"), { recursive: true });
+  fs.writeFileSync(path.join(repos, "repoA", "src", "main.ts"), "x", "utf-8");
+  fs.mkdirSync(path.join(repos, "repoB"), { recursive: true });
+  fs.writeFileSync(path.join(repos, "repoB", ".env"), "TOKEN=x", "utf-8");
+  process.env.ORQUESTADOR_REPOS_PATH = repos;
+  return repos;
+}
+
+describe("resolveRepoPath", () => {
+  it("arma <repos>/<repo>/<archivo>", () => {
+    const repos = reposTemporales();
+
+    assert.equal(resolveRepoPath("repoA", "src/main.ts"), path.join(repos, "repoA", "src", "main.ts"));
+  });
+
+  it("rechaza un repo_name que no es un solo segmento", () => {
+    reposTemporales();
+
+    for (const repo of ["..", "../repoB", "repoA/src", ""]) {
+      assert.throws(() => resolveRepoPath(repo, "x.md"), /repo_name/, `debía rechazar ${JSON.stringify(repo)}`);
+    }
+  });
+
+  // Antes la comprobación miraba solo la carpeta de repos: salir a un repo vecino pasaba.
+  it("rechaza un file_path que sale a otro repo", () => {
+    reposTemporales();
+
+    assert.throws(() => resolveRepoPath("repoA", "../repoB/.env"), /Acceso denegado/);
+  });
+
+  it("rechaza un file_path que sale del repo por un enlace", () => {
+    const repos = reposTemporales();
+    crearSymlink(path.join(repos, "repoB"), path.join(repos, "repoA", "enlace"));
+
+    assert.throws(() => resolveRepoPath("repoA", "enlace/.env"), /Acceso denegado/);
+  });
+
+  it("acepta un repo que es un enlace a otra carpeta", () => {
+    const repos = reposTemporales();
+    const real = carpetaTemporal("repo-real");
+    fs.writeFileSync(path.join(real, "README.md"), "x", "utf-8");
+    crearSymlink(real, path.join(repos, "repoC"));
+
+    assert.equal(resolveRepoPath("repoC", "README.md"), path.join(repos, "repoC", "README.md"));
+  });
+});
+
+describe("leerTextoAcotado", () => {
+  it("el límite es 1 MB y un archivo de exactamente ese tamaño se lee", () => {
+    const archivo = path.join(carpetaTemporal("lectura"), "justo.md");
+    fs.writeFileSync(archivo, Buffer.alloc(LIMITE_LECTURA_BYTES, "a"));
+
+    assert.equal(LIMITE_LECTURA_BYTES, 1_048_576);
+    assert.equal(leerTextoAcotado(archivo).length, LIMITE_LECTURA_BYTES);
+  });
+
+  it("rechaza un byte por encima del límite", () => {
+    const archivo = path.join(carpetaTemporal("lectura"), "grande.md");
+    fs.writeFileSync(archivo, Buffer.alloc(LIMITE_LECTURA_BYTES + 1, "a"));
+
+    assert.throws(() => leerTextoAcotado(archivo), /límite/);
+  });
+
+  it("rechaza un byte NUL dentro de los primeros 8000 bytes", () => {
+    const archivo = path.join(carpetaTemporal("lectura"), "binario.md");
+    const contenido = Buffer.alloc(8000, "a");
+    contenido[7999] = 0;
+    fs.writeFileSync(archivo, contenido);
+
+    assert.throws(() => leerTextoAcotado(archivo), /parece binario/);
+  });
+
+  // Es la misma heurística que usa git: solo se miran los primeros 8000 bytes.
+  it("no mira más allá de los primeros 8000 bytes", () => {
+    const archivo = path.join(carpetaTemporal("lectura"), "tardio.md");
+    const contenido = Buffer.alloc(8001, "a");
+    contenido[8000] = 0;
+    fs.writeFileSync(archivo, contenido);
+
+    assert.equal(leerTextoAcotado(archivo).length, 8001);
+  });
+
+  it("devuelve el texto en UTF-8", () => {
+    const archivo = path.join(carpetaTemporal("lectura"), "acentos.md");
+    fs.writeFileSync(archivo, "Migración de Pagos (ñ)", "utf-8");
+
+    assert.equal(leerTextoAcotado(archivo), "Migración de Pagos (ñ)");
   });
 });
 
