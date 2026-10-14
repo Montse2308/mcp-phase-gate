@@ -10,11 +10,15 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
+        # Windows además de Linux: la Documentación viaja entre los dos, y lo que solo falla en
+        # Windows (junctions, nombres cortos 8.3, finales de línea, nombres reservados) no lo
+        # ve una CI que corre solo en Linux.
+        os: [ubuntu-latest, windows-latest]
         # 22 es la versión mínima soportada: los tests usan los patrones glob de `node --test`,
         # que no existen antes. 24 es la que traen los equipos nuevos.
         node-version: [22, 24]
