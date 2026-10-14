@@ -3,6 +3,23 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule: { interval: weekly }
+    # Las versiones menores y los parches llegan juntos en un solo PR por semana, en vez de
+    # uno por dependencia. Las mayores siguen llegando sueltas, para revisarlas de una en una.
+    groups:
+      menores-y-parches:
+        update-types: [minor, patch]
+    ignore:
+      # Un salto mayor de compilador se decide aparte, no como mantenimiento semanal.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Los tipos siguen a la versión mínima de Node que soporta el paquete (engines >=22):
+      # con los de una versión más nueva se podría usar sin aviso una API que en 22 no existe.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: weekly }
+    # Las acciones se actualizan juntas: checkout y setup-node suelen cambiar a la vez.
+    groups:
+      acciones:
+        patterns: ["*"]
