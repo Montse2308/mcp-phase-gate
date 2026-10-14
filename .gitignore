@@ -20,3 +20,9 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Configuración local de Claude Code: rutas y permisos de este equipo
+.claude/settings.local.json
+
+# Volcados de auditoría y notas locales
+auditoria*.txt
