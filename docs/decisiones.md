@@ -12,6 +12,45 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — Un documento de fase se congela cuando existe el de una fase posterior
+
+**Decisión.** Sin `force: true`, `write_central_doc` rechaza escribir:
+
+- **El contexto inicial**, siempre: también para crearlo. Solo `start_task` lo escribe sin
+  `force`.
+- **Un documento de fase congelado**: el de una fase `n` cuando alguna fase posterior está
+  **presente**. Una fase está presente si existe su documento, o si declara `recibos` y su
+  subcarpeta tiene al menos un `.md`. Los recibos cuentan como de la Fase 4, así que la propia
+  Fase 4 no se congela con sus recibos: a ellos y a `04 - Ejecución.md` solo los congela una
+  Fase 5 presente.
+
+Crear un documento que no existe nunca se rechaza, ni siquiera cuando rellena un hueco, porque
+no pisa nada. Un archivo que no es de ninguna fase (`notas.md`) tampoco. `force` se describe al
+modelo como "solo con confirmación explícita del usuario en el chat", el mensaje de rechazo dice
+cómo pedirla, y la respuesta avisa cuando un documento se sobrescribió con `force`. Lo decide
+`motivoDeProteccion`, con la tabla de verdad del plan maestro v3 en `test/tasks.test.ts`.
+
+**Amplía** la entrada del 2026-08-08 "La Fase 5 deja documento y `start_task` se niega a pisar
+una tarea": aquella protegía el contexto inicial de `start_task`; esta lo protege también de
+`write_central_doc`, y extiende la idea a los documentos de las fases ya superadas.
+
+**Por qué.** Cada fase trabaja sobre los documentos de las anteriores. Reescribir el análisis
+cuando ya existen las decisiones cambia la base de esas decisiones sin que nada lo avise, y el
+disco, que es el único registro, deja de contar lo que pasó. El prompt ya lo prohibía; ahora lo
+hace cumplir el servidor.
+
+**Por qué con `force` y no un rechazo sin salida.** Hay correcciones legítimas que nadie previó:
+una errata en `01` con `02` ya escrito. Cerrarlas del todo obligaría a editar a mano fuera del
+flujo, que es peor. Con `force`, la corrección pasa por el usuario.
+
+**Las mayúsculas no lo esquivan.** En Windows y macOS, `01 - análisis técnico.md` abre el mismo
+archivo que `01 - Análisis Técnico.md`. La ruta se resuelve con `rutaReal`, que devuelve el
+nombre que hay en disco, así que llega a la comprobación con el nombre del documento.
+
+**`force` admite `null`,** como todo opcional desde la Etapa 0: cuenta como ausente.
+
+---
+
 ## 2026-10-14 — Ranuras en los prompts base: estructura fija, contenido sustituible
 
 **Decisión.** Un prompt base puede marcar el contenido de una sección como **ranura**:

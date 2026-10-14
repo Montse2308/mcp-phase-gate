@@ -150,6 +150,64 @@ export function estadoDeTarea(
   };
 }
 
+// ─── Documentos congelados ──────────────────────────────────────────────────
+// Un documento de fase se congela en cuanto una fase posterior está presente: reescribirlo
+// después cambiaría la base sobre la que esa fase ya trabajó, sin que nada lo avise. Se puede
+// reescribir con force, que el modelo solo usa con la confirmación explícita del usuario.
+//
+// Una fase está presente si existe su documento, o si declara recibos y su subcarpeta tiene al
+// menos un .md: con varios lotes, la Fase 4 está en curso mucho antes de escribir su documento.
+function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null {
+  if (datos.documento && fs.existsSync(path.join(carpetaTarea, datos.documento))) {
+    return `existe \`${datos.documento}\``;
+  }
+
+  if (datos.recibos) {
+    const subcarpeta = path.join(carpetaTarea, datos.recibos);
+    const entradas = fs.existsSync(subcarpeta) ? fs.readdirSync(subcarpeta, { withFileTypes: true }) : [];
+    if (entradas.some((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md"))) {
+      return `existen recibos en \`${datos.recibos}/\``;
+    }
+  }
+
+  return null;
+}
+
+// Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
+// dentro de la tarea, con "/" como separador (la de ubicarEnTarea).
+export function motivoDeProteccion(
+  carpetaTarea: string,
+  relativo: string,
+  phases: Map<number, PhaseFile>,
+  contextoInicial: string
+): string | null {
+  // Ni siquiera para crearlo: solo start_task lo escribe.
+  if (relativo === contextoInicial) {
+    return "El contexto inicial está siempre protegido: es el único documento que no se puede regenerar leyendo el código.";
+  }
+
+  const fases = [...phases.entries()].sort((a, b) => a[0] - b[0]);
+  const propia = fases.find(
+    ([, datos]) => datos.documento === relativo || (datos.recibos && relativo.startsWith(`${datos.recibos}/`))
+  );
+  if (!propia) return null; // no es un archivo de fase
+
+  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Un recibo nuevo sí
+  // se congela: con la Fase 5 presente, la ejecución ya se auditó.
+  const [numero, datos] = propia;
+  if (datos.documento === relativo && !fs.existsSync(path.join(carpetaTarea, relativo))) return null;
+
+  for (const [posterior, datosPosterior] of fases) {
+    if (posterior <= numero) continue;
+    const presencia = presenciaDeFase(carpetaTarea, datosPosterior);
+    if (presencia) {
+      return `\`${relativo}\` está congelado: la Fase ${posterior} ya está en curso o cerrada (${presencia}).`;
+    }
+  }
+
+  return null;
+}
+
 // Frase corta para el chat. Se le pasa el mapa de fases para poder nombrar la fase siguiente
 // con su título real en vez de un número suelto.
 export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFile>): string {

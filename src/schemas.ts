@@ -51,6 +51,9 @@ export const readCentralDocShape = {
 export const writeCentralDocShape = {
   ...readCentralDocShape,
   content: z.string(),
+  // Solo con confirmación explícita del usuario en el chat. Permite reescribir un documento
+  // congelado o el contexto inicial.
+  force: z.boolean().nullish(),
 };
 
 export const readCrossRepoShape = {

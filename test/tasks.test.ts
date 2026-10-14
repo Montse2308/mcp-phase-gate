@@ -14,6 +14,7 @@ import {
   leerPunteros,
   limpiarEstadoViejo,
   listarTareas,
+  motivoDeProteccion,
   tareaActiva,
 } from "../src/tasks.js";
 import { stateFile } from "../src/config.js";
@@ -154,6 +155,75 @@ describe("estadoDeTarea", () => {
 
     assert.equal(estado.fasesConDocumento, 0);
     assert.equal(describeEstado(estado, new Map()).includes("fase desconocida"), true);
+  });
+});
+
+// R4: un documento de fase se congela en cuanto una fase posterior está presente. La tabla es la
+// del plan maestro v3 (§3.7.3), con la Fase 4 escribiendo sus recibos en una subcarpeta.
+describe("motivoDeProteccion", () => {
+  const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
+  CON_RECIBOS.set(4, { ...(FASES.get(4) as PhaseFile), recibos: "04 - Ejecución" });
+
+  const CONTEXTO = "00 - Contexto Inicial.md";
+  const [C00, D01, D02, D03, D04, D05] = TODOS as [string, string, string, string, string, string];
+  const RECIBO_L01 = "04 - Ejecución/L01 - rutas.md";
+  const RECIBO_L02 = "04 - Ejecución/L02 - x.md";
+
+  // [existen, se escribe, motivo esperado (null = permitido)]
+  const tabla: Array<[string[], string, RegExp | null]> = [
+    [[C00, D01], CONTEXTO, /contexto inicial está siempre protegido/],
+    [[C00, D01, D02], D01, /01 - Análisis Técnico\.md` está congelado: la Fase 2 .*02 - Decisiones\.md/],
+    [[C00, D01, D02], D02, null],
+    [[C00, D01, D02], D03, null],
+    [TODOS, D05, null],
+    [TODOS, D04, /congelado: la Fase 5 .*05 - Auditoría\.md/],
+    [[C00, D01, D02, D03, RECIBO_L01], D03, /congelado: la Fase 4 .*04 - Ejecución\//],
+    [[C00, D01, D02, D03, RECIBO_L01], D04, null],
+    [[C00, D01, D02, D03, RECIBO_L01], RECIBO_L02, null],
+    [[...TODOS, RECIBO_L01], RECIBO_L02, /congelado: la Fase 5/],
+    [[C00, D01, D03], D02, null],
+    [[C00, D01, D03], D01, /congelado: la Fase 3/],
+    [TODOS, "notas.md", null],
+  ];
+
+  for (const [existen, relativo, esperado] of tabla) {
+    const caso = `con ${existen.map((d) => (d.includes("/") ? "recibo" : d.slice(0, 2))).join(", ")}, escribir ${relativo}: ${esperado ? "rechazo" : "permitido"}`;
+    it(caso, () => {
+      const docs = docsTemporales();
+      crearProyecto(docs, "PROYECTO-A");
+      const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso");
+      for (const documento of existen) {
+        fs.mkdirSync(path.dirname(path.join(carpeta, documento)), { recursive: true });
+        fs.writeFileSync(path.join(carpeta, documento), "x", "utf-8");
+      }
+
+      const motivo = motivoDeProteccion(carpeta, relativo, CON_RECIBOS, CONTEXTO);
+
+      if (esperado) assert.match(motivo ?? "(permitido)", esperado);
+      else assert.equal(motivo, null);
+    });
+  }
+
+  // Solo start_task lo crea sin force (decisión C2 del plan).
+  it("el contexto inicial también se protege cuando todavía no existe", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso");
+
+    assert.match(motivoDeProteccion(carpeta, CONTEXTO, CON_RECIBOS, CONTEXTO) ?? "", /siempre protegido/);
+  });
+
+  // La Fase 4 solo está presente por sus recibos si hay al menos un .md en la subcarpeta.
+  it("una subcarpeta de recibos vacía o sin .md no congela nada", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", [C00, D01, D02, D03]);
+    fs.mkdirSync(path.join(carpeta, "04 - Ejecución"));
+
+    assert.equal(motivoDeProteccion(carpeta, D03, CON_RECIBOS, CONTEXTO), null);
+
+    fs.writeFileSync(path.join(carpeta, "04 - Ejecución", "notas.txt"), "x", "utf-8");
+    assert.equal(motivoDeProteccion(carpeta, D03, CON_RECIBOS, CONTEXTO), null);
   });
 });
 

@@ -42,6 +42,7 @@ import {
   guardarPuntero,
   limpiarEstadoViejo,
   listarTareas,
+  motivoDeProteccion,
   tareaActiva,
 } from "./tasks.js";
 import { validarLlamada } from "./schemas.js";
@@ -156,7 +157,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
             file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
             file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN, que tiene que caer dentro de la carpeta de una tarea que ya existe (ej. 'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Los archivos del proyecto no se escriben con esta tool. Solo si no usas project+task_name." },
-            content: { type: "string", description: "Contenido a escribir" }
+            content: { type: "string", description: "Contenido a escribir" },
+            force: { type: "boolean", description: "Solo con confirmación explícita del usuario en el chat. Permite reescribir un documento congelado o el contexto inicial." }
           },
           required: ["content"],
         },
@@ -401,11 +403,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
       }
 
+      const motivo = motivoDeProteccion(
+        ubicacion.carpetaTarea, ubicacion.relativo, discoverPhases(), nombreContextoInicial()
+      );
+      if (motivo && llamada.args.force !== true) {
+        throw new Error(
+          `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
+            `y vuelve a llamar con force: true.`
+        );
+      }
+
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, content, "utf-8");
 
+      const forzado = motivo ? " (sobrescrito con force)" : "";
       return {
-        content: [{ type: "text", text: `Archivo escrito exitosamente en ${fullPath}` }],
+        content: [{ type: "text", text: `Archivo escrito exitosamente en ${fullPath}${forzado}` }],
       };
     }
 
