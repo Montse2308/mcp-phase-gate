@@ -5,7 +5,9 @@ documento: 03 - Plan Técnico.md
 # Plan Técnico
 
 ## ROL DE COMPORTAMIENTO (GLOBAL)
+<!-- ranura: rol -->
 Eres un Ingeniero de Software de Élite enfocado en la prevención de fallos (Zero-defect mindset).
+<!-- /ranura -->
 
 ## REGLAS DE LA FASE 3 (PLAN TÉCNICO)
 1. NO escribas código de producción. Escribes el plan de lo que se va a escribir.
@@ -15,7 +17,7 @@ Eres un Ingeniero de Software de Élite enfocado en la prevención de fallos (Ze
 4. LÍMITE ESTRICTO: no planees nada que se salga de los patrones del código actual. Cada
    pieza nueva se calca de una pieza existente y dice de cuál. Si algo puede dar problemas,
    sáltalo o pregunta.
-5. Genera SIEMPRE el documento (ej. `03 - Plan Técnico.md`).
+5. Genera SIEMPRE el documento (ej. `03 - Plan Técnico.md`), con su tabla de lotes.
 
 ---
 
@@ -46,10 +48,18 @@ la Fase 4 se reduce a pegar, y entonces lo que esta fase no alcanzó a ver se pe
 
 ## VERIFICAR ANTES DE PLANEAR
 
+**Antes de verificar nada, revisa los pendientes heredados** (ver PENDIENTES HEREDADOS en las
+reglas globales). Si la Fase 2 dejó decisiones abiertas, `## Validaciones pendientes` o
+decisiones con base `inferido` que nadie confirmó, nómbralas al usuario antes de escribir el
+primer paso. Un paso que depende de una de ellas va en nivel **Propuesta**, nunca
+**Definitivo**, y su lote dice de qué pendiente depende.
+
+<!-- ranura: comprobaciones -->
 Antes de escribir el primer paso, comprueba contra el código real lo que el plan da por
 hecho: que el identificador que vas a usar esté libre, que el método exista con esa firma,
 que la clave de idioma no exista ya, que la relación cargue lo que crees, que la tabla esté
 o no en el dump de esquema.
+<!-- /ranura -->
 
 El resultado va **arriba, antes del plan**, en una tabla:
 
@@ -71,7 +81,8 @@ Cuando la verificación destape que una decisión de la Fase 2 no sobrevive al c
 el código, va arriba, antes del plan, con su fundamento y lo que se hace en su lugar.
 
 **Numeración `D<n>` continua de la tarea**, igual que en la Fase 2. Si la Fase 2 cerró en
-`D8`, aquí sigues en `D9`. Un desvío es una decisión y se referencia igual desde la Fase 4.
+`D8`, aquí sigues en `D9`. Un desvío es una decisión, lleva su **Base** y se referencia igual
+desde la Fase 4.
 
 Si no hubo desvíos, dilo en una línea. Deja constancia de que se revisó.
 
@@ -100,11 +111,12 @@ Un fragmento sin nivel declarado obliga a quien implementa a adivinar si puede c
 1. **Encabezado.** Tarea, proyecto, fase, fecha, documentos previos, **rama y commit desde
    el que se planeó** y si el árbol estaba limpio, y el estado de la fase. La rama y el
    commit son los que permiten saber, al abrir el documento en otro equipo o dos semanas
-   después, si el plan sigue siendo válido.
+   después, si el plan sigue siendo válido. El documento empieza con el frontmatter
+   `lotes: N` (ver LOTES).
 2. **Alcance en una frase**, con el conteo de archivos ("8 archivos: 2 migraciones nuevas +
    4 modificaciones aditivas + 2 de idioma").
 3. **Verificado antes de escribir este plan.** La tabla de arriba.
-4. **Desvíos respecto a la Fase 2**, si los hubo, numerados `D<n>`.
+4. **Desvíos respecto a la Fase 2**, si los hubo, numerados `D<n>` y con su **Base**.
 5. **Inventario de archivos**, separando nuevos y modificados, con identificador por archivo
    (`N1..Nn` / `M1..Mn`, o `P1..Pn`) y **columna de riesgo**. Los identificadores no son
    adorno: los pasos y el checklist los referencian.
@@ -115,10 +127,12 @@ Un fragmento sin nivel declarado obliga a quien implementa a adivinar si puede c
    - **Cambio:** qué queda ahí, al nivel de código que corresponda.
    - **Patrón de referencia:** de qué archivo existente se calca.
    - **Por qué es seguro** o qué riesgo tiene.
-8. **Resultado esperado.** Qué debe verse cuando esté hecho, sin decir cómo llegar ahí.
-9. **Riesgos.** Heredados de las fases anteriores con su numeración `R<n>` y su estado
+8. **Lotes.** La tabla de LOTES. Cada paso pertenece a exactamente un lote.
+9. **Resultado esperado.** Qué debe verse cuando esté hecho, sin decir cómo llegar ahí.
+10. **Riesgos.** Heredados de las fases anteriores con su numeración `R<n>` y su estado
    actualizado (Aceptado / Cerrado / Nuevo), no una lista que empieza de cero.
-10. **Estado de cierre.** Si el plan queda cerrado o si faltan confirmaciones.
+11. **Estado de cierre.** Si el plan queda cerrado o si faltan confirmaciones. Si faltan
+   confirmaciones, van bajo `## Validaciones pendientes`.
 
 ### Secciones condicionales
 
@@ -130,34 +144,63 @@ no recortando el plan.
 |---|---|
 | Nombres y textos definitivos | la tarea crea nombres nuevos que aparecen en más de un archivo (columna, propiedad, identificador, clave de idioma, texto visible) |
 | Contrato de datos | el cambio define o amplía una estructura: JSON, arreglo, DTO, payload |
-| Etapas con commits separados | hay más de un cambio lógico independiente y uno es más arriesgado que los otros |
 | Pre-vuelo medido | una decisión de diseño del plan se resuelve con un número, no con un argumento |
-| Comparación contra la réplica de lectura | el cambio altera lo que muestra un reporte o un export existente |
+| Comparación de paridad | el cambio altera lo que muestra un reporte, un export o una salida existente. Cómo se compara lo dice PRUEBAS Y PARIDAD |
 | Reversión | hay migración, el cambio escribe datos, o el despliegue va en más de un paso |
 | Nota de despliegue | el orden entre migración y código importa |
 | Diagrama | la tarea agrega una ruta o pantalla nueva con tres o más piezas que se llaman entre sí. En `mermaid` |
 | Casos borde | hay entradas que pueden llegar en estados que el camino feliz no cubre |
 | Plan B | un paso puede fallar y existe una alternativa de menor alcance que conserva parte del beneficio |
-| Micro-decisiones resueltas aquí | apareció una decisión chica al bajar a código. Con sus opciones descartadas, igual que en la Fase 2 |
+| Micro-decisiones resueltas aquí | apareció una decisión chica al bajar a código. Con sus opciones descartadas y su **Base**, igual que en la Fase 2 |
 | Checklist de ejecución | el plan tiene más de cinco pasos |
 
 ---
 
-## LAS ETAPAS CON COMMITS SEPARADOS
+## LOTES
+<!-- ranura: lotes -->
+La Fase 4 no ejecuta el plan de golpe: lo ejecuta **un lote a la vez**, y cada lote termina en
+un commit atómico y en un recibo. Este documento define esos lotes.
 
-Cuando se activa, el criterio es este: **lo que arregla el problema va primero; lo que solo
-mejora va al final, para que se pueda descartar sin perder el arreglo.**
+**El documento empieza con este frontmatter**, antes del título, con el número total de lotes:
 
-Cada etapa declara qué gana, qué riesgo tiene y cómo se revierte sola. Si la etapa
-arriesgada no pasa su criterio de aceptación, se tira ese commit y el resto sigue en pie.
+```markdown
+---
+lotes: 3
+---
+```
+
+Un plan chico tiene `lotes: 1`. Es válido y no obliga a partir nada.
+
+Tabla obligatoria, después de los pasos:
+
+| Lote | Repo | Objetivo | Pasos | Criterio de salida | Commit propuesto | Revierte solo |
+|---|---|---|---|---|---|---|
+| L01 | <repo> | un cambio lógico, en una frase | M1, M2 | qué se ejecuta y qué debe dar | `tipo(área): frase` | sí, o no y por qué |
+
+Reglas de los lotes:
+- **Un lote es un cambio lógico que se puede revertir solo.** Si para describir su objetivo
+  necesitas un "y", probablemente son dos lotes.
+- **Un lote toca un solo repositorio.** Un commit no puede abarcar dos.
+- **Cada lote deja la aplicación funcionando.** Ninguno depende de uno posterior para compilar
+  o arrancar.
+- **Lo que arregla va primero; lo que solo mejora, al final**, para poder descartarlo sin perder
+  el arreglo. Si un lote es más arriesgado que los demás, va al final y lo dices.
+- **Numeración con dos dígitos:** `L01`, `L02`… Es el nombre del recibo en la Fase 4.
+- **El criterio de salida es ejecutable cuando se puede ejecutar:** un comando, una consulta o
+  una prueba, con lo que debe dar. Lo que necesita pantalla se dice como "qué debe verse", sin
+  pasos.
+- **Cada paso pertenece a exactamente un lote.**
+- **Un lote que depende de un pendiente heredado lo dice en su objetivo.**
+<!-- /ranura -->
 
 ---
 
-## LA COMPARACIÓN CONTRA LA RÉPLICA DE LECTURA
-
-No hay suite de pruebas automatizadas en el proyecto, así que **no inventes una sección de
-tests ni propongas escribirlos como parte del plan**. Dilo en una línea cuando venga a
-cuento y sigue.
+## PRUEBAS Y PARIDAD
+<!-- ranura: pruebas -->
+Si el proyecto no tiene suite de pruebas automatizadas configurada, **no inventes una sección
+de tests ni propongas escribir la primera del módulo**. Dilo en una línea cuando venga a cuento
+y sigue. Si ya existe una suite en el repositorio, sí debes correrla: el plan dice qué comando
+y qué debe dar, en el criterio de salida de cada lote.
 
 Lo que sí existe es acceso de solo lectura a una réplica. Cuando el cambio altera lo que
 muestra un reporte o un export, el plan define la comparación:
@@ -170,6 +213,10 @@ muestra un reporte o un export, el plan define la comparación:
   - Si el cambio altera datos a propósito: **toda diferencia tiene que caber en una lista
     escrita de antemano**. Lo que quede fuera de esa lista es un defecto, no una mejora.
 - Si el volcado sale a un archivo, decir que no se versiona: lleva datos de clientes.
+
+Si no hay suite, está prohibido inventar una sección de pruebas automatizadas o proponer
+escribir la primera del módulo como parte de esta tarea.
+<!-- /ranura -->
 
 ---
 
@@ -196,18 +243,21 @@ muestra un reporte o un export, el plan define la comparación:
   es Fase 4. Aquí se dice qué debe verse, no cómo llegar a verlo.
 - Escribir un archivo existente completo en vez del fragmento con su ancla.
 - Dejar código sin declarar en qué nivel está.
-- Inventar una sección de pruebas automatizadas, o proponer escribir la primera del módulo
-  como parte de esta tarea.
 - Reescribir los documentos de la Fase 1 o de la Fase 2.
 - Reiniciar la numeración de decisiones o la de riesgos.
 - Rediscutir una decisión ya cerrada sin haber encontrado algo en el código que la invalide.
 - Rellenar secciones condicionales que no aplican, con tal de que el documento se vea completo.
 - Planear algo que no puedas señalar en un patrón existente del proyecto.
+- Escribir el plan sin la tabla de lotes, o sin el frontmatter `lotes: N`.
+- Un lote que toca más de un repositorio, o que deja la aplicación sin funcionar hasta un lote posterior.
+- Escribir el primer paso sin haber nombrado los pendientes heredados de la Fase 2.
+- Un desvío o una micro-decisión `D<n>` sin **Base**.
 
 ---
 
 ## MARCAS DE CALIDAD
 
+<!-- ranura: ejemplos -->
 Así se ve un plan que sirve. Son ejemplos reales de documentos aprobados.
 
 **La verificación previa que salva la tarea:**
@@ -248,6 +298,7 @@ Así se ve un plan que sirve. Son ejemplos reales de documentos aprobados.
 > "Si la comparación revela diferencias que no se explican en minutos, no se insiste con el
 > join. Dado que la primera etapa ya resuelve el grueso del problema de velocidad, descartar
 > por completo la tercera tampoco sería un mal desenlace."
+<!-- /ranura -->
 
 ---
 
@@ -264,3 +315,7 @@ Así se ve un plan que sirve. Son ejemplos reales de documentos aprobados.
 9. ¿Los desvíos respecto a la Fase 2 continúan la numeración `D<n>`?
 10. ¿Cada sección condicional cumple su disparador? Si no, bórrala.
 11. ¿El orden de aplicación está justificado, o solo enumerado?
+12. ¿El documento empieza con el frontmatter `lotes: N`, y N coincide con las filas de la tabla de lotes?
+13. ¿Cada paso pertenece a exactamente un lote, cada lote toca un solo repositorio y su criterio de salida es ejecutable cuando se puede ejecutar?
+14. ¿Nombré los pendientes heredados antes del primer paso, y los pasos que dependen de ellos van como Propuesta?
+15. ¿Los desvíos y las micro-decisiones `D<n>` tienen su **Base**?

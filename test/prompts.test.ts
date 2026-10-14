@@ -180,6 +180,29 @@ describe("prompts publicados", () => {
     }
   });
 
+  // L06: en la Fase 3 los lotes son estructurales. La sección condicional "Etapas con commits
+  // separados" desaparece y la política de pruebas se junta en una sola ranura.
+  it("la Fase 3 planea por lotes y junta las pruebas en PRUEBAS Y PARIDAD", () => {
+    const texto = leer("fase-3-plan-tecnico.md");
+    const prompt = loadPhasePrompt(3, [PROMPTS]);
+
+    assert.deepEqual(ranurasDe(texto), ["comprobaciones", "ejemplos", "lotes", "pruebas", "rol"]);
+    assert.equal(/etapas con commits separados/i.test(prompt), false, "sigue la sección condicional de etapas");
+    assert.equal(prompt.includes("No hay suite de pruebas automatizadas en el proyecto"), false, "sigue afirmando que no hay suite");
+    for (const fragmento of [
+      "\n## LOTES\n",
+      "\n## PRUEBAS Y PARIDAD\n",
+      "lotes: 3",
+      "| Lote | Repo | Objetivo | Pasos | Criterio de salida | Commit propuesto | Revierte solo |",
+      "8. **Lotes.** La tabla de LOTES. Cada paso pertenece a exactamente un lote.",
+      "**Antes de verificar nada, revisa los pendientes heredados**",
+      "- Escribir el plan sin la tabla de lotes, o sin el frontmatter `lotes: N`.",
+      "12. ¿El documento empieza con el frontmatter `lotes: N`",
+    ]) {
+      assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
+    }
+  });
+
   // L04 (#39 y #40): se escriben una vez en las reglas globales, que se anteponen a cada fase.
   for (const fase of [1, 2, 3, 4, 5]) {
     it(`get_phase_prompt(${fase}) trae la base de cada decisión y los pendientes heredados`, () => {

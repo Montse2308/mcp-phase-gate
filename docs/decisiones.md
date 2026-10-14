@@ -12,6 +12,37 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — Los lotes son estructurales en la Fase 3
+
+**Decisión.** Todo plan técnico se parte en **lotes**. El documento empieza con el frontmatter
+`lotes: N` y lleva, después de los pasos, una tabla con una fila por lote: repositorio,
+objetivo, pasos que incluye, criterio de salida, commit propuesto y si se revierte solo. Cada
+paso pertenece a exactamente un lote, cada lote toca un solo repositorio y deja la aplicación
+funcionando, y lo que arregla va antes que lo que solo mejora. Un plan chico tiene `lotes: 1`,
+y es válido.
+
+**Reemplaza** la sección condicional "Etapas con commits separados" del contrato de la Fase 3,
+que llegó con las decisiones del 2026-08-07 sin entrada propia. Su criterio sigue intacto
+dentro de las reglas de los lotes: lo que arregla va primero, y lo arriesgado al final, para
+poder descartarlo sin perder el arreglo.
+
+**Por qué.** Como sección condicional, partir el trabajo dependía de que el modelo decidiera
+que hacía falta, y la Fase 4 no tenía dónde apoyarse para ejecutar por partes. Con los lotes en
+el núcleo, la Fase 4 ejecuta un lote a la vez, con un commit y un recibo por lote, y cada lote
+llega con su criterio de salida ya escrito. El número `N` del frontmatter es lo que la Fase 4
+lee para saber cuántos recibos esperar.
+
+**Matiza** la entrada del 2026-08-07 "Sin suite de pruebas: la comparación contra la réplica
+ocupa ese lugar". La política de pruebas, que estaba repartida en tres sitios, se junta en
+**PRUEBAS Y PARIDAD**: si el proyecto no tiene suite, sigue prohibido inventarla; si ya tiene
+una, se corre, y el criterio de salida de cada lote dice qué comando y qué debe dar. La
+comparación contra la réplica se queda igual dentro de esa sección.
+
+**Ranuras de la Fase 3:** `rol`, `comprobaciones`, `lotes`, `pruebas` y `ejemplos`. Con
+`lotes: false` en un preset de la Etapa 3, la ranura `lotes` se reduce a "un solo lote".
+
+---
+
 ## 2026-10-14 — Base de cada decisión y pendientes heredados viven en las reglas globales; Cero Rupturas se acota por fase
 
 **Decisión.** `prompts/global-rules.md` gana tres secciones y reescribe una:
