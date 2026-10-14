@@ -7,14 +7,34 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { after } from "node:test";
 
 export const SUBDIR_POR_DEFECTO = "Proyectos";
 
+// Todo lo que crea carpetaTemporal se borra al terminar. Antes no se borraba nada: cada
+// ejecución de la suite dejaba unas 145 carpetas orq-* en la carpeta temporal del sistema.
+// Cada archivo de test corre en su propio proceso, así que este hook se registra una vez por
+// archivo, al importar este módulo. rmSync no sigue los enlaces: borra la junction, no su
+// destino, que en estos tests es siempre otra carpeta temporal.
+const temporales = new Set<string>();
+
+after(() => {
+  for (const carpeta of temporales) {
+    try {
+      fs.rmSync(carpeta, { recursive: true, force: true, maxRetries: 3 });
+    } catch {
+      // Limpiar es cortesía: un archivo bloqueado en Windows no debe tumbar la suite.
+    }
+  }
+});
+
 // Sobre la ruta real de la carpeta temporal, no sobre os.tmpdir() tal cual. En Windows, con un
-// usuario cuyo nombre lleva espacios, os.tmpdir() devuelve el nombre corto 8.3 (USUARI~1) y
+// usuario cuyo nombre lleva espacios, os.tmpdir() devuelve el nombre corto 8.3 (NOMBRE~1) y
 // realpath el largo: cualquier test que compare contra una ruta ya resuelta fallaría solo ahí.
 export function carpetaTemporal(prefijo: string): string {
-  return fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), `orq-${prefijo}-`));
+  const carpeta = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), `orq-${prefijo}-`));
+  temporales.add(carpeta);
+  return carpeta;
 }
 
 // Enlace a una carpeta. En Windows un symlink exige modo desarrollador o permisos de
