@@ -6,11 +6,21 @@ import * as fs from "node:fs";
 import {
   discoverProjects,
   estaDentro,
+  estaDentroReal,
   findProjectFolder,
   resolveDocPath,
   resolveTaskFolder,
+  rutaReal,
+  validarSegmento,
 } from "../src/paths.js";
-import { crearProyecto, crearTarea, docsTemporales, limpiarEntorno } from "./helpers.js";
+import {
+  carpetaTemporal,
+  crearProyecto,
+  crearSymlink,
+  crearTarea,
+  docsTemporales,
+  limpiarEntorno,
+} from "./helpers.js";
 
 afterEach(limpiarEntorno);
 
@@ -103,19 +113,136 @@ describe("resolveDocPath", () => {
     assert.throws(() => resolveDocPath({ project: "proyecto-a", task_name: "x" }), /file_path/);
   });
 
-  // resolveDocPath solo arma la ruta; quien decide si es aceptable es estaDentro. Este test
-  // fija esa división: un file_name con .. produce una ruta fuera, y la comprobación la ataja.
-  it("deja fuera de la base una ruta con .. , y estaDentro la rechaza", () => {
+  // Antes resolveDocPath armaba la ruta con .. y era estaDentro, en la tool, quien la atajaba
+  // si salía de la base. Una que salía de la tarea sin salir de la base pasaba.
+  it("rechaza un file_name con .., salga o no de la base", () => {
     const docs = docsTemporales();
     crearProyecto(docs, "PROYECTO-A");
     crearTarea(docs, "PROYECTO-A", "login-sso");
+    crearTarea(docs, "PROYECTO-A", "otra");
 
-    const ruta = resolveDocPath({
-      project: "proyecto-a",
-      task_name: "login-sso",
-      file_name: path.join("..", "..", "..", "..", "fuera.md"),
+    const conFileName = (fileName: string) => () =>
+      resolveDocPath({ project: "proyecto-a", task_name: "login-sso", file_name: fileName });
+
+    assert.throws(conFileName(path.join("..", "..", "..", "..", "fuera.md")), /file_name/);
+    assert.throws(conFileName("../otra/02 - Decisiones.md"), /file_name/);
+  });
+
+  it("rechaza un file_name absoluto", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+
+    assert.throws(
+      () => resolveDocPath({ project: "proyecto-a", task_name: "login-sso", file_name: path.join(docs, "x.md") }),
+      /file_name.*absolut/s
+    );
+  });
+
+  it("acepta un file_name con subcarpeta dentro de la tarea", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+
+    const ruta = resolveDocPath({ project: "proyecto-a", task_name: "login-sso", file_name: "04 - Ejecución/L01 - x.md" });
+
+    assert.equal(ruta, path.join(docs, "PROYECTO-A", "Proyectos", "login-sso", "04 - Ejecución", "L01 - x.md"));
+  });
+
+  it("rechaza un file_name que sale de la tarea por un enlace", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "login-sso");
+    const fuera = carpetaTemporal("fuera");
+    crearSymlink(fuera, path.join(tarea, "enlace"));
+
+    assert.throws(
+      () => resolveDocPath({ project: "proyecto-a", task_name: "login-sso", file_name: "enlace/x.md" }),
+      /Acceso denegado/
+    );
+  });
+
+  it("rechaza un file_path que sale de la Documentación", () => {
+    docsTemporales();
+
+    assert.throws(() => resolveDocPath({ file_path: "../fuera.md" }), /Acceso denegado/);
+  });
+
+  it("rechaza un task_name que no es un solo segmento", () => {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+
+    assert.throws(() => resolveTaskFolder("proyecto-a", "../../fuera"), /task_name/);
+  });
+});
+
+describe("validarSegmento", () => {
+  const rechazados: Array<[string, string]> = [
+    ["", "vacío"],
+    ["   ", "solo espacios"],
+    [".", "exactamente ."],
+    ["..", "exactamente .."],
+    ["a/b", "separador /"],
+    ["..\\x", "separador \\"],
+    ["login: sso", "carácter :"],
+    ["a<b", "carácter <"],
+    ["a>b", "carácter >"],
+    ['a"b', 'carácter "'],
+    ["a|b", "carácter |"],
+    ["a?b", "carácter ?"],
+    ["a*b", "carácter *"],
+    ["a\u0000b", "control U+0000"],
+    ["a\u001fb", "control U+001F"],
+    ["a\u007fb", "control U+007F"],
+    ["tarea.", "punto final"],
+    ["tarea ", "espacio final"],
+    ["con", "reservado CON"],
+    ["NUL.txt", "reservado NUL con extensión"],
+    ["Com1", "reservado COM1"],
+    ["lpt9.md", "reservado LPT9 con extensión"],
+    ["PRN", "reservado PRN"],
+    ["aux", "reservado AUX"],
+  ];
+
+  for (const [valor, regla] of rechazados) {
+    // JSON.stringify no escapa U+007F, y el título del test lo llevaría crudo.
+    const visible = JSON.stringify(valor).replace(/\u007f/g, "\\u007f");
+    it(`rechaza ${visible} (${regla}) y nombra el campo`, () => {
+      assert.throws(() => validarSegmento(valor, "task_name"), /task_name/);
     });
+  }
 
-    assert.equal(estaDentro(docs, ruta), false);
+  it("permite espacios intermedios, acentos, ñ, guiones y paréntesis", () => {
+    for (const valor of ["Exponer endpoints", "Tokens login", "Migración de Pagos (ñ)", "login-sso", "CONSOLA", "com10"]) {
+      assert.equal(validarSegmento(valor, "task_name"), valor);
+    }
+  });
+});
+
+describe("rutaReal y estaDentroReal", () => {
+  it("resuelve el ancestro existente y vuelve a unir lo que falta", () => {
+    const destino = carpetaTemporal("destino");
+    const base = carpetaTemporal("base");
+    crearSymlink(destino, path.join(base, "enlace"));
+
+    assert.equal(rutaReal(path.join(base, "enlace", "no", "existe.md")), path.join(destino, "no", "existe.md"));
+  });
+
+  it("rechaza lo que un enlace saca de la base", () => {
+    const base = carpetaTemporal("base");
+    const fuera = carpetaTemporal("fuera");
+    crearSymlink(fuera, path.join(base, "enlace"));
+
+    assert.equal(estaDentroReal(base, path.join(base, "enlace", "x.md")), false);
+    assert.equal(estaDentroReal(base, path.join(base, "normal", "x.md")), true);
+  });
+
+  it("acepta una base que es enlace, comparando contra su ruta real", () => {
+    const real = carpetaTemporal("real");
+    const contenedor = carpetaTemporal("contenedor");
+    const base = path.join(contenedor, "base-enlace");
+    crearSymlink(real, base);
+
+    assert.equal(estaDentroReal(base, path.join(base, "PROYECTO-A", "x.md")), true);
+    assert.equal(estaDentroReal(base, path.join(real, "PROYECTO-A", "x.md")), true);
+    assert.equal(estaDentroReal(base, path.join(contenedor, "x.md")), false);
   });
 });

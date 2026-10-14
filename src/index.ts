@@ -20,10 +20,12 @@ import {
   describeProjects,
   discoverProjects,
   estaDentro,
+  estaDentroReal,
   findProjectFolder,
   requireProjectFolder,
   resolveDocPath,
   taskFolderPath,
+  validarSegmento,
 } from "./paths.js";
 import {
   describePhases,
@@ -193,12 +195,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               `vuelve a llamar a start_task con crear_proyecto: true.`
           );
         }
+        // El nombre se vuelve carpeta tal cual: "../evil" la creaba fuera de la Documentación.
+        validarSegmento(proj, "project");
         carpetaProyecto = proj.toUpperCase();
         estrenado = true;
       }
 
       const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
       const contextoInicial = path.join(carpetaTarea, nombreContextoInicial());
+
+      const docsBase = requireBasePath(DOCS);
+      if (!estaDentroReal(docsBase, carpetaTarea)) {
+        throw new Error(`Acceso denegado: la carpeta de la tarea queda fuera de ${docsBase}.`);
+      }
 
       // start_task escribe el contexto inicial sin preguntar, así que llamarlo sobre una tarea
       // que ya existe borraba el requerimiento original — el único documento que no se puede
@@ -356,7 +365,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(args);
 
-      if (!estaDentro(docsBase, fullPath)) {
+      if (!estaDentroReal(docsBase, fullPath)) {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 
@@ -371,7 +380,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(args);
 
-      if (!estaDentro(docsBase, fullPath)) {
+      if (!estaDentroReal(docsBase, fullPath)) {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 

@@ -10,8 +10,18 @@ import * as path from "path";
 
 export const SUBDIR_POR_DEFECTO = "Proyectos";
 
+// Sobre la ruta real de la carpeta temporal, no sobre os.tmpdir() tal cual. En Windows, con un
+// usuario cuyo nombre lleva espacios, os.tmpdir() devuelve el nombre corto 8.3 (USUARI~1) y
+// realpath el largo: cualquier test que compare contra una ruta ya resuelta fallaría solo ahí.
 export function carpetaTemporal(prefijo: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), `orq-${prefijo}-`));
+  return fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), `orq-${prefijo}-`));
+}
+
+// Enlace a una carpeta. En Windows un symlink exige modo desarrollador o permisos de
+// administrador; una junction no, y para lo que se prueba aquí —que la contención mire la
+// ruta real— se comporta igual.
+export function crearSymlink(destino: string, ruta: string): void {
+  fs.symlinkSync(destino, ruta, process.platform === "win32" ? "junction" : "dir");
 }
 
 // Deja el entorno apuntando a una Documentación Central vacía y devuelve su ruta.

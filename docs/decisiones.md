@@ -12,6 +12,45 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — La contención se comprueba contra la ruta real y los nombres son un solo segmento portable
+
+**Decisión.** Toda ruta que una tool lee o escribe en la Documentación se compara contra la
+base **después de resolver symlinks y junctions**, de la base y de la ruta (`estaDentroReal`).
+Los nombres de proyecto y de tarea, y cada segmento de `file_name`, tienen que ser **un solo
+segmento de ruta portable** (`validarSegmento`): sin `/` ni `\`, sin `.` ni `..`, sin
+`< > : " | ? *` ni caracteres de control, sin punto ni espacio al final y sin nombres
+reservados de Windows. Con `project + task_name + file_name`, el archivo además tiene que
+quedar dentro de **su tarea**, no solo dentro de la base.
+
+**Complementa** la entrada del 2026-08-08 sobre `path.relative`: la comparación sigue siendo
+relativa, pero entre rutas reales.
+
+**Por qué.** El diagnóstico reprodujo cuatro escapes contra el binario compilado. Un
+`task_name` con `..` sacaba `start_task` de su carpeta. `crear_proyecto` con `"../evil"`
+creaba el proyecto fuera de la raíz, porque `toUpperCase` no valida nada. Un `file_name` como
+`"../otra-tarea/x.md"` escribía en otra tarea, porque la comprobación solo miraba la base. Y
+un symlink dentro de la Documentación que apuntaba fuera dejaba leer y escribir al otro lado:
+su ruta "estaba dentro" como texto, pero su destino no. Los cuatro quedan como casos de
+`test/e2e.test.ts`.
+
+**Por qué es seguro.** Solo se rechazan nombres que ya eran peligrosos o no portables. Un
+nombre con `/` creaba carpetas anidadas que `listarTareas` no ve como tarea, y uno con `:` o
+con punto final se rompe al sincronizar con Windows. Siguen valiendo los espacios, los
+acentos, la `ñ`, los paréntesis y una subcarpeta en `file_name` (`04 - Ejecución/L01 - x.md`).
+También un symlink que no sale de la Documentación y una raíz `DOCS` que es un symlink.
+
+**Un detalle de `rutaReal`.** La ruta que se va a escribir casi nunca existe todavía, así que
+se resuelve el ancestro existente más cercano y se vuelve a unir el resto. "Existe" se mira
+con `lstat`: un enlace roto cuenta como existente, `realpath` falla y la operación se rechaza.
+Con `existsSync` el enlace roto se saltaría, y escribir a través de él crearía su destino, esté
+donde esté.
+
+**Qué se descartó.** Normalizar los nombres (quitar los caracteres prohibidos, recortar el punto
+final) en lugar de rechazarlos. Así dos nombres distintos acaban en la misma carpeta sin que
+nadie se entere, y el error que explica la regla es más barato que esa confusión.
+
+---
+
 ## 2026-08-12 — La Fase 2 traduce el cambio para quien pidió el ticket, dentro de su documento
 
 **Decisión.** La Fase 2 gana una sección condicional, "Traducción para quien pidió el ticket",
