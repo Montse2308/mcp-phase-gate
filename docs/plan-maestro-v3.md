@@ -4151,8 +4151,28 @@ Rama `etapa-0/blindaje`, creada desde `master` en `d7594ea`. Un commit por lote,
 
 - L01: `rutaReal` decide qué "existe" con `lstat`, no con `existsSync`, para que un enlace roto haga fallar la operación en vez de saltarse.
 - L02: sin ADR propia, porque `docs/decisiones.md` no estaba en su lista de archivos.
+- L10: el commit de la release toca también `docs/plan-maestro-v3.md` (8 líneas: la fila "Modo" de la cabecera, la nota de estado de §2.2 y las filas L09 y L10 de esta tabla), para que la versión etiquetada no diga que la release está pendiente. Lo decidió la autora.
 - L06: dos casos más de los pedidos (variable solo con espacios; ruta válida devuelta sin espacios). Como no hay código nuevo, se comprobó que los tests muerden metiendo cuatro errores a propósito en la salida compilada: fallaron 5 de 13.
-- L08: en el diagrama en inglés, la flecha de la Fase 5 dice `05 · Audit`, como las demás flechas traducidas. Los cinco enlaces a `MCP_orquestador/issues/N` dentro de ADRs antiguas se dejaron como registro histórico; solo cambió el de la cabecera.
+- L08: en el diagrama en inglés, la flecha de la Fase 5 dice `05 · Audit`, como las demás flechas traducidas. Los cuatro enlaces a `MCP_orquestador/issues/N` dentro de ADRs antiguas se dejaron como registro histórico; solo cambió el de la cabecera.
+
+**Auditoría externa (antes del push).** Un segundo agente auditó la etapa a ciegas, sin acceso a las cifras del ejecutor. Veredicto: **apto con observaciones**. Los 10 commits pasan build y tests cada uno por su cuenta, los totales coinciden con esta tabla y hubo 0 escapes en 273 casos de ataque (39 de la verificación y 234 nuevos). Encontró 2 hallazgos medios y 10 bajos. Todos se resolvieron con commits nuevos encima de L10, sin reescribir la historia:
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| 1 | Media | `file_path` no validaba sus segmentos: dentro de DOCS creaba `CON`, `nul.md` o `nota.md:secreto` | Cada segmento de `file_path` pasa por `validarSegmento`, como `file_name`; también se rechaza un `file_path` absoluto |
+| 2 | Media | `test/helpers.ts` citaba el nombre corto 8.3 real del equipo | Cambiado por `NOMBRE~1`. El texto sigue en la historia de `ac2adca` (sensibilidad baja: es casi el nombre por defecto) |
+| 3 | Baja | L10 tocó `docs/plan-maestro-v3.md` sin anotarlo | Anotado arriba, en las interpretaciones menores |
+| 4 | Baja | `validarSegmento` aceptaba `COM¹`, `CONIN$`, `nul .txt`… | Lista de nombres reservados ampliada |
+| 5 | Baja | `leerTextoAcotado` leía sin tope si el archivo crecía tras el `stat`, y se bloqueaba con un FIFO | Lectura por descriptor: `fstat`, `isFile()` y como mucho límite + 1 bytes, con `O_NONBLOCK`. **Riesgo aceptado:** la contención mira la ruta real y la apertura usa la ruta tal cual, así que cambiar un enlace entre las dos cosas abriría otro destino; cerrarlo exige abrir sin seguir enlaces componente a componente, que Node no ofrece de forma portable |
+| 6 | Baja | Esta sección decía "cinco enlaces" y son cuatro | Corregido |
+| 7 | Baja | `.env.example` decía "MCP Orquestador" | Cambiado por `mcp-phase-gate` |
+| 8 | Baja | Un ancla de cada README fallaba, porque GitHub conserva U+FE0F en el ancla del encabezado 🗂️ | Quitado U+FE0F de los tres encabezados con emoji de cada README |
+| 9 | Baja | Los tests no borraban sus carpetas temporales (unas 145 por ejecución) | `carpetaTemporal` registra lo que crea y un `after()` lo borra; medido: 0 carpetas nuevas por ejecución |
+| 10 | Baja | `phase: 1e20` respondía en inglés | `too_big` tiene su mensaje: "`phase` es demasiado grande." |
+| 11 | Baja | Usos que dejan de funcionar no estaban documentados | Apartado "Qué deja de funcionar" en la ADR de L01 |
+| 12 | Baja | `resolveDocPath(args: any)` seguía con `String(args.x)` | Tipado con `ArgumentosDeDocumento`; 0 `String(args` en `src/` |
+
+Tras los ajustes: 171 tests (169 pasan; 2 omitidos fuera de Linux o macOS: `XDG_STATE_HOME` y el FIFO).
 
 **Pendiente de comprobar fuera de este equipo:** todos los tests nuevos de la Etapa 0 corrieron solo en Windows (Node 24). Su primera ejecución en Linux, y la de Node 22, será la CI del PR (L07).
 
