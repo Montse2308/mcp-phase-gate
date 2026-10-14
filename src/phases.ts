@@ -5,6 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { promptsLayers } from "./config.js";
+import { validarSegmento } from "./paths.js";
 
 // Las reglas globales se anteponen a cada fase.
 const GLOBAL_RULES_FILE = "global-rules.md";
@@ -24,10 +25,41 @@ export type PhaseFile = {
   title: string;
   documento?: string | undefined;         // el que produce la fase
   documentoInicial?: string | undefined;  // solo la fase 1: el archivo que escribe start_task
+  recibos?: string | undefined;           // subcarpeta de los recibos de lote (la Fase 4)
 };
 
+// Los prompts propios, escritos por ejemplo con el Bloc de notas, llegan en CRLF. Se normalizan
+// al leer: lo que se entrega al modelo y lo que se compara en los tests va siempre en LF.
+function aLF(texto: string): string {
+  return texto.replace(/\r\n/g, "\n");
+}
+
+// Quita los marcadores de ranura y conserva su contenido. El modelo nunca los ve.
+// Una ranura marca el contenido de una sección que un preset podrá sustituir en la Etapa 3:
+//   <!-- ranura: verificacion -->
+//   contenido por defecto
+//   <!-- /ranura -->
+// Solo cuenta un marcador que ocupa su propia línea, y la línea se quita entera.
+export const MARCADOR_RANURA = /^[ \t]*<!--\s*\/?ranura(?:\s*:\s*[\w-]+)?\s*-->[ \t]*\r?\n?/gm;
+
+export function quitarMarcadores(texto: string): string {
+  return texto.replace(MARCADOR_RANURA, "");
+}
+
+// La subcarpeta de recibos acaba dentro de un file_name, así que tiene que ser un solo segmento
+// portable. Un valor inválido no tumba la fase: se ignora y queda en el log.
+function leerRecibos(valor: string | undefined, archivo: string): string | undefined {
+  if (!valor) return undefined;
+  try {
+    return validarSegmento(valor, "recibos");
+  } catch (error: any) {
+    console.error(`[orquestador] Se ignora el frontmatter recibos de ${archivo}: ${error.message}`);
+    return undefined;
+  }
+}
+
 export function parsePhaseFile(fullPath: string): { meta: Record<string, string>; cuerpo: string } {
-  const crudo = fs.readFileSync(fullPath, "utf-8");
+  const crudo = aLF(fs.readFileSync(fullPath, "utf-8"));
   const encontrada = crudo.match(PHASE_FRONTMATTER);
 
   if (!encontrada) return { meta: {}, cuerpo: crudo };
@@ -88,6 +120,7 @@ export function discoverPhases(capas: string[] = promptsLayers()): Map<number, P
         title: readPhaseTitle(cuerpo, file),
         documento: meta.documento || undefined,
         documentoInicial: meta.documento_inicial || undefined,
+        recibos: leerRecibos(meta.recibos, fullPath),
       });
     }
 
@@ -133,10 +166,10 @@ export function loadPhasePrompt(phase: number, capas: string[] = promptsLayers()
 
   const globales = resolveGlobalRules(capas);
   if (globales) {
-    parts.push(fs.readFileSync(globales, "utf-8").trim());
+    parts.push(quitarMarcadores(aLF(fs.readFileSync(globales, "utf-8"))).trim());
   }
 
-  parts.push(parsePhaseFile(entry.file).cuerpo.trim());
+  parts.push(quitarMarcadores(parsePhaseFile(entry.file).cuerpo).trim());
 
   const archivos = describePhaseFiles(available, phase);
   if (archivos) parts.push(archivos);
@@ -158,7 +191,8 @@ function resolveGlobalRules(capas: string[]): string | null {
 }
 
 // Bloque que se añade al final del prompt con los nombres exactos de los documentos: el que
-// produce esta fase y los de las anteriores, que son los que hay que leer. Va aquí y no en el
+// produce esta fase y los de las anteriores, que son los que hay que leer, y la subcarpeta de
+// recibos de la fase que la declare. Va aquí y no en el
 // comando del cliente para que el nombre viva en un solo sitio; así afinar un prompt no obliga
 // a editar además un comando en cada dispositivo.
 export function describePhaseFiles(available: Map<number, PhaseFile>, phase: number): string {
@@ -167,7 +201,10 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
   const previos = [...available.entries()]
     .filter(([numero, datos]) => numero < phase && datos.documento)
     .sort((a, b) => a[0] - b[0])
-    .map(([numero, datos]) => `- Fase ${numero}: \`${datos.documento}\``);
+    .map(([numero, datos]) => {
+      const recibos = datos.recibos ? ` (recibos de lote en \`${datos.recibos}/\`)` : "";
+      return `- Fase ${numero}: \`${datos.documento}\`${recibos}`;
+    });
 
   if (!propio && previos.length === 0) return "";
 
@@ -183,6 +220,16 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
       `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
         "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
     );
+
+    const recibos = available.get(phase)?.recibos;
+    if (recibos) {
+      lineas.push(
+        "",
+        `Los recibos de lote van en la subcarpeta \`${recibos}/\`, uno por lote: ` +
+          `\`${recibos}/L01 - <slug>.md\`. Con un solo lote no hay subcarpeta: el recibo es el ` +
+          "documento de esta fase."
+      );
+    }
   } else {
     lineas.push("", "Esta fase no deja documento en la Documentación Central: su salida va en el chat.");
   }

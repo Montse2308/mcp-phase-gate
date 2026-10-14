@@ -12,6 +12,77 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — Ranuras en los prompts base: estructura fija, contenido sustituible
+
+**Decisión.** Un prompt base puede marcar el contenido de una sección como **ranura**:
+
+```md
+## VERIFICACIÓN
+<!-- ranura: verificacion -->
+contenido por defecto
+<!-- /ranura -->
+```
+
+El encabezado `##` queda fuera: la estructura del prompt no se sustituye; el contenido, sí. El
+servidor quita los marcadores antes de entregar el prompt (`quitarMarcadores`), así que el
+modelo nunca los ve y recibe el mismo texto que sin ellos. `test/prompts.test.ts` hace cumplir
+las reglas en los prompts publicados: toda ranura se cierra, no se anidan, el nombre es único en
+su archivo y pertenece al catálogo del plan maestro v3 (§3.2, 22 ranuras), y ningún marcador va
+dentro de un bloque de código.
+
+**Nueva.** Prepara las capas de la Etapa 3, donde un preset sustituye una ranura con un bloque
+cuyo identificador es `<archivo>/<ranura>` (`fase-3/pruebas`).
+
+**Por qué.** Hoy, para cambiar cómo verifica una fase hay que pisar la fase entera con un
+archivo propio, y esa copia deja de recibir las mejoras del resto del prompt. Lo que un preset
+necesita cambiar es poco y está localizado: el rol, los medios de verificación, la política de
+pruebas, los ejemplos. Solo es ranura lo que cambia el **comportamiento**; una ruta de ejemplo
+de una línea se generaliza en el texto y no se vuelve ranura.
+
+**Por qué un comentario HTML, en su propia línea.** No se ve al leer el `.md` renderizado, y
+quitarlo por línea entera no deja huecos en el texto. El precio es que `quitarMarcadores` no
+distingue un bloque de código: por eso un marcador dentro de uno es un error del test, y los
+ejemplos de frontmatter de los prompts nunca llevan marcadores.
+
+**En la 2.1.0 todavía no hay ranuras.** Las meten los lotes de prompts (L04 a L08 de la
+Etapa 1). Hasta entonces el test de buena formación pasa con cero.
+
+**Finales de línea, en el mismo cambio.** Las reglas globales y el archivo de cada fase se
+normalizan de `\r\n` a `\n` al leerlos. Un prompt propio escrito con el Bloc de notas llega en
+CRLF, y el prompt entregado mezclaba finales de línea: lo que se compara byte a byte fallaría
+solo en Windows.
+
+---
+
+## 2026-10-14 — Los recibos de lote viven en una subcarpeta que declara el prompt
+
+**Decisión.** La fase que ejecuta por lotes declara en su frontmatter la subcarpeta de sus
+recibos (`recibos: 04 - Ejecución`), igual que declara su documento. El servidor la lee y la
+anuncia al final del prompt: en esa fase, dónde va cada recibo
+(`04 - Ejecución/L01 - <slug>.md`); en las fases posteriores, junto al documento de esa fase.
+El valor tiene que ser un solo segmento de ruta portable (`validarSegmento`), porque acaba
+dentro de un `file_name`. Un valor inválido no tumba la fase: se ignora y queda en el log.
+
+**Amplía** la entrada del 2026-08-12 sobre la traducción para quien pidió el ticket, que dejó
+escrito que el flujo **nunca** escribe un archivo que no sea el documento de su fase. Con lotes,
+sí escribe otros: los recibos, y solo ellos, en una subcarpeta con nombre declarado y con un
+nombre de archivo fijado. El argumento técnico que esa entrada dejó registrado sigue valiendo:
+la deducción de fase compara contra los nombres exactos, así que la subcarpeta no mueve la fase
+(lo fija un test de `test/tasks.test.ts`).
+
+**Por qué en el frontmatter.** Un solo lugar para cada dato: el nombre vive en el prompt que lo
+usa, se lee en vivo y llega al modelo por el servidor, como el del documento. Copiarlo en el
+texto de cada prompt que lo menciona es la forma de que un día dos prompts digan dos nombres.
+
+**Todavía no se ve.** Ningún prompt publicado declara `recibos` hasta que la Fase 4 pase a
+ejecutar por lotes (L07 de la Etapa 1). Hasta entonces el servidor no anuncia nada nuevo.
+
+**Desvío E1-D2 (aprobado por la autora).** El plan pedía comprobar en este lote que la Fase 4
+declara `recibos`. Ese frontmatter llega con el prompt de la Fase 4, en L07, así que la
+comprobación se hace allí, en el test de los prompts publicados de `test/phases.test.ts`.
+
+---
+
 ## 2026-10-14 — `write_central_doc` solo escribe dentro de carpetas de tarea, y las carpetas con punto no son proyecto ni tarea
 
 **Decisión.** `write_central_doc` solo escribe dentro de la carpeta de una tarea **que ya
