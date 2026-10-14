@@ -137,6 +137,49 @@ describe("prompts publicados", () => {
     });
   }
 
+  // L05 (#39 y #40 en las Fases 1 y 2): cada fase ancla Base y Pendientes con frases cortas, y
+  // marca como ranura su rol, su verificación y sus ejemplos.
+  const leer = (archivo: string): string => fs.readFileSync(path.join(PROMPTS, archivo), "utf-8");
+  const ranurasDe = (texto: string): string[] =>
+    texto
+      .split(/\r?\n/)
+      .map((linea) => linea.match(MARCADOR))
+      .flatMap((marcador) => (marcador && !marcador[1] && marcador[2] ? [marcador[2]] : []))
+      .sort();
+
+  it("la Fase 1 marca sus ranuras y pide la Base de cada decisión", () => {
+    const texto = leer("fase-1-descubrimiento.md");
+
+    assert.deepEqual(ranurasDe(texto), ["ejemplos", "rol", "verificacion"]);
+    for (const fragmento of [
+      "- **Base:** ver BASE DE CADA DECISIÓN en las reglas globales.",
+      "| Validaciones pendientes | no hubo acceso para comprobar algo, o una medición sale de una fuente",
+      "- Una decisión `D<n>` sin línea **Base**, o marcada `medido` sin fuente y vigencia.",
+      "8. ¿Cada `D<n>` tiene su línea **Base**",
+      "10. Si la fase cerró con lagunas, ¿están bajo `## Validaciones pendientes`",
+    ]) {
+      assert.ok(texto.includes(fragmento), `falta: ${fragmento}`);
+    }
+    assert.equal(texto.includes("app/Models/Ejemplo.php"), false, "el ejemplo sigue siendo de un framework concreto");
+  });
+
+  it("la Fase 2 abre con los pendientes heredados y lleva la Base en la tabla y en el bloque", () => {
+    const texto = leer("fase-2-decisiones.md");
+
+    assert.deepEqual(ranurasDe(texto), ["ejemplos", "rol", "verificacion"]);
+    for (const fragmento of [
+      "0. **Revisa los pendientes heredados de la Fase 1**",
+      "| # | Tema | Decisión | Fundamento | Base |",
+      "- **Base:** ver BASE DE CADA DECISIÓN en las reglas globales.",
+      "**Empieza por las decisiones que la Fase 1 marcó como `inferido`**",
+      "| Validaciones pendientes | quedó algo sin comprobar o sin decidir.",
+      "- Plantear decisiones sin haber nombrado antes los pendientes heredados de la Fase 1.",
+      "10. ¿Abrí nombrando los pendientes heredados de la Fase 1",
+    ]) {
+      assert.ok(texto.includes(fragmento), `falta: ${fragmento}`);
+    }
+  });
+
   // L04 (#39 y #40): se escriben una vez en las reglas globales, que se anteponen a cada fase.
   for (const fase of [1, 2, 3, 4, 5]) {
     it(`get_phase_prompt(${fase}) trae la base de cada decisión y los pendientes heredados`, () => {
