@@ -12,6 +12,30 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — El plan maestro v3 se versiona en `docs/`
+
+**Decisión.** El plan de la versión 3 vive en [`docs/plan-maestro-v3.md`](plan-maestro-v3.md),
+versionado con el código. Desde que entra al repo, esa copia es la fuente: cada etapa la
+actualiza en su lote de documentación con el estado de sus lotes y sus desvíos, sin reescribir
+el diseño de las etapas ya cerradas.
+
+**Reemplaza, para este plan,** la entrada del 2026-08-07 "El plan del proyecto vive en Issues,
+no en un archivo".
+
+**Por qué.** Aquella decisión era contra una lista de pendientes —un `TODO.md` que envejece
+mal— y sigue siendo cierta para eso. Este plan es otra cosa: un documento de diseño con
+decisiones, alternativas descartadas, anclas contra el código y verificaciones ejecutadas. Un
+issue no tiene dónde guardar eso, y fuera del repo se separa del código que describe. Como
+activo de ingeniería tiene valor por sí mismo.
+
+**Lo que se mantiene de la anterior.** Los fallos y los pendientes sueltos siguen yendo a
+Issues, y cada etapa puede tener su issue de seguimiento que enlace a su sección del plan.
+
+**Privacidad.** Antes de entrar se revisó el texto entero: sin rutas reales de ningún equipo,
+sin nombres de proyectos o clientes del trabajo y sin datos de terceros.
+
+---
+
 ## 2026-10-14 — Los argumentos se validan con zod declarado como dependencia directa, y los schemas son la fuente de la Etapa 2
 
 **Decisión.** Cada tool declara sus argumentos en `src/schemas.ts` con zod, y el servidor los
@@ -1082,6 +1106,9 @@ una versión anterior.
 ---
 
 ## 2026-08-07 — El plan del proyecto vive en Issues, no en un archivo
+
+> **Reemplazada en parte** el 2026-10-14 por "El plan maestro v3 se versiona en `docs/`": el
+> plan de diseño vive en `docs/plan-maestro-v3.md`. Los pendientes sueltos siguen en Issues.
 
 **Decisión.** Lo que falta por hacer se registra como GitHub Issues, agrupado con las
 labels `v1-uso-propio` y `v2-publico`. No hay `TODO.md` ni sección de roadmap en el README.
