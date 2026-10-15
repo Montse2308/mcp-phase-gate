@@ -106,6 +106,35 @@ describe("configuracionDe: el preset efectivo", () => {
   });
 });
 
+describe("un machine.json roto solo afecta a quien lo necesita (hallazgo 7 de la auditoría de la Etapa 3)", () => {
+  it("un proyecto con manifiesto sin repos sigue funcionando; uno sin manifiesto falla explícito", async () => {
+    const { docs, config } = instalacion({ version: 1, preset: "software-tdd" });
+    crearProyecto(docs, "SIN-MANIFIESTO");
+    crearTarea(docs, "SIN-MANIFIESTO", "t", [CONTEXTO]);
+    fs.writeFileSync(path.join(config, "machine.json"), "{ roto", "utf-8");
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const conManifiesto = await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 3, project: "PROYECTO-A" } });
+      assert.equal(conManifiesto.isError, undefined, textoDe(conManifiesto));
+      assert.ok(textoDe(conManifiesto).includes("- Preset: `software-tdd` (del proyecto)"));
+
+      const sinManifiesto = await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 3, project: "SIN-MANIFIESTO" } });
+      assert.equal(sinManifiesto.isError, true);
+      assert.match(textoDe(sinManifiesto), /machine\.json no es válido/);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("una ruta relativa en machine.json es inválida (hallazgo 17)", () => {
+    const { config } = instalacion();
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, repos: { "PROYECTO-A/api": "relativo/x" } }), "utf-8");
+
+    assert.throws(() => configuracionDe(null), /repos\.PROYECTO-A\/api: tiene que ser una ruta absoluta/);
+  });
+});
+
 describe("frontmatterDeTarea", () => {
   it("lee repos en las dos formas y el preset; sin frontmatter, nada", () => {
     const carpeta = carpetaTemporal("tarea");

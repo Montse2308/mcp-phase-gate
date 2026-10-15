@@ -60,7 +60,17 @@ export const MaquinaConfig = z
     $schema: z.string().optional(),
     version: z.literal(1),
     // "<PROYECTO>/<repo id>" -> ruta absoluta en ESTE equipo
-    repos: z.record(z.string().regex(/^[^/\\]+\/[a-z0-9][a-z0-9-]{0,39}$/), z.string().min(1)).default({}),
+    // Ruta absoluta: una relativa se resolvería contra el directorio de trabajo del cliente, que es
+    // distinto en cada uno (hallazgo 17 de la auditoría de la Etapa 3).
+    repos: z
+      .record(
+        z.string().regex(/^[^/\\]+\/[a-z0-9][a-z0-9-]{0,39}$/),
+        z
+          .string()
+          .min(1)
+          .refine((ruta) => path.win32.isAbsolute(ruta) || path.posix.isAbsolute(ruta), "tiene que ser una ruta absoluta")
+      )
+      .default({}),
     presetPorDefecto: z.string().optional(), // para proyectos sin manifiesto; si falta, "software"
   })
   .strict();
@@ -360,7 +370,11 @@ export type RepoResuelto = {
 
 // Dónde está cada repo en ESTE equipo: el override de machine.json ("<PROYECTO>/<id>") si lo hay, y
 // si no, <PHASE_GATE_REPOS_PATH>/<dir>.
-export function resolverRepos(carpetaProyecto: string, repos: readonly RepoManifiesto[], maquina: LecturaMaquina = maquinaDe()): RepoResuelto[] {
+// machine.json solo se lee si hay repos que resolver: un machine.json roto no debe tumbar los proyectos
+// que no lo necesitan (hallazgo 7 de la auditoría de la Etapa 3).
+export function resolverRepos(carpetaProyecto: string, repos: readonly RepoManifiesto[], maquinaDada?: LecturaMaquina): RepoResuelto[] {
+  if (repos.length === 0) return [];
+  const maquina = maquinaDada ?? maquinaDe();
   let base: string | null = null;
   let errorBase: string | null = null;
   const baseDeRepos = (): string | null => {

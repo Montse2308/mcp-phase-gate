@@ -461,7 +461,7 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
 
   // Configuración local: machine.json y los presets disponibles.
   const maquina = leerMaquina();
-  if (maquina.estado === "invalido") hallar("error", "MAQUINA-INVALIDA", `${maquina.error} Mientras no se corrija, las tools que dependen de él fallan.`);
+  if (maquina.estado === "invalido") hallar("error", "MAQUINA-INVALIDA", `${maquina.error} Mientras no se corrija, fallan los prompts de los proyectos sin manifiesto (y sin proyecto), que necesitan su presetPorDefecto, y todo lo que resuelve repos.`);
   for (const aviso of maquina.avisos) hallar(aviso.severidad, aviso.codigo, aviso.texto);
 
   let presets = new Map<string, Preset>();

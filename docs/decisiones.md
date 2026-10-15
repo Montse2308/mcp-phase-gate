@@ -349,6 +349,12 @@ dos veces, no con código": su "introducir un formato de configuración nuevo" y
 pagar, pero los "espacios" con `use_space` siguen descartados; varias documentaciones siguen siendo
 varios registros.
 
+**Un `machine.json` roto solo afecta a quien lo usa** (añadido tras la auditoría de la etapa). Se lee
+solo cuando hace falta: para resolver repos, y para el `presetPorDefecto` de un proyecto sin
+manifiesto (o sin proyecto). Antes se leía siempre al armar el bloque de configuración, y un error en
+él dejaba sin prompts a todos los proyectos. Sus rutas de repo tienen que ser absolutas: una relativa
+se resolvería contra el directorio de trabajo de cada cliente.
+
 **Por qué dos archivos y no uno.** El manifiesto viaja con la Documentación por OneDrive y lo leen
 todos los equipos; una ruta como `D:\trabajo\backend-api` solo vale en uno. Mezclarlas obligaría a
 elegir entre rutas que no existen en el otro equipo o repos que hay que declarar dos veces.
