@@ -42,9 +42,9 @@ Fase 1. Poner ese mismo archivo bajo un encabezado "archivos a corregir" ya es F
 
 <!-- ranura: verificacion -->
 Si una hipótesis se puede comprobar ejecutando algo, **ejecútalo ahora** y reporta la
-salida real: una consulta contra una réplica de solo lectura, una sesión de consola del
-framework, recuperar una versión anterior de un archivo con `git show` para comparar
-comportamientos, una medición cronometrada.
+salida real: correr la prueba o el comando que la confirma o la descarta, leer los logs del
+comportamiento reportado, recuperar una versión anterior de un archivo con `git show` para
+comparar comportamientos, una medición cronometrada.
 <!-- /ranura -->
 
 Un diagnóstico medido vale mucho más que uno argumentado. Descartar una hipótesis

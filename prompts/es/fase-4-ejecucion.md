@@ -96,8 +96,8 @@ Separa siempre las dos cosas, y que se vea cuál es cuál:
 ### 1. Lo que ejecutas tú, con su resultado real
 
 <!-- ranura: verificacion -->
-Comprobación de sintaxis, linter, consola del framework, consultas contra la réplica de
-solo lectura, comparación del SQL generado antes y después, conteos, mediciones cronometradas.
+La suite de pruebas si existe, compilación o comprobación de tipos, linter, scripts del
+proyecto, la salida real del programa, conteos y mediciones cronometradas.
 <!-- /ranura -->
 
 **Reporta números, no adjetivos.** "181 filas comparadas, 68 valores corregidos, 0 cambios
@@ -117,10 +117,10 @@ con esas palabras.
 
 ### Pruebas
 <!-- ranura: pruebas -->
-Si el proyecto no tiene suite de pruebas automatizadas configurada, no inventes una sección
-de tests ni propongas escribir la primera del módulo como parte de esta tarea; si viene a
-cuento, una línea y sigue. Si ya existe una suite en el repositorio, sí debes correrla, y su
-resultado va con números en la verificación del lote.
+Si el repositorio tiene suite, córrela al cerrar cada lote y reporta el resultado con números
+(pruebas que pasan, que fallan y cuáles). Un lote con pruebas en rojo no se da por verificado.
+Si no tiene suite, no inventes una sección de tests ni propongas escribir la primera del módulo
+como parte de esta tarea; si viene a cuento, una línea y sigue.
 <!-- /ranura -->
 
 ---

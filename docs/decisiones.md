@@ -12,6 +12,50 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — El preset por defecto es `software`; la réplica pasa a `software-replica`
+
+**Decisión.** Los prompts de fábrica dejan de suponer un proyecto sin suite y con réplica de datos.
+Cambia el contenido por defecto de seis ranuras, y nada de la estructura:
+
+| Ranura | Antes (2.2.0) | Ahora (`software`) |
+|---|---|---|
+| `fase-1/verificacion` | una consulta contra una réplica, una consola del framework | correr la prueba o el comando que confirma o descarta, leer los logs |
+| `fase-2/verificacion` | consultas contra una réplica, conteos de volumen | barridos de consumidores, código de las dependencias, las pruebas de la zona |
+| `fase-3/comprobaciones` | la clave de idioma, la relación, el dump de esquema | la función y su firma, la configuración, lo que exporta un módulo, quién más lo consume |
+| `fase-3/pruebas` | sin suite; comparación de volcados contra la réplica | con suite, el plan la usa (y dice qué prueba nueva); sin suite, lo que sí se ejecuta |
+| `fase-4/verificacion` | consola del framework, consultas contra la réplica, SQL antes y después | la suite si existe, tipos, linter, scripts, la salida real |
+| `fase-4/pruebas` | sin suite, una línea y sigue | con suite, córrela por lote y un lote en rojo no se da por verificado |
+
+El texto de la 2.2.0 de esas seis ranuras pasa, byte a byte, al preset
+**`presets/es/software-replica.md`** (`lotes: true`, `commits: agente-commitea-con-OK`). Se generó
+extrayendo las ranuras con un script, no a mano.
+
+**La prueba de oro** (`test/oro.test.ts`): con `software-replica`, por manifiesto o por
+`presetPorDefecto` de `machine.json`, y también sin proyecto, `ensamblarFase(N, …,
+{ incluirConfigProyecto: false })` produce exactamente el texto que entregaba `loadPhasePrompt(N)`
+en la `2.2.0`, en las cinco fases. Las copias de `test/oro/2.2.0/fase-N.txt` salen del build de la
+etiqueta `v2.2.0`. Y la red puede fallar: con `software`, las fases 1 a 4 ya no coinciden.
+
+**Reemplaza** la entrada del 2026-08-07 "Sin suite de pruebas: la comparación contra la réplica ocupa
+ese lugar", que deja de ser la regla general: era la regla de un proyecto concreto, escrita como si
+fuera la de todos. Sigue entera dentro de su preset.
+
+**Por qué el genérico es "con suite si la hay".** Prohibir inventar pruebas sigue valiendo: es lo que
+evita que el modelo proponga escribir la primera prueba del módulo en mitad de una tarea. Lo que ya
+no se supone es que no existan; un proyecto con suite la usa como criterio de salida de cada lote.
+
+**Para quien ya usaba la réplica** (riesgo E3-R1): `presetPorDefecto: "software-replica"` en su
+`machine.json`, o `init --migrate`, que escribe `"preset": "software-replica"` en cada proyecto sin
+manifiesto. El bloque CONFIGURACIÓN DEL PROYECTO dice en cada prompt qué preset se usa y por qué
+(`por defecto; este proyecto no tiene phase-gate.json`), y `doctor` avisará con `PRESET-IMPLICITO`.
+
+**Un ajuste al texto del plan.** La ranura `fase-3/comprobaciones` abarca el párrafo entero, desde
+"Antes de escribir el primer paso, comprueba…"; el texto genérico del plan era solo el fragmento que
+empieza en "que el identificador…". Se conservó la entrada del párrafo para que la frase siga
+completa.
+
+---
+
 ## 2026-10-15 — Las fases, los prompts y la deducción se resuelven por proyecto; la política de commits es configurable y el push queda fuera de cualquier variante
 
 **Decisión.** Lo que hasta ahora era global pasa a resolverse con el proyecto:
@@ -1787,6 +1831,9 @@ micro-decisión de Fase 3 como `D7`, continuando desde la Fase 2, sin que nadie 
 ---
 
 ## 2026-08-07 — Sin suite de pruebas: la comparación contra la réplica ocupa ese lugar
+
+> **Reemplazada** el 2026-10-15 por "El preset por defecto es `software`; la réplica pasa a
+> `software-replica`": deja de ser la regla general. El texto vive, intacto, en ese preset.
 
 **Decisión.** El proyecto de la usuaria no tiene pruebas automatizadas, así que la Fase 3
 tiene **prohibido** inventar una sección de tests o proponer escribir la primera del módulo.
