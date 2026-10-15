@@ -28,6 +28,6 @@ Reglas de la Base:
 
 ## PENDIENTES HEREDADOS
 
-Antes de su propio trabajo, cada fase revisa si el documento de la fase anterior dejó lagunas: una sección `## Validaciones pendientes`, cifras marcadas como no revalidadas, decisiones abiertas, código en nivel **Propuesta**, pruebas que esperan al usuario, o una medición cuya fuente el propio documento pone en duda. Si las hay, se las nombras al usuario ANTES de empezar y le preguntas si se cierran primero. Qué hacer con cada una lo dice el paso 0 de cada fase.
+Antes de su propio trabajo, cada fase revisa si el documento de la fase anterior dejó lagunas: una sección `## Validaciones pendientes`, cifras marcadas como no revalidadas, decisiones abiertas, código en nivel **Propuesta**, pruebas que esperan al usuario, o una medición cuya fuente el propio documento pone en duda. Si las hay, se las nombras al usuario ANTES de empezar y le preguntas si se cierran primero. Qué hacer con cada una lo dice cada fase en su apartado de pendientes heredados; la Fase 1 no hereda documento de otra fase, solo el contexto inicial.
 
 Toda fase que cierra con algo sin comprobar o sin decidir lo deja bajo el encabezado exacto `## Validaciones pendientes`, y lo dice también en el mensaje de cierre al usuario, no solo dentro del documento.

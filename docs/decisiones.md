@@ -46,15 +46,20 @@ del PR no cambia; solo queda envuelto para que un preset de la Etapa 3 pueda sus
 de la Fase 3, con un ciclo fijo: implementar solo ese lote, verificarlo con su criterio de
 salida, escribir su recibo con `commit: pendiente`, mostrarle al usuario la lista exacta de
 archivos y el mensaje de commit, y con su OK hacer el commit y anotar el hash en el recibo. El
-corte de commit es la única parada del lote. Las secciones NO SUBES NADA y EL DOCUMENTO del
+corte de commit es la única parada prevista del lote. Las secciones NO SUBES NADA y EL DOCUMENTO del
 prompt se sustituyen por **LOTES Y RECIBOS** y **COMMITS**.
 
 - El recibo tiene frontmatter (`lote`, `de`, `repo`, `rama`, `estado`, `commit`, `fecha`) y
   encabezados exactos. Con `lotes: 1` el recibo es el documento de la fase; con más lotes, cada
   recibo va en `04 - Ejecución/L0x - <slug>.md` y el documento de la fase es un índice que se
   escribe solo al cerrar el último.
-- El `git add` lleva la lista de archivos del lote, uno por uno; nunca `-A` ni `.`. Si falla un
-  hook o se pide una passphrase, el agente se detiene; nunca `--no-verify`.
+- El `git add` lleva la lista de archivos del lote, uno por uno; nunca `-A`, `.`, `-u`, una
+  carpeta entera ni `git commit -a`, y nunca `--amend`. Si falla un hook o se pide una
+  passphrase, el agente se detiene; nunca `--no-verify`.
+- Antes del primer commit, el agente comprueba la rama con `git branch --show-current`. Si no es
+  la del plan, o es la principal sin que el plan lo diga, se detiene y pregunta. Como no puede
+  cambiar de rama, sin esta comprobación una sesión abierta en la rama principal dejaba ahí los
+  commits (hallazgo de la auditoría de la Etapa 1).
 - Antes del primer lote se nombran los pendientes heredados del plan, y un lote que depende de
   uno sin resolver no se ejecuta.
 
@@ -80,6 +85,13 @@ hacer las pruebas que el lote dejó esperando. Las otras políticas (`agente-pro
 `commit: pendiente`, así que durante esos minutos la fase aparece cerrada antes del commit; es
 una ventana aceptada que desaparece en la 3.0.0, cuando el servidor guarda el recibo en la
 subcarpeta hasta anclarlo.
+
+**La ventana no se extiende a un lote que falla.** Con `lotes: 1`, si el lote queda `fallido` o
+`descartado` en su verificación, su recibo va en la subcarpeta (`L01 - <slug>.md`) y el
+documento de la fase no se escribe. Si no, el recibo fallido se quedaba para siempre como
+documento de la fase y la tarea aparecía cerrada (cuestionamiento de la auditoría de la Etapa 1).
+Queda un resto: si el usuario rechaza el commit después de escrito el recibo, el documento ya
+existe y el modelo no puede moverlo; el recibo lo dice con su `estado`, y lo cierra la 3.0.0.
 
 **Ranuras de la Fase 4:** `rol`, `verificacion`, `pruebas`, `lotes`, `commits` y `ejemplos`.
 

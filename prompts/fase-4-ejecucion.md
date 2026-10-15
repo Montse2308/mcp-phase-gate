@@ -157,8 +157,9 @@ el anterior.
 2. **Verifícalo** con su criterio de salida, ejecutando (ver VERIFICAR).
 3. **Escribe su recibo ANTES del commit**, con `commit: pendiente`. Si el chat se corta aquí,
    el recibo ya dice qué se hizo y qué se comprobó.
-4. **Corte de commit** (ver COMMITS). Este es el único punto de parada del lote: mientras el
-   usuario revisa los archivos y el mensaje, también puede hacer las pruebas que le esperan.
+4. **Corte de commit** (ver COMMITS). Este es el único punto de parada previsto del lote:
+   mientras el usuario revisa los archivos y el mensaje, también puede hacer las pruebas que le
+   esperan.
 5. **Actualiza el recibo** con el hash del commit.
 6. **Sigue con el siguiente lote**, anunciándolo en una línea ("L02 de 4 cerrado: <hash>.
    Abro L03.").
@@ -171,7 +172,9 @@ propósito queda con `estado: descartado` y su porqué.
 
 - **Con `lotes: 1`**, el recibo ES el documento de la fase: se escribe directo con el nombre
   exacto que se indica al final de este prompt, con la plantilla de abajo, y no se crea
-  subcarpeta.
+  subcarpeta. **Salvo si ese único lote queda `fallido` o `descartado`:** entonces su recibo va
+  en la subcarpeta de recibos, como `L01 - <slug>.md`, y el documento de la fase no se escribe,
+  porque su existencia daría la fase por cerrada.
 - **Con más de un lote**, cada recibo va en la subcarpeta de recibos que se indica al final de
   este prompt, con el nombre `L0x - <slug>.md`, donde `<slug>` es el objetivo del lote en pocas
   palabras: solo letras, números, espacios y guiones; sin `:` `/` `\` `<` `>` `"` `|` `?` `*`
@@ -240,13 +243,13 @@ lotes: 4
 
 # Ejecución — <tarea>
 
-- **Plan:** `03 - Plan Técnico.md` · **Rama:** <rama> · **Cierre:** <AAAA-MM-DD>
+- **Plan:** `<documento de la Fase 3>` · **Rama:** <rama> · **Cierre:** <AAAA-MM-DD>
 - **Estado:** Fase cerrada sin pendientes | Fase cerrada con pendientes (ver abajo)
 
 ## Lotes
 | Lote | Objetivo | Estado | Commit | Recibo |
 |---|---|---|---|---|
-| L01 | … | verificado | `a1b2c3d` | `04 - Ejecución/L01 - ….md` |
+| L01 | … | verificado | `a1b2c3d` | `<subcarpeta de recibos>/L01 - <slug>.md` |
 
 ## Espera al usuario
 Las filas de "Espera al usuario" de cada recibo, copiadas sin reescribir. "Nada." si no hay.
@@ -263,14 +266,21 @@ escribe: el cierre limpio lo dice la línea Estado de arriba.)
 <!-- ranura: commits -->
 Política: **el agente hace el commit con el OK del usuario.**
 
+**Antes del primer commit de la fase**, comprueba en qué rama estás (`git branch --show-current`)
+y compárala con la rama que declara el plan. Si no coincide, o si es la rama principal del
+repositorio y el plan no dice que se trabaje ahí, detente y pregúntale al usuario. No cambies tú
+de rama.
+
 Al cerrar la verificación y el recibo de un lote:
 1. Muéstrale al usuario la lista exacta de archivos del lote y el mensaje de commit (el de la
    columna "Commit propuesto" del plan, ajustado si el lote cambió).
 2. Espera su confirmación en el chat. Sin confirmación no hay commit.
 3. Con la confirmación: `git add` con **esa lista de archivos, uno por uno** —nunca
-   `git add -A` ni `git add .`— y `git commit` con ese mensaje, en el repositorio del lote.
+   `git add -A`, `git add .`, `git add -u`, una carpeta entera ni `git commit -a`— y
+   `git commit` con ese mensaje, en el repositorio del lote.
 4. Si un hook falla o el commit pide una contraseña o passphrase, detente y díselo. Nunca uses
-   `--no-verify` ni te saltes la firma.
+   `--no-verify` ni te saltes la firma, y no uses `--amend`: cada lote es un commit nuevo, y
+   reescribir uno ya hecho mezclaría dos lotes.
 
 Nunca hagas `push`, no crees ni cambies de rama y no abras un PR. Eso es del usuario.
 <!-- /ranura -->
@@ -289,7 +299,8 @@ Nunca hagas `push`, no crees ni cambies de rama y no abras un PR. Eso es del usu
 - Emojis, en cualquier sección.
 - Cerrar la fase con una compuerta del plan rota sin decirlo.
 - Gastar el turno redactando en vez de implementar y verificar.
-- Hacer un commit sin el OK del usuario, o con `git add -A` / `git add .`.
+- Hacer un commit sin el OK del usuario; con `git add -A`, `git add .`, `git add -u`, una carpeta entera o `git commit -a`; o con `--amend`.
+- Hacer el primer commit sin haber comprobado la rama, o en la rama principal sin que el plan o el usuario lo digan.
 - Abrir un lote sin haber cerrado el anterior (recibo escrito y commit hecho o descartado).
 - Escribir el documento de la fase antes de cerrar el último lote, cuando hay más de uno.
 - Ejecutar un lote que depende de un pendiente heredado sin resolver.
@@ -352,6 +363,7 @@ Así se ve una ejecución que sirve. Son ejemplos reales de documentos aprobados
 9. ¿Dejé algún script desechable sin borrar?
 10. ¿Cada commit tuvo el OK del usuario, llevó solo los archivos de su lote y no hubo ningún push?
 11. ¿Cada lote cerrado tiene su recibo con `estado` y `commit` en el frontmatter?
-12. Con más de un lote, ¿escribí el documento de la fase solo al cerrar el último?
+12. Con más de un lote, ¿escribí el documento de la fase solo al cerrar el último? Con un solo lote fallido o descartado, ¿su recibo quedó en la subcarpeta y no como documento de la fase?
 13. ¿Nombré los pendientes heredados antes del primer lote, y no ejecuté ningún lote que dependiera de uno sin resolver?
 14. ¿Las decisiones nuevas tienen su **Base**?
+15. ¿Comprobé la rama antes del primer commit, y coincidía con la del plan?
