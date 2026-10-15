@@ -12,6 +12,54 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — El servidor deduce el proyecto de las raíces del cliente
+
+**Decisión.** El servidor pide al cliente sus raíces (MCP Roots: las carpetas que tiene abiertas)
+al terminar el initialize, y otra vez cuando el cliente avisa con `notifications/roots/list_changed`.
+Solo si el cliente declaró la capacidad `roots`: el SDK no lo comprueba, y la petición volvería con
+error. Cada URI pasa por `fileURLToPath` (que resuelve igual `file:///C:/…`, `file:///c:/…` y el
+`file:///c%3A/…` de VS Code, y decodifica espacios y acentos) y por `rutaReal`; nunca se manipula
+como texto. Las que fallan se descartan y quedan en el log.
+
+Las raíces se cruzan con los proyectos:
+
+| Coincidencia | Fuerza |
+|---|---|
+| La raíz es un repo del proyecto (según su `phase-gate.json` y `machine.json`) o está dentro de él | fuerte |
+| La raíz está dentro de `<DOCS>/<PROYECTO>` | fuerte |
+| Un repo del proyecto está dentro de la raíz | débil |
+
+Un solo proyecto con coincidencia fuerte, o ninguno fuerte y uno solo débil, es el proyecto; varios
+fuertes son ambiguos; cualquier otro caso (también varios débiles) no apunta a ninguno.
+
+**`project` pasa a ser opcional** en `start_task`, `switch_task`, `read_central_doc` y
+`write_central_doc` (con `task_name` + `file_name`), además de `get_phase_prompt` y los `/fN`, que ya
+lo eran. El orden de resolución: el `project` explícito; si no, el de las raíces; y solo para la
+compuerta y el aviso de pendientes, el único puntero, como antes. Si no se puede resolver, la tool
+falla con "No sé en qué proyecto estás: indica `project`.", con los candidatos si son varios. Cuando
+se deduce, la respuesta lo dice en una línea ("Proyecto deducido de la carpeta abierta: PROYECTO-A
+(la carpeta abierta `…` es el repo `api` de PROYECTO-A).") —en `read_central_doc`, como una parte
+aparte de la respuesta, para no mezclarla con el documento—. Estrenar un proyecto exige siempre
+`project`: un nombre nuevo no se deduce.
+
+**Amplía** la entrada del 2026-08-08 "La compuerta avisa, no bloquea, y la resuelve el servidor": el
+servidor resuelve ahora también el proyecto, con un dato que el cliente ya tiene y que el modelo no
+tiene que adivinar. De obligatorio a opcional es un cambio compatible para quien ya pasa `project`.
+
+**Por qué el puntero no se usa para todo.** El puntero dice cuál fue la última tarea de cada
+proyecto, no en qué proyecto está esta ventana. Para la compuerta, equivocarse cuesta un aviso de
+más; para elegir el preset, las reglas o el proyecto donde escribir, cuesta instrucciones o
+archivos equivocados. Las raíces sí dicen dónde está la ventana.
+
+**Las raíces se esperan.** Una tool llamada justo después del initialize espera a que llegue la
+respuesta de `roots/list` (como mucho 5 s): sin eso, la primera llamada de cada sesión no vería el
+proyecto. Si el cliente no responde, todo sigue como sin raíces.
+
+**Qué se descartó.** Deducir el proyecto de un repo que no está en ningún manifiesto, por el nombre
+de su carpeta: dos proyectos pueden tener un repo `api`, y un nombre parecido no es una prueba.
+
+---
+
 ## 2026-10-15 — El preset por defecto es `software`; la réplica pasa a `software-replica`
 
 **Decisión.** Los prompts de fábrica dejan de suponer un proyecto sin suite y con réplica de datos.

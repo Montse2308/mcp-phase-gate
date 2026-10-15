@@ -32,11 +32,13 @@ import {
   validarNombreVisible,
   validarSegmento,
 } from "./paths.js";
+import type { ArgumentosDeDocumento } from "./paths.js";
 import { contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerfano } from "./capas.js";
 import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
+import { errorSinProyecto, iniciarRoots, lineaDeDeduccion, proyectoPorRaices } from "./roots.js";
 import type { PhaseFile } from "./phases.js";
 import {
   diagnosticoShape,
@@ -70,6 +72,24 @@ function responder(texto: string): CallToolResult {
 
 function mensajeDe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// El proyecto de una llamada que lo necesita: el que se indica o, si no, el que deducen las raíces
+// del cliente. Si no se puede deducir, la llamada falla pidiéndolo (con los candidatos si hay varios).
+// `deducido` es la línea que la respuesta añade para que se vea de dónde salió.
+async function proyectoDeLaLlamada(mcp: McpServer, project: string | undefined): Promise<{ nombre: string; deducido: string | null }> {
+  if (project) return { nombre: project, deducido: null };
+  const porRaices = await proyectoPorRaices(mcp);
+  if (porRaices.tipo !== "unico") throw errorSinProyecto(porRaices);
+  return { nombre: porRaices.carpetaProyecto, deducido: lineaDeDeduccion(porRaices) };
+}
+
+// Para read_central_doc y write_central_doc: solo hace falta proyecto cuando se usa la forma
+// recomendada (task_name + file_name) sin project; con file_path, no.
+async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args: T): Promise<{ args: T; deducido: string | null }> {
+  if (args.project || args.file_path || !args.task_name || !args.file_name) return { args, deducido: null };
+  const { nombre, deducido } = await proyectoDeLaLlamada(mcp, undefined);
+  return { args: { ...args, project: nombre }, deducido };
 }
 
 // Un proyecto que no existe no impide entregar un prompt: se entrega sin su configuración, y la
@@ -155,6 +175,7 @@ export function crearServidor(): McpServer {
   );
 
   conectarLog(mcp);
+  iniciarRoots(mcp);
   registrarTools(mcp);
   registrarRecursos(mcp);
 
@@ -199,8 +220,14 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada, extra) => {
       const args = sinNulos(entrada);
-      const proj = args.project; // el schema ya le quitó los espacios
       const taskName = args.task_name;
+
+      // Sin project, el de la carpeta abierta. Un proyecto nuevo no se deduce: estrenarlo exige
+      // decir su nombre.
+      if (!args.project && args.crear_proyecto === true) {
+        throw new Error("Para estrenar un proyecto, indica su nombre en `project`.");
+      }
+      const { nombre: proj, deducido } = await proyectoDeLaLlamada(mcp, args.project); // el schema ya le quitó los espacios
 
       // Estrenar proyecto tiene que ser deliberado: sin esta puerta, un nombre mal escrito
       // creaba una carpeta suelta en la Documentación y nadie se enteraba hasta buscarla.
@@ -273,7 +300,7 @@ function registrarTools(mcp: McpServer): void {
 
       return responder(
         `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${contextoInicial}\n` +
-          `Tarea activa de ${carpetaProyecto}: ${taskName}.${aviso}`
+          `Tarea activa de ${carpetaProyecto}: ${taskName}.${aviso}${deducido ? `\n${deducido}` : ""}`
       );
     })
   );
@@ -291,11 +318,21 @@ function registrarTools(mcp: McpServer): void {
     sincronizandoTras(async (entrada) => {
       // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice ensamblarFase.
       const { phase, project, task_name } = sinNulos(entrada);
-      const opciones = { ...(project ? { project } : {}), ...(task_name ? { taskName: task_name } : {}) };
 
       // El proyecto del prompt (su preset, sus reglas, sus capas y el bloque de configuración) es el
-      // que se indica. El único puntero solo sirve para la compuerta y los pendientes, como antes.
-      const carpetaProyecto = project ? proyectoSiExiste(project) : null;
+      // que se indica o, si no, el de la carpeta abierta. El único puntero solo sirve para la
+      // compuerta y los pendientes, como antes.
+      let carpetaProyecto = project ? proyectoSiExiste(project) : null;
+      let deducido: string | null = null;
+      if (!project) {
+        const porRaices = await proyectoPorRaices(mcp);
+        if (porRaices.tipo === "unico") {
+          carpetaProyecto = porRaices.carpetaProyecto;
+          deducido = `> ${lineaDeDeduccion(porRaices)}`;
+        }
+      }
+      const delPrompt = project ?? carpetaProyecto;
+      const opciones = { ...(delPrompt ? { project: delPrompt } : {}), ...(task_name ? { taskName: task_name } : {}) };
 
       // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
       // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
@@ -325,7 +362,7 @@ function registrarTools(mcp: McpServer): void {
       for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
 
       // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
-      return responder([aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos].filter(Boolean).join("\n\n"));
+      return responder([deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos].filter(Boolean).join("\n\n"));
     })
   );
 
@@ -432,7 +469,8 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
-      const carpetaProyecto = requireProjectFolder(args.project);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project);
+      const carpetaProyecto = requireProjectFolder(nombre);
       const phases = fasesDe(carpetaProyecto);
       const taskName = args.task_name;
 
@@ -452,7 +490,7 @@ function registrarTools(mcp: McpServer): void {
 
       return responder(
         `Tarea activa de ${carpetaProyecto}: ${taskName}.\nFase: ${describeEstado(encontrada, phases)}\n` +
-          `Carpeta: ${encontrada.folderPath}`
+          `Carpeta: ${encontrada.folderPath}${deducido ? `\n${deducido}` : ""}`
       );
     })
   );
@@ -470,13 +508,17 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const docsBase = requireBasePath(DOCS);
-      const fullPath = resolveDocPath(sinNulos(entrada));
+      const { args, deducido } = await conProyecto(mcp, sinNulos(entrada));
+      const fullPath = resolveDocPath(args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 
-      return responder(leerTextoAcotado(fullPath));
+      // La línea de la deducción va aparte, para no mezclarla con el contenido del documento.
+      const resultado = responder(leerTextoAcotado(fullPath));
+      if (deducido) resultado.content.push({ type: "text", text: deducido });
+      return resultado;
     })
   );
 
@@ -495,8 +537,8 @@ function registrarTools(mcp: McpServer): void {
       annotations: anotaciones("Escribir documento", false, true, true),
     },
     sincronizandoTras(async (entrada, extra) => {
-      const args = sinNulos(entrada);
       const docsBase = requireBasePath(DOCS);
+      const { args, deducido } = await conProyecto(mcp, sinNulos(entrada));
       const fullPath = resolveDocPath(args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
@@ -570,7 +612,7 @@ function registrarTools(mcp: McpServer): void {
       // uno que ya existía no cambia la lista.
       if (!existia) mcp.sendResourceListChanged();
 
-      return responder(`Archivo escrito exitosamente en ${fullPath}${sufijo}`);
+      return responder(`Archivo escrito exitosamente en ${fullPath}${sufijo}${deducido ? `\n${deducido}` : ""}`);
     })
   );
 

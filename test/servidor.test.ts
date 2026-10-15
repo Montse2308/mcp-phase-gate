@@ -100,7 +100,9 @@ describe("tools/list", () => {
       const { tools } = await cliente.listTools();
       const porNombre = new Map(tools.map((t) => [t.name, t.inputSchema]));
 
-      assert.deepEqual([...(porNombre.get("start_task")?.required ?? [])].sort(), ["initial_context", "project", "task_name"]);
+      // `project` es opcional desde la Etapa 3: sin él, se deduce de la carpeta abierta (Roots).
+      assert.deepEqual([...(porNombre.get("start_task")?.required ?? [])].sort(), ["initial_context", "task_name"]);
+      assert.deepEqual(porNombre.get("switch_task")?.required, ["task_name"]);
       assert.deepEqual(porNombre.get("write_central_doc")?.required, ["content"]);
       assert.deepEqual(porNombre.get("get_phase_prompt")?.required, ["phase"]);
 

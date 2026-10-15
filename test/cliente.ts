@@ -7,9 +7,12 @@ import type { ClientCapabilities } from "@modelcontextprotocol/sdk/types.js";
 
 import { crearServidor } from "../src/servidor.js";
 
-export async function conectar(capacidades: ClientCapabilities = {}) {
+// `preparar` configura el cliente antes de conectar: por ejemplo, para que responda roots/list, que
+// el servidor pide en cuanto termina el initialize.
+export async function conectar(capacidades: ClientCapabilities = {}, preparar?: (cliente: Client) => void) {
   const servidor = crearServidor();
   const cliente = new Client({ name: "cliente-de-prueba", version: "1.0.0" }, { capabilities: capacidades });
+  preparar?.(cliente);
   const [delCliente, delServidor] = InMemoryTransport.createLinkedPair();
   await Promise.all([servidor.connect(delServidor), cliente.connect(delCliente)]);
   return {

@@ -71,6 +71,9 @@ const PROYECTO =
   "tool te devuelve los que hay. También los listan `list_tasks`, `get_orchestrator_status` y el recurso " +
   "`phase-gate://estado`.";
 
+// Donde el proyecto se puede deducir de la carpeta abierta (MCP Roots, Etapa 3).
+const DEDUCIBLE = " Si lo omites, se deduce de la carpeta que tienes abierta, si tu cliente la anuncia; si no se puede, la tool te lo pide.";
+
 const FASE =
   "Número de fase. Con los prompts de fábrica son 1 a 5; `get_orchestrator_status` y el recurso " +
   "`phase-gate://fases` listan las disponibles con su título y documento.";
@@ -82,7 +85,7 @@ const ARCHIVO =
 
 // ─── Shapes ─────────────────────────────────────────────────────────────────
 export const startTaskShape = {
-  project: obligatorio("project", { recortar: true }).describe(PROYECTO),
+  project: texto("project").trim().nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
   task_name: obligatorio("task_name").describe("Nombre de la tarea (creará una carpeta con este nombre)."),
   initial_context: obligatorio("initial_context").describe("El contexto, correo o requerimiento inicial completo."),
   crear_proyecto: booleano("crear_proyecto")
@@ -113,7 +116,8 @@ export const getPhasePromptShape = {
     .nullish()
     .describe(
       `${PROYECTO} Pásalo siempre que lo sepas —lo sabes por el repositorio que tienes abierto— para que se ` +
-        "pueda comprobar que no te saltas una fase. La tarea se toma de la activa de ese proyecto."
+        "pueda comprobar que no te saltas una fase. La tarea se toma de la activa de ese proyecto." +
+        DEDUCIBLE
     ),
   task_name: texto("task_name")
     .nullish()
@@ -131,7 +135,7 @@ export const listTasksShape = {
 };
 
 export const switchTaskShape = {
-  project: obligatorio("project", { recortar: true }).describe(PROYECTO),
+  project: texto("project").trim().nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
   task_name: obligatorio("task_name").describe(
     "Nombre de la carpeta de la tarea a activar. Si no existe, la tool te devuelve las que sí."
   ),
@@ -139,7 +143,7 @@ export const switchTaskShape = {
 
 // Los cuatro son opcionales por separado: qué combinación vale lo decide resolveDocPath.
 export const readCentralDocShape = {
-  project: texto("project").nullish().describe(`${PROYECTO} Úsalo junto con task_name y file_name.`),
+  project: texto("project").nullish().describe(`${PROYECTO} Úsalo junto con task_name y file_name.${DEDUCIBLE}`),
   task_name: texto("task_name").nullish().describe(TAREA),
   file_name: texto("file_name").nullish().describe(ARCHIVO),
   file_path: texto("file_path")

@@ -19,6 +19,7 @@ import { capasDeCuerpos, rutasDeCuerpos } from "./capas.js";
 import { promptsLayers } from "./config.js";
 import { log } from "./log.js";
 import { findProjectFolder } from "./paths.js";
+import { proyectoPorRaices } from "./roots.js";
 import { discoverPhases, parsePhaseFile, resolveCommandFile } from "./phases.js";
 
 // Todos los argumentos son opcionales: el texto de cada comando ya pide lo que falte, y así el
@@ -146,9 +147,16 @@ function registrar(mcp: McpServer, numero: number, titulo: string): RegisteredPr
     async (args: Argumentos): Promise<GetPromptResult> => {
       // El título se toma del registro vigente: puede haber cambiado desde que se registró.
       const vigente = registros.get(mcp)?.get(numero)?.titulo ?? titulo;
+      // Sin project, el de la carpeta abierta: el comando sale de sus capas y el modelo recibe su
+      // nombre en "Datos de esta invocación", para pasárselo a las tools.
+      let datos = args;
+      if (!args.project?.trim()) {
+        const porRaices = await proyectoPorRaices(mcp);
+        if (porRaices.tipo === "unico") datos = { ...args, project: porRaices.carpetaProyecto };
+      }
       return {
         description: descripcionDePrompt(numero, vigente),
-        messages: [{ role: "user", content: { type: "text", text: textoDelComando(numero, vigente, args, capasDelComando(args.project)) } }],
+        messages: [{ role: "user", content: { type: "text", text: textoDelComando(numero, vigente, datos, capasDelComando(datos.project)) } }],
       };
     }
   );
