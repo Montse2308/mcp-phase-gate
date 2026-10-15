@@ -12,8 +12,8 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { traducirError } from "../src/git.js";
-import { columnaDeConfiguracion, estadoDeRepo, lineaDeEstado, parsearStatus, rutaDeArchivoDeRepo } from "../src/repos.js";
+import { anularFiltros, traducirError } from "../src/git.js";
+import { columnaDeConfiguracion, estadoDeRepo, estadoDeRepoSincrono, lineaDeEstado, parsearStatus, rutaDeArchivoDeRepo } from "../src/repos.js";
 import type { RepoResuelto } from "../src/manifiesto.js";
 import { repoStatusSalidaShape } from "../src/schemas.js";
 import { conectar, textoDe } from "./cliente.js";
@@ -165,6 +165,56 @@ describe("estadoDeRepo con repos reales", () => {
     const estado = await estadoDeRepo(resuelto(repo));
     assert.equal(estado.esGit, true);
     assert.equal(fs.existsSync(marca), false, "la puerta única ejecutó core.fsmonitor");
+  });
+});
+
+describe("filtros de .gitattributes (hallazgo 1 de la auditoría de la Etapa 3)", () => {
+  // Un filtro clean o process de .git/config es un comando que git status ejecuta con un archivo
+  // que cambió de fecha. Mismo esquema que el de fsmonitor: control positivo y después la puerta.
+  for (const variable of ["clean", "process"]) {
+    it(`un filtro ${variable} trampa se dispara con un git status normal y NO con la puerta única (asíncrona ni síncrona)`, async () => {
+      const repo = carpetaTemporal("repo");
+      g(repo, "init", "-q");
+      fs.writeFileSync(path.join(repo, ".gitattributes"), "*.txt filter=trampa\n", "utf-8");
+      fs.writeFileSync(path.join(repo, "a.txt"), "uno\n", "utf-8");
+      g(repo, "add", ".");
+      g(repo, "commit", "-q", "-m", "uno");
+      const raiz = carpetaTemporal("trampa");
+      const marca = path.join(raiz, "MARCA").replace(/\\/g, "/");
+      const trampa = path.join(raiz, "trampa.js").replace(/\\/g, "/");
+      fs.writeFileSync(trampa, `require("fs").appendFileSync(${JSON.stringify(marca)}, "x"); process.stdin.pipe(process.stdout);\n`, "utf-8");
+      g(repo, "config", `filter.trampa.${variable}`, `node "${trampa}"`);
+      let segundos = 0;
+      const tocar = (): void => {
+        const fecha = new Date(Date.now() + ++segundos * 61_000);
+        fs.utimesSync(path.join(repo, "a.txt"), fecha, fecha);
+      };
+
+      tocar();
+      try {
+        execFileSync("git", ["status", "--porcelain=v2"], { cwd: repo, stdio: "ignore", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+      } catch {
+        // process puede romper el status: lo que importa es si el filtro corrió.
+      }
+      assert.equal(fs.existsSync(marca), true, "control: el filtro debía dispararse con un git status normal");
+      fs.rmSync(marca);
+
+      tocar();
+      const estado = await estadoDeRepo(resuelto(repo));
+      tocar();
+      const sincrono = estadoDeRepoSincrono(resuelto(repo));
+      assert.equal(fs.existsSync(marca), false, "la puerta única ejecutó el filtro");
+      assert.deepEqual([estado.esGit, estado.error, sincrono.esGit, sincrono.error], [true, null, true, null]);
+    });
+  }
+
+  it("anularFiltros anula cada driver definido y falla cerrado con un nombre que no se puede escribir", () => {
+    assert.deepEqual(anularFiltros("filter.lfs.clean git-lfs clean -- %f\nfilter.lfs.required true\nfilter.Mi.Filtro.process x\n", "r"), [
+      "-c", "filter.lfs.clean=", "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false",
+      "-c", "filter.Mi.Filtro.clean=", "-c", "filter.Mi.Filtro.smudge=", "-c", "filter.Mi.Filtro.process=", "-c", "filter.Mi.Filtro.required=false",
+    ]);
+    assert.deepEqual(anularFiltros("", "r"), []);
+    assert.throws(() => anularFiltros("filter.a=b.clean x\n", "r"), /no se puede desactivar/);
   });
 });
 

@@ -114,6 +114,15 @@ podría traerlo. Se comprobó en este equipo (git 2.51 para Windows): una trampa
 se dispara con un `git status` normal y no con la puerta; el test lo repite con su control positivo.
 `LC_ALL=C` hace que "not a git repository" se reconozca sin depender del idioma del equipo.
 
+**Los filtros de `.gitattributes` también se anulan** (añadido tras la auditoría de la etapa, que lo
+encontró). Un `filter.<nombre>.clean` o `.process` definido en `.git/config` es otro comando que
+`git status` ejecuta, con cualquier archivo que cambió de fecha, y con `GIT_OPTIONAL_LOCKS=0` en cada
+llamada. Antes de cada consulta, la puerta lee los drivers definidos con `git config --get-regexp
+'^filter\.'` (leer la configuración no ejecuta nada) y anula cada uno con `-c filter.<n>.clean=`,
+`smudge=`, `process=` y `required=false`; un nombre que no se puede escribir en un `-c` hace fallar
+la consulta. Comprobado con control positivo en git 2.51: con el valor vacío, ni `clean` ni `process`
+se ejecutan. Ni los hooks, ni `core.hooksPath`, ni `include.path` se ejecutan con `status`.
+
 **Sigue sin escribir en git** (principio 3 del plan): los commits los hace el agente con su terminal.
 Esta puerta es la única forma en que el servidor toca git, y solo lee.
 

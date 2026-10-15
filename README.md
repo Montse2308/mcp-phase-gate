@@ -405,7 +405,7 @@ On top of that, `write_central_doc` only writes **inside the folder of a task th
 | `read_central_doc` | Reads a file from the central documentation. **Recommended:** pass `project` + `task_name` + `file_name` and let the server build the path. It also accepts a relative `file_path`. |
 | `write_central_doc` | Writes/overwrites a file inside a task folder. Same parameters as `read_central_doc` plus `content`, and `force` for [protected documents](#-protected-documents) when your client doesn't support direct confirmations. |
 | `read_repo_file` | Reads a file from one of the project's repos **by its id** (`api`, `web`…), wherever it lives on this machine. Never reads anything under `.git` ([see below](#several-repositories-read_repo_file-and-repo_status)). |
-| `repo_status` | Branch, commit, ahead/behind its upstream and whether the tree is clean, for one repo or all the task's repos. Read-only: takes no locks and runs no hooks. |
+| `repo_status` | Branch, commit, ahead/behind its upstream and whether the tree is clean, for one repo or all the task's repos. Read-only: takes no locks and runs no commands the repo brings along (`core.fsmonitor`, `.gitattributes` filters). |
 | `read_cross_repo` | Reads a file from any folder in your repositories folder, by name, so you can check how another codebase solved something without switching windows. If the project declares its repos, use `read_repo_file`. |
 | `get_orchestrator_status` | The installation X-ray, same as [`doctor`](#-check-your-setup-doctor): package version and path, variables and where each came from, configuration, which prompt wins per phase, projects with their active task, preset, rules and repos, and findings. Plus the connected client, its capabilities and which project the open folder matches. Use it when something doesn't behave as you expect. |
 
@@ -564,7 +564,7 @@ If your client announces its open folders (MCP Roots), the server matches them a
 
 With the repos declared in the manifest, the AI uses them by id: `read_repo_file(repo: "api", path: "src/main.ts")` and `repo_status()` (the task's repos) or `repo_status(repo: "web")`. `read_repo_file` never reads anything under `.git` — not through a link either — so not `.gitignore` or `.gitmodules`; `.github` is fine.
 
-`repo_status` queries git through a single, read-only door with no side effects: it takes no `index.lock` (so it can't get in the way of a commit in progress) and **doesn't run a repo's `core.fsmonitor`**, which a plain `git status` would. If git isn't installed, or a repo belongs to another user ("dubious ownership"), it tells you what to do.
+`repo_status` queries git through a single, read-only door with no side effects: it takes no `index.lock` (so it can't get in the way of a commit in progress) and **doesn't run a repo's `core.fsmonitor` or `.gitattributes` filters**, which a plain `git status` would. If git isn't installed, or a repo belongs to another user ("dubious ownership"), it tells you what to do.
 
 ---
 

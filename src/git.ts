@@ -5,7 +5,7 @@
 // índice y tomar index.lock (y estorbar a un commit que el agente esté haciendo a la vez), y si el
 // repo configura core.fsmonitor, git EJECUTA ese comando. Un repo clonado de cualquier sitio podría
 // traerlo. Por eso toda llamada pasa por aquí, con:
-//   - `-c core.fsmonitor=false` delante de todo;
+//   - `-c core.fsmonitor=false` delante de todo, y cada filtro de .gitattributes anulado (ver abajo);
 //   - GIT_OPTIONAL_LOCKS=0, para que status no tome locks opcionales;
 //   - GIT_TERMINAL_PROMPT=0, para que nada se quede esperando una contraseña;
 //   - LC_ALL=C, para que los mensajes de error no dependan del idioma del equipo;
@@ -60,31 +60,71 @@ function opcionesDe(dir: string) {
 
 const ARGUMENTOS_FIJOS = ["-c", "core.fsmonitor=false"];
 
+// Los filtros de .gitattributes (`filter.<nombre>.clean`, `.smudge`, `.process`) también son comandos
+// que git ejecuta: `git status` pasa por el filtro clean un archivo que cambió de fecha, y como
+// GIT_OPTIONAL_LOCKS=0 no refresca el índice, lo haría en cada llamada. Un `.git/config` manipulado
+// podría traer uno, igual que un core.fsmonitor (hallazgo 1 de la auditoría de la Etapa 3). Leer la
+// configuración no ejecuta nada, así que primero se leen los nombres de los drivers definidos (en
+// cualquier ámbito) y cada uno se anula con -c. Comprobado con control positivo en git 2.51: con el
+// valor vacío, ni clean ni process se ejecutan.
+const CONSULTA_DE_FILTROS = ["config", "--get-regexp", "^filter\\."];
+
+export function anularFiltros(salidaDeConfig: string, dir: string): string[] {
+  const nombres = new Set<string>();
+  for (const linea of salidaDeConfig.split(/\r?\n/)) {
+    const clave = linea.split(/\s/, 1)[0] ?? "";
+    if (!clave.startsWith("filter.")) continue;
+    nombres.add(clave.slice("filter.".length, clave.lastIndexOf(".")));
+  }
+  const args: string[] = [];
+  for (const nombre of nombres) {
+    // Un nombre que no se puede escribir en un -c sin ambigüedad no se puede anular: se falla cerrado.
+    if (!nombre || /[=\s]/.test(nombre)) throw new ErrorDeGit(`${dir} define un filtro de git con un nombre raro ("${nombre}") que no se puede desactivar; no se consulta.`, "otro");
+    for (const variable of ["clean", "smudge", "process"]) args.push("-c", `filter.${nombre}.${variable}=`);
+    args.push("-c", `filter.${nombre}.required=false`);
+  }
+  return args;
+}
+
+// `git config --get-regexp` sale con 1 cuando no encuentra nada: eso no es un error.
+const sinCoincidencias = (codigo: unknown): boolean => codigo === 1;
+
 // Con un cwd que no existe, execFile da ENOENT y se confundiría con "git no está instalado".
 function siNoEsCarpeta(dir: string): ErrorDeGit | null {
   return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? null : new ErrorDeGit(`${dir} no existe o no es una carpeta.`, "otro");
 }
 
-export function git(dir: string, args: readonly string[]): Promise<string> {
-  const noEs = siNoEsCarpeta(dir);
-  if (noEs) return Promise.reject(noEs);
-
+function ejecutar(dir: string, args: readonly string[]): Promise<{ stdout: string; codigo: number | null }> {
   return new Promise((resolve, reject) => {
     execFile("git", [...ARGUMENTOS_FIJOS, ...args], opcionesDe(dir), (error, stdout, stderr) => {
-      if (error) reject(traducirError(error, stderr, dir));
-      else resolve(stdout);
+      if (error && !(args === CONSULTA_DE_FILTROS && sinCoincidencias(error.code))) reject(traducirError(error, stderr, dir));
+      else resolve({ stdout, codigo: error ? Number(error.code) : 0 });
     });
   });
 }
 
-// La misma puerta, síncrona: para el diagnóstico, que doctor ejecuta de una vez en la terminal.
-export function gitSincrono(dir: string, args: readonly string[]): string {
+export async function git(dir: string, args: readonly string[]): Promise<string> {
   const noEs = siNoEsCarpeta(dir);
   if (noEs) throw noEs;
+  const filtros = anularFiltros((await ejecutar(dir, CONSULTA_DE_FILTROS)).stdout, dir);
+  return (await ejecutar(dir, [...filtros, ...args])).stdout;
+}
+
+function ejecutarSincrono(dir: string, args: readonly string[]): string {
   try {
     return execFileSync("git", [...ARGUMENTOS_FIJOS, ...args], { ...opcionesDe(dir), stdio: ["ignore", "pipe", "pipe"] });
   } catch (error) {
-    const fallo = error as { code?: string; signal?: string; message: string; stderr?: string };
+    const fallo = error as { code?: string; status?: number; signal?: string; message: string; stderr?: string };
+    if (args === CONSULTA_DE_FILTROS && sinCoincidencias(fallo.status)) return "";
     throw traducirError({ code: fallo.code, killed: fallo.signal === "SIGTERM", message: fallo.message }, String(fallo.stderr ?? ""), dir);
   }
+}
+
+// La misma puerta, síncrona: solo para `doctor`, que se ejecuta de una vez en la terminal. El servidor
+// usa siempre la asíncrona, para no bloquear el resto de mensajes mientras git responde.
+export function gitSincrono(dir: string, args: readonly string[]): string {
+  const noEs = siNoEsCarpeta(dir);
+  if (noEs) throw noEs;
+  const filtros = anularFiltros(ejecutarSincrono(dir, CONSULTA_DE_FILTROS), dir);
+  return ejecutarSincrono(dir, [...filtros, ...args]);
 }

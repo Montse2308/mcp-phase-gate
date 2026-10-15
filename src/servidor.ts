@@ -698,7 +698,7 @@ function registrarTools(mcp: McpServer): void {
       title: "Estado de git de los repos",
       description:
         "Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo del proyecto o de todos los " +
-        "de la tarea activa. Solo lee: no toma locks ni ejecuta hooks.",
+        "de la tarea activa. Solo lee: no toma locks ni ejecuta comandos del repo (core.fsmonitor, filtros de .gitattributes).",
       inputSchema: repoStatusShape,
       outputSchema: repoStatusSalidaShape,
       annotations: anotaciones("Estado de git de los repos", true, false, true),

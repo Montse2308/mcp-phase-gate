@@ -425,7 +425,7 @@ Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea qu
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo dentro de la carpeta de una tarea. Mismos parámetros que `read_central_doc` + `content`, y `force` para los [documentos protegidos](#-documentos-protegidos) cuando tu cliente no admite confirmaciones directas. |
 | `read_repo_file` | Lee un archivo de un repo del proyecto **por su id** (`api`, `web`…), esté donde esté en este equipo. Nunca lee nada de `.git` ([ver abajo](#varios-repositorios-read_repo_file-y-repo_status)). |
-| `repo_status` | Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo o de todos los de la tarea. Solo lee: no toma locks ni ejecuta hooks. |
+| `repo_status` | Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo o de todos los de la tarea. Solo lee: no toma locks ni ejecuta comandos que traiga el repo (`core.fsmonitor`, filtros de `.gitattributes`). |
 | `read_cross_repo` | Lee un archivo de cualquier carpeta de tu carpeta de repositorios, por nombre (ej. desde `repo-a` consultar cómo `repo-b` maneja un endpoint) sin cambiar de ventana. Si el proyecto declara sus repos, usa `read_repo_file`. |
 | `get_orchestrator_status` | La radiografía de la instalación, igual que [`doctor`](#-revisar-la-instalación-doctor): versión y ruta del paquete, variables y de dónde salió cada una, configuración, qué prompt gana en cada fase, proyectos con su tarea activa, preset, reglas y repos, y avisos. Además, el cliente conectado, sus capacidades y con qué proyecto coincide la carpeta abierta. Úsala cuando algo no se comporte como esperas. |
 
@@ -584,7 +584,7 @@ Si tu cliente anuncia sus carpetas abiertas (MCP Roots), el servidor las cruza c
 
 Con los repos declarados en el manifiesto, la IA los usa por su id: `read_repo_file(repo: "api", path: "src/main.ts")` y `repo_status()` (los de la tarea) o `repo_status(repo: "web")`. `read_repo_file` nunca lee nada de `.git` —tampoco a través de un enlace—, así que `.gitignore` o `.gitmodules` tampoco; `.github` sí.
 
-`repo_status` consulta git por una sola puerta, de solo lectura y sin efectos: no toma `index.lock` (no estorba a un commit en curso) y **no ejecuta el `core.fsmonitor` de un repo**, que `git status` normal sí ejecutaría. Si git no está instalado, o un repo es de otro usuario ("dubious ownership"), te lo dice con lo que hay que hacer.
+`repo_status` consulta git por una sola puerta, de solo lectura y sin efectos: no toma `index.lock` (no estorba a un commit en curso) y **no ejecuta el `core.fsmonitor` ni los filtros de `.gitattributes` de un repo**, que `git status` normal sí ejecutaría. Si git no está instalado, o un repo es de otro usuario ("dubious ownership"), te lo dice con lo que hay que hacer.
 
 ---
 
