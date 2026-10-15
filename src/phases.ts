@@ -8,7 +8,19 @@ import { promptsLayers } from "./config.js";
 import { claveDeNombre, validarSegmento } from "./paths.js";
 
 // Las reglas globales se anteponen a cada fase.
-const GLOBAL_RULES_FILE = "global-rules.md";
+export const GLOBAL_RULES_FILE = "global-rules.md";
+
+// Comando de cada fase (`/fN`): `comandos/fN.md` dentro de una capa de prompts. Gana la capa más
+// alta que lo tenga, igual que las fases; sin ninguno, la fase usa un texto genérico.
+export const CARPETA_COMANDOS = "comandos";
+
+export function resolveCommandFile(numero: number, capas: string[] = promptsLayers()): string | null {
+  for (const base of [...capas].reverse()) {
+    const ruta = path.join(base, CARPETA_COMANDOS, `f${numero}.md`);
+    if (fs.statSync(ruta, { throwIfNoEntry: false })?.isFile()) return ruta;
+  }
+  return null;
+}
 
 // Acepta "fase-1-descubrimiento.md" y también "phase-1-discovery.md",
 // para que un juego de prompts en inglés funcione sin tocar el código.
@@ -33,7 +45,7 @@ export type PhaseFile = {
 // tests va siempre en LF y sin BOM. Con el BOM delante, el frontmatter no se reconocía y la fase
 // se quedaba sin documento.
 function aLF(texto: string): string {
-  return texto.replace(/^﻿/, "").replace(/\r\n/g, "\n");
+  return texto.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
 }
 
 // Quita los marcadores de ranura y conserva su contenido. El modelo nunca los ve.
@@ -222,13 +234,19 @@ export function loadPhasePrompt(phase: number, capas: string[] = promptsLayers()
 // fábrica, no se suman: concatenar dos juegos de reglas hace imposible saber de qué archivo
 // salió la instrucción que estorbó cuando algo sale raro, que es justo el momento en que hay
 // que saberlo. Si quieres las de fábrica y algo más, las copias y añades.
-function resolveGlobalRules(capas: string[]): string | null {
+export function resolveGlobalRules(capas: string[] = promptsLayers()): string | null {
   for (const base of [...capas].reverse()) {
     const ruta = path.join(base, GLOBAL_RULES_FILE);
     if (fs.existsSync(ruta)) return ruta;
   }
 
   return null;
+}
+
+// El texto de un prompt propio tal como lo ve el modelo: en LF y sin BOM. Lo usan quienes leen
+// un archivo de prompts fuera de este módulo, como el diagnóstico.
+export function leerPromptNormalizado(ruta: string): string {
+  return aLF(fs.readFileSync(ruta, "utf-8"));
 }
 
 // Bloque que se añade al final del prompt con los nombres exactos de los documentos: el que
