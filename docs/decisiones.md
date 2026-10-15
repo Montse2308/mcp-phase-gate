@@ -136,13 +136,14 @@ cada cliente y remite a la fuente.
 **Resuelve** "Lo que esta decisión no resuelve" de la entrada del 2026-08-07 "La configuración
 por dispositivo no vive en el repo": los comandos vivían solo en la carpeta del usuario y
 editarlos en un equipo dejaba al otro con la versión vieja. Ahora llegan con el paquete, a
-cualquier cliente que muestre prompts. **Amplía** la del 2026-08-08 que los versionó en
+cualquier cliente que muestre prompts. **Amplía** la del 2026-08-08 "El servidor se llama `phase-gate` y deja de presuponer Cursor", que los versionó en
 `.claude/commands/`: esa copia sigue, pero ya no es la que manda.
 
 **Por qué el prompt no incluye el prompt de la fase.** `/f4` podría devolver ya el texto de
 `get_phase_prompt(4)` y ahorrar una llamada. Se descartó: serían dos caminos para recibir el
 mismo prompt, y en uno de ellos la compuerta no sabría el `project`. El comando sigue siendo
-orquestación, como decidió la entrada del 2026-08-08.
+orquestación, como decidió la entrada del 2026-08-08 "El nombre del documento lo declara el prompt
+de su fase".
 
 **Por qué todos los argumentos son opcionales.** Algunos clientes parten los argumentos de un
 prompt por espacios. Con argumentos obligatorios, un contexto largo no cabría; con opcionales,

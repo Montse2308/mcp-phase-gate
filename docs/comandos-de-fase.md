@@ -16,7 +16,7 @@ README):
 |---------|-----------------|
 | Claude Code | `/<clave>:f1 (MCP)` en el menú de `/`; también acepta `/mcp__<clave>__f1` |
 | Cursor | En el menú de prompts MCP del chat |
-| VS Code | En el menú de `/` del chat, con el nombre del servidor delante |
+| VS Code | En el menú de `/` del chat, con el nombre del servidor delante; su documentación se contradice entre `/<clave>.f1` y `mcp.<clave>.f1` |
 
 `<clave>` es el nombre con el que registraste el servidor en tu cliente (por ejemplo
 `mcp-phase-gate`). Si ya lo tienes registrado, **conserva esa clave**: cambiarla cambia el
