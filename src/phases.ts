@@ -5,6 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { promptsLayers } from "./config.js";
+import { log } from "./log.js";
 import { claveDeNombre, validarSegmento } from "./paths.js";
 
 // Las reglas globales se anteponen a cada fase.
@@ -68,7 +69,7 @@ const RESTO_DE_MARCADOR = /<!--[^\n]*?ranura/i;
 function entregable(texto: string, archivo: string): string {
   const limpio = quitarMarcadores(texto);
   if (RESTO_DE_MARCADOR.test(limpio)) {
-    console.error(`[orquestador] ${archivo} tiene un marcador de ranura que no se reconoce: llega tal cual al modelo.`);
+    log("warning", `${archivo} tiene un marcador de ranura que no se reconoce: llega tal cual al modelo.`);
   }
   return limpio.trim();
 }
@@ -83,7 +84,7 @@ function leerRecibos(valor: string | undefined, archivo: string): string | undef
     if (segmento.startsWith(".")) throw new Error("no puede empezar por punto.");
     return segmento;
   } catch (error: any) {
-    console.error(`[orquestador] Se ignora el frontmatter recibos de ${archivo}: ${error.message}`);
+    log("warning", `Se ignora el frontmatter recibos de ${archivo}: ${error.message}`);
     return undefined;
   }
 }
@@ -101,8 +102,9 @@ function descartarRecibosQueChocan(phases: Map<number, PhaseFile>): void {
 
   for (const datos of phases.values()) {
     if (datos.recibos && documentos.has(claveDeNombre(datos.recibos))) {
-      console.error(
-        `[orquestador] Se ignora el frontmatter recibos de ${datos.file}: ` +
+      log(
+        "warning",
+        `Se ignora el frontmatter recibos de ${datos.file}: ` +
           `"${datos.recibos}" es el nombre de un documento de fase.`
       );
       datos.recibos = undefined;
@@ -294,14 +296,4 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
   }
 
   return lineas.join("\n");
-}
-
-export function describePhases(): string {
-  const available = discoverPhases();
-  if (available.size === 0) return "No se encontraron prompts de fase.";
-
-  return [...available.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([number, { title }]) => `${number}: ${title}`)
-    .join(", ");
 }

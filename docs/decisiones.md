@@ -12,6 +12,53 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Las tools se registran en `McpServer`; sus descripciones son estáticas y la parte que cambia vive en Resources y Prompts
+
+**Decisión.** El servidor pasa de la clase `Server` con un `switch` sobre `CallToolRequestSchema`
+a `McpServer`, con un `registerTool` por tool. Queda repartido así:
+
+- `src/servidor.ts` exporta `crearServidor()`, que registra las tools y no conecta ningún
+  transporte. `src/index.ts` solo despacha: la línea de comandos o el servidor por stdio.
+  Los tests conectan el servidor a un cliente con un transporte en memoria.
+- Cada tool recibe su shape de `src/schemas.ts`. El SDK genera el JSON Schema que ve el cliente
+  y valida cada llamada antes del callback. `validarLlamada` desaparece: los mensajes en español
+  que nombran el campo ("Falta `task_name`.", "`phase` debe ser un número, por ejemplo 3") van
+  ahora en cada campo del shape, y el SDK los entrega detrás de su prefijo en inglés
+  (`Input validation error: Invalid arguments for tool …`). Los callbacks lanzan `Error`, y el
+  SDK los convierte en `isError`.
+- Todas las tools declaran sus cuatro anotaciones (`readOnlyHint`, `destructiveHint`,
+  `idempotentHint`, `openWorldHint`) y un `title`. Los valores por defecto del protocolo son
+  pesimistas (destructiva y de mundo abierto): sin declararlos, un cliente cauto pediría permiso
+  hasta para listar tareas. Solo `write_central_doc` es destructiva, y ninguna es de mundo
+  abierto.
+- El log pasa del prefijo `[orquestador]` a `[mcp-phase-gate]`, en `src/log.ts`. Se declara la
+  capacidad `logging`: cada línea va a stderr y, con un cliente conectado, también como
+  `notifications/message`.
+
+**Reemplaza** el comentario de la caché estática de descripciones de `src/index.ts`. Las
+descripciones de `project` y de `phase` se armaban al arrancar con la lista de proyectos y de
+fases, y se quedaban viejas en cuanto alguien creaba una carpeta con el cliente abierto, porque
+el cliente no vuelve a pedir la lista de tools. Ahora son estáticas y remiten a los recursos
+`phase-gate://estado` y `phase-gate://fases` (llegan en esta misma etapa), que sí pueden
+notificar cuando cambian. Con descripciones estáticas, la lista de tools no cambia nunca y no
+se emite `tools/list_changed`.
+
+**Lo que cambia para el cliente, sin cambiar lo que se acepta.** El JSON Schema declara ahora
+`phase` como `integer` (antes `number`, aunque el servidor ya rechazaba los decimales) y los
+opcionales como `["string", "null"]` (el servidor ya aceptaba `null` desde la Etapa 0). Los
+mensajes de error pierden el prefijo `Error ejecutando tool <x>:` y, si falla la validación,
+ganan el del SDK.
+
+**Qué no cambia.** Los nombres, los parámetros y la semántica de las 8 tools. Los E2E de las
+Etapas 0 y 1 pasan sin tocarlos: comparan subcadenas del mensaje desde la Etapa 0 precisamente
+para sobrevivir a este prefijo (riesgo E2-R1).
+
+**Qué se descartó.** Seguir validando con `validarLlamada` y pasarle al SDK un esquema
+permisivo. Habría conservado el formato exacto de los mensajes, pero el JSON Schema que ve el
+cliente ya no saldría de los shapes, y serían dos fuentes para lo mismo.
+
+---
+
 ## 2026-10-15 — El `.env` se lee con un lector propio sobre `util.parseEnv`, sin `dotenv`
 
 **Decisión.** `src/config.ts` lee el `.env` de la raíz del paquete con un lector propio:

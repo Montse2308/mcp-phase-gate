@@ -15,6 +15,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MODULE_DIR, stateDir, stateFile } from "./config.js";
+import { log } from "./log.js";
 import { claveDeNombre, findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
 import type { PhaseFile } from "./phases.js";
 
@@ -78,7 +79,7 @@ export function limpiarEstadoViejo(): void {
     try {
       if (fs.existsSync(viejo)) {
         fs.unlinkSync(viejo);
-        console.error(`[orquestador] Estado en formato anterior eliminado: ${viejo}`);
+        log("info", `Estado en formato anterior eliminado: ${viejo}`);
       }
     } catch {
       // Que no se pueda borrar no impide trabajar: el archivo viejo ya no se lee.
