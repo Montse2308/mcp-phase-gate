@@ -8,7 +8,8 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { DOCS, NOMBRES_LOGICOS, REPOS, SERVER_NAME, errorDeEnv, leerVariable, requireBasePath } from "./config.js";
-import { ejecutarCli } from "./cli.js";
+import { SALIDA_DE_PROCESO, ejecutarCli } from "./cli.js";
+import { ejecutarInit, entornoDelProceso } from "./init.js";
 import { log } from "./log.js";
 import { crearServidor } from "./servidor.js";
 import { limpiarEstadoViejo } from "./tasks.js";
@@ -43,6 +44,10 @@ async function main() {
   const resultado = ejecutarCli(process.argv.slice(2));
   if (resultado.accion === "salir") {
     process.exitCode = resultado.codigo;
+    return;
+  }
+  if (resultado.accion === "init") {
+    process.exitCode = await ejecutarInit(resultado.opciones, entornoDelProceso(SALIDA_DE_PROCESO));
     return;
   }
 

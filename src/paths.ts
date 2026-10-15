@@ -107,9 +107,9 @@ export function validarNombreVisible(valor: string, campo: string): string {
 // las carpetas que no son proyectos, y da de alta uno nuevo con solo crearle su subcarpeta.
 // Si la subcarpeta está vacía la regla no se puede aplicar y vale cualquier carpeta.
 // Las carpetas con punto nunca son proyecto: .obsidian o .git en la raíz de la Documentación.
-export function discoverProjects(): Map<string, string> {
+// `base` es para quien recorre otra Documentación que la del entorno: init --docs --migrate.
+export function discoverProjects(base: string = requireBasePath(DOCS)): Map<string, string> {
   const proyectos = new Map<string, string>(); // clave en minúsculas -> nombre real de la carpeta
-  const base = requireBasePath(DOCS);
   const subdir = tasksSubdir();
 
   for (const entrada of fs.readdirSync(base, { withFileTypes: true })) {

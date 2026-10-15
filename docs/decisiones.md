@@ -12,6 +12,72 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — `init` escribe la configuración del cliente con copia, diff y confirmación
+
+**Decisión.** `npx mcp-phase-gate init` registra el servidor en los clientes de este equipo:
+
+- **Claude Code** (si `claude --version` responde): `claude mcp add <clave> --scope user --env
+  PHASE_GATE_DOCS_PATH=… --env PHASE_GATE_REPOS_PATH=… -- npx -y mcp-phase-gate`.
+- **Cursor** (si existe `~/.cursor/`): una entrada en `~/.cursor/mcp.json`, bajo `mcpServers`. En
+  Windows, con `PHASE_GATE_ELICITATION=off`, por el bug abierto en el que el formulario de
+  confirmación no aparece (validación V4).
+- **VS Code** (si existe su carpeta de usuario): una entrada en su `mcp.json`, bajo `servers`, con
+  `"type": "stdio"`.
+
+Las rutas salen de `--docs`/`--repos`, de las variables, o se preguntan en una terminal; sin
+terminal y sin ellas, es un error. Además: `--comandos` copia los `/fN` (con la marca `<!-- generado
+por mcp-phase-gate init vX.Y.Z -->`) a `~/.claude/commands/` o `~/.cursor/commands/`;
+`--migrate` crea `phase-gate.json` con `"preset": "software-replica"` (u otro con `--preset`) en
+los proyectos que no lo tienen, o con `--solo-este-equipo` escribe `presetPorDefecto` en
+`machine.json`; `--dry-run` dice todo lo que haría sin escribir nada. Al final imprime cómo poner
+un candado a `git push` y ejecuta `doctor`. Sale con 0, con 1 si alguna acción no se hizo, y con 2
+si los argumentos no valen.
+
+**Cómo escribe en archivos que no son suyos.**
+
+1. Un archivo que no existe, o que existe vacío (el `mcp.json` de VS Code puede tener 0 bytes), es
+   `{}`.
+2. Se toleran comentarios y comas finales, solo para leer. Un JSON que aun así no se entiende **no
+   se toca**: se imprime el bloque para pegarlo a mano.
+3. **Un registro que ya existe no se duplica**: si otra clave ya ejecuta `mcp-phase-gate` (un `npx`
+   o un `build/index.js` de un clon), se actualiza esa entrada y **conserva su clave**, porque
+   cambiarla cambia el nombre de todas las tools y los prompts y rompe los permisos ya concedidos.
+   Solo con `--clave` explícita se renombra, y se avisa. Se cambian las dos rutas (con los nombres
+   `PHASE_GATE_*`, quitando sus alias `ORQUESTADOR_*`, que quedarían en discrepancia); el comando y
+   el resto de variables se conservan.
+4. Si la entrada queda igual: "sin cambios". Si cambia, o si al reescribir se perderían comentarios,
+   se muestra el diff y hace falta `--yes` o confirmarlo en la terminal. Una clave que ya usa otro
+   servidor no se pisa nunca.
+5. Antes de escribir, copia `<archivo>.bak-AAAAMMDD-HHMMSS`. Se escribe JSON estricto con dos
+   espacios.
+
+Un comando `/fN` sin la marca es de la persona y no se pisa sin `--yes` (entonces, con copia).
+`--migrate` solo crea manifiestos, nunca sobrescribe.
+
+**En Claude Code, un registro que ya existe no se toca.** `claude mcp list` enseña la clave y el
+comando, no las variables, así que no hay diff posible; init dice el `claude mcp remove` y el
+`claude mcp add` con la misma clave para hacerlo a mano. Se probó el formato de `mcp list` en este
+equipo (Claude Code 2.1, `clave: comando - estado`), y un `init --dry-run --cliente todos` contra la
+configuración real: reconoce el registro existente de Cursor y propone el diff sin escribir nada.
+
+**El candado de `git push`**, solo informativo y graduado con honestidad: las reglas `deny` de
+Claude Code (`Bash(git push *)` **y** `PowerShell(git push *)`, validación V6) no son una frontera
+de seguridad (`git -C . push` las esquiva); un hook `pre-push` es más firme pero `--no-verify` lo
+salta; la única frontera real está en el remoto (protección de ramas) o en que el agente no tenga
+credenciales.
+
+**Reemplaza en parte** el descarte del 2026-08-10, en "Varias documentaciones se resuelven
+registrando el servidor dos veces, no con código", de una app que escribiera la configuración "para
+un público que ya edita un `mcp.json` a mano". La app sigue descartada; lo que cambia es que
+escribir la configuración ya no es un paso manual, porque con la 3.0 hay más que escribir (rutas,
+presets, comandos) y equivocarse en un JSON a mano deja el cliente sin el servidor.
+
+**Qué se descartó.** Que init escriba también el candado de `git push` en la configuración de Claude
+Code: es una decisión de seguridad de la persona, y presentarlo como algo que init "instala" haría
+creer que es una frontera.
+
+---
+
 ## 2026-10-15 — Git se consulta por una sola puerta, de solo lectura y sin efectos
 
 **Decisión.** Toda llamada a git pasa por `git(dir, args)` de `src/git.ts`: `execFile` (sin
@@ -1381,7 +1447,9 @@ pero por accidente, que es la peor forma de funcionar. Ahora se declara qué se 
 
 > **Matizada** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`; cada equipo,
 > un `machine.json`": ya existe un formato de configuración, pero los espacios con `use_space`
-> siguen descartados.
+> siguen descartados. Y **reemplazada en parte** el mismo día por "`init` escribe la configuración
+> del cliente con copia, diff y confirmación": el descarte de la app de escritorio sigue, pero
+> escribir la configuración del cliente ya no se deja a mano.
 
 **Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se
 documenta como un patrón de configuración: **registrar el servidor más de una vez** en el
