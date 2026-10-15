@@ -28,13 +28,18 @@ largo puede ir pegado después del comando como texto normal del chat.
 
 **Como comandos de archivo.** Para quien trabaja en este repo, o con un cliente que no muestra
 bien los prompts MCP, hay una copia idéntica en [`.claude/commands/`](../.claude/commands), que
-Claude Code lee al abrir el repo. Para usarlos en Cursor sin prompts MCP, copia los archivos de
-`prompts/es/comandos/` a `~/.cursor/commands/`. Un test (`test/docs.test.ts`) obliga a que
-`.claude/commands/` y `prompts/es/comandos/` sean idénticos.
+Claude Code lee al abrir el repo. Para usarlos en otros proyectos, o en Cursor sin prompts MCP,
+`npx mcp-phase-gate init --comandos` copia los de `prompts/es/comandos/` a `~/.claude/commands/`
+o a `~/.cursor/commands/`, con una marca en la primera línea; un archivo tuyo, sin la marca, no
+lo pisa. Un test (`test/docs.test.ts`) obliga a que `.claude/commands/` y `prompts/es/comandos/`
+sean idénticos.
 
 **Comandos propios.** Un `comandos/fN.md` en tu carpeta de prompts propia
-(`PHASE_GATE_PROMPTS_PATH`) gana al de fábrica, igual que los prompts de fase. Una fase sin
-comando —por ejemplo, una `fase-6` que añadas tú— recibe su `/f6` con un texto genérico que
+(`PHASE_GATE_PROMPTS_PATH`) gana al de fábrica, igual que los prompts de fase; uno en la capa de
+un proyecto (`<DOCS>/<PROYECTO>/.phase-gate/prompts/comandos/`) gana solo en ese proyecto, cuando
+el comando se pide con su `project` o el servidor lo deduce de la carpeta abierta.
+`npx mcp-phase-gate eject comando-f4 --a global` te copia el texto actual para empezar. Una fase
+sin comando —por ejemplo, una `fase-6` que añadas tú— recibe su `/f6` con un texto genérico que
 hace lo mismo: buscar la tarea activa, pedir el prompt de la fase y guardar su documento.
 
 ## Qué carga cada uno, y qué no

@@ -4,7 +4,7 @@
 
 An MCP (Model Context Protocol) server that splits every incoming requirement into **five gated phases**, and forces each one to leave a written document behind before the next can start. Your client's panel will show it as `mcp-phase-gate`.
 
-> Tool names and most parameters are in English, but the tool descriptions and the server's messages are in Spanish, and so is one parameter: `crear_proyecto`. The **phase prompts that drive the AI's behaviour are written in Spanish**, so the documents it produces come out in Spanish. If you want them in another language, translate `prompts/*.md` — no code changes needed.
+> Tool names and most parameters are in English, but the tool descriptions and the server's messages are in Spanish, and so is one parameter: `crear_proyecto`. The **phase prompts that drive the AI's behaviour are written in Spanish**, so the documents it produces come out in Spanish. If you want them in another language, translate `prompts/es/*.md` into a layer of your own — no code changes needed.
 
 ## The problem
 
@@ -34,7 +34,9 @@ flowchart TD
 
 And between one phase and the next there is a **gate**, which is what gives the server its name: ask for a phase while skipping the previous one and the server notices and warns you ([see below](#-the-gate-skipping-a-phase-stops-being-invisible)).
 
-In phase 4 the AI commits each batch only with your OK; it never pushes or opens the PR. In phase 5 it only reads.
+In phase 4 the AI commits each batch only with your OK (that's the default policy; a project can choose another, [see below](#-per-project-configuration)); it never pushes or opens the PR, under any policy. In phase 5 it only reads.
+
+Since 3.0 the flow adapts to the kind of work through **presets**: code with or without a test suite, a requirement that spans several repositories, maintaining an AI agent, or research whose deliverable is a report. The five phases and their gate stay the same; only the sections that need to change do.
 
 ## Who it's for
 
@@ -88,6 +90,16 @@ Two routes, same destination:
 - **From source** — if you're going to edit the prompts in place, or contribute.
 
 The code is identical everywhere; the only thing that changes between machines is **the paths to your folders**, because the system user and where you keep your documentation differ. That's why they are environment variables and not constants in the code.
+
+**The shortcut: `init`.** It registers the server in the clients it finds on your machine (Claude Code, Cursor, VS Code), with your paths:
+
+```bash
+npx mcp-phase-gate init --docs "C:\Users\YOUR_USER\Documents\DOCUMENTATION" --repos "C:\projects"
+```
+
+Without `--docs` and `--repos` it takes the variables or asks you. If the server was already registered, **it neither duplicates it nor changes its key**: it updates that entry, shows you the diff and asks for confirmation (`--yes` to skip asking). Before writing it leaves a `.bak` copy, it won't touch an `mcp.json` it can't parse (it prints the block for you to paste by hand), and with `--dry-run` it only tells you what it would do. `--cliente cursor` (or `claude-code`, `vscode`, `todos`) picks the client; `--comandos` also copies `/f1`…`/f5` as files, and `--migrate` prepares your projects for 3.0 ([see the guide](#-migrating-to-30-in-3-steps)). At the end it explains how to put a lock on `git push`, being honest about which option is a real boundary and which isn't, and runs `doctor`.
+
+If you'd rather do it by hand, the two routes below.
 
 ### Prerequisites
 - **Node.js 22 or newer.** Check with `node -v`. That's what `package.json` declares and the only thing CI tests (22 and 24); earlier versions are out of support.
@@ -170,7 +182,7 @@ That `PHASE_GATE_DOCS_PATH` is only an **example** using a OneDrive folder. `G:\
 
 ### 🔧 Route B — from source
 
-Only needed if you're going to edit the repo's prompts directly, or contribute. You do *not* need it to add prompts of your own: that's done by layering folders, [see below](#-the-phase-prompts-live-in-prompts).
+Only needed if you're going to edit the repo's prompts directly, or contribute. You do *not* need it to add prompts of your own: that's done by layering folders, [see below](#-the-phase-prompts-live-in-promptses).
 
 **1. Clone and build.** `build/` is **not** committed, so it has to be generated on every machine:
 
@@ -211,7 +223,7 @@ In **Claude Code**, a `.mcp.json` at this repo's root can use a **relative** pat
 
 ### ✅ Verify it works
 1. Restart the client, or toggle the server off and on in its MCP panel.
-2. It should show up active with its 9 tools. In **Cursor** that's Settings → MCP; in **VS Code**, the extensions/MCP view; in **Claude Code**, `/mcp`.
+2. It should show up active with its 11 tools. In **Cursor** that's Settings → MCP; in **VS Code**, the extensions/MCP view; in **Claude Code**, `/mcp`.
 3. Try it from the chat: *"Use the `get_orchestrator_status` tool from mcp-phase-gate"* — it returns an X-ray of the installation: which variables it sees, which prompts it uses and which projects it finds.
 
 ### 🔍 Check your setup: `doctor`
@@ -222,9 +234,11 @@ From a terminal, with the same variables you give the client:
 npx mcp-phase-gate doctor
 ```
 
-It tells you which version is running and from where (`npx`, global, a dependency or a clone), the value of each variable and where it came from (the environment or `.env`, and whether you used the new name or the alias), which prompt file wins for each phase, which projects exist with their active task, and a list of findings: a missing required variable, a UTF-16 `.env`, a custom `global-rules.md` missing sections the phases cite, a phase with no document… It exits with code `1` if there's any error, so it also works in a script. `doctor --json` gives the same thing as JSON.
+It tells you which version is running and from where (`npx`, global, a dependency or a clone), the value of each variable and where it came from (the environment or `.env`, and whether you used the new name or the alias), your local configuration (`machine.json` and the available presets), which prompt file wins for each phase, and which projects exist with their active task, manifest, preset (and where it comes from), rules and repos with their branch. It ends with a list of findings: a missing required variable, a UTF-16 `.env`, a badly written manifest, a conflicted copy left by OneDrive, a preset that doesn't exist, a project without a manifest silently on the default preset, a block that fits no slot, a repo that isn't on this machine… It exits with code `1` if there's any error, so it also works in a script. `doctor --json` gives the same thing as JSON.
 
-It's the same information returned by the `get_orchestrator_status` tool and the `phase-gate://estado` resource; from the chat, it also includes which client is connected and which capabilities it announced.
+**Where does this text come from?** `doctor --fase 3 --proyecto PROJECT-A` shows, slot by slot, which layer and which `file:line` wins in that phase's prompt, and what got added on top. It's the answer to "I changed a preset and can't tell whether it took".
+
+It's the same information returned by the `get_orchestrator_status` tool and the `phase-gate://estado` resource; from the chat, it also includes which client is connected, which capabilities it announced, and which project the folder you have open matches.
 
 ---
 
@@ -237,6 +251,8 @@ It's the same information returned by the `get_orchestrator_status` tool and the
   - **Linux:** `~/.local/state/mcp-phase-gate/active-tasks.json`
 
   If you switch machines or chats and the LLM "forgot" where to write, tell it to call `get_active_task`, or just give it `project` + `task_name`.
+- **The project comes from the folder you have open.** If your client announces its open folders (MCP Roots), and one of them is a project's repo or sits inside its documentation folder, the server works out the project and says so in one line. `project` becomes optional ([see below](#the-project-comes-from-the-open-folder)).
+- What belongs to **each machine** and doesn't travel with the documentation — where each repo lives on this machine, the default preset for projects without a manifest, your own presets — lives in `machine.json`, in the same data folder (on Linux, `~/.config/mcp-phase-gate/`).
 - **The phase isn't stored — it's derived.** The server looks at which documents the task folder already has and works out the phase from there, because each phase declares its own document's name. That's why the answer can never drift: delete `02 - Decisiones.md` because it came out wrong and the task drops back to Phase 2 on its own.
 - And if the pointer file is lost — new machine, or you deleted it — `get_active_task` doesn't go silent: it proposes the most recently touched task and **tells you it's a guess**, so you can confirm before writing.
 - **Golden rule:** if you use a synced folder, let the sync finish before starting work on the other machine, to avoid conflicted copies.
@@ -288,18 +304,19 @@ Two more things that bite and aren't obvious:
 
 ## 🧩 What lives OUTSIDE the repo (one copy per machine)
 
-`git pull` does **not** update these four things. If something stopped working right after pulling, the cause is almost always here.
+`git pull` does **not** update these five things. If something stopped working right after pulling, the cause is almost always here.
 
 | What | Where | Why it isn't in the repo |
 |------|-------|--------------------------|
 | The compiled server | `build/` in your clone | It's gitignored. **After every `git pull` that touches `src/`, run `npm run build`** or the client keeps executing the previous version. |
 | This machine's paths | `.env` at the root ([route B](#-route-b--from-source), step 2) | The system user and the documentation folder differ per machine. |
 | The MCP registration | Your client's config ([route A](#-route-a--with-npx-recommended), or step 3 of [route B](#-route-b--from-source)) | In Cursor and VS Code it holds the absolute path to `build/index.js`, which depends on where you cloned and points into a gitignored folder. No single path can be right on every machine. See [`docs/decisiones.md`](docs/decisiones.md). The exception is Claude Code's `.mcp.json`, which uses a relative path. |
-| The `/f1`–`/f5` commands as files, **only if your client doesn't show MCP Prompts well** | `~/.cursor/commands/f<N>.md` in Cursor | Since 2.2.0 the server offers them as MCP Prompts and they arrive with every version ([see below](#the-phase-commands)). The file copy is only a fallback; in **Claude Code** inside this repo it's already versioned in `.claude/commands/`. |
+| The `/f1`–`/f5` commands as files, **only if your client doesn't show MCP Prompts well** | `~/.cursor/commands/f<N>.md` in Cursor | Since 2.2.0 the server offers them as MCP Prompts and they arrive with every version ([see below](#the-phase-commands)). The file copy is only a fallback (`init --comandos` makes it for you); in **Claude Code** inside this repo it's already versioned in `.claude/commands/`. |
+| This machine's configuration | `machine.json` and `presets/` in `%APPDATA%\mcp-phase-gate\` (or `PHASE_GATE_CONFIG_PATH`) | Paths and preferences of this machine: where each repo lives here, and the default preset for projects without a manifest ([see below](#machinejson-what-belongs-to-each-machine)). |
 
 ### The phase commands
 
-You invoke them by typing `/f1`, `/f2`, etc. in the chat. **They are orchestration only**: which tools to call and in what order. The behaviour, the document's structure and its filename all come from the phase prompt in `prompts/`, so tuning a phase doesn't mean editing its command.
+You invoke them by typing `/f1`, `/f2`, etc. in the chat. **They are orchestration only**: which tools to call and in what order. The behaviour, the document's structure and its filename all come from the phase prompt in `prompts/es/`, so tuning a phase doesn't mean editing its command.
 
 | Command | Calls | Document it leaves |
 |---------|-------|--------------------|
@@ -313,7 +330,7 @@ No command names a file: the name is declared in each phase prompt's header and 
 
 `/f1` needs project, task_name and the full requirement. `/f5` accepts a commit range; without one it audits the commits recorded in the phase 4 receipts, and only asks if there are no receipts. The rest start from `get_active_task`.
 
-**They arrive on their own, as MCP Prompts.** Since 2.2.0 the server offers each command as an MCP prompt (`f1`…`f5`), with its text in [`prompts/comandos/`](prompts/comandos). Nothing to copy into any folder, and they update with every package version. All their arguments are optional — `project`; in `/f1` also `task_name` and `contexto`; in `/f5`, `commits` —: whatever you don't pass, the command asks for, and a long context can be pasted after the command as plain chat text. A phase you add yourself (a `fase-6`) gets its own `/f6` with a generic text, and a `comandos/fN.md` in your own prompts folder wins over the packaged one.
+**They arrive on their own, as MCP Prompts.** Since 2.2.0 the server offers each command as an MCP prompt (`f1`…`f5`), with its text in [`prompts/es/comandos/`](prompts/es/comandos). Nothing to copy into any folder, and they update with every package version. All their arguments are optional — `project`; in `/f1` also `task_name` and `contexto`; in `/f5`, `commits` —: whatever you don't pass, the command asks for, and a long context can be pasted after the command as plain chat text. Without `project`, if the server works it out from the open folder, the command already arrives with it. A phase you add yourself (a `fase-6`) gets its own `/f6` with a generic text, and a `comandos/fN.md` in your own prompts folder (or a project's) wins over the packaged one.
 
 How they look in each client:
 
@@ -323,7 +340,7 @@ How they look in each client:
 | Cursor | To be verified (per its docs: in the MCP prompts menu) | To be verified | To be verified | To be verified | On Windows, `PHASE_GATE_ELICITATION=off` while the form bug stays open ([see below](#-protected-documents)) |
 | VS Code | To be verified (its docs contradict themselves between `/<key>.f1` and `mcp.<key>.f1`) | To be verified | To be verified | To be verified | |
 
-**If your client doesn't show them comfortably**, use the files: in this repo, Claude Code already reads them from [`.claude/commands/`](.claude/commands) (identical to `prompts/comandos/`); to use them in your other projects, copy them to `~/.claude/commands/`, or to `~/.cursor/commands/` in Cursor. More detail in [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) (Spanish).
+**If your client doesn't show them comfortably**, use the files: in this repo, Claude Code already reads them from [`.claude/commands/`](.claude/commands) (identical to `prompts/es/comandos/`); to use them in your other projects, `npx mcp-phase-gate init --comandos` copies them to `~/.claude/commands/` or `~/.cursor/commands/`, without overwriting any you wrote yourself. More detail in [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) (Spanish).
 
 ---
 
@@ -380,15 +397,19 @@ On top of that, `write_central_doc` only writes **inside the folder of a task th
 
 | Tool | What it does |
 |------|--------------|
-| `start_task` | Creates the folder for a **new** task (`<PROJECT>/<tasks subfolder>/<task>`), saves the initial context and makes it the **active task of its project**. If the task already exists it refuses and points you at `switch_task`, so the initial context is never overwritten. Starting a new project takes `crear_proyecto: true` and, if your client can, your direct confirmation. |
+| `start_task` | Creates the folder for a **new** task (`<PROJECT>/<tasks subfolder>/<task>`), saves the initial context and makes it the **active task of its project**. If the task already exists it refuses and points you at `switch_task`, so the initial context is never overwritten. Starting a new project takes `crear_proyecto: true` and, if your client can, your direct confirmation. With `repos` it picks which of the project's repos the task touches, and with `preset` it uses a different preset just for it ([see below](#a-task-with-its-own-repos-or-preset)). |
 | `get_active_task` | Returns the active task and **which phase it's on**, derived from the documents it already has. Without `project` it answers for every project. Use it when opening a new chat or after losing track. |
 | `list_tasks` | Lists the tasks that exist and each one's phase, most recently touched first. For picking up something old or seeing what was left half-done. |
 | `switch_task` | Changes which task is active for a project. **Touches no files**: it's the correct way to resume an existing task. |
-| `get_phase_prompt` | Returns the behaviour rules for a phase (1–5), with the global rules prepended and the exact document filenames appended. The text lives in `prompts/`. It also checks the **gate**: pass `project` and, if you skipped a phase, the prompt arrives with the warning on top, followed by the inherited pending items if there are any. |
+| `get_phase_prompt` | Returns the behaviour rules for a phase (1–5), with the global rules prepended and the exact document filenames appended, assembled with the project's preset and layers (see below). It also checks the **gate**: if you skipped a phase, the prompt arrives with the warning on top, followed by the inherited pending items if there are any. With a project, it ends with the **CONFIGURACIÓN DEL PROYECTO** block. |
 | `read_central_doc` | Reads a file from the central documentation. **Recommended:** pass `project` + `task_name` + `file_name` and let the server build the path. It also accepts a relative `file_path`. |
 | `write_central_doc` | Writes/overwrites a file inside a task folder. Same parameters as `read_central_doc` plus `content`, and `force` for [protected documents](#-protected-documents) when your client doesn't support direct confirmations. |
-| `read_cross_repo` | Reads files from your other local repos, so you can check how another codebase solved something without switching windows. |
-| `get_orchestrator_status` | The installation X-ray, same as [`doctor`](#-check-your-setup-doctor): package version and path, variables and where each came from, which prompt wins per phase, projects with their active task, and findings. Plus the connected client and its capabilities. Use it when something doesn't behave as you expect. |
+| `read_repo_file` | Reads a file from one of the project's repos **by its id** (`api`, `web`…), wherever it lives on this machine. Never reads anything under `.git` ([see below](#several-repositories-read_repo_file-and-repo_status)). |
+| `repo_status` | Branch, commit, ahead/behind its upstream and whether the tree is clean, for one repo or all the task's repos. Read-only: takes no locks and runs no hooks. |
+| `read_cross_repo` | Reads a file from any folder in your repositories folder, by name, so you can check how another codebase solved something without switching windows. If the project declares its repos, use `read_repo_file`. |
+| `get_orchestrator_status` | The installation X-ray, same as [`doctor`](#-check-your-setup-doctor): package version and path, variables and where each came from, configuration, which prompt wins per phase, projects with their active task, preset, rules and repos, and findings. Plus the connected client, its capabilities and which project the open folder matches. Use it when something doesn't behave as you expect. |
+
+In `start_task`, `switch_task`, `read_central_doc`, `write_central_doc`, `read_repo_file` and `repo_status`, **`project` is optional** if your client announces the open folder.
 
 They all declare their MCP annotations (read-only, destructive, idempotent), so a cautious client can let the read-only ones through without asking. Only `write_central_doc` is destructive.
 
@@ -402,12 +423,14 @@ The server also exposes the documents as **read-only resources**, which compatib
 | `phase-gate://fases` | The available phases, with their document, receipts, and which prompt file wins |
 | `phase-gate://tareas/{proyecto}/{tarea}/{documento}` | A task document |
 | `phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}` | A phase 4 batch receipt |
+| `phase-gate://configuracion/{proyecto}` | A project's effective configuration: preset, language, batches and commits with where each value comes from, and the state of its repos on this machine |
 
 The list only includes the existing documents of **each project's active task**, so the picker doesn't drown; the rest is reachable through the template, which autocompletes project, task and document. They have the same defences as `read_central_doc`: they can't leave the task folder, don't expose dot-files, and don't read more than 1 MB.
 
 ### How the server builds paths
 - **Documentation:** `PHASE_GATE_DOCS_PATH` / `<PROJECT>` / `PHASE_GATE_TASKS_SUBDIR` / `<task>` / `<file>`
-- **Code repos:** `PHASE_GATE_REPOS_PATH` / `<repo>` / `<file>`
+- **Code repos, by name** (`read_cross_repo`): `PHASE_GATE_REPOS_PATH` / `<repo>` / `<file>`
+- **A project's repos, by id** (`read_repo_file`): the `machine.json` path for `"<PROJECT>/<id>"` if there is one, otherwise `PHASE_GATE_REPOS_PATH` / `<manifest dir>` / `<file>`
 
 ### What counts as a project
 
@@ -419,21 +442,149 @@ A project that doesn't exist is rejected, showing the list of the ones that do, 
 
 ---
 
-## 📝 The phase prompts live in `prompts/`
+## 🧱 Per-project configuration
 
-Each phase's text is a plain markdown file, not code:
+All of this is **optional**: a project with no configuration works with the defaults. But since 3.0 each project can declare which preset it uses, which repositories it touches and which rules apply.
+
+### `phase-gate.json`, the project manifest
+
+It lives in the project folder, `<DOCS>/<PROJECT>/phase-gate.json`, so it travels with the documentation to all your machines:
+
+```json
+{
+  "$schema": "https://unpkg.com/mcp-phase-gate@3/schema/project.json",
+  "version": 1,
+  "preset": "multi-repo-feature",
+  "repos": [
+    { "id": "api", "dir": "backend-api", "rol": "backend" },
+    { "id": "web", "dir": "frontend-web", "rol": "frontend" }
+  ],
+  "reglas": { "commits": "agente-commitea-con-OK", "verificacion": ["npm test"] },
+  "fase5": { "prPorRepo": true }
+}
+```
+
+| Field | What it is |
+|-------|------------|
+| `preset` | The project's preset ([see the table](#presets)). Defaults to `software`. |
+| `idioma` | `es` (English arrives in a later version). |
+| `repos` | The project's repositories: a short `id`, its `dir` **relative to `PHASE_GATE_REPOS_PATH`** (never absolute nor with `..`: the manifest travels between machines) and an optional `rol`. |
+| `reglas.lotes` | `false` if the project doesn't work in batches: a single batch whose receipt is the phase 4 document. If missing, the preset decides. |
+| `reglas.commits` | The phase 4 commit policy ([see below](#the-commit-policy)). If missing, the preset decides. |
+| `reglas.verificacion` | The commands that verify the project; they reach every prompt. |
+| `fase5.prPorRepo` | One PR description per repository. |
+
+With the `$schema`, your editor autocompletes and flags mistakes. **A badly written manifest is not ignored**: the tools that depend on the project return the error with the exact path of the problem (`repos[1].dir: no puede ser una ruta absoluta…`) and `doctor` flags it. Silently falling back to the defaults would change every instruction without you noticing. You write it, or `init --migrate` does; the AI can't (`write_central_doc` doesn't write outside tasks).
+
+### `machine.json`, what belongs to each machine
+
+What's only valid on this machine lives apart, in `%APPDATA%\mcp-phase-gate\machine.json` (macOS: `~/Library/Application Support/mcp-phase-gate/`; Linux: `~/.config/mcp-phase-gate/`; or the folder in `PHASE_GATE_CONFIG_PATH`):
+
+```json
+{
+  "$schema": "https://unpkg.com/mcp-phase-gate@3/schema/machine.json",
+  "version": 1,
+  "repos": { "PROJECT-A/api": "D:\\work\\backend-api" },
+  "presetPorDefecto": "software-replica"
+}
+```
+
+- `repos` says where a given repo lives **on this machine**, even outside `PHASE_GATE_REPOS_PATH`. The key is `"<PROJECT>/<id>"`, with the project compared case-insensitively.
+- `presetPorDefecto` is the preset for your projects **without a manifest**: the way to keep your usual flow without writing a manifest in every project.
+
+### Presets
+
+A preset changes the content of a few sections of the prompts; the phases, the gate and the documents are always the same.
+
+| Preset | What for |
+|--------|----------|
+| `software` | **Default.** Code with or without a test suite: if there's a suite, the plan uses it as each batch's exit criterion; if not, whatever can actually be run. |
+| `software-replica` | The 2.x flow: code without a suite and with a read-only data replica, where comparing before and after takes the place of tests. Reproduces the 2.2.0 prompts byte for byte (a test checks it). |
+| `software-tdd` | Code with a suite, tests first: every batch starts with a failing test, and execution goes red, green, full suite. |
+| `multi-repo-feature` | A requirement that changes several repositories: contracts between them, deployment order and one PR per repo. |
+| `ai-agent-ops` | Maintaining an AI agent, a system prompt, a skill or an MCP server: evidence with transcripts, a battery of golden, edge and adversarial cases, and a behaviour-regression audit with a version record. |
+| `research-ops` | Technical research or operations: the deliverable is a report or a runbook, and there are no per-batch commits. |
+
+A preset is **a single file** of blocks ([see below](#blocks-changing-a-section-without-copying-the-prompt)). Yours go in the `presets/` folder next to `machine.json`, and win over the packaged ones with the same name.
+
+**A project's preset comes, in this order**, from the task's (if it declares one), from `phase-gate.json`, from `machine.json`'s `presetPorDefecto`, or it's `software`. Every prompt states it at the end, with its origin.
+
+### A task with its own repos or preset
+
+`start_task` accepts `repos` (the ids of the repos that task touches; without it, all the project's) and `preset` (for instance `ai-agent-ops` for an agent-maintenance task inside a general project). They're validated before anything is created and recorded in the initial context's header:
+
+```markdown
+---
+repos: api, web
+preset: ai-agent-ops
+---
+<the requirement>
+```
+
+Changing them later means rewriting the initial context, which is protected: that's on purpose, switching repos halfway through a task is a decision.
+
+### The commit policy
+
+`reglas.commits` (or the preset) chooses how each phase 4 batch is versioned:
+
+| Policy | What the AI does |
+|--------|------------------|
+| `agente-commitea-con-OK` | **Default.** Shows you the files and the message, and commits only with your OK. |
+| `agente-propone` | Leaves the `git add` and `git commit` ready to copy; you commit and give it the hash. |
+| `auto` | Commits as soon as the batch passes its verification, without waiting. |
+| `ninguno` | No per-batch commits; it stops after each batch so you can review. |
+
+In every policy: `git add` file by file (never `-A`, `.` or a folder), never `--no-verify` or `--amend`, and it checks the branch before the first commit. **And it never pushes or opens the PR, under any policy: that is not configurable.**
+
+### The CONFIGURACIÓN DEL PROYECTO block
+
+When the server knows the project, every phase prompt ends with what its configuration declares, as data:
 
 ```
-prompts/
+## CONFIGURACIÓN DEL PROYECTO (la declara phase-gate.json)
+
+- Preset: `multi-repo-feature` (del proyecto) · Idioma: es
+- Lotes: sí · Commits: agente-commitea-con-OK
+- Repositorios de esta tarea:
+  - `api` (backend): `D:\work\backend-api` · git · rama `feat/x` · árbol limpio
+  - `web` (frontend): `D:\repos\frontend-web` · git · rama `feat/x` · 2 cambios sin commit
+- Comandos de verificación del proyecto: `npm test`
+- Una descripción de PR por repositorio (fase5.prPorRepo).
+
+Usa `read_repo_file` y `repo_status` con estos ids.
+```
+
+Without a manifest, the preset line says `(por defecto; este proyecto no tiene phase-gate.json)`. The git state is left out if it takes more than 3 seconds.
+
+### The project comes from the open folder
+
+If your client announces its open folders (MCP Roots), the server matches them against your projects: if an open folder **is one of the project's repos** (per its manifest and `machine.json`) or sits **inside its documentation folder**, that's the project. If you opened a folder that contains a single repo of one project, that works too. `project` then becomes optional, and the response says so: *"Proyecto deducido de la carpeta abierta: PROJECT-A (…)"*. If it matches several, the tool asks for `project` and tells you which ones. Without Roots, everything works as before.
+
+### Several repositories: `read_repo_file` and `repo_status`
+
+With the repos declared in the manifest, the AI uses them by id: `read_repo_file(repo: "api", path: "src/main.ts")` and `repo_status()` (the task's repos) or `repo_status(repo: "web")`. `read_repo_file` never reads anything under `.git` — not through a link either — so not `.gitignore` or `.gitmodules`; `.github` is fine.
+
+`repo_status` queries git through a single, read-only door with no side effects: it takes no `index.lock` (so it can't get in the way of a commit in progress) and **doesn't run a repo's `core.fsmonitor`**, which a plain `git status` would. If git isn't installed, or a repo belongs to another user ("dubious ownership"), it tells you what to do.
+
+---
+
+## 📝 The phase prompts live in `prompts/es/`
+
+Each phase's text is a plain markdown file, not code, in one folder per language:
+
+```
+prompts/es/
 ├── global-rules.md              ← "Zero Breakage" rules, prepended to EVERY phase
 ├── fase-1-descubrimiento.md
 ├── fase-2-decisiones.md
 ├── fase-3-plan-tecnico.md
 ├── fase-4-ejecucion.md
 ├── fase-5-auditoria-pr.md       ← includes the PR description contract
-└── comandos/                    ← the /f1…/f5 text, served by the server as MCP Prompts
-    ├── f1.md
-    └── …
+├── comandos/                    ← the /f1…/f5 text, served by the server as MCP Prompts
+│   ├── f1.md
+│   └── …
+└── reglas/                      ← the batch and commit variants the manifest switches on
+presets/es/                      ← the packaged presets, one file each
 ```
 
 **They are read on every call.** Edit a `.md` and the next `get_phase_prompt` already returns the new version — no `npm run build`, no client restart. That's what makes it practical to tune a phase and test it immediately.
@@ -461,25 +612,66 @@ Format rules:
 
 ### Using your own prompts without losing the packaged ones
 
-`PHASE_GATE_PROMPTS_PATH` points at a folder of yours that is **layered on top of** the packaged one. It does not replace it.
+Prompts are assembled **in layers**, lowest to highest priority:
 
-To change only phase 2, your folder holds **one file**:
+| Layer | Where | What it can contribute |
+|-------|-------|------------------------|
+| Packaged | the package's `prompts/es/` | The phases, `global-rules.md` and the commands |
+| Preset | the effective preset's file | Blocks only |
+| Rules | `prompts/es/reglas/`, per `lotes` and `commits` | Blocks only |
+| Global | `PHASE_GATE_PROMPTS_PATH`, or else the `prompts/` folder next to `machine.json` when it exists | Phases, `global-rules.md`, commands and a `bloques.md` |
+| Project | `<DOCS>/<PROJECT>/.phase-gate/prompts/` | The same as global, for that project only |
+
+A layer of your own is **layered on top of** the ones below; it doesn't replace them. To change only the whole of phase 2, your folder holds **one file**:
 
 ```
 my-prompts/
 └── fase-2-my-way.md
 ```
 
-Phase 2 is now yours and phases 1, 3, 4 and 5 stay as the packaged ones — including whatever improvements new versions bring. This used to be a full replacement: changing one phase meant copying all six, ending up with frozen copies, and any phase you forgot to copy **disappeared with no warning**.
-
-Three details that matter:
+Phase 2 is now yours and phases 1, 3, 4 and 5 stay as the packaged ones — including whatever improvements new versions bring.
 
 - **Layering is by phase number, not by filename.** Your `fase-2-my-way.md` overrides the package's `fase-2-decisiones.md`. You don't have to guess the original's name.
 - **It also adds.** A `fase-6-deployment.md` in your folder creates phase 6, nothing else needed.
-- **Your `global-rules.md` replaces the packaged one, it doesn't stack.** Concatenating two rule sets makes it impossible to tell which file an unwanted instruction came from, exactly when you need to know. If you want the packaged rules plus extras, copy them and add.
-  **Watch out:** the packaged rules include the `EVIDENCIA`, `BASE DE CADA DECISIÓN` and `PENDIENTES HEREDADOS` sections, which the phases refer to. A `global-rules.md` of your own without them leaves the phases pointing at rules that don't exist; copy them into your file.
 
-On the `npx` route this is the **only** way to customise: the packaged prompts live inside `node_modules`, where editing them achieves nothing because the next install wipes them.
+On the `npx` route layers are the **only** way to customise: the packaged prompts live inside `node_modules`, where editing them achieves nothing because the next install wipes them.
+
+### Blocks: changing a section without copying the prompt
+
+Copying a whole phase to change a paragraph leaves you with a frozen copy that no longer gets the rest's improvements. That's what **slots** are for: the sections of each prompt that can be changed (the role, verification, tests, batches, commits, examples, the PR contract…). A **block** changes one slot and leaves everything else alive. It goes in the `bloques.md` of your global layer or of a project's:
+
+```markdown
+<!-- bloque: fase-3/pruebas -->
+This project runs `make test` and the plan states what it must give for each batch.
+<!-- /bloque -->
+
+<!-- bloque: global/extra | despues -->
+- Always answer in neutral Spanish.
+<!-- /bloque -->
+```
+
+- The identifier is `<file>/<slot>`: `global` or `fase-N`, plus the slot name.
+- The mode is `reemplazar` (the default), `antes` or `despues`.
+- Blocks are applied layer by layer, bottom up: the highest one wins. A block **can't change a document's name**.
+- `global/extra` is an empty slot at the end of the global rules, to **add** rules without replacing any.
+- What doesn't fit is flagged and not applied: a block for a slot that doesn't exist (with a note at the top of the prompt and in `doctor`), a repeated one, or a malformed file (ignored whole).
+
+**A whole `global-rules.md`.** Replacing it with your own still works, but it's no longer the recommended way: use a `bloques.md` with `global/cero-rupturas`, `global/evidencia` or `global/extra`. If your `global-rules.md` lacks the `BASE DE CADA DECISIÓN` and `PENDIENTES HEREDADOS` sections, which the phases cite, the server **appends the packaged ones** and `doctor` tells you (`GLOBAL-REINYECTADO`). `EVIDENCIA` is a slot and isn't appended: if it's missing, `doctor` warns.
+
+### `eject`: copy what's in effect today so you can edit it
+
+```bash
+npx mcp-phase-gate eject fase-3/pruebas --a proyecto:PROJECT-A
+```
+
+| Target | Copies | To |
+|--------|--------|----|
+| `fase-3` | The packaged phase prompt, with its slots | `<layer>/fase-3-plan-tecnico.md` |
+| `fase-3/pruebas`, `global/evidencia` | The slot's **effective** content for that project (with its preset and rules already applied), as a block | `<layer>/bloques.md` |
+| `comando-f4` | The text of `/f4` | `<layer>/comandos/f4.md` |
+| `preset:<name>` | The preset file | `presets/<name>.md` next to `machine.json` |
+
+`--a global` copies into your global layer (if you don't have `PHASE_GATE_PROMPTS_PATH`, into the `prompts/` folder next to `machine.json`, which then becomes your global layer); `--a proyecto:<NAME>`, into that project's. If it already exists, it's left alone unless you pass `--fuerza`, which keeps a copy. `--dry-run` shows it without writing. Afterwards, `doctor --fase 3 --proyecto PROJECT-A` shows your copy winning.
 
 ### The PR description contract (phase 5)
 
@@ -492,9 +684,30 @@ Phase 5 doesn't only audit: it drafts the PR description under a strict contract
 - **Length limits in words**, not adjectives: trivial (60–100), small (120–160), normal (200–260), large (350–450, hard cap 500).
 - **Delivered inside a four-backtick code block**, so copy-pasting into GitHub gives you raw markdown instead of already-rendered text.
 
-To adapt it to your own style, edit `prompts/fase-5-auditoria-pr.md`. The highest-leverage change is replacing the examples under "EJEMPLOS DE REFERENCIA" with PR descriptions of your own: models imitate that voice far more than they follow instructions.
+To adapt it to your own style, change it with a `fase-5/pr` or `fase-5/ejemplos` block (`eject fase-5/ejemplos` copies the current text for you). The highest-leverage change is replacing the examples under "EJEMPLOS DE REFERENCIA" with PR descriptions of your own: models imitate that voice far more than they follow instructions.
 
 > The reasoning behind each rule is in [`docs/decisiones.md`](docs/decisiones.md) (Spanish). Read it before changing things: several rules that look arbitrary are solving a concrete problem.
+
+---
+
+## 🧭 Migrating to 3.0 in 3 steps
+
+3.0 is the first major version: **the default preset is no longer the replica flow** (`software-replica`) but the generic `software`. If your projects worked with the replica, three steps keep exactly what you had:
+
+1. **Update.** Via `npx` it arrives on its own (while it's a beta, `npx -y mcp-phase-gate@beta`). From source: `git pull`, `npm install` and `npm run build`.
+2. **Choose your preset.** To carry on as before in all your projects without a manifest, one of two:
+   - `npx mcp-phase-gate init --migrate` writes `phase-gate.json` with `"preset": "software-replica"` in every project that lacks one (it only creates, never overwrites). It travels with the documentation.
+   - `npx mcp-phase-gate init --migrate --solo-este-equipo` writes `"presetPorDefecto": "software-replica"` into this machine's `machine.json`, without touching the documentation. Repeat it on each machine.
+
+   If you do nothing, your projects use `software`: the same flow, with verification and testing aimed at code with or without a suite, and no replica.
+3. **Check it** with `npx mcp-phase-gate doctor`: the `PRESET-IMPLICITO` finding (a project without a manifest on the default preset) goes away, and each project states its preset. `doctor --fase 3 --proyecto <NAME>` shows where each section of the prompt comes from.
+
+What else changes, in case it affects you:
+
+- **The packaged prompts moved to `prompts/es/`.** Your `PHASE_GATE_PROMPTS_PATH` stays as it is: your own layers keep their files at the root.
+- **A `global-rules.md` of your own** now gets the packaged `BASE DE CADA DECISIÓN` and `PENDIENTES HEREDADOS` sections if it lacks them. Better still: replace it with a `bloques.md` ([see above](#blocks-changing-a-section-without-copying-the-prompt)).
+- **`project` is optional** in the tools that required it, if your client announces the open folder. If you already pass it, nothing changes.
+- **Two new tools**, `read_repo_file` and `repo_status`, for the repos a manifest declares. `read_cross_repo` stays as it is.
 
 ---
 
@@ -513,21 +726,28 @@ Each variable also has an **alias** with the old name, `ORQUESTADOR_*` (e.g. `OR
 | `PHASE_GATE_TASKS_SUBDIR` | `Proyectos` | Subfolder where tasks live inside each project. Empty means tasks hang directly off the project. It's also the rule that decides what counts as a project (see above). |
 | `PHASE_GATE_PROMPTS_PATH` | none | Folder holding your own prompts. They are **layered on top of** the packaged ones rather than replacing them, so you only drop in the phases you want to change ([see above](#using-your-own-prompts-without-losing-the-packaged-ones)). |
 | `PHASE_GATE_STATE_PATH` | Your user data folder (see above) | Where the active-task pointers are stored. Rarely needs touching; useful to isolate state in tests, and **required if you register the server more than once** (see [More than one documentation folder?](#-more-than-one-documentation-folder-optional)). |
-| `PHASE_GATE_ELICITATION` | none (enabled) | `off` (or `false`, `0`, `no`) so the server doesn't ask the client for [direct confirmations](#-protected-documents) and lets `force` decide, as before. Recommended on Cursor for Windows. No alias. |
+| `PHASE_GATE_CONFIG_PATH` | Your user data folder | Folder for `machine.json` and your own presets ([see above](#machinejson-what-belongs-to-each-machine)); with a `prompts/` subfolder, that becomes your global layer if you don't set `PHASE_GATE_PROMPTS_PATH`. Rarely needed. No alias. |
+| `PHASE_GATE_ELICITATION` | none (enabled) | `off` (or `false`, `0`, `no`) so the server doesn't ask the client for [direct confirmations](#-protected-documents) and lets `force` decide, as before. Recommended on Cursor for Windows (`init` sets it for you). No alias. |
 
 ---
 
 ## 🧑‍💻 Development (if you change the code)
 
-> **Note:** this applies to **code** changes only. If all you edited was a prompt under `prompts/*.md`, there is **nothing to build and nothing to restart** — they're read on every call.
+> **Note:** this applies to **code** changes only. If all you edited was a prompt under `prompts/es/*.md` or a preset, there is **nothing to build and nothing to restart** — they're read on every call.
 
 The source lives in `src/`, split by responsibility:
 
 | File | What it handles |
 |------|-----------------|
-| `config.ts` | Environment variables and their aliases, reading `.env`, where state lives, server identity |
+| `config.ts` | Environment variables and their aliases, reading `.env`, where state and configuration live, server identity |
 | `paths.ts` | How every path is built, and the check that it stays inside its base |
-| `phases.ts` | Discovering the phases and assembling each one's prompt |
+| `phases.ts` | Discovering the phases and reading their files |
+| `capas.ts` | The layers, a project's effective configuration (preset and rules) and the assembly of each prompt |
+| `bloques.ts` | Reading blocks and applying them to slots |
+| `manifiesto.ts` | `phase-gate.json`, `machine.json`, the available presets and the published JSON Schemas |
+| `roots.ts` | The project worked out from the client's open folders |
+| `git.ts` | The single, read-only door to git |
+| `repos.ts` | Reading files and git state from a project's repos |
 | `tasks.ts` | Which tasks exist, which phase each is on, which one is active, the gate and inherited pending items |
 | `schemas.ts` | Each tool's arguments, with their description and error message |
 | `servidor.ts` | The server's tools. It computes nothing: it translates between the protocol and the above |
@@ -535,7 +755,9 @@ The source lives in `src/`, split by responsibility:
 | `prompts-mcp.ts` | The `/f1`…`/fN` commands as MCP Prompts |
 | `confirmacion.ts` | Direct confirmations to the user (elicitation) |
 | `diagnostico.ts` | The X-ray shared by `doctor`, `get_orchestrator_status` and `phase-gate://estado` |
-| `cli.ts` | The command line: `doctor`, `--help`, `--version` |
+| `cli.ts` | The command line: `doctor`, `init`, `eject`, `--help`, `--version` |
+| `init.ts` | `init`: registering the server in the clients, copying the commands and migrating |
+| `eject.ts` | `eject`: copying a prompt, a slot, a command or a preset into a layer of your own |
 | `log.ts` | Logging: stderr and, with a client connected, MCP notifications |
 | `index.ts` | The entry point: the command line, or the server over stdio |
 
@@ -563,7 +785,9 @@ yours. CI runs them on every PR.
 |-------------------------|-------|
 | What the project does today | This README (and its Spanish twin, [`README.es.md`](README.es.md) — **change one, change the other**) |
 | Why it's designed this way | [`docs/decisiones.md`](docs/decisiones.md) (Spanish) |
-| The `/f1`–`/f5` commands | Their text in [`prompts/comandos/`](prompts/comandos); how they reach each client in [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) (Spanish) |
+| The `/f1`–`/f5` commands | Their text in [`prompts/es/comandos/`](prompts/es/comandos); how they reach each client in [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) (Spanish) |
+| The presets and the schemas | [`presets/es/`](presets/es) and [`schema/`](schema). The schemas are generated from the zod shapes: `npm run build && node scripts/generar-esquemas.mjs` |
+| The version 3 plan | [`docs/plan-maestro-v3.md`](docs/plan-maestro-v3.md) (Spanish) |
 | That a change broke nothing | [`test/`](test), via `npm test`. CI runs them on every PR |
 | What's still missing | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — grouped under the `v1-uso-propio` and `v2-publico` labels |
 | What's already been done | The commit history and merged PRs |
