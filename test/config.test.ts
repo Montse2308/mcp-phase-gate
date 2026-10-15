@@ -313,3 +313,45 @@ describe("promptsLayers", () => {
     assert.deepEqual(promptsLayers(), [defaultPromptsPath(), propia]);
   });
 });
+
+// Ajustes de la auditoría de la Etapa 2: la fuente manda antes que el nombre.
+describe("leerVariable cuando cada nombre llega por una vía distinta", () => {
+  function envTemporal(contenido: string): string {
+    const archivo = path.join(carpetaTemporal("env"), ".env");
+    fs.writeFileSync(archivo, contenido);
+    return archivo;
+  }
+
+  it("el alias del entorno del cliente gana a PHASE_GATE_* del .env, y la discrepancia lo explica", () => {
+    process.env.ORQUESTADOR_DOCS_PATH = "/del-cliente";
+    cargarEnv(envTemporal("PHASE_GATE_DOCS_PATH=/del-env\n"));
+
+    const lectura = leerVariable("DOCS_PATH");
+    assert.equal(lectura.valor, "/del-cliente");
+    assert.equal(lectura.usada, "ORQUESTADOR_DOCS_PATH");
+    assert.equal(lectura.fuente, "entorno");
+    assert.equal(
+      lectura.discrepancia,
+      "PHASE_GATE_DOCS_PATH difiere de ORQUESTADOR_DOCS_PATH; se usa ORQUESTADOR_DOCS_PATH (el entorno del cliente gana al .env)."
+    );
+  });
+
+  it("con los dos en el .env, gana PHASE_GATE_*", () => {
+    cargarEnv(envTemporal("ORQUESTADOR_DOCS_PATH=/viejo\nPHASE_GATE_DOCS_PATH=/nuevo\n"));
+
+    const lectura = leerVariable("DOCS_PATH");
+    assert.equal(lectura.valor, "/nuevo");
+    assert.equal(lectura.fuente, ".env");
+    assert.match(lectura.discrepancia ?? "", /se usa PHASE_GATE_DOCS_PATH\.$/);
+  });
+
+  // Una ruta vacía no significa nada: no puede tapar un alias que apunta a una carpeta.
+  it("una PHASE_GATE_DOCS_PATH vacía no tapa un alias válido", () => {
+    const carpeta = carpetaTemporal("config");
+    process.env.PHASE_GATE_DOCS_PATH = "  ";
+    process.env.ORQUESTADOR_DOCS_PATH = carpeta;
+
+    assert.equal(requireBasePath(DOCS), carpeta);
+    assert.equal(leerVariable("DOCS_PATH").discrepancia, "PHASE_GATE_DOCS_PATH está vacía; se usa ORQUESTADOR_DOCS_PATH.");
+  });
+});

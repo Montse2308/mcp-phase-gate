@@ -266,7 +266,15 @@ Los mensajes de error nombran las dos: "Falta `PHASE_GATE_DOCS_PATH` (o su alias
 `ORQUESTADOR_DOCS_PATH`)"; y cuando la ruta está mal, nombran la que se usó.
 
 "Definida" es que exista en el entorno, aunque esté vacía: `TASKS_SUBDIR` vacía significa que
-las tareas cuelgan del proyecto, y eso se tiene que poder decir con el nombre nuevo.
+las tareas cuelgan del proyecto, y eso se tiene que poder decir con el nombre nuevo. En las
+variables de **ruta**, vacía cuenta como ausente: una ruta vacía no significa nada y no debe tapar
+un alias que apunta a una carpeta (se avisa como discrepancia).
+
+**Qué gana cuando cada nombre llega por una vía distinta** (añadido tras la auditoría de la
+etapa): primero la **fuente** —el entorno, es decir el bloque `env` del cliente, gana al `.env`—
+y, dentro de la misma fuente, el **nombre** —`PHASE_GATE_*` gana a `ORQUESTADOR_*`—. Así un `.env`
+con `PHASE_GATE_DOCS_PATH` no le gana a un bloque `env` con `ORQUESTADOR_DOCS_PATH`, y "el cliente
+gana al `.env`" sigue siendo cierto sin excepciones. La discrepancia dice cuál se usó y por qué.
 
 De paso, `stateDir` recorta y resuelve su variable como las demás rutas; antes se usaba tal
 cual, y un espacio al final del valor creaba otra carpeta de estado.

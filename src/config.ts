@@ -56,9 +56,9 @@ export function cargarEnv(archivo: string = envPorDefecto()): void {
   let bytes: Buffer;
   try {
     bytes = fs.readFileSync(archivo);
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return; // sin .env, todo sale del entorno
-    errorDeCarga = `No se pudo leer el .env (${archivo}): ${error?.message ?? error}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return; // sin .env, todo sale del entorno
+    errorDeCarga = `No se pudo leer el .env (${archivo}): ${error instanceof Error ? error.message : String(error)}`;
     return;
   }
 
@@ -75,8 +75,8 @@ export function cargarEnv(archivo: string = envPorDefecto()): void {
   let valores: Record<string, string>;
   try {
     valores = parseEnv(texto) as Record<string, string>;
-  } catch (error: any) {
-    errorDeCarga = `No se pudo interpretar el .env (${archivo}): ${error?.message ?? error}`;
+  } catch (error) {
+    errorDeCarga = `No se pudo interpretar el .env (${archivo}): ${error instanceof Error ? error.message : String(error)}`;
     return;
   }
 
@@ -118,33 +118,51 @@ export type LecturaVariable = {
   discrepancia: string | null; // texto del aviso si las dos existen y difieren
 };
 
-// "Definida" es que exista en el entorno, aunque esté vacía: TASKS_SUBDIR vacía a propósito
-// significa que las tareas cuelgan directo del proyecto, y eso tiene que poder decirse también
-// con PHASE_GATE_TASKS_SUBDIR.
+// Qué nombre gana, en este orden:
+//   1. La fuente: el entorno (el bloque "env" del cliente) gana al .env, también cuando cada
+//      nombre llega por una vía distinta. Si no, un .env con PHASE_GATE_X le ganaría a un bloque
+//      env con ORQUESTADOR_X, y "el cliente gana al .env" dejaría de ser cierto.
+//   2. Dentro de la misma fuente, PHASE_GATE_* gana a ORQUESTADOR_*.
+//
+// "Definida" es que exista, aunque esté vacía: TASKS_SUBDIR vacía a propósito significa que las
+// tareas cuelgan directo del proyecto, y eso tiene que poder decirse también con el nombre nuevo.
+// En las variables de RUTA, en cambio, vacía cuenta como ausente: una ruta vacía no significa
+// nada, y no debe tapar un alias que sí apunta a una carpeta.
 export function leerVariable(logica: NombreLogico): LecturaVariable {
   const { principal, alias, esRuta } = VARIABLES[logica];
-  const dePrincipal = process.env[principal];
-  const deAlias = alias ? process.env[alias] : undefined;
+  const definida = (nombre: string): boolean => {
+    const valor = process.env[nombre];
+    return valor !== undefined && (!esRuta || valor.trim() !== "");
+  };
+  const fuenteDe = (nombre: string): FuenteVariable => (clavesCargadas.has(nombre) ? ".env" : "entorno");
 
-  const usada = dePrincipal !== undefined ? principal : deAlias !== undefined ? alias : null;
+  const candidatos = (alias ? [principal, alias] : [principal]).filter(definida);
+  // sort es estable: con la misma fuente se conserva el orden principal, alias.
+  candidatos.sort((a, b) => Number(fuenteDe(a) === ".env") - Number(fuenteDe(b) === ".env"));
+
+  const usada = candidatos[0] ?? null;
+  const ignorada = candidatos[1] ?? null;
   const crudo = usada ? process.env[usada] : undefined;
 
   let discrepancia: string | null = null;
-  if (alias && dePrincipal !== undefined && deAlias !== undefined) {
+  if (usada && ignorada) {
     const comparable = (valor: string): string => {
       const recortado = valor.trim();
       return esRuta && recortado ? path.resolve(recortado) : recortado;
     };
-    if (comparable(dePrincipal) !== comparable(deAlias)) {
-      discrepancia = `${alias} difiere de ${principal}; se usa ${principal}.`;
+    if (comparable(process.env[usada]!) !== comparable(process.env[ignorada]!)) {
+      const motivo = fuenteDe(usada) !== fuenteDe(ignorada) ? " (el entorno del cliente gana al .env)" : "";
+      discrepancia = `${ignorada} difiere de ${usada}; se usa ${usada}${motivo}.`;
     }
+  } else if (esRuta && alias && usada === alias && process.env[principal] !== undefined) {
+    discrepancia = `${principal} está vacía; se usa ${alias}.`;
   }
 
   return {
     logica,
     valor: crudo?.trim(),
     usada,
-    fuente: usada === null ? "sin definir" : clavesCargadas.has(usada) ? ".env" : "entorno",
+    fuente: usada === null ? "sin definir" : fuenteDe(usada),
     discrepancia,
   };
 }
