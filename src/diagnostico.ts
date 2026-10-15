@@ -29,7 +29,8 @@ import {
 } from "./config.js";
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder } from "./paths.js";
-import { discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
+import { SECCIONES_ESQUELETO, textoDeReinyeccion } from "./capas.js";
+import { GLOBAL_RULES_FILE, discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { describeEstado, leerPunteros, listarTareas, tareaActiva } from "./tasks.js";
 
@@ -228,14 +229,24 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
       faltan = [...SECCIONES_GLOBALES];
     }
   }
+  // BASE y PENDIENTES son esqueleto: si un global-rules.md propio no las tiene, el ensamblado añade
+  // las de fábrica (GLOBAL-REINYECTADO). EVIDENCIA es una ranura y no se reinyecta: si falta, las
+  // fases citan una sección que no existe (GLOBAL-SIN-BASE).
   if (archivoGlobales && capaGlobales !== "fábrica" && faltan.length) {
-    hallar(
-      "aviso",
-      "GLOBAL-SIN-BASE",
-      `Tu global-rules.md (${archivoGlobales}) sustituye al de fábrica y no tiene ` +
-        `${faltan.map((seccion) => `"## ${seccion}"`).join(", ")}. Las fases citan esas secciones: ` +
-        `cópialas desde el de fábrica.`
-    );
+    const fabrica = path.join(capas[0]?.ruta ?? "", GLOBAL_RULES_FILE);
+    const reinyectadas = fs.existsSync(fabrica) ? faltan.filter((seccion) => SECCIONES_ESQUELETO.includes(seccion)) : [];
+    const sinReinyectar = faltan.filter((seccion) => !reinyectadas.includes(seccion));
+
+    if (reinyectadas.length) hallar("aviso", "GLOBAL-REINYECTADO", textoDeReinyeccion(archivoGlobales, reinyectadas));
+    if (sinReinyectar.length) {
+      hallar(
+        "aviso",
+        "GLOBAL-SIN-BASE",
+        `Tu global-rules.md (${archivoGlobales}) sustituye al de fábrica y no tiene ` +
+          `${sinReinyectar.map((seccion) => `"## ${seccion}"`).join(", ")}. Las fases citan esas secciones: ` +
+          `cópialas desde el de fábrica.`
+      );
+    }
   }
 
   // Fases.

@@ -12,6 +12,68 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Los presets y las personalizaciones se escriben como bloques sobre ranuras, en un solo archivo, con modos `reemplazar`, `antes` y `despues`
+
+**Decisión.** Un archivo de bloques cambia el contenido de las ranuras sin copiar el prompt:
+
+```markdown
+<!-- bloque: fase-3/pruebas -->
+contenido que sustituye a la ranura
+<!-- /bloque -->
+
+<!-- bloque: global/cero-rupturas | despues -->
+contenido que se añade al final de la ranura
+<!-- /bloque -->
+```
+
+El identificador es `<archivo>/<ranura>` (`global` o `fase-N`), y el modo, `reemplazar` (por
+defecto), `antes` o `despues`. Un preset es un archivo así; una capa propia (la global o la de un
+proyecto, `<DOCS>/<PROYECTO>/.phase-gate/prompts/`) los escribe en su `bloques.md`.
+
+Las capas, de menor a mayor: fábrica (1), preset (2), variantes de regla (2.5), global (3) y
+proyecto (4). El **cuerpo** de una fase sale de la capa más alta entre 1, 3 y 4 que tenga su
+`fase-N-*.md`, y su cabecera da el nombre del documento: un bloque no lo puede cambiar. Después,
+los bloques se aplican por capa ascendente (y, dentro de una capa, en el orden del archivo), así
+que el de más arriba manda aunque su capa esté por debajo de la del cuerpo. Un `despues` del
+preset seguido de un `reemplazar` del proyecto deja solo el del proyecto.
+
+Lo que no encaja se avisa y no se aplica: un bloque de una ranura que no existe es
+`BLOQUE-HUERFANO`; el mismo identificador dos veces en un archivo es `BLOQUE-DUPLICADO` (vale el
+primero); un bloque sin cerrar, un cierre suelto, uno anidado o un marcador mal escrito es
+`BLOQUE-MAL-FORMADO`, y el archivo entero se ignora. Los marcadores nunca llegan al modelo, y una
+ranura que ningún bloque toca se entrega byte a byte como antes: sin bloques, el prompt es
+idéntico al de la `2.2.0` (comprobado contra el build de `v2.2.0` en las cinco fases).
+
+**`global/extra`.** `global-rules.md` gana al final una ranura vacía bajo `## REGLAS
+ADICIONALES`, para sumar reglas globales sin sustituir ninguna. Si queda vacía, el encabezado no
+se entrega. El catálogo pasa a 23 ranuras.
+
+**Reemplaza en parte** la entrada del 2026-08-10 "Publicable en npm: los prompts se superponen en
+capas", en su punto "`global-rules.md` sustituye, no concatena". Un `global-rules.md` propio sigue
+sustituyendo al de fábrica, pero las secciones `## BASE DE CADA DECISIÓN` y `## PENDIENTES
+HEREDADOS` son **esqueleto**: no son ranuras, ningún bloque las toca, y si el archivo que gana no
+las tiene se añaden al final las de fábrica. `doctor` lo dice con `GLOBAL-REINYECTADO`, que
+sustituye a `GLOBAL-SIN-BASE` para esas dos. `## EVIDENCIA` es una ranura y no se reinyecta: si
+falta, `GLOBAL-SIN-BASE` sigue avisando. La forma recomendada de cambiar las reglas globales deja
+de ser copiar el archivo y pasa a ser un `bloques.md` con `global/cero-rupturas`,
+`global/evidencia` o `global/extra`. **Amplía** la del 2026-10-14 "Ranuras en los prompts base:
+estructura fija, contenido sustituible", que reservó las ranuras para esto.
+
+**Por qué el motivo de la entrada vieja ya no pesa.** Concatenar dos juegos de reglas hacía
+imposible saber de qué archivo salió una instrucción. Un bloque nombra su ranura y su modo, y la
+procedencia de cada ranura (qué capa y qué `archivo:línea` ganó, y qué modos se sumaron) la da el
+ensamblado; `doctor` la mostrará. Lo que se suma es visible y tiene dirección.
+
+**Por qué un archivo de bloques mal formado se ignora entero.** Aplicar la mitad de un preset daría
+un prompt que nadie escribió. Mejor el prompt de fábrica y un aviso con archivo y línea.
+
+**Qué se descartó.** Bloques que cambien el frontmatter (el nombre del documento o de los recibos):
+la deducción de fase depende de esos nombres, y que un preset de tarea pudiera cambiarlos haría que
+la fase de una tarea dependiera de qué preset tiene. Y un parser de Markdown completo: los
+marcadores se reconocen por línea entera, como los de ranura, sin entender bloques de código.
+
+---
+
 ## 2026-10-15 — Los prompts de fábrica viven en `prompts/<idioma>/`
 
 **Decisión.** Los prompts que trae el paquete pasan de `prompts/` a `prompts/es/`: las cinco
@@ -938,6 +1000,10 @@ intentaría republicarla y npm la rechazaría por duplicada. Los tags empiezan e
 ---
 
 ## 2026-08-10 — Publicable en npm: los prompts se superponen en capas
+
+> **Reemplazada en parte** el 2026-10-15 por "Los presets y las personalizaciones se escriben
+> como bloques sobre ranuras…": el punto "`global-rules.md` sustituye, no concatena" ya no vale
+> para las secciones esqueleto (BASE y PENDIENTES), que se reinyectan. El resto sigue.
 
 **Decisión.** El paquete gana `bin`, el `index.ts` gana shebang, y `ORQUESTADOR_PROMPTS_PATH`
 deja de **reemplazar** la carpeta de prompts para **superponerse** a ella. Se publica como

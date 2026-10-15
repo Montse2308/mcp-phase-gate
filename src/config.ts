@@ -257,8 +257,22 @@ export function tasksSubdir(): string {
 // sigue teniendo sus fase-N-*.md en la raíz.
 export const IDIOMA_POR_DEFECTO = "es";
 
+// La raíz del paquete: la carpeta que tiene al lado build/, prompts/ y presets/. Los tests corren
+// desde build-test/, que no tiene esas carpetas al lado; la apuntan al repo con fijarRaizDelPaquete
+// cuando necesitan los prompts y presets de fábrica de verdad.
+let raizDelPaquete = path.join(MODULE_DIR, "..");
+
+export function raizPaquete(): string {
+  return raizDelPaquete;
+}
+
+// Solo para tests. null vuelve a la raíz real.
+export function fijarRaizDelPaquete(ruta: string | null): void {
+  raizDelPaquete = ruta ?? path.join(MODULE_DIR, "..");
+}
+
 export function defaultPromptsPath(idioma: string = IDIOMA_POR_DEFECTO): string {
-  return path.join(MODULE_DIR, "..", "prompts", idioma);
+  return path.join(raizPaquete(), "prompts", idioma);
 }
 
 // De menor a mayor prioridad. La del usuario va al final: gana.

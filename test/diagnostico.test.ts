@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cargarEnv } from "../src/config.js";
+import { cargarEnv, fijarRaizDelPaquete } from "../src/config.js";
 import { deducirVia, diagnosticar, formatearDiagnostico } from "../src/diagnostico.js";
 import type { Diagnostico } from "../src/diagnostico.js";
 import { guardarPuntero } from "../src/tasks.js";
@@ -119,6 +119,29 @@ describe("diagnosticar", () => {
     assert.match(hallazgo?.texto ?? "", /"## BASE DE CADA DECISIÓN", "## PENDIENTES HEREDADOS"/);
     assert.equal(d.reglasGlobales.capa, "propia");
     assert.deepEqual(d.reglasGlobales.faltan, ["BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"]);
+  });
+
+  // Etapa 3, L02: BASE y PENDIENTES son esqueleto y se reinyectan desde la fábrica; EVIDENCIA no.
+  it("GLOBAL-REINYECTADO sustituye a GLOBAL-SIN-BASE cuando la fábrica tiene las secciones que faltan", () => {
+    instalacionCorrecta();
+    fijarRaizDelPaquete(path.resolve(PROMPTS_DEL_REPO, "..", ".."));
+    try {
+      promptsTemporales({ "global-rules.md": "## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)\n\n## EVIDENCIA\n" });
+      const sinEsqueleto = diagnosticar();
+      const reinyectado = sinEsqueleto.hallazgos.find((h) => h.codigo === "GLOBAL-REINYECTADO");
+      assert.equal(reinyectado?.severidad, "aviso");
+      assert.match(reinyectado?.texto ?? "", /se añaden al final las de fábrica/);
+      assert.match(reinyectado?.texto ?? "", /global\/evidencia/);
+      assert.ok(!codigos(sinEsqueleto).includes("GLOBAL-SIN-BASE"));
+
+      // Sin EVIDENCIA, que es una ranura y no se reinyecta, sigue saliendo GLOBAL-SIN-BASE para ella.
+      promptsTemporales({ "global-rules.md": "## BASE DE CADA DECISIÓN\n\n## PENDIENTES HEREDADOS\n" });
+      const sinEvidencia = diagnosticar();
+      assert.ok(!codigos(sinEvidencia).includes("GLOBAL-REINYECTADO"));
+      assert.match(sinEvidencia.hallazgos.find((h) => h.codigo === "GLOBAL-SIN-BASE")?.texto ?? "", /no tiene "## EVIDENCIA"\./);
+    } finally {
+      fijarRaizDelPaquete(null);
+    }
   });
 
   it("GLOBAL-SIN-BASE no salta con un global-rules.md propio completo, aunque esté en CRLF y con BOM", () => {

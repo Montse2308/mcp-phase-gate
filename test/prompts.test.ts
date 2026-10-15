@@ -20,7 +20,7 @@ const PROMPTS = path.join(process.cwd(), "prompts", "es");
 
 // El catálogo de §3.2, por identificador de archivo (el de los bloques de la Etapa 3).
 const CATALOGO: Record<string, string[]> = {
-  global: ["cero-rupturas", "evidencia"],
+  global: ["cero-rupturas", "evidencia", "extra"],
   "fase-1": ["rol", "verificacion", "ejemplos"],
   "fase-2": ["rol", "verificacion", "ejemplos"],
   "fase-3": ["rol", "comprobaciones", "lotes", "pruebas", "ejemplos"],
@@ -195,8 +195,8 @@ describe("prompts publicados", () => {
   }
 
   // Hallazgo 8: comprobar solo que cada ranura fuera del catálogo dejaba pasar que se borrara una.
-  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 22 de §3.2.
-  it("cada prompt tiene exactamente las ranuras de su catálogo, 22 en total", () => {
+  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 23 de §3.2 y §5.3.5 (la Etapa 3 suma `global/extra`).
+  it("cada prompt tiene exactamente las ranuras de su catálogo, 23 en total", () => {
     let total = 0;
     for (const archivo of archivos) {
       const id = identificador(archivo) ?? "";
@@ -205,7 +205,7 @@ describe("prompts publicados", () => {
       assert.deepEqual(encontradas, [...(CATALOGO[id] ?? [])].sort(), archivo);
       total += encontradas.length;
     }
-    assert.equal(total, 22);
+    assert.equal(total, 23);
   });
 
   for (const fase of [1, 2, 3, 4, 5]) {
