@@ -199,9 +199,14 @@ hace cumplir el servidor.
 una errata en `01` con `02` ya escrito. Cerrarlas del todo obligaría a editar a mano fuera del
 flujo, que es peor. Con `force`, la corrección pasa por el usuario.
 
-**Las mayúsculas no lo esquivan.** En Windows y macOS, `01 - análisis técnico.md` abre el mismo
-archivo que `01 - Análisis Técnico.md`. La ruta se resuelve con `rutaReal`, que devuelve el
-nombre que hay en disco, así que llega a la comprobación con el nombre del documento.
+**Ni las mayúsculas ni Unicode lo esquivan.** En Windows y macOS, `01 - análisis técnico.md`
+abre el mismo archivo que `01 - Análisis Técnico.md`, y un nombre en Unicode NFD se ve igual que
+el documento. `rutaReal` devuelve el nombre que hay en disco, pero solo para lo que ya existe:
+crear `00 - contexto inicial.md`, o un recibo en `04 - ejecución/`, llegaba a la comprobación con
+el nombre tal cual y pasaba (hallazgo de la auditoría de la Etapa 1). Por eso
+`motivoDeProteccion` compara los nombres normalizados a NFC y sin distinguir mayúsculas, en todos
+los sistemas: en Linux, un nombre que solo difiere en mayúsculas de un documento protegido
+también pide `force`, y no hay un uso legítimo que lo necesite.
 
 **`force` admite `null`,** como todo opcional desde la Etapa 0: cuenta como ausente.
 

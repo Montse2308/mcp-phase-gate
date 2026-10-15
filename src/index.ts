@@ -413,10 +413,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
       }
 
+      const existia = fs.existsSync(fullPath);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, content, "utf-8");
 
-      const forzado = motivo ? " (sobrescrito con force)" : "";
+      // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
+      const forzado = motivo ? (existia ? " (sobrescrito con force)" : " (creado con force)") : "";
       return {
         content: [{ type: "text", text: `Archivo escrito exitosamente en ${fullPath}${forzado}` }],
       };

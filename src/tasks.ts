@@ -173,6 +173,16 @@ function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null 
   return null;
 }
 
+// Los nombres protegidos se comparan por esta clave y no como texto exacto. rutaReal solo corrige
+// las mayúsculas de lo que ya existe, así que sin ella un archivo nuevo las esquivaba:
+// `00 - contexto inicial.md` o `04 - ejecución/L01 - x.md` en Windows y macOS, donde abren lo
+// mismo que el nombre protegido, y en cualquier sistema un nombre en Unicode NFD, que se ve igual
+// que el documento. Sin distinguir mayúsculas en todos los sistemas: en Linux un nombre que solo
+// difiere en mayúsculas de un documento protegido también pide force, y no hace falta nunca.
+function clave(nombre: string): string {
+  return nombre.normalize("NFC").toLowerCase();
+}
+
 // Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
 // dentro de la tarea, con "/" como separador (la de ubicarEnTarea).
 export function motivoDeProteccion(
@@ -181,21 +191,27 @@ export function motivoDeProteccion(
   phases: Map<number, PhaseFile>,
   contextoInicial: string
 ): string | null {
+  const buscado = clave(relativo);
+
   // Ni siquiera para crearlo: solo start_task lo escribe.
-  if (relativo === contextoInicial) {
+  if (buscado === clave(contextoInicial)) {
     return "El contexto inicial está siempre protegido: es el único documento que no se puede regenerar leyendo el código.";
   }
 
   const fases = [...phases.entries()].sort((a, b) => a[0] - b[0]);
   const propia = fases.find(
-    ([, datos]) => datos.documento === relativo || (datos.recibos && relativo.startsWith(`${datos.recibos}/`))
+    ([, datos]) =>
+      (datos.documento && clave(datos.documento) === buscado) ||
+      (datos.recibos && buscado.startsWith(`${clave(datos.recibos)}/`))
   );
   if (!propia) return null; // no es un archivo de fase
 
-  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Un recibo nuevo sí
-  // se congela: con la Fase 5 presente, la ejecución ya se auditó.
+  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Se mira el nombre
+  // declarado y no el que llegó, que puede venir en otras mayúsculas. Un recibo nuevo sí se
+  // congela: con la Fase 5 presente, la ejecución ya se auditó.
   const [numero, datos] = propia;
-  if (datos.documento === relativo && !fs.existsSync(path.join(carpetaTarea, relativo))) return null;
+  const esDocumento = datos.documento !== undefined && clave(datos.documento) === buscado;
+  if (esDocumento && !fs.existsSync(path.join(carpetaTarea, datos.documento!))) return null;
 
   for (const [posterior, datosPosterior] of fases) {
     if (posterior <= numero) continue;

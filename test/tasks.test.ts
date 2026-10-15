@@ -184,10 +184,18 @@ describe("motivoDeProteccion", () => {
     [[C00, D01, D03], D02, null],
     [[C00, D01, D03], D01, /congelado: la Fase 3/],
     [TODOS, "notas.md", null],
+    // Hallazgo 1 de la auditoría de la Etapa 1: un nombre en otras mayúsculas o en NFD no esquiva
+    // la protección, exista o no el archivo con ese nombre.
+    [[D01], "00 - contexto inicial.md", /contexto inicial está siempre protegido/],
+    [[C00, D01, D02], "01 - análisis técnico.md", /congelado: la Fase 2/],
+    [[C00, D01, D02], D01.normalize("NFD"), /congelado: la Fase 2/],
+    [TODOS, "04 - ejecución/L01 - x.md", /congelado: la Fase 5/],
+    [[C00, D01, D02, D03, RECIBO_L01], "03 - plan técnico.md", /congelado: la Fase 4/],
+    [[C00, D01], "02 - decisiones.md", null],
   ];
 
   for (const [existen, relativo, esperado] of tabla) {
-    const caso = `con ${existen.map((d) => (d.includes("/") ? "recibo" : d.slice(0, 2))).join(", ")}, escribir ${relativo}: ${esperado ? "rechazo" : "permitido"}`;
+    const caso = `con ${existen.map((d) => (d.includes("/") ? "recibo" : d.slice(0, 2))).join(", ")}, escribir ${relativo}${relativo === relativo.normalize("NFC") ? "" : " (NFD)"}: ${esperado ? "rechazo" : "permitido"}`;
     it(caso, () => {
       const docs = docsTemporales();
       crearProyecto(docs, "PROYECTO-A");

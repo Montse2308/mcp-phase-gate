@@ -315,6 +315,24 @@ describe("e2e: documentos congelados (R4)", () => {
     );
   });
 
+  // Hallazgo 13 de la auditoría de la Etapa 1: force también crea el contexto cuando falta.
+  it("crear el contexto con force responde 'creado', no 'sobrescrito'", async () => {
+    const e = escenario();
+    conFases(e, []);
+    fs.rmSync(path.join(e.tareaA, CONTEXTO_INICIAL));
+    const destino = { project: "PROYECTO-A", task_name: "tarea-a", file_name: "00 - contexto inicial.md", content: "nuevo" };
+
+    await conServidor(e.env, async (llamar) => {
+      const rechazo = await llamar("write_central_doc", destino);
+      assert.equal(rechazo.isError, true, rechazo.texto);
+      assert.match(rechazo.texto, /contexto inicial está siempre protegido/);
+
+      const creado = await llamar("write_central_doc", { ...destino, file_name: CONTEXTO_INICIAL, force: true });
+      assert.equal(creado.isError, false, creado.texto);
+      assert.match(creado.texto, /\(creado con force\)/);
+    });
+  });
+
   it("escribe un recibo en la subcarpeta, y el recibo congela el plan", async () => {
     const e = escenario();
     conFases(e, [D01, D02, D03]);
