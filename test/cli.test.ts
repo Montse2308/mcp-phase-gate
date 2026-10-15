@@ -17,7 +17,7 @@ afterEach(limpiarEntorno);
 
 // Este archivo compila a build-test/test/; el binario, a build-test/src/.
 const BINARIO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js");
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
 function salidaDePrueba(): Salida & { textoOut: () => string; textoErr: () => string } {
   const out: string[] = [];

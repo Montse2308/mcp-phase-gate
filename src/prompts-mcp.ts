@@ -3,7 +3,7 @@
 // servidor los ofrece a cualquier cliente que muestre prompts, y llegan con cada versión.
 //
 // El texto de cada comando vive en `comandos/fN.md` dentro de una capa de prompts (los de fábrica
-// en prompts/comandos/), y se resuelve por capas como las fases: gana la más alta que lo tenga.
+// en prompts/es/comandos/), y se resuelve por capas como las fases: gana la más alta que lo tenga.
 // Una fase sin comando, como una fase-6 propia, recibe un texto genérico que funciona igual.
 //
 // El prompt NO incluye el prompt de la fase: sigue siendo orquestación ("llama a

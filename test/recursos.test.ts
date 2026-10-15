@@ -17,7 +17,7 @@ import { carpetaTemporal, crearProyecto, crearSymlink, crearTarea, docsTemporale
 
 afterEach(limpiarEntorno);
 
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 const CONTEXTO = "00 - Contexto Inicial.md";
 const ANALISIS = "01 - Análisis Técnico.md";
 const RECIBOS = "04 - Ejecución";

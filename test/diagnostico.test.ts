@@ -25,7 +25,7 @@ import {
 afterEach(limpiarEntorno);
 
 // Este archivo compila a build-test/test/; los prompts del repo están dos niveles arriba.
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
 const GLOBALES_COMPLETAS = [
   "## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)",

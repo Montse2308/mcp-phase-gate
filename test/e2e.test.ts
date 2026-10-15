@@ -475,7 +475,7 @@ describe("e2e: argumentos validados antes de usarlos (S6)", () => {
 });
 
 // La carpeta prompts/ del repo: el servidor compilado en build-test/ no tiene una al lado.
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
 describe("e2e: usos legítimos que siguen funcionando", () => {
   it("las tools de fase y de tarea aceptan sus argumentos de siempre", async () => {

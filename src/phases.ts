@@ -237,7 +237,7 @@ export function loadPhasePrompt(phase: number, capas: string[] = promptsLayers()
     throw new Error(
       list
         ? `Fase no válida. Las fases disponibles son: ${list}.`
-        : `No se encontró ningún prompt de fase en ${capas.join(", ")}. Verifica que la carpeta 'prompts' exista junto al build.`
+        : `No se encontró ningún prompt de fase en ${capas.join(", ")}. Verifica que la carpeta 'prompts/es' exista junto al build.`
     );
   }
 

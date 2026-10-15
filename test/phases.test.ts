@@ -181,7 +181,7 @@ describe("promptsLayers", () => {
   // alguien renombra un archivo de `prompts/` y rompe el patrón, esa fase desaparece del
   // paquete en silencio, y esto es lo único que lo caza.
   it("los prompts que se publican declaran sus cinco fases con documento", () => {
-    const fases = discoverPhases([path.join(process.cwd(), "prompts")]);
+    const fases = discoverPhases([path.join(process.cwd(), "prompts", "es")]);
 
     assert.deepEqual([...fases.keys()].sort((a, b) => a - b), [1, 2, 3, 4, 5]);
     for (const [numero, datos] of fases) {

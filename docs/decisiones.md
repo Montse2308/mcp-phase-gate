@@ -12,6 +12,28 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Los prompts de fábrica viven en `prompts/<idioma>/`
+
+**Decisión.** Los prompts que trae el paquete pasan de `prompts/` a `prompts/es/`: las cinco
+fases, `global-rules.md` y `comandos/`. `defaultPromptsPath()` apunta ahí y acepta el idioma
+(`"es"` por defecto). El paquete publica además `presets/` y `schema/`, que llegan en los lotes
+siguientes de la Etapa 3.
+
+**Amplía** la entrada del 2026-08-10 "Publicable en npm: los prompts se superponen en capas": las
+capas siguen igual, solo cambia dónde está la de fábrica.
+
+**Por qué una subcarpeta por idioma.** La versión en inglés (Etapa 6) llega al lado, en
+`prompts/en/`, sin mover nada ni partir los nombres de archivo con sufijos. Hacerlo ahora, con un
+solo idioma, cuesta un `git mv`; hacerlo con dos idiomas y presets apuntando a la ruta vieja
+costaría una migración.
+
+**Qué no cambia.** Las capas propias (`PHASE_GATE_PROMPTS_PATH`, o su alias
+`ORQUESTADOR_PROMPTS_PATH`) siguen teniendo sus `fase-N-*.md` en la raíz: nadie tiene que mover
+su carpeta. `.claude/commands/` sigue siendo la copia idéntica de los comandos, ahora de
+`prompts/es/comandos/`.
+
+---
+
 ## 2026-10-15 — El servidor avisa de los pendientes heredados leyendo encabezados, sin guardar estado
 
 **Decisión.** `get_phase_prompt` añade un bloque `## PENDIENTES HEREDADOS (detectados por el

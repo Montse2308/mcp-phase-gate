@@ -251,8 +251,14 @@ export function tasksSubdir(): string {
 // instalación se los lleva. Reemplazar obligaba entonces a copiar las cinco fases para
 // cambiar una: te quedas con copias congeladas que ya no reciben mejoras y, si se te olvida
 // copiar una, esa fase simplemente deja de existir sin que nada te avise.
-export function defaultPromptsPath(): string {
-  return path.join(MODULE_DIR, "..", "prompts");
+//
+// Los de fábrica viven en una subcarpeta por idioma (prompts/es/), para que la versión en inglés
+// llegue al lado sin mover nada. Las capas propias no cambian: una carpeta de prompts del usuario
+// sigue teniendo sus fase-N-*.md en la raíz.
+export const IDIOMA_POR_DEFECTO = "es";
+
+export function defaultPromptsPath(idioma: string = IDIOMA_POR_DEFECTO): string {
+  return path.join(MODULE_DIR, "..", "prompts", idioma);
 }
 
 // De menor a mayor prioridad. La del usuario va al final: gana.

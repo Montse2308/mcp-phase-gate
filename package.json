@@ -9,6 +9,8 @@
   "files": [
     "build",
     "prompts",
+    "presets",
+    "schema",
     "!build/**/*.map"
   ],
   "engines": {

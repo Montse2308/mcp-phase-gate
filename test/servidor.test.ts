@@ -227,7 +227,7 @@ const _diagnosticoCuadra: z.input<z.ZodObject<typeof diagnosticoShape>> = {} as 
 void _diagnosticoCuadra;
 
 describe("MCP Prompts /fN", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const comandoDelRepo = (numero: number): string =>
     fs.readFileSync(path.join(PROMPTS_DEL_REPO, "comandos", `f${numero}.md`), "utf-8").replace(/\r\n/g, "\n").trim();
   const esperar = () => new Promise((resolver) => setImmediate(resolver));
@@ -365,7 +365,7 @@ describe("MCP Prompts /fN", () => {
 });
 
 describe("confirmaciones por elicitation", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const CONGELADO = "01 - Análisis Técnico.md";
 
   afterEach(() => fijarEsperaDeConfirmacion(null));
@@ -578,7 +578,7 @@ describe("confirmaciones por elicitation", () => {
 });
 
 describe("get_phase_prompt con pendientes heredados", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
   it("el aviso va después del de la compuerta y antes del prompt", async () => {
     const docs = docsTemporales();
@@ -627,7 +627,7 @@ describe("una capa de prompts que no es carpeta", () => {
 
 // Ajustes de la auditoría de la Etapa 2: la cancelación del cliente y los valores de apagado.
 describe("confirmaciones: cancelación y apagado", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const CONGELADO = "01 - Análisis Técnico.md";
 
   function tareaConCongelado(): string {
@@ -684,7 +684,7 @@ describe("confirmaciones: cancelación y apagado", () => {
 
 // Ajuste de la auditoría de la Etapa 2: un argumento de una línea no puede abrir secciones.
 describe("argumentos de /fN", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
   it("project, task_name y commits se aplanan a una línea; el contexto se conserva", async () => {
     estadoTemporal();

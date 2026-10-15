@@ -12,10 +12,11 @@ import { describe, it } from "node:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { defaultPromptsPath } from "../src/config.js";
 import { PHASE_FILE_PATTERN, describePhaseFiles, discoverPhases, loadPhasePrompt } from "../src/phases.js";
 
 // Como en test/phases.test.ts: la capa de fábrica no se resuelve al repo desde build-test/.
-const PROMPTS = path.join(process.cwd(), "prompts");
+const PROMPTS = path.join(process.cwd(), "prompts", "es");
 
 // El catálogo de §3.2, por identificador de archivo (el de los bloques de la Etapa 3).
 const CATALOGO: Record<string, string[]> = {
@@ -164,6 +165,18 @@ describe("revisarRanuras (el propio validador)", () => {
 
 describe("prompts publicados", () => {
   const archivos = fs.readdirSync(PROMPTS).filter((archivo) => archivo.endsWith(".md")).sort();
+
+  // Etapa 3, L01: los de fábrica viven en una subcarpeta por idioma. Un prompt que se quedara en
+  // la raíz de prompts/ ya no lo lee nadie, y se publicaría igual.
+  it("los prompts de fábrica viven en prompts/es/ y no queda ninguno suelto en prompts/", () => {
+    const raiz = path.dirname(PROMPTS);
+    const sueltos = fs.readdirSync(raiz, { withFileTypes: true }).filter((entrada) => entrada.isFile());
+
+    assert.deepEqual(sueltos.map((entrada) => entrada.name), []);
+    assert.equal(fs.existsSync(path.join(raiz, "comandos")), false, "prompts/comandos/ debía moverse a prompts/es/comandos/");
+    assert.ok(path.resolve(defaultPromptsPath()).endsWith(path.join("prompts", "es")));
+    assert.ok(archivos.includes("global-rules.md"));
+  });
 
   it("cada prompt es de un archivo del catálogo", () => {
     for (const archivo of archivos) {
