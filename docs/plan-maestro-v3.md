@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Iteración | **13** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6) y versionado en el repo con revisión de privacidad (iteración 13) |
+| Iteración | **14** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13) y puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) |
 | Base del análisis | commit `d7594ea`, árbol limpio |
 | Versión publicada | `2.0.0` |
-| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapa 0 ejecutada** (L01 a L10, §9.6); faltan el PR, el tag `v2.0.1` y la publicación, que hace la autora |
+| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapa 0 ejecutada** (L01 a L10, §9.6) y en `master`. **Etapa 1 ejecutada** (L01 a L11, §9.7); faltan el PR, el tag `v2.1.0` y la publicación, que hace la autora |
 | Ejecución | La hace el agente local de la autora, lote por lote, con la política `agente-commitea-con-OK` |
 | Fuente | Desde E0 L09, esta copia en `docs/plan-maestro-v3.md` es la fuente del plan (§9.2) |
 
@@ -1100,6 +1100,8 @@ La respuesta de éxito añade `" (sobrescrito con force)"` cuando se usó `force
 | **L09** | Comandos `f3`, `f4` y `f5`, y su copia (§3.6) | `.claude/commands/f3.md`, `.claude/commands/f4.md`, `.claude/commands/f5.md`, `docs/comandos-de-fase.md` | Base verde, incluido el test de sincronía de la Etapa 0 | `feat(comandos): llevar los lotes y los recibos a f3, f4 y f5` |
 | **L10** | Los dos README | `README.md`, `README.es.md` | `grep` no encuentra "You always make the commits" ni "Los commits y el PR los haces tú"; ambos README describen lotes, recibos, `force` y la advertencia sobre `global-rules.md` propio | `docs(readme): explicar los lotes, los recibos y la protección de documentos` |
 | **L11** | Versión `2.1.0` | `package.json`, `package-lock.json` | Base verde. El tag `v2.1.0` lo crea la autora | `chore(release): 2.1.0` |
+
+> **Estado de ejecución:** de L01 a L11 hechos. Commits y desvíos en §9.7.
 
 **Por qué este orden.** El código primero, porque los prompts de L07 y L08 dependen de que el servidor anuncie la subcarpeta (L02) y proteja los documentos (L03). Las reglas globales (L04) van antes que las fases, porque las fases las citan. Los comandos (L09) y los README (L10) describen lo ya hecho. Si L03 se descarta, el resto sigue en pie.
 
@@ -4176,6 +4178,49 @@ Tras los ajustes: 171 tests (169 pasan; 2 omitidos fuera de Linux o macOS: `XDG_
 
 **Pendiente de comprobar fuera de este equipo:** todos los tests nuevos de la Etapa 0 corrieron solo en Windows (Node 24). Su primera ejecución en Linux, y la de Node 22, será la CI del PR (L07).
 
+### 9.7 Ejecución de la Etapa 1
+
+Rama `etapa-1/lotes-y-recibos`, creada desde `master` en `eef0058`, con la Etapa 0 ya integrada. Un commit por lote, cada uno con el OK de la autora y con `git add` archivo por archivo; ningún `push`. Todos los lotes pasaron `npm ci && npm run build && npm test` antes de su commit. Los tests de L01 a L06 se volvieron a medir en una copia aparte del repo, commit por commit, al cerrar la etapa.
+
+| Lote | Estado | Commit | Tests al cerrar | Desvíos |
+|---|---|---|---|---|
+| L01 | Hecho | `4d616f4` | 191 (antes 171) | E1-D1 |
+| L02 | Hecho | `7810ce4` | 225 | E1-D2 |
+| L03 | Hecho | `3cd9e1a` | 244 | — |
+| L04 | Hecho | `e6d1f53` | 249 | — |
+| L05 | Hecho | `da84414` | 251 | — |
+| L06 | Hecho | `9a57ac0` | 252 | — |
+| L07 | Hecho | `91b6b5e` | 253 | E1-D3 |
+| L08 | Hecho; cierra #39 y #40 al integrar el PR | `c390f04` | 255 | E1-D4 |
+| L09 | Hecho | `155e608` | 255 | — |
+| L10 | Hecho | `d0a48b7` | 255 | E1-D5 |
+| L11 | Hecho en el commit `chore(release): 2.1.0`; el tag `v2.1.0` y la publicación los hace la autora | — | 255 | E1-D6 |
+
+En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_HOME` y el FIFO), como al cerrar la Etapa 0.
+
+**Desvíos** (cada uno se decidió con la autora antes de su commit):
+
+- **E1-D1 · L01.** `start_task` rechaza un `task_name` que empieza por punto, y un `project` que empieza por punto cuando viene con `crear_proyecto`; y la descripción de `file_path` en `write_central_doc` dice que la ruta debe caer dentro de una tarea existente. El plan no lo pedía en este lote. Detalle en la ADR de L01. Base: leído en código.
+- **E1-D2 · L02.** La comprobación de que la Fase 4 declara `recibos` se mudó a L07, que es donde llega ese frontmatter. Base: leído en código.
+- **E1-D3 · L07.** En "Dónde va cada recibo", el texto de §3.5.2 decía "(ventana aceptada, ver la nota de diseño de abajo)". Esa nota vive en el plan, no en el prompt, así que el modelo habría leído una referencia a algo que no existe. Se quitó del prompt, y su contenido pasó a la ADR de L07 como consecuencia aceptada. Base: leído en código.
+- **E1-D4 · L08.** Al envolver los ejemplos de la Fase 5 en la ranura `ejemplos` (§3.4.5 a), la regla 3 del validador marcó 5 errores: los `## Contexto`, `## Cambios` y `## Problema` de los PR de ejemplo, que van entre `--- INICIO EJEMPLO ---` y `--- FIN EJEMPLO ---` sin bloque de código. Meterlos en un bloque habría cambiado lo que ve el modelo (el prompt dice que se muestran sin bloque a propósito), así que el validador de `test/prompts.test.ts` trata esos delimitadores como una valla, con un caso de prueba propio. Fuera del ejemplo, un `##` dentro de una ranura sigue siendo error. Base: medido (5 errores antes, 0 después).
+- **E1-D5 · L10.** Además del contenido mínimo, los README corrigen dos textos que ya no eran ciertos: `/f5` no exige los commits después del comando (los toma de los recibos), y la fila de `write_central_doc` dice que solo escribe dentro de una tarea y que tiene `force`. Base: leído en código.
+- **E1-D6 · L11.** El commit de la release toca también este plan (la cabecera, la nota de estado de §3.8, esta sección y el Anexo A), igual que en la Etapa 0, para que la versión etiquetada no diga que la etapa está pendiente. Lo decidió la autora.
+
+**Tamaño de los prompts** (riesgo E1-R5), en caracteres, antes y después del lote que los cambió (medido sobre los commits):
+
+| Prompt | Lote | Antes | Después |
+|---|---|---|---|
+| Fase 1 | L05 | 8 351 (168 líneas) | 9 380 (184) |
+| Fase 2 | L05 | 11 112 (247) | 13 018 (276) |
+| Fase 3 | L06 | 13 447 (267) | 16 408 (322) |
+| Fase 4 | L07 | 10 689 (236) | 15 608 (358) |
+| Fase 5 | L08 | 12 709 (209) | 13 988 (232) |
+
+La Fase 4 crece 122 líneas, más que las "unas 80" que preveía el riesgo: la plantilla del recibo y el índice de cierre van completos dentro del prompt.
+
+**Pendiente de comprobar fuera de este equipo:** como en la Etapa 0, todos los tests corrieron solo en Windows (Node 24). Su primera ejecución en Linux y en Node 22 será la CI del PR.
+
 ---
 
 ## 10. Cierre del plan
@@ -4218,3 +4263,4 @@ Tras los ajustes: 171 tests (169 pasan; 2 omitidos fuera de Linux o macOS: `XDG_
 | 11 | 2026-10-14 | Decisiones al ejecutar E0 L03: `null` en campos opcionales cuenta como ausente (`.nullish()`); un número en texto se rechaza con un mensaje claro; se acepta el metadato `"peer": true` que npm 11 añade al lockfile |
 | 12 | 2026-10-14 | Desvío detectado al ejecutar E0 L04: el refresco de la copia de trabajo exigía el árbol limpio antes del commit del propio lote, y `reset --hard` habría borrado el cambio de `.gitignore`. Nuevo orden: renormalizar, commit y después refrescar |
 | 13 | 2026-10-14 | E0 L09: el plan entra al repo como `docs/plan-maestro-v3.md` y pasa a ser la fuente. Sección 9 puesta al día con lo ejecutado (§9.6: commits de L01 a L08 y desvíos E0-D1 a E0-D5). Revisión de privacidad del texto entero: fuera la rama de la sesión en la nube y el nombre corto 8.3 real; los ejemplos de recibos de la Etapa 4 pasan a un caso genérico de tienda; los detalles del equipo de la autora se generalizan; la estrategia de difusión personal (§8.9.1) sale del repo |
+| 14 | 2026-10-14 | Etapa 1 ejecutada (L01 a L11) en la rama `etapa-1/lotes-y-recibos`. Nueva §9.7 con los commits y los desvíos E1-D1 a E1-D6. El más relevante: el validador de ranuras de `test/prompts.test.ts` trata los ejemplos de PR de la Fase 5 (`--- INICIO EJEMPLO ---` … `--- FIN EJEMPLO ---`) como una valla de código, porque sus `##` son parte del ejemplo |
