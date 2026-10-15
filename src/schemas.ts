@@ -31,6 +31,7 @@ const TIPOS: Record<string, string> = {
   int: "un número entero, por ejemplo 3",
   boolean: "true o false",
   object: "un objeto",
+  array: "una lista",
 };
 
 // El mensaje de un campo. null también es "falta": en un opcional se tolera antes de llegar aquí,
@@ -90,6 +91,19 @@ export const startTaskShape = {
       "Solo para ESTRENAR un proyecto que todavía no existe. Déjalo sin poner salvo que el usuario te haya " +
         "dicho explícitamente que quiere crear un proyecto nuevo: sirve para que un nombre mal escrito no cree " +
         "una carpeta suelta en la Documentación."
+    ),
+  repos: z
+    .array(texto("repos"), { error: mensaje("repos") })
+    .nullish()
+    .describe(
+      "Solo si la tarea toca algunos de los repos que declara el phase-gate.json del proyecto, no todos: sus ids " +
+        "(ej. ['api', 'web']). Sin esto, la tarea usa todos. Un id que no existe devuelve los válidos."
+    ),
+  preset: texto("preset")
+    .nullish()
+    .describe(
+      "Solo si esta tarea usa un preset distinto del de su proyecto (ej. 'ai-agent-ops' para el mantenimiento de " +
+        "un agente). Si no existe, la tool devuelve los disponibles."
     ),
 };
 

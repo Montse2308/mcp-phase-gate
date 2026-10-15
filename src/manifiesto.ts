@@ -15,7 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { DOCS, IDIOMA_POR_DEFECTO, configDir, raizPaquete, requireBasePath } from "./config.js";
+import { DOCS, IDIOMA_POR_DEFECTO, REPOS, configDir, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { validarSegmento } from "./paths.js";
 import { leerPromptNormalizado, separarFrontmatter } from "./phases.js";
@@ -343,6 +343,57 @@ export function maquinaDe(): LecturaMaquina {
   const lectura = leerMaquina();
   if (lectura.estado === "invalido") throw new Error(lectura.error!);
   return lectura;
+}
+
+// ─── Repos de un proyecto ───────────────────────────────────────────────────
+export type RepoManifiesto = z.output<typeof RepoManifiesto>;
+
+export type RepoResuelto = {
+  id: string;
+  dir: string;
+  rol: string | null;
+  ruta: string | null; // null si no se pudo resolver (falta PHASE_GATE_REPOS_PATH)
+  origenRuta: "machine.json" | "PHASE_GATE_REPOS_PATH" | null;
+  existe: boolean;
+  error: string | null;
+};
+
+// Dónde está cada repo en ESTE equipo: el override de machine.json ("<PROYECTO>/<id>") si lo hay, y
+// si no, <PHASE_GATE_REPOS_PATH>/<dir>.
+export function resolverRepos(carpetaProyecto: string, repos: readonly RepoManifiesto[], maquina: LecturaMaquina = maquinaDe()): RepoResuelto[] {
+  let base: string | null = null;
+  let errorBase: string | null = null;
+  const baseDeRepos = (): string | null => {
+    if (base === null && errorBase === null) {
+      try {
+        base = requireBasePath(REPOS);
+      } catch (error) {
+        errorBase = error instanceof Error ? error.message : String(error);
+      }
+    }
+    return base;
+  };
+
+  return repos.map((repo) => {
+    const override = maquina.repos.get(claveDeRepo(carpetaProyecto, repo.id));
+    const raiz = override ? null : baseDeRepos();
+    const ruta = override ?? (raiz ? path.join(raiz, ...repo.dir.split(/[\\/]/)) : null);
+    let existe = false;
+    try {
+      existe = ruta !== null && fs.statSync(ruta).isDirectory();
+    } catch {
+      existe = false;
+    }
+    return {
+      id: repo.id,
+      dir: repo.dir,
+      rol: repo.rol ?? null,
+      ruta,
+      origenRuta: override ? "machine.json" : ruta ? "PHASE_GATE_REPOS_PATH" : null,
+      existe,
+      error: ruta ? null : errorBase,
+    };
+  });
 }
 
 // ─── JSON Schema publicados ─────────────────────────────────────────────────

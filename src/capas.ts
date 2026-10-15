@@ -18,9 +18,22 @@ import * as path from "path";
 
 import { aplicarBloques, leerBloques, omitirRanuraVacia } from "./bloques.js";
 import type { Bloque, Procedencia } from "./bloques.js";
-import { DOCS, carpetaPromptsGlobal, defaultPromptsPath, requireBasePath } from "./config.js";
+import { DOCS, IDIOMA_POR_DEFECTO, carpetaPromptsGlobal, defaultPromptsPath, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
-import { describePhaseFiles, discoverPhases, entregable, GLOBAL_RULES_FILE, leerPromptNormalizado, parsePhaseFile, resolveGlobalRules } from "./phases.js";
+import { PRESET_POR_DEFECTO, describirPresets, manifiestoDe, maquinaDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
+import type { Manifiesto, PoliticaCommit, Preset, RepoResuelto } from "./manifiesto.js";
+import { leerTextoAcotado } from "./paths.js";
+import {
+  CONTEXTO_INICIAL_POR_DEFECTO,
+  GLOBAL_RULES_FILE,
+  describePhaseFiles,
+  discoverPhases,
+  entregable,
+  leerPromptNormalizado,
+  parsePhaseFile,
+  resolveGlobalRules,
+  separarFrontmatter,
+} from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 
 export type EtiquetaCapa = "fábrica" | "preset" | "reglas" | "global" | "proyecto";
@@ -38,12 +51,179 @@ export function carpetaPromptsDeProyecto(carpetaProyecto: string): string {
   return path.join(requireBasePath(DOCS), carpetaProyecto, ".phase-gate", "prompts");
 }
 
-export function capasDe(carpetaProyecto: string | null, _carpetaTarea?: string | null): Capa[] {
-  const capas: Capa[] = [{ orden: 1, etiqueta: "fábrica", ruta: defaultPromptsPath() }];
+// ─── Configuración efectiva de un proyecto ──────────────────────────────────
+// De qué preset y con qué reglas se ensambla un prompt. El preset sigue esta precedencia:
+//   frontmatter de la tarea > phase-gate.json del proyecto > presetPorDefecto de machine.json > software
+// y las reglas (lotes, commits): reglas del manifiesto > frontmatter del preset > valor de fábrica.
+// Un preset o un manifiesto que no existe o está mal escrito es un error explícito (decisión F2).
+export type OrigenDelPreset = "de la tarea" | "del proyecto" | "de machine.json" | "por defecto";
+export type OrigenDeRegla = "del proyecto" | "del preset" | "de fábrica";
+export type ReglasEfectivas = {
+  lotes: boolean;
+  commits: PoliticaCommit;
+  origen: { lotes: OrigenDeRegla; commits: OrigenDeRegla };
+};
+export type FrontmatterDeTarea = { repos: string[] | null; preset: string | null };
+
+export type ConfiguracionProyecto = {
+  carpetaProyecto: string | null;
+  manifiesto: Manifiesto | null;
+  idioma: string;
+  preset: Preset;
+  origenPreset: OrigenDelPreset;
+  reglas: ReglasEfectivas;
+  tarea: FrontmatterDeTarea | null;
+};
+
+export const LOTES_DE_FABRICA = true;
+export const COMMITS_DE_FABRICA: PoliticaCommit = "agente-commitea-con-OK";
+
+// Las capas que aportan cuerpos (1, 3 y 4), sin resolver preset ni reglas: lo que hace falta para
+// saber qué fases hay y cómo se llaman sus documentos. Solo lee el manifiesto por el idioma.
+export function capasDeCuerpos(carpetaProyecto: string | null): Capa[] {
+  const idioma = (carpetaProyecto ? manifiestoDe(carpetaProyecto)?.idioma : null) ?? IDIOMA_POR_DEFECTO;
+  const capas: Capa[] = [{ orden: 1, etiqueta: "fábrica", ruta: defaultPromptsPath(idioma) }];
   const global = carpetaPromptsGlobal();
   if (global) capas.push({ orden: 3, etiqueta: "global", ruta: global });
   if (carpetaProyecto) capas.push({ orden: 4, etiqueta: "proyecto", ruta: carpetaPromptsDeProyecto(carpetaProyecto) });
   return capas;
+}
+
+// Las fases de un proyecto: un proyecto puede sustituir una fase entera, con otro documento, y sus
+// tareas se deducen con ese nombre. Sin proyecto, las de fábrica y la capa global.
+export function fasesDe(carpetaProyecto: string | null): Map<number, PhaseFile> {
+  return discoverPhases(rutasDeCuerpos(capasDeCuerpos(carpetaProyecto)));
+}
+
+export function contextoInicialDe(carpetaProyecto: string | null): string {
+  return fasesDe(carpetaProyecto).get(1)?.documentoInicial || CONTEXTO_INICIAL_POR_DEFECTO;
+}
+
+// El frontmatter que start_task escribe en el contexto inicial cuando la tarea declara sus repos o
+// su preset. Se acepta `repos: api, web` y también `repos: [api, web]`.
+export function frontmatterDeTarea(carpetaTarea: string, contextoInicial: string): FrontmatterDeTarea {
+  let meta: Record<string, string> = {};
+  try {
+    meta = separarFrontmatter(leerTextoAcotado(path.join(carpetaTarea, contextoInicial))).meta;
+  } catch {
+    // Sin contexto inicial legible, la tarea no declara nada: usa lo del proyecto.
+  }
+  const repos =
+    meta.repos === undefined
+      ? null
+      : meta.repos
+          .replace(/^\[|\]$/g, "")
+          .split(",")
+          .map((id) => id.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean);
+  return { repos, preset: meta.preset?.trim() || null };
+}
+
+export function configuracionDe(carpetaProyecto: string | null, carpetaTarea?: string | null): ConfiguracionProyecto {
+  const manifiesto = carpetaProyecto ? manifiestoDe(carpetaProyecto) : null;
+  const idioma = manifiesto?.idioma ?? IDIOMA_POR_DEFECTO;
+  const tarea = carpetaProyecto && carpetaTarea ? frontmatterDeTarea(carpetaTarea, contextoInicialDe(carpetaProyecto)) : null;
+
+  let nombre: string;
+  let origenPreset: OrigenDelPreset;
+  if (tarea?.preset) {
+    nombre = tarea.preset;
+    origenPreset = "de la tarea";
+  } else if (manifiesto) {
+    nombre = manifiesto.preset;
+    origenPreset = "del proyecto";
+  } else {
+    const porDefecto = maquinaDe().config?.presetPorDefecto;
+    nombre = porDefecto ?? PRESET_POR_DEFECTO;
+    origenPreset = porDefecto ? "de machine.json" : "por defecto";
+  }
+
+  const presets = presetsDisponibles(idioma);
+  const preset = presets.get(nombre);
+  if (!preset) {
+    throw new Error(`No existe el preset "${nombre}" (${origenPreset}). Los disponibles son: ${describirPresets(presets)}.`);
+  }
+
+  const regla = <T>(delProyecto: T | undefined, delPreset: T | null, deFabrica: T): [T, OrigenDeRegla] =>
+    delProyecto !== undefined ? [delProyecto, "del proyecto"] : delPreset !== null ? [delPreset, "del preset"] : [deFabrica, "de fábrica"];
+  const [lotes, origenLotes] = regla(manifiesto?.reglas.lotes, preset.lotes, LOTES_DE_FABRICA);
+  const [commits, origenCommits] = regla(manifiesto?.reglas.commits, preset.commits, COMMITS_DE_FABRICA);
+
+  return {
+    carpetaProyecto,
+    manifiesto,
+    idioma,
+    preset,
+    origenPreset,
+    reglas: { lotes, commits, origen: { lotes: origenLotes, commits: origenCommits } },
+    tarea,
+  };
+}
+
+// Los archivos de bloques del paquete que activan las reglas: el contenido de fábrica es
+// "con lotes" y "agente-commitea-con-OK", así que esas dos no tienen archivo.
+export function variantesDeRegla(reglas: ReglasEfectivas, idioma: string = IDIOMA_POR_DEFECTO): string[] {
+  const carpeta = path.join(defaultPromptsPath(idioma), "reglas");
+  const variantes: string[] = [];
+  if (reglas.commits !== COMMITS_DE_FABRICA) variantes.push(path.join(carpeta, `commits-${reglas.commits}.md`));
+  if (!reglas.lotes) variantes.push(path.join(carpeta, "sin-lotes.md"));
+  return variantes;
+}
+
+function capasConConfiguracion(config: ConfiguracionProyecto): Capa[] {
+  const [fabrica, ...resto] = capasDeCuerpos(config.carpetaProyecto);
+  const capas: Capa[] = [fabrica!];
+  if (config.preset.ruta) capas.push({ orden: 2, etiqueta: "preset", ruta: config.preset.ruta });
+  for (const ruta of variantesDeRegla(config.reglas, config.idioma)) capas.push({ orden: 2.5, etiqueta: "reglas", ruta });
+  return [...capas, ...resto];
+}
+
+// Todas las capas de un proyecto (o sin proyecto, con null: la fábrica, el preset de machine.json o
+// `software`, sus reglas y la capa global). Con la carpeta de la tarea, su frontmatter puede
+// cambiar el preset.
+export function capasDe(carpetaProyecto: string | null, carpetaTarea?: string | null): Capa[] {
+  return capasConConfiguracion(configuracionDe(carpetaProyecto, carpetaTarea));
+}
+
+// ─── El bloque CONFIGURACIÓN DEL PROYECTO ───────────────────────────────────
+// Dato, no prosa: lo que declara el manifiesto, machine.json y la tarea, al final de cada prompt de
+// fase cuando se sabe el proyecto. El estado de git de cada repo lo añade quien lo sepa (`estado`).
+export function reposDeLaTarea(config: ConfiguracionProyecto): RepoResuelto[] {
+  if (!config.carpetaProyecto || !config.manifiesto) return [];
+  const declarados = config.manifiesto.repos;
+  const elegidos = config.tarea?.repos ? declarados.filter((repo) => config.tarea!.repos!.includes(repo.id)) : declarados;
+  return resolverRepos(config.carpetaProyecto, elegidos);
+}
+
+export function bloqueDeConfiguracion(
+  config: ConfiguracionProyecto,
+  repos: RepoResuelto[] = reposDeLaTarea(config),
+  estado: (repo: RepoResuelto) => string | null = () => null
+): string {
+  const m = config.manifiesto;
+  const origen = config.origenPreset === "por defecto" ? "por defecto; este proyecto no tiene phase-gate.json" : config.origenPreset;
+  const lineas = [
+    m ? "## CONFIGURACIÓN DEL PROYECTO (la declara phase-gate.json)" : "## CONFIGURACIÓN DEL PROYECTO",
+    "",
+    `- Preset: \`${config.preset.nombre}\` (${origen}) · Idioma: ${config.idioma}`,
+    `- Lotes: ${config.reglas.lotes ? "sí" : "no"} · Commits: ${config.reglas.commits}`,
+  ];
+
+  if (repos.length) {
+    lineas.push("- Repositorios de esta tarea:");
+    for (const repo of repos) {
+      const rol = repo.rol ? ` (${repo.rol})` : "";
+      const donde = repo.ruta ? `\`${repo.ruta}\`` : `sin ruta (${repo.error ?? "no se pudo resolver"})`;
+      const extra = repo.ruta && !repo.existe ? " · no existe en este equipo" : (estado(repo) ?? "");
+      lineas.push(`  - \`${repo.id}\`${rol}: ${donde}${extra}`);
+    }
+  }
+  if (m?.reglas.verificacion?.length) {
+    lineas.push(`- Comandos de verificación del proyecto: ${m.reglas.verificacion.map((c) => `\`${c}\``).join(", ")}`);
+  }
+  if (m?.fase5.prPorRepo) lineas.push("- Una descripción de PR por repositorio (fase5.prPorRepo).");
+
+  return lineas.join("\n");
 }
 
 // Las capas que pueden aportar cuerpos (fases, reglas globales, comandos), de menor a mayor.
@@ -215,14 +395,20 @@ export function textoDeReinyeccion(archivo: string, reinyectadas: string[]): str
   );
 }
 
-// El prompt de una fase tal como lo recibe el modelo en un proyecto (o sin proyecto, con null).
+// El prompt de una fase tal como lo recibe el modelo en un proyecto (o sin proyecto, con null). Con
+// proyecto, termina con el bloque CONFIGURACIÓN DEL PROYECTO, salvo con incluirConfigProyecto:
+// false (la prueba de oro compara con la 2.2.0, que no lo tenía). `estadoDeRepo` lo pone quien
+// pueda preguntarle a git.
 export function ensamblarFase(
   fase: number,
   carpetaProyecto: string | null,
   carpetaTarea?: string | null,
-  opciones: OpcionesDeEnsamblado = {}
+  opciones: OpcionesDeEnsamblado & { estadoDeRepo?: (repo: RepoResuelto) => string | null } = {}
 ): PromptEnsamblado {
-  return ensamblarConCapas(fase, capasDe(carpetaProyecto, carpetaTarea), opciones);
+  const config = configuracionDe(carpetaProyecto, carpetaTarea);
+  const ensamblado = ensamblarConCapas(fase, capasConConfiguracion(config), opciones);
+  if (!carpetaProyecto || opciones.incluirConfigProyecto === false) return ensamblado;
+  return { ...ensamblado, texto: `${ensamblado.texto}\n\n${bloqueDeConfiguracion(config, reposDeLaTarea(config), opciones.estadoDeRepo)}` };
 }
 
 // Los bloques que no encajan en ningún sitio, mirando todas las fases a la vez: lo que lista doctor.

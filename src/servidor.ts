@@ -32,7 +32,9 @@ import {
   validarNombreVisible,
   validarSegmento,
 } from "./paths.js";
-import { discoverPhases, loadPhasePrompt, nombreContextoInicial } from "./phases.js";
+import { contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerfano } from "./capas.js";
+import { IDIOMA_POR_DEFECTO } from "./config.js";
+import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
 import type { PhaseFile } from "./phases.js";
@@ -57,8 +59,8 @@ import {
   guardarPuntero,
   listarTareas,
   motivoDeProteccion,
+  resolverTareaDelPrompt,
   tareaActiva,
-  tareaDelPrompt,
 } from "./tasks.js";
 import type { EstadoTarea } from "./tasks.js";
 
@@ -66,8 +68,67 @@ function responder(texto: string): CallToolResult {
   return { content: [{ type: "text", text: texto }] };
 }
 
+function mensajeDe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// Un proyecto que no existe no impide entregar un prompt: se entrega sin su configuración, y la
+// compuerta lo dice en el log como siempre. Sin Documentación configurada, tampoco hay proyecto.
+function proyectoSiExiste(project: string): string | null {
+  try {
+    return findProjectFolder(project);
+  } catch {
+    return null;
+  }
+}
+
+// La cabecera que start_task escribe en el contexto inicial cuando la tarea elige sus repos o su
+// preset. Se valida ANTES de crear nada: un id mal escrito no debe dejar media tarea creada.
+function cabeceraDeTarea(carpetaProyecto: string, estrenado: boolean, repos: string[] | undefined, preset: string | undefined): string {
+  const manifiesto = estrenado ? null : manifiestoDe(carpetaProyecto);
+  const lineas: string[] = [];
+
+  if (repos && repos.length) {
+    const validos = manifiesto?.repos.map((repo) => repo.id) ?? [];
+    if (validos.length === 0) {
+      throw new Error(
+        `El proyecto ${carpetaProyecto} no declara repos en su phase-gate.json, así que la tarea no puede elegir ` +
+          `entre ellos. Quita \`repos\`, o decláralos primero en el manifiesto.`
+      );
+    }
+    const desconocidos = repos.filter((id) => !validos.includes(id));
+    if (desconocidos.length) {
+      throw new Error(
+        `${desconocidos.map((id) => `"${id}"`).join(", ")} no ${desconocidos.length === 1 ? "es un repo" : "son repos"} ` +
+          `del phase-gate.json de ${carpetaProyecto}. Los válidos son: ${validos.join(", ")}.`
+      );
+    }
+    lineas.push(`repos: ${[...new Set(repos)].join(", ")}`);
+  }
+
+  if (preset) {
+    const presets = presetsDisponibles(manifiesto?.idioma ?? IDIOMA_POR_DEFECTO);
+    if (!presets.has(preset)) throw new Error(`No existe el preset "${preset}". Los disponibles son: ${describirPresets(presets)}.`);
+    lineas.push(`preset: ${preset}`);
+  }
+
+  return lineas.length ? `---\n${lineas.join("\n")}\n---\n` : "";
+}
+
 function siCancelada(extra: { signal: AbortSignal }): void {
   if (extra.signal.aborted) throw new Error("El cliente canceló la llamada antes de escribir. No se escribió nada.");
+}
+
+// Las fases de un proyecto para un listado. Si se pidió ese proyecto, un manifiesto inválido es un
+// error; en el listado de todos, ese proyecto sale con su error y los demás se listan igual.
+function fasesDelListado(carpetaProyecto: string, pedido: boolean, bloques: string[]): Map<number, PhaseFile> | null {
+  try {
+    return fasesDe(carpetaProyecto);
+  } catch (error) {
+    if (pedido) throw error;
+    bloques.push(`${carpetaProyecto}: no se pudo leer su configuración. ${mensajeDe(error)}`);
+    return null;
+  }
 }
 
 function lineaDeTarea(estado: EstadoTarea, phases: Map<number, PhaseFile>): string {
@@ -163,7 +224,8 @@ function registrarTools(mcp: McpServer): void {
 
       validarNombreVisible(taskName, "task_name");
       const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
-      const contextoInicial = path.join(carpetaTarea, nombreContextoInicial());
+      const contextoInicial = path.join(carpetaTarea, contextoInicialDe(carpetaProyecto));
+      const cabecera = cabeceraDeTarea(carpetaProyecto, estrenado, args.repos, args.preset);
 
       const docsBase = requireBasePath(DOCS);
       if (!estaDentroReal(docsBase, carpetaTarea)) {
@@ -199,7 +261,7 @@ function registrarTools(mcp: McpServer): void {
         fs.mkdirSync(carpetaTarea, { recursive: true });
       }
 
-      fs.writeFileSync(contextoInicial, args.initial_context, "utf-8");
+      fs.writeFileSync(contextoInicial, `${cabecera}${args.initial_context}`, "utf-8");
 
       // Queda como activa de SU proyecto. Otra ventana trabajando en otro proyecto conserva
       // la suya: los punteros son independientes.
@@ -227,9 +289,13 @@ function registrarTools(mcp: McpServer): void {
       annotations: anotaciones("Prompt de fase", true, false, true),
     },
     sincronizandoTras(async (entrada) => {
-      // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice loadPhasePrompt.
+      // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice ensamblarFase.
       const { phase, project, task_name } = sinNulos(entrada);
-      const prompt = loadPhasePrompt(phase);
+      const opciones = { ...(project ? { project } : {}), ...(task_name ? { taskName: task_name } : {}) };
+
+      // El proyecto del prompt (su preset, sus reglas, sus capas y el bloque de configuración) es el
+      // que se indica. El único puntero solo sirve para la compuerta y los pendientes, como antes.
+      const carpetaProyecto = project ? proyectoSiExiste(project) : null;
 
       // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
       // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
@@ -237,22 +303,29 @@ function registrarTools(mcp: McpServer): void {
       let aviso: string | null = null;
       let pendientes: string | null = null;
       let recibos: string | null = null;
+      let carpetaTarea: string | null = null;
       try {
-        const phases = discoverPhases();
-        const opciones = { ...(project ? { project } : {}), ...(task_name ? { taskName: task_name } : {}) };
-        aviso = avisoDeCompuerta(phase, phases, opciones);
+        aviso = avisoDeCompuerta(phase, fasesDe, opciones);
 
-        const estado = tareaDelPrompt(phases, opciones);
-        if (estado && estado !== "ambigua") {
-          pendientes = avisoDePendientes(phase, estado, phases);
-          recibos = bloqueDeRecibos(phase, estado, phases);
+        const resuelta = resolverTareaDelPrompt(fasesDe, opciones);
+        if (resuelta && resuelta !== "ambigua") {
+          pendientes = avisoDePendientes(phase, resuelta.estado, resuelta.phases);
+          recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases);
+          // La tarea aporta su preset si declara uno en su contexto inicial.
+          if (carpetaProyecto && resuelta.carpetaProyecto === carpetaProyecto) carpetaTarea = resuelta.estado.folderPath;
         }
       } catch (error) {
-        log("warning", `No se pudo comprobar la compuerta: ${error instanceof Error ? error.message : String(error)}`);
+        log("warning", `No se pudo comprobar la compuerta: ${mensajeDe(error)}`);
       }
 
+      // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su
+      // lugar sería el fallo silencioso que el manifiesto evita.
+      const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea);
+      const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map(notaDeHuerfano);
+      for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
+
       // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
-      return responder([aviso, pendientes, prompt, recibos].filter(Boolean).join("\n\n"));
+      return responder([aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos].filter(Boolean).join("\n\n"));
     })
   );
 
@@ -267,7 +340,6 @@ function registrarTools(mcp: McpServer): void {
       annotations: anotaciones("Tarea activa", true, false, true),
     },
     sincronizandoTras(async (entrada) => {
-      const phases = discoverPhases();
       const pedido = sinNulos(entrada).project ?? "";
 
       // Con proyecto: la suya. Sin proyecto: la de cada uno. Antes había un único puntero
@@ -282,6 +354,8 @@ function registrarTools(mcp: McpServer): void {
       const bloques: string[] = [];
 
       for (const carpetaProyecto of proyectos) {
+        const phases = fasesDelListado(carpetaProyecto, Boolean(pedido), bloques);
+        if (!phases) continue;
         const activa = tareaActiva(carpetaProyecto, phases);
 
         if (!activa) {
@@ -316,7 +390,6 @@ function registrarTools(mcp: McpServer): void {
       annotations: anotaciones("Listar tareas", true, false, true),
     },
     sincronizandoTras(async (entrada) => {
-      const phases = discoverPhases();
       const pedido = sinNulos(entrada).project ?? "";
 
       const proyectos = pedido ? [requireProjectFolder(pedido)] : [...discoverProjects().values()].sort();
@@ -324,6 +397,8 @@ function registrarTools(mcp: McpServer): void {
       const bloques: string[] = [];
 
       for (const carpetaProyecto of proyectos) {
+        const phases = fasesDelListado(carpetaProyecto, Boolean(pedido), bloques);
+        if (!phases) continue;
         const tareas = listarTareas(carpetaProyecto, phases);
         const activa = tareaActiva(carpetaProyecto, phases);
 
@@ -357,8 +432,8 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
-      const phases = discoverPhases();
       const carpetaProyecto = requireProjectFolder(args.project);
+      const phases = fasesDe(carpetaProyecto);
       const taskName = args.task_name;
 
       const tareas = listarTareas(carpetaProyecto, phases);
@@ -438,11 +513,13 @@ function registrarTools(mcp: McpServer): void {
         );
       }
 
+      // Con los nombres de documento de SU proyecto: uno que sustituye una fase con otro documento
+      // protege ese.
       const motivo = motivoDeProteccion(
         ubicacion.carpetaTarea,
         ubicacion.relativo,
-        discoverPhases(),
-        nombreContextoInicial()
+        fasesDe(ubicacion.carpetaProyecto),
+        contextoInicialDe(ubicacion.carpetaProyecto)
       );
       const existia = fs.existsSync(fullPath);
 

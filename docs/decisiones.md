@@ -12,6 +12,73 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Las fases, los prompts y la deducción se resuelven por proyecto; la política de commits es configurable y el push queda fuera de cualquier variante
+
+**Decisión.** Lo que hasta ahora era global pasa a resolverse con el proyecto:
+
+- **Las fases de un proyecto** (`fasesDe(proyecto)`) salen de sus capas de cuerpos: fábrica,
+  global y la del proyecto (`<DOCS>/<PROYECTO>/.phase-gate/prompts/`). Si un proyecto sustituye una
+  fase con otro `documento`, sus tareas se deducen, se protegen (R4) y se listan con ese nombre.
+  `list_tasks`, `get_active_task`, `switch_task`, `write_central_doc`, la compuerta, el aviso de
+  pendientes, los recursos y el diagnóstico usan las fases de SU proyecto.
+- **El prompt de una fase** (`ensamblarFase(fase, proyecto, tarea)`) sale de todas las capas del
+  proyecto: el preset efectivo, las variantes de regla y la capa del proyecto. El **preset** sigue
+  la precedencia frontmatter de la tarea > `phase-gate.json` > `presetPorDefecto` de `machine.json`
+  > `software`; las **reglas** (`lotes`, `commits`), `reglas` del manifiesto > frontmatter del
+  preset > fábrica. Sin proyecto, entran la fábrica, el preset de `machine.json` (o `software`), sus
+  reglas y la capa global.
+- **El bloque `## CONFIGURACIÓN DEL PROYECTO`** se añade al final del prompt cuando se sabe el
+  proyecto: preset y su origen (`de la tarea`, `del proyecto`, `de machine.json` o `por defecto;
+  este proyecto no tiene phase-gate.json`), idioma, lotes y commits, los repos de la tarea con su
+  ruta en este equipo, los comandos de verificación y si hay un PR por repo. Es dato, no prosa.
+- **`get_phase_prompt` antepone una nota** por cada bloque huérfano de la fase que entrega:
+  `> Nota del servidor: el bloque «fase-3/verificaion» de <archivo>:<línea> no encaja en ninguna
+  ranura y se ignoró.`
+- **`start_task` gana `repos` y `preset`**, opcionales. Se validan contra el manifiesto y los
+  presets disponibles antes de crear nada (un id o un preset desconocido devuelven la lista de los
+  válidos) y se escriben como frontmatter del contexto inicial. Cambiarlos después exige reescribir
+  el contexto inicial, que está protegido: es deliberado, cambiar de repos a mitad de tarea es una
+  decisión.
+- **Los MCP Prompts** se listan sin proyecto, pero `/fN` con `project` toma el texto del
+  `comandos/fN.md` de ese proyecto si lo tiene.
+
+**Variantes de la política de commits** (`prompts/es/reglas/`), cada una un archivo de bloques que
+sustituye la ranura `fase-4/commits`: `agente-propone` (el agente propone, el usuario commitea y le
+da el hash), `auto` (el agente commitea en cuanto el lote queda `verificado`, sin esperar OK) y
+`ninguno` (sin commits; el recibo queda con `commit: no aplica`). `agente-commitea-con-OK` es el
+contenido de fábrica y no tiene archivo. Con `lotes: false`, `reglas/sin-lotes.md` sustituye
+`fase-3/lotes` y `fase-4/lotes`: un solo lote, cuyo recibo es el documento de la fase, con la
+plantilla copiada entera (el modelo no ve el plan).
+
+**El push no es una variante.** Ninguna política lo permite y ninguna lo hace configurable: lo que
+sale del equipo hacia el remoto, y el PR, los hace siempre la persona (decisión de la iteración 8
+del plan). Las variantes que commitean (`auto`) conservan lo que añadió la auditoría de la Etapa 1
+al contenido de fábrica: comprobar la rama antes del primer commit, `git add` archivo por archivo
+(nunca `-A`, `.`, `-u`, una carpeta ni `commit -a`), y nunca `--no-verify` ni `--amend`.
+
+**Las partes fijas que contradirían una variante.** PROHIBIDO y AUTOVERIFICACIÓN de la Fase 4 dicen
+"un commit sin el OK del usuario", y los de la Fase 3, "un plan sin la tabla de lotes". No son
+ranuras, así que una variante no puede cambiarlos. Cada variante lo dice dentro de su bloque: qué
+de esas secciones no aplica con esa política. Es un parche de texto, no de estructura; la revisión
+de la Fase 4 de la Etapa 4 es el sitio para convertir esas líneas en ranuras.
+
+**Amplía** la entrada del 2026-08-08 "La fase de cada tarea se deduce de sus documentos, no se
+guarda" (sigue deduciéndose; ahora con los nombres de documento de su proyecto) y la del 2026-10-14
+"La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario" (esa política
+sigue siendo la de fábrica; ahora es una de cuatro).
+
+**Errores explícitos.** Un manifiesto inválido o un preset que no existe hacen fallar
+`get_phase_prompt` con la ruta del problema: entregar el prompt de fábrica en su lugar sería el
+fallo silencioso que el manifiesto evita. En los listados de todos los proyectos, el proyecto roto
+sale con su error y los demás se listan igual. Un proyecto que no existe no impide entregar un
+prompt: se entrega sin configuración de proyecto, como antes.
+
+**Qué se conservó a propósito.** El único puntero sigue sirviendo solo para la compuerta y los
+pendientes, no para elegir el preset ni el bloque de configuración: deducir el proyecto de un
+puntero puede equivocarse, y equivocarse de preset cambia todas las instrucciones.
+
+---
+
 ## 2026-10-15 — Cada proyecto puede declarar un `phase-gate.json`; cada equipo, un `machine.json`
 
 **Decisión.** Dos archivos de configuración, los dos opcionales:

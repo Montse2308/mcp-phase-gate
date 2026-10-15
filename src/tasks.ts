@@ -347,13 +347,26 @@ export function detectarSalto(
 // alta, en vez de callar como si todo estuviera en orden.
 export type OpcionesDeTarea = { project?: string; taskName?: string };
 
+// Las fases con las que se deduce una tarea dependen de su proyecto (un proyecto puede sustituir
+// una fase con otro documento). Quien llama pasa un mapa fijo o la función que da las de cada
+// proyecto, porque aquí el proyecto se resuelve dentro.
+export type FasesPorProyecto = Map<number, PhaseFile> | ((carpetaProyecto: string) => Map<number, PhaseFile>);
+
+function fasesPara(phases: FasesPorProyecto, carpetaProyecto: string): Map<number, PhaseFile> {
+  return typeof phases === "function" ? phases(carpetaProyecto) : phases;
+}
+
+export type TareaResuelta = { estado: EstadoTarea; carpetaProyecto: string; phases: Map<number, PhaseFile> };
+
 // La tarea de la que habla una llamada a get_phase_prompt: la indicada, o la activa del proyecto.
 // Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa; con
 // varios, se devuelve "ambigua" para que quien llama lo diga en vez de callar.
-export function tareaDelPrompt(
-  phases: Map<number, PhaseFile>,
-  opciones: OpcionesDeTarea = {}
-): EstadoTarea | "ambigua" | null {
+export function tareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): EstadoTarea | "ambigua" | null {
+  const resuelta = resolverTareaDelPrompt(phases, opciones);
+  return resuelta === "ambigua" || resuelta === null ? resuelta : resuelta.estado;
+}
+
+export function resolverTareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): TareaResuelta | "ambigua" | null {
   let carpetaProyecto: string;
 
   if (opciones.project) {
@@ -369,30 +382,28 @@ export function tareaDelPrompt(
     carpetaProyecto = encontrada;
   }
 
+  const deEste = fasesPara(phases, carpetaProyecto);
   const estado = opciones.taskName
-    ? listarTareas(carpetaProyecto, phases).find((tarea) => tarea.taskName === opciones.taskName)
-    : tareaActiva(carpetaProyecto, phases)?.estado;
+    ? listarTareas(carpetaProyecto, deEste).find((tarea) => tarea.taskName === opciones.taskName)
+    : tareaActiva(carpetaProyecto, deEste)?.estado;
 
-  return estado ?? null; // null: proyecto sin tareas, o un nombre de tarea que no existe.
+  // null: proyecto sin tareas, o un nombre de tarea que no existe.
+  return estado ? { estado, carpetaProyecto, phases: deEste } : null;
 }
 
-export function avisoDeCompuerta(
-  fasePedida: number,
-  phases: Map<number, PhaseFile>,
-  opciones: OpcionesDeTarea = {}
-): string | null {
-  const estado = tareaDelPrompt(phases, opciones);
+export function avisoDeCompuerta(fasePedida: number, phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): string | null {
+  const resuelta = resolverTareaDelPrompt(phases, opciones);
 
-  if (estado === "ambigua") {
+  if (resuelta === "ambigua") {
     return (
       "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
       "proyectos con tarea activa. Pasa `project` para que se compruebe."
     );
   }
-  if (!estado) return null;
+  if (!resuelta) return null;
 
-  const salto = detectarSalto(fasePedida, estado, phases);
-  return salto ? avisoDeSalto(salto, estado.taskName, phases) : null;
+  const salto = detectarSalto(fasePedida, resuelta.estado, resuelta.phases);
+  return salto ? avisoDeSalto(salto, resuelta.estado.taskName, resuelta.phases) : null;
 }
 
 // ─── Recibos que ya existen ─────────────────────────────────────────────────

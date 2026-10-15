@@ -29,7 +29,8 @@ import {
 } from "./config.js";
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder } from "./paths.js";
-import { SECCIONES_ESQUELETO, textoDeReinyeccion } from "./capas.js";
+import { SECCIONES_ESQUELETO, fasesDe, textoDeReinyeccion } from "./capas.js";
+import { leerManifiesto } from "./manifiesto.js";
 import { GLOBAL_RULES_FILE, discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { describeEstado, leerPunteros, listarTareas, tareaActiva } from "./tasks.js";
@@ -146,6 +147,16 @@ export function fasesConCapa(
       ...(datos.recibos ? { recibos: datos.recibos } : {}),
       comando: resolveCommandFile(numero, rutasCapas),
     }));
+}
+
+// Las fases con las que se deducen las tareas de un proyecto. Si su manifiesto no se puede leer,
+// las de sin proyecto: el hallazgo ya lo dice.
+function fasesDelProyecto(carpetaProyecto: string, sinProyecto: Map<number, PhaseFile>): Map<number, PhaseFile> {
+  try {
+    return fasesDe(carpetaProyecto);
+  } catch {
+    return sinProyecto;
+  }
 }
 
 // ─── El diagnóstico ─────────────────────────────────────────────────────────
@@ -283,13 +294,18 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
   if (rutas.docs.existe) {
     try {
       for (const nombre of [...discoverProjects().values()].sort()) {
-        const tareas = listarTareas(nombre, phases);
-        const activa = tareaActiva(nombre, phases);
+        // Con las fases de SU proyecto. Un manifiesto inválido no tumba el listado: se avisa, y sus
+        // tareas se cuentan con las fases sin proyecto.
+        const manifiesto = leerManifiesto(nombre);
+        if (manifiesto.estado === "invalido") hallar("error", manifiesto.codigo, manifiesto.error);
+        const delProyecto = fasesDelProyecto(nombre, phases);
+        const tareas = listarTareas(nombre, delProyecto);
+        const activa = tareaActiva(nombre, delProyecto);
         proyectos.push({
           nombre,
           tareas: tareas.length,
           activa: activa
-            ? { tarea: activa.estado.taskName, origen: activa.origen, fase: describeEstado(activa.estado, phases) }
+            ? { tarea: activa.estado.taskName, origen: activa.origen, fase: describeEstado(activa.estado, delProyecto) }
             : null,
         });
       }
@@ -298,7 +314,7 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
         const carpeta = findProjectFolder(clave);
         if (!carpeta) {
           hallar("info", "PUNTERO-HUERFANO", `Hay un puntero guardado para el proyecto "${clave}", que ya no existe.`);
-        } else if (!listarTareas(carpeta, phases).some((t) => t.taskName === tarea)) {
+        } else if (!listarTareas(carpeta, fasesDelProyecto(carpeta, phases)).some((t) => t.taskName === tarea)) {
           hallar(
             "info",
             "PUNTERO-HUERFANO",
