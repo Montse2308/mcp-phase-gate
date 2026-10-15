@@ -54,8 +54,13 @@ const NOTA_OFF =
   "volverá a pedirse en el chat.";
 
 const NOTA_SIN_RESPUESTA =
-  "Tu cliente no respondió a dos confirmaciones seguidas: durante el resto de la sesión la confirmación vuelve " +
-  "a pedirse en el chat (con force).";
+  "Tu cliente no respondió a dos confirmaciones seguidas, así que esta vez tampoco se escribe nada; durante el " +
+  "resto de la sesión la confirmación vuelve a pedirse en el chat (con force).";
+
+const NOTA_CANCELADA = "El cliente canceló la llamada antes de que el usuario respondiera.";
+
+// Valores de PHASE_GATE_ELICITATION que apagan las confirmaciones directas.
+const APAGADO = new Set(["off", "false", "0", "no"]);
 
 const NOTA_NO_IMPLEMENTA =
   "Tu cliente anuncia confirmaciones directas pero no las implementa: durante el resto de la sesión la " +
@@ -67,7 +72,7 @@ export async function pedirConfirmacion(
   pregunta: { mensaje: string; etiqueta: string }
 ): Promise<ResultadoConfirmacion> {
   // La escotilla para un cliente cuya implementación falle.
-  if (leerVariable("ELICITATION").valor?.toLowerCase() === "off") return { estado: "no-disponible" };
+  if (APAGADO.has(leerVariable("ELICITATION").valor?.toLowerCase() ?? "")) return { estado: "no-disponible" };
   if (!mcp.server.getClientCapabilities()?.elicitation?.form) return { estado: "no-disponible" };
 
   const sesion = sesionDe(mcp);
@@ -91,7 +96,9 @@ export async function pedirConfirmacion(
           required: ["confirmar"],
         },
       },
-      { timeout: esperaMs, relatedRequestId: extra.requestId }
+      // Con la señal de la llamada: si el cliente cancela la tool (por su propio plazo, o porque la
+      // persona la detuvo), la pregunta se cancela también y no se escribe nada a sus espaldas.
+      { timeout: esperaMs, relatedRequestId: extra.requestId, signal: extra.signal }
     );
 
     sesion.vencimientosSeguidos = 0;
@@ -99,12 +106,18 @@ export async function pedirConfirmacion(
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : String(error);
 
+    // Una cancelación del cliente no dice nada de si muestra o no el formulario: no cuenta como
+    // vencimiento ni cambia la sesión.
+    if (extra.signal.aborted) return { estado: "rechazada", nota: NOTA_CANCELADA };
+
     if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
       sesion.vencimientosSeguidos++;
       if (sesion.vencimientosSeguidos >= 2) {
+        // Desde la siguiente llamada decide force; ESTA falla cerrada. Si no, una persona ausente
+        // dos veces más un force puesto por el modelo acabarían escribiendo sin que nadie confirmara.
         sesion.noDisponible = true;
         log("warning", "El cliente dejó vencer dos confirmaciones seguidas; se desactivan para el resto de la sesión.");
-        return { estado: "no-disponible", nota: NOTA_SIN_RESPUESTA };
+        return { estado: "rechazada", nota: NOTA_SIN_RESPUESTA };
       }
       return { estado: "rechazada", nota: NOTA_OFF };
     }

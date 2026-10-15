@@ -64,13 +64,27 @@ todo sigue como en la Etapa 1: deciden `force` y `crear_proyecto`.
 | Aceptar con la casilla marcada | `confirmada` |
 | Aceptar sin marcarla, rechazar o cerrar el formulario | `rechazada` |
 | Vence el plazo (tres minutos), la primera vez en la sesión | `rechazada`, y la respuesta sugiere `PHASE_GATE_ELICITATION=off` |
-| Vence el plazo por segunda vez seguida | `no-disponible` para el resto de la sesión |
+| Vence el plazo por segunda vez seguida | `rechazada` en esa llamada, y `no-disponible` desde la siguiente y para el resto de la sesión |
+| El cliente cancela la llamada a la tool antes de que la persona responda | `rechazada`, sin contar como vencimiento; y no se escribe nada aunque la persona acepte después |
 | El cliente la anuncia pero responde `MethodNotFound`, o un error "does not support" | `no-disponible` para el resto de la sesión |
 | Cualquier otro error | `rechazada` (se falla cerrado) |
 
 Con `no-disponible` se cae al comportamiento de la Etapa 1. `PHASE_GATE_ELICITATION=off` lo
-fuerza desde el principio: es la escotilla para un cliente cuya implementación falle (validación
-V4: hay un bug abierto en Cursor para Windows en el que el formulario no aparece).
+fuerza desde el principio (también acepta `false`, `0` y `no`, sin distinguir mayúsculas): es la
+escotilla para un cliente cuya implementación falle (validación V4: hay un bug abierto en Cursor
+para Windows en el que el formulario no aparece).
+
+**Dos casos añadidos tras la auditoría de la etapa.** *El segundo vencimiento seguido falla
+cerrado en esa misma llamada.* Antes, esa llamada ya pasaba a `no-disponible` y, si traía
+`force: true`, escribía: una persona ausente dos veces más un `force` puesto por el modelo acababan
+en escritura sin que nadie confirmara. Ahora `force` decide solo a partir de la llamada siguiente.
+*La cancelación del cliente cancela la pregunta.* La elicitation va con la señal de la llamada, y
+antes de escribir se comprueba que no se haya cancelado: si el cliente se rindió por su propio
+plazo (casi todos esperan menos que los tres minutos de la pregunta), escribir después dejaría un
+archivo que el modelo cree que no existe.
+
+**Consecuencia aceptada.** "No disponible" se recuerda durante toda la sesión, sin caducar. En una
+sesión de días, un cliente que se arregle a mitad no vuelve a preguntar hasta reiniciar el servidor.
 
 **Amplía** la entrada del 2026-08-08 "Los proyectos son las carpetas que existen, no una lista"
 (la puerta de `crear_proyecto`) y la del 2026-10-14 "Un documento de fase se congela cuando

@@ -478,15 +478,18 @@ describe("confirmaciones por elicitation", () => {
     }
   });
 
-  it("vencido dos veces seguidas, deja de preguntar en la sesión y vuelve a decidir force", async () => {
+  // La segunda llamada falla cerrada aunque traiga force: una persona ausente dos veces más un
+  // force puesto por el modelo no pueden acabar en escritura. Desde la tercera decide force.
+  it("vencido dos veces seguidas, esa llamada no escribe ni con force, y desde la siguiente decide force", async () => {
     const { tarea } = tareaConCongelado();
     fijarEsperaDeConfirmacion(50);
     const { cliente, mensajes, cerrar } = await conConfirmacion(() => new Promise<ElicitResult>(() => {}));
     try {
-      await cliente.callTool(reescribir());
-      const segunda = await cliente.callTool(reescribir());
+      await cliente.callTool(reescribir({ force: true }));
+      const segunda = await cliente.callTool(reescribir({ force: true }));
       assert.equal(segunda.isError, true);
-      assert.match(textoDe(segunda), /force: true\. Tu cliente no respondió a dos confirmaciones seguidas/);
+      assert.match(textoDe(segunda), /No se escribió nada\. Tu cliente no respondió a dos confirmaciones seguidas/);
+      assert.equal(contenido(tarea), original);
 
       const tercera = await cliente.callTool(reescribir({ force: true }));
       assert.notEqual(tercera.isError, true, textoDe(tercera));
@@ -620,4 +623,61 @@ describe("una capa de prompts que no es carpeta", () => {
       await cerrar();
     }
   });
+});
+
+// Ajustes de la auditoría de la Etapa 2: la cancelación del cliente y los valores de apagado.
+describe("confirmaciones: cancelación y apagado", () => {
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const CONGELADO = "01 - Análisis Técnico.md";
+
+  function tareaConCongelado(): string {
+    const docs = docsTemporales();
+    estadoTemporal();
+    process.env.PHASE_GATE_PROMPTS_PATH = PROMPTS_DEL_REPO;
+    crearProyecto(docs, "PROYECTO-A");
+    return crearTarea(docs, "PROYECTO-A", "tarea", ["00 - Contexto Inicial.md", CONGELADO, "02 - Decisiones.md"]);
+  }
+
+  const reescribir = (extra: Record<string, unknown> = {}) => ({
+    name: "write_central_doc",
+    arguments: { project: "PROYECTO-A", task_name: "tarea", file_name: CONGELADO, content: "nuevo", ...extra },
+  });
+
+  // El cliente se rinde (su plazo de tools/call) antes de que la persona conteste. Cuando la
+  // persona acepta, ya nadie escucha la respuesta: no se puede escribir a sus espaldas.
+  it("si el cliente cancela la llamada antes de que la persona responda, no se escribe aunque luego acepte", async () => {
+    const tarea = tareaConCongelado();
+    const { cliente, cerrar } = await conectar({ elicitation: {} });
+    cliente.setRequestHandler(ElicitRequestSchema, async () => {
+      await new Promise((resolver) => setTimeout(resolver, 600));
+      return { action: "accept", content: { confirmar: true } };
+    });
+    try {
+      await assert.rejects(cliente.callTool(reescribir(), undefined, { timeout: 200 }));
+      await new Promise((resolver) => setTimeout(resolver, 900));
+      assert.equal(fs.readFileSync(path.join(tarea, CONGELADO), "utf-8"), `contenido de ${CONGELADO}`);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  for (const valor of ["off", "OFF", "false", "0", "no"]) {
+    it(`PHASE_GATE_ELICITATION=${valor} apaga las confirmaciones directas`, async () => {
+      tareaConCongelado();
+      process.env.PHASE_GATE_ELICITATION = valor;
+      const { cliente, cerrar } = await conectar({ elicitation: {} });
+      let preguntas = 0;
+      cliente.setRequestHandler(ElicitRequestSchema, async () => {
+        preguntas++;
+        return { action: "accept", content: { confirmar: true } };
+      });
+      try {
+        const r = await cliente.callTool(reescribir({ force: true }));
+        assert.match(textoDe(r), /\(sobrescrito con force\)/);
+        assert.equal(preguntas, 0);
+      } finally {
+        await cerrar();
+      }
+    });
+  }
 });

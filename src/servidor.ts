@@ -66,6 +66,10 @@ function responder(texto: string): CallToolResult {
   return { content: [{ type: "text", text: texto }] };
 }
 
+function siCancelada(extra: { signal: AbortSignal }): void {
+  if (extra.signal.aborted) throw new Error("El cliente canceló la llamada antes de escribir. No se escribió nada.");
+}
+
 function lineaDeTarea(estado: EstadoTarea, phases: Map<number, PhaseFile>): string {
   return `- ${estado.taskName} — ${describeEstado(estado, phases)}`;
 }
@@ -190,6 +194,7 @@ function registrarTools(mcp: McpServer): void {
         );
       }
 
+      siCancelada(extra);
       if (!fs.existsSync(carpetaTarea)) {
         fs.mkdirSync(carpetaTarea, { recursive: true });
       }
@@ -456,7 +461,8 @@ function registrarTools(mcp: McpServer): void {
         const conNota = nota ? ` ${nota}` : "";
 
         if (estado === "rechazada") {
-          throw new Error(`El usuario no confirmó la reescritura de \`${archivo}\`. No se escribió nada.${conNota}`);
+          const accion = existia ? "la reescritura" : "la escritura";
+          throw new Error(`El usuario no confirmó ${accion} de \`${archivo}\`. No se escribió nada.${conNota}`);
         }
         if (estado === "no-disponible" && args.force !== true) {
           throw new Error(
@@ -477,6 +483,9 @@ function registrarTools(mcp: McpServer): void {
         if (nota) sufijo += `\n${nota}`;
       }
 
+      // Si el cliente canceló la llamada mientras se esperaba algo (una confirmación), ya no
+      // escucha la respuesta: escribir ahora dejaría un archivo que el modelo cree que no existe.
+      siCancelada(extra);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, args.content, "utf-8");
 

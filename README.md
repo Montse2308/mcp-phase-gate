@@ -370,7 +370,7 @@ Creating a phase document that doesn't exist yet is never refused; a new receipt
 
 The same goes for **starting a new project** with `crear_proyecto: true`: with direct confirmations, the server asks you before creating the folder.
 
-If your client announces direct confirmations but the form never shows up, the server waits three minutes and writes nothing; the second time in a row it stops asking for that session. To avoid this from the start, register the server with `PHASE_GATE_ELICITATION=off`. **On Cursor for Windows, `off` is recommended** while the bug where the form doesn't appear stays open.
+If your client announces direct confirmations but the form never shows up, the server waits three minutes and writes nothing; the second time in a row it doesn't write either (even if the AI set `force`) and stops asking for the rest of the session: from then on `force` decides again, with your confirmation in the chat. If your client cancels the call before you answer, nothing is written. To avoid this from the start, register the server with `PHASE_GATE_ELICITATION=off`. **On Cursor for Windows, `off` is recommended** while the bug where the form doesn't appear stays open.
 
 On top of that, `write_central_doc` only writes **inside the folder of a task that already exists**: it doesn't create stray folders in the documentation.
 
@@ -513,7 +513,7 @@ Each variable also has an **alias** with the old name, `ORQUESTADOR_*` (e.g. `OR
 | `PHASE_GATE_TASKS_SUBDIR` | `Proyectos` | Subfolder where tasks live inside each project. Empty means tasks hang directly off the project. It's also the rule that decides what counts as a project (see above). |
 | `PHASE_GATE_PROMPTS_PATH` | none | Folder holding your own prompts. They are **layered on top of** the packaged ones rather than replacing them, so you only drop in the phases you want to change ([see above](#using-your-own-prompts-without-losing-the-packaged-ones)). |
 | `PHASE_GATE_STATE_PATH` | Your user data folder (see above) | Where the active-task pointers are stored. Rarely needs touching; useful to isolate state in tests, and **required if you register the server more than once** (see [More than one documentation folder?](#-more-than-one-documentation-folder-optional)). |
-| `PHASE_GATE_ELICITATION` | none (enabled) | `off` so the server doesn't ask the client for [direct confirmations](#-protected-documents) and lets `force` decide, as before. Recommended on Cursor for Windows. No alias. |
+| `PHASE_GATE_ELICITATION` | none (enabled) | `off` (or `false`, `0`, `no`) so the server doesn't ask the client for [direct confirmations](#-protected-documents) and lets `force` decide, as before. Recommended on Cursor for Windows. No alias. |
 
 ---
 
