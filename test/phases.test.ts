@@ -188,6 +188,7 @@ describe("promptsLayers", () => {
       assert.ok(datos.documento, `la fase ${numero} no declara documento en su cabecera`);
     }
     assert.equal(fases.get(1)?.documentoInicial, "00 - Contexto Inicial.md");
+    assert.equal(fases.get(4)?.recibos, "04 - Ejecución");
   });
 });
 

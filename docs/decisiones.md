@@ -12,6 +12,51 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario
+
+**Decisión.** La Fase 4 ejecuta el plan **un lote a la vez**, en el orden de la tabla de lotes
+de la Fase 3, con un ciclo fijo: implementar solo ese lote, verificarlo con su criterio de
+salida, escribir su recibo con `commit: pendiente`, mostrarle al usuario la lista exacta de
+archivos y el mensaje de commit, y con su OK hacer el commit y anotar el hash en el recibo. El
+corte de commit es la única parada del lote. Las secciones NO SUBES NADA y EL DOCUMENTO del
+prompt se sustituyen por **LOTES Y RECIBOS** y **COMMITS**.
+
+- El recibo tiene frontmatter (`lote`, `de`, `repo`, `rama`, `estado`, `commit`, `fecha`) y
+  encabezados exactos. Con `lotes: 1` el recibo es el documento de la fase; con más lotes, cada
+  recibo va en `04 - Ejecución/L0x - <slug>.md` y el documento de la fase es un índice que se
+  escribe solo al cerrar el último.
+- El `git add` lleva la lista de archivos del lote, uno por uno; nunca `-A` ni `.`. Si falla un
+  hook o se pide una passphrase, el agente se detiene; nunca `--no-verify`.
+- Antes del primer lote se nombran los pendientes heredados del plan, y un lote que depende de
+  uno sin resolver no se ejecuta.
+
+**Reemplaza** la entrada del 2026-08-07 "La Fase 4 no sube nada". **Matiza** la del 2026-08-07
+"La Fase 4 hace; el documento es el recibo": el recibo sigue siendo corto y secundario, pero
+ahora hay uno por lote y se escribe al cerrar cada lote, no al final de la fase.
+
+**Por qué el commit sí y el push nunca.** El commit es local y reversible, y a partir de la
+Etapa 4 lo verifica el servidor contra Git. El push saca el trabajo del equipo, dispara el CI o
+un despliegue, y debe pasar antes por la auditoría de la Fase 5, que sigue siendo de solo
+lectura. Además, el servidor no puede impedir un push desde la terminal del agente: la frontera
+se expresa en el prompt y, si se quiere, se refuerza con los permisos del cliente. Por eso el
+push, crear o cambiar de rama y abrir el PR siguen siendo del usuario, y no es configurable.
+
+**Por qué con OK y no automático.** Es la política `agente-commitea-con-OK`, la de fábrica en
+la 2.1.0. El usuario ve qué entra en cada commit antes de que exista, y mientras revisa puede
+hacer las pruebas que el lote dejó esperando. Las otras políticas (`agente-propone`, `auto`,
+`ninguno`) llegan con el manifiesto de la Etapa 3, como variantes de la ranura `commits`.
+
+**Consecuencia aceptada.** Para quien usa la 2.x por `npx`, la Fase 4 pasa a hacer commits
+(riesgo E1-R2); siempre con OK explícito, y por eso la versión es menor y no de parche. Con
+`lotes: 1`, el documento de la fase existe desde que se escribe el recibo con
+`commit: pendiente`, así que durante esos minutos la fase aparece cerrada antes del commit; es
+una ventana aceptada que desaparece en la 3.0.0, cuando el servidor guarda el recibo en la
+subcarpeta hasta anclarlo.
+
+**Ranuras de la Fase 4:** `rol`, `verificacion`, `pruebas`, `lotes`, `commits` y `ejemplos`.
+
+---
+
 ## 2026-10-14 — Los lotes son estructurales en la Fase 3
 
 **Decisión.** Todo plan técnico se parte en **lotes**. El documento empieza con el frontmatter
@@ -969,6 +1014,9 @@ como issue abierto; entretanto su contenido está copiado en
 
 ## 2026-08-07 — La Fase 4 hace; el documento es el recibo
 
+> **Matizada** el 2026-10-14 por "La Fase 4 ejecuta lote por lote y hace el commit de cada uno
+> con el OK del usuario": hay un recibo corto por lote, escrito al cerrarlo.
+
 **Decisión.** El prompt de la Fase 4 pone casi todo su peso en cómo ejecutar y cómo
 verificar. El documento va al final, corto, y el prompt lo dice con esas palabras: si el
 modelo está redactando en vez de implementar o verificar, está gastando el turno en lo que
@@ -1031,6 +1079,10 @@ supuesta.
 ---
 
 ## 2026-08-07 — La Fase 4 no sube nada
+
+> **Reemplazada** el 2026-10-14 por "La Fase 4 ejecuta lote por lote y hace el commit de cada
+> uno con el OK del usuario": el commit de cada lote lo hace el agente con el OK del usuario.
+> El push, las ramas y el PR siguen siendo del usuario.
 
 **Decisión.** Prohibido hacer commit, crear ramas, hacer push o abrir un PR. La fase termina
 con el código escrito, verificado y el documento cerrado.

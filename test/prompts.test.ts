@@ -12,7 +12,7 @@ import { describe, it } from "node:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { PHASE_FILE_PATTERN, loadPhasePrompt } from "../src/phases.js";
+import { PHASE_FILE_PATTERN, describePhaseFiles, discoverPhases, loadPhasePrompt } from "../src/phases.js";
 
 // Como en test/phases.test.ts: la capa de fábrica no se resuelve al repo desde build-test/.
 const PROMPTS = path.join(process.cwd(), "prompts");
@@ -198,6 +198,35 @@ describe("prompts publicados", () => {
       "**Antes de verificar nada, revisa los pendientes heredados**",
       "- Escribir el plan sin la tabla de lotes, o sin el frontmatter `lotes: N`.",
       "12. ¿El documento empieza con el frontmatter `lotes: N`",
+    ]) {
+      assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
+    }
+  });
+
+  // L07: la Fase 4 ejecuta lote por lote, con un recibo y un commit con OK por lote. NO SUBES
+  // NADA y EL DOCUMENTO se sustituyen por LOTES Y RECIBOS y COMMITS.
+  it("la Fase 4 ejecuta por lotes, con recibo y commit con el OK del usuario", () => {
+    const texto = leer("fase-4-ejecucion.md");
+    const fases = discoverPhases([PROMPTS]);
+    const prompt = `${loadPhasePrompt(4, [PROMPTS])}\n\n${describePhaseFiles(fases, 4)}`;
+
+    assert.deepEqual(ranurasDe(texto), ["commits", "ejemplos", "lotes", "pruebas", "rol", "verificacion"]);
+    for (const quitado of ["## NO SUBES NADA", "## EL DOCUMENTO\n", "El proyecto no tiene suite.", "¿Hice commit o subí algo? No debí."]) {
+      assert.equal(prompt.includes(quitado), false, `sigue: ${quitado.trim()}`);
+    }
+    for (const fragmento of [
+      "\n## ANTES DEL PRIMER LOTE: PENDIENTES HEREDADOS\n",
+      "\n## LOTES Y RECIBOS\n",
+      "\n## COMMITS\n",
+      "\n### Pruebas\n",
+      "Los recibos de lote van en la subcarpeta `04 - Ejecución/`, uno por lote",
+      "commit: pendiente | <hash corto> | no aplica",
+      "nunca\n   `git add -A` ni `git add .`",
+      "Nunca hagas `push`, no crees ni cambies de rama y no abras un PR.",
+      "- Hacer push, crear o cambiar de rama, o abrir un PR.",
+      "- Escribir el documento de la fase antes de cerrar el último lote, cuando hay más de uno.",
+      "10. ¿Cada commit tuvo el OK del usuario, llevó solo los archivos de su lote y no hubo ningún push?",
+      "14. ¿Las decisiones nuevas tienen su **Base**?",
     ]) {
       assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
     }
