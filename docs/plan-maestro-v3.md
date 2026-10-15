@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Iteración | **14** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13) y puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) |
+| Iteración | **15** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13) puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7) |
 | Base del análisis | commit `d7594ea`, árbol limpio |
 | Versión publicada | `2.0.0` |
 | Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapa 0 ejecutada** (L01 a L10, §9.6) y en `master`. **Etapa 1 ejecutada** (L01 a L11, §9.7); faltan el PR, el tag `v2.1.0` y la publicación, que hace la autora |
@@ -416,7 +416,7 @@ Reglas de la Base:
 
 ## PENDIENTES HEREDADOS
 
-Antes de su propio trabajo, cada fase revisa si el documento de la fase anterior dejó lagunas: una sección `## Validaciones pendientes`, cifras marcadas como no revalidadas, decisiones abiertas, código en nivel **Propuesta**, pruebas que esperan al usuario, o una medición cuya fuente el propio documento pone en duda. Si las hay, se las nombras al usuario ANTES de empezar y le preguntas si se cierran primero. Qué hacer con cada una lo dice el paso 0 de cada fase.
+Antes de su propio trabajo, cada fase revisa si el documento de la fase anterior dejó lagunas: una sección `## Validaciones pendientes`, cifras marcadas como no revalidadas, decisiones abiertas, código en nivel **Propuesta**, pruebas que esperan al usuario, o una medición cuya fuente el propio documento pone en duda. Si las hay, se las nombras al usuario ANTES de empezar y le preguntas si se cierran primero. Qué hacer con cada una lo dice cada fase en su apartado de pendientes heredados; la Fase 1 no hereda documento de otra fase, solo el contexto inicial.
 
 Toda fase que cierra con algo sin comprobar o sin decidir lo deja bajo el encabezado exacto `## Validaciones pendientes`, y lo dice también en el mensaje de cierre al usuario, no solo dentro del documento.
 ````
@@ -4180,7 +4180,7 @@ Tras los ajustes: 171 tests (169 pasan; 2 omitidos fuera de Linux o macOS: `XDG_
 
 ### 9.7 Ejecución de la Etapa 1
 
-Rama `etapa-1/lotes-y-recibos`, creada desde `master` en `eef0058`, con la Etapa 0 ya integrada. Un commit por lote, cada uno con el OK de la autora y con `git add` archivo por archivo; ningún `push`. Todos los lotes pasaron `npm ci && npm run build && npm test` antes de su commit. Los tests de L01 a L06 se volvieron a medir en una copia aparte del repo, commit por commit, al cerrar la etapa.
+Rama `etapa-1/lotes-y-recibos`, creada desde `master` en `eef0058`, con la Etapa 0 ya integrada. Un commit por lote, cada uno con el OK de la autora y con `git add` archivo por archivo. El agente no hizo ningún `push`: el commit de L11 y la subida de la rama, antes de la auditoría externa, los hizo la autora. Todos los lotes pasaron `npm ci && npm run build && npm test` antes de su commit. Los tests de L01 a L06 se volvieron a medir en una copia aparte del repo, commit por commit, al cerrar la etapa, y la auditoría externa midió los 11 por su cuenta con los mismos resultados.
 
 | Lote | Estado | Commit | Tests al cerrar | Desvíos |
 |---|---|---|---|---|
@@ -4194,9 +4194,9 @@ Rama `etapa-1/lotes-y-recibos`, creada desde `master` en `eef0058`, con la Etapa
 | L08 | Hecho; cierra #39 y #40 al integrar el PR | `c390f04` | 255 | E1-D4 |
 | L09 | Hecho | `155e608` | 255 | — |
 | L10 | Hecho | `d0a48b7` | 255 | E1-D5 |
-| L11 | Hecho en el commit `chore(release): 2.1.0`; el tag `v2.1.0` y la publicación los hace la autora | — | 255 | E1-D6 |
+| L11 | Hecho; commit de la autora. El tag `v2.1.0` y la publicación los hace la autora | `2344f63` | 255 | E1-D6 |
 
-En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_HOME` y el FIFO), como al cerrar la Etapa 0.
+En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_HOME` y el FIFO), como al cerrar la Etapa 0. La versión etiquetada `2.1.0` incluye además los ajustes de la auditoría (abajo), que van en commits nuevos encima de L11.
 
 **Desvíos** (cada uno se decidió con la autora antes de su commit):
 
@@ -4206,18 +4206,62 @@ En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_
 - **E1-D4 · L08.** Al envolver los ejemplos de la Fase 5 en la ranura `ejemplos` (§3.4.5 a), la regla 3 del validador marcó 5 errores: los `## Contexto`, `## Cambios` y `## Problema` de los PR de ejemplo, que van entre `--- INICIO EJEMPLO ---` y `--- FIN EJEMPLO ---` sin bloque de código. Meterlos en un bloque habría cambiado lo que ve el modelo (el prompt dice que se muestran sin bloque a propósito), así que el validador de `test/prompts.test.ts` trata esos delimitadores como una valla, con un caso de prueba propio. Fuera del ejemplo, un `##` dentro de una ranura sigue siendo error. Base: medido (5 errores antes, 0 después).
 - **E1-D5 · L10.** Además del contenido mínimo, los README corrigen dos textos que ya no eran ciertos: `/f5` no exige los commits después del comando (los toma de los recibos), y la fila de `write_central_doc` dice que solo escribe dentro de una tarea y que tiene `force`. Base: leído en código.
 - **E1-D6 · L11.** El commit de la release toca también este plan (la cabecera, la nota de estado de §3.8, esta sección y el Anexo A), igual que en la Etapa 0, para que la versión etiquetada no diga que la etapa está pendiente. Lo decidió la autora.
+- **E1-D7 · L04 (detectado por la auditoría).** §3.8 pedía comprobar `get_phase_prompt(1)` por E2E y se comprobó con un test unitario de `loadPhasePrompt`. El caso E2E, para las cinco fases, llegó con el ajuste A4. Base: leído en código.
 
-**Tamaño de los prompts** (riesgo E1-R5), en caracteres, antes y después del lote que los cambió (medido sobre los commits):
+**Interpretaciones menores** (sin desvío):
+
+- L03: `force` es `.nullish()` y no `.optional()`, como todo opcional desde la Etapa 0 (E0-D3); lo explica la ADR de L03.
+
+**Tamaño de los prompts** (riesgo E1-R5), en caracteres y en LF, antes y después del lote que los cambió, medido sobre los commits. La primera versión de esta tabla mezclaba conteos en CRLF (los "antes" de las Fases 4 y 5 y el "después" de la 5, medidos sobre la copia de trabajo) y contaba una línea de más; la auditoría lo detectó y estas son las cifras corregidas:
 
 | Prompt | Lote | Antes | Después |
 |---|---|---|---|
-| Fase 1 | L05 | 8 351 (168 líneas) | 9 380 (184) |
-| Fase 2 | L05 | 11 112 (247) | 13 018 (276) |
-| Fase 3 | L06 | 13 447 (267) | 16 408 (322) |
-| Fase 4 | L07 | 10 689 (236) | 15 608 (358) |
-| Fase 5 | L08 | 12 709 (209) | 13 988 (232) |
+| Fase 1 | L05 | 8 351 (167 líneas) | 9 380 (183) |
+| Fase 2 | L05 | 11 112 (246) | 13 018 (275) |
+| Fase 3 | L06 | 13 447 (266) | 16 408 (321) |
+| Fase 4 | L07 | 10 454 (235) | 15 608 (357) |
+| Fase 5 | L08 | 12 501 (208) | 13 757 (231) |
 
-La Fase 4 crece 122 líneas, más que las "unas 80" que preveía el riesgo: la plantilla del recibo y el índice de cierre van completos dentro del prompt.
+La Fase 4 crece 122 líneas, más que las "unas 80" que preveía el riesgo: la plantilla del recibo y el índice de cierre van completos dentro del prompt. Con el ajuste A3 de la auditoría queda en 16 681 caracteres (369 líneas).
+
+**Auditoría externa (antes del PR).** Un segundo agente auditó la etapa a ciegas, sin leer esta sección hasta tener sus propias cifras, y con permiso para cuestionar las ADRs de la etapa. Veredicto: **apto con observaciones**. Los 11 commits compilan y pasan los tests cada uno por su cuenta, tocan los archivos de su lote y sus mensajes coinciden con el plan; sus cifras de tests coinciden con las de la tabla. Encontró 3 hallazgos medios, 12 bajos y 3 cuestionamientos de ADRs. Todos se resolvieron con commits nuevos encima de L11, sin reescribir la historia:
+
+| Ajuste | Commit | Resuelve | Tests al cerrar |
+|---|---|---|---|
+| A1 | `ed74866` | 1, 13, C | 262 |
+| A2 | `f32ef7a` | 2, 7, 15 | 265 |
+| A3 | `db4c041` | 3, 4, 5, 6, 14, A | 265 |
+| A4 | `09b5f0d` | 8, 11 | 269 |
+| A6 | `13df598` | B | 272 |
+| A5 | El commit de documentación de la auditoría | 9, 10, 12 y esta sección | 272 |
+
+| # | Sev. | Lote | Hallazgo | Resolución |
+|---|---|---|---|---|
+| 1 | Media | L03 | R4 se esquivaba sin `force` con un nombre nuevo en otras mayúsculas o en Unicode NFD: crear `00 - contexto inicial.md`, un recibo en `04 - ejecución/` con la Fase 5 presente, o `01 - Análisis Técnico.md` en NFD con la Fase 2 presente | `motivoDeProteccion` compara por `claveDeNombre` (NFC y sin mayúsculas, en todos los sistemas); 6 filas nuevas en la tabla de verdad |
+| 2 | Media | L02 | `recibos` aceptaba `.recibos` o el nombre de un documento, que rompían el flujo | Se ignora, con aviso en el log, un valor con punto delante o igual a un documento o al contexto inicial |
+| 3 | Media | L07 | La Fase 4 no comprobaba la rama antes de commitear: en la rama principal, los commits caían ahí | `git branch --show-current` contra la rama del plan antes del primer commit; si no coincide o es la principal, se detiene |
+| 4 | Baja | L07 | No prohibía `git commit -a`, `git add -u`, una carpeta entera ni `--amend` | Prohibidos en COMMITS y PROHIBIDO |
+| 5 | Baja | L04 | Las reglas globales remitían al "paso 0 de cada fase", que solo tiene la Fase 2 | "lo dice cada fase en su apartado de pendientes heredados" (§3.3 actualizado) |
+| 6 | Baja | L07 | "El único punto de parada del lote" chocaba con las otras paradas | "el único punto de parada previsto" |
+| 7 | Baja | L02 | La regex de `quitarMarcadores` no anclaba el fin de línea | Anclada; un marcador que no se reconoce queda avisado en el log |
+| 8 | Baja | L02/L08 | El validador de ranuras era más blando de lo que decía | Vallas del mismo tipo, ejemplo sin `FIN` es error, catálogo exacto por archivo y 22 en total |
+| 9 | Baja | L03/L10 | "Crear un documento que no existe nunca se rechaza" no era cierto para los recibos | Matizado en los README y en la ADR de L03 |
+| 10 | Baja | L10 | La advertencia sobre un `global-rules.md` propio omitía `EVIDENCIA` | Añadida en los dos README |
+| 11 | Baja | L04 | El E2E de `get_phase_prompt` se hizo como test unitario sin registrarlo | E2E de las cinco fases; registrado como E1-D7 |
+| 12 | Baja | L01 | La ADR decía que daba igual la vía de la ruta; con un enlace entre tareas difieren | Matizado en la ADR de L01: las dos vías son seguras |
+| 13 | Baja | L03 | `force` respondía "sobrescrito" también al crear | "(creado con force)" cuando no existía |
+| 14 | Baja | L07 | La plantilla del índice fijaba `03 - Plan Técnico.md` y `04 - Ejecución/` | Marcadores de posición |
+| 15 | Baja | L02 | Un prompt propio con BOM perdía su frontmatter | `aLF` quita el BOM |
+
+| # | ADR cuestionada | Resolución |
+|---|---|---|
+| A | L07: con `lotes: 1`, un lote fallido dejaba el recibo como documento de la fase y la tarea aparecía cerrada | Aceptado: un único lote fallido o descartado deja su recibo en la subcarpeta. Queda anotado el resto (el usuario rechaza el commit con el recibo ya escrito), que cierra la 3.0.0 |
+| B | L02: ninguna tool listaba los recibos, así que al retomar el modelo no podía descubrirlos | Aceptado: `get_phase_prompt` añade la lista de recibos existentes en la fase que los declara y en las posteriores |
+| C | L03: "Las mayúsculas no lo esquivan" solo valía para archivos existentes | Aceptado con el hallazgo 1; el párrafo de la ADR se reescribió |
+
+Los textos de §3.3 y §3.5.2 de este plan describen los prompts tal como se diseñaron. Lo que la auditoría cambió en ellos está en esta tabla y en las ADRs de L04 y L07; §3.3 se actualizó en su única frase cambiada porque es la que el plan cita como texto completo.
+
+**No comprobado por la auditoría:** Linux y macOS (el hallazgo 1 se comporta distinto según el sistema de archivos), Node 22, enlaces simbólicos reales en Windows (solo se probaron uniones) y el comportamiento de un modelo real con estos prompts.
 
 **Pendiente de comprobar fuera de este equipo:** como en la Etapa 0, todos los tests corrieron solo en Windows (Node 24). Su primera ejecución en Linux y en Node 22 será la CI del PR.
 
@@ -4264,3 +4308,4 @@ La Fase 4 crece 122 líneas, más que las "unas 80" que preveía el riesgo: la p
 | 12 | 2026-10-14 | Desvío detectado al ejecutar E0 L04: el refresco de la copia de trabajo exigía el árbol limpio antes del commit del propio lote, y `reset --hard` habría borrado el cambio de `.gitignore`. Nuevo orden: renormalizar, commit y después refrescar |
 | 13 | 2026-10-14 | E0 L09: el plan entra al repo como `docs/plan-maestro-v3.md` y pasa a ser la fuente. Sección 9 puesta al día con lo ejecutado (§9.6: commits de L01 a L08 y desvíos E0-D1 a E0-D5). Revisión de privacidad del texto entero: fuera la rama de la sesión en la nube y el nombre corto 8.3 real; los ejemplos de recibos de la Etapa 4 pasan a un caso genérico de tienda; los detalles del equipo de la autora se generalizan; la estrategia de difusión personal (§8.9.1) sale del repo |
 | 14 | 2026-10-14 | Etapa 1 ejecutada (L01 a L11) en la rama `etapa-1/lotes-y-recibos`. Nueva §9.7 con los commits y los desvíos E1-D1 a E1-D6. El más relevante: el validador de ranuras de `test/prompts.test.ts` trata los ejemplos de PR de la Fase 5 (`--- INICIO EJEMPLO ---` … `--- FIN EJEMPLO ---`) como una valla de código, porque sus `##` son parte del ejemplo |
+| 15 | 2026-10-14 | Auditoría externa de la Etapa 1, a ciegas y con permiso para cuestionar las ADRs: apto con observaciones (3 hallazgos medios, 12 bajos y 3 cuestionamientos). Se resolvieron con los ajustes A1 a A6, en commits nuevos encima de L11 (§9.7). Los de más peso: R4 compara los nombres sin mayúsculas y en NFC, la Fase 4 comprueba la rama antes de commitear, un único lote fallido deja su recibo en la subcarpeta, y `get_phase_prompt` lista los recibos que ya existen. Se corrigen los tamaños de los prompts de §9.7, que mezclaban conteos en CRLF, y la frase de §3.3 sobre el "paso 0" |

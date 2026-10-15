@@ -74,7 +74,7 @@ DOCUMENTATION/
 
 The `Proyectos` level is the tasks subfolder, and its name is configurable — see `ORQUESTADOR_TASKS_SUBDIR` below. The document names come from the phase prompts, which is why they are in Spanish by default.
 
-**Batches and receipts.** The phase 3 plan splits the work into batches (`L01`, `L02`…): each one is a change that can be reverted on its own and leaves the application working. Phase 4 runs them one at a time and closes each batch with a short **receipt** (what was done, what was verified, what is waiting for you) and a commit. With a single batch, the receipt is `04 - Ejecución.md` itself and there is no subfolder. With several, the receipts go in `04 - Ejecución/` and `04 - Ejecución.md` is the index written when the last one closes: until then the phase doesn't show as finished.
+**Batches and receipts.** The phase 3 plan splits the work into batches (`L01`, `L02`…): each one is a change that can be reverted on its own and leaves the application working. Phase 4 runs them one at a time and closes each batch with a short **receipt** (what was done, what was verified, what is waiting for you) and a commit. With a single batch, the receipt is `04 - Ejecución.md` itself and there is no subfolder, unless that batch fails or is discarded: then its receipt goes in `04 - Ejecución/` and the phase isn't marked as closed. With several, the receipts go in `04 - Ejecución/` and `04 - Ejecución.md` is the index written when the last one closes: until then the phase doesn't show as finished. When you ask for phase 4 or 5, the server appends the list of existing receipts to the prompt, so a new chat can pick up without guessing their names.
 
 > The server builds this path **automatically**. You (or the LLM) only supply `project`, `task_name` and `file_name`; nobody has to type a full path.
 
@@ -341,7 +341,7 @@ Each phase works on top of the previous phases' documents, so rewriting one that
 - **The initial context** (`00 - Contexto Inicial.md`), always, even to create it. Only `start_task` writes it without `force`.
 - **The document of a frozen phase.** A phase freezes as soon as a later phase's document exists, or as soon as phase 4 has any receipt in `04 - Ejecución/`. Receipts count as phase 4: they and `04 - Ejecución.md` are frozen only by phase 5.
 
-Creating a document that doesn't exist yet is never refused. If a legitimate fix is needed — a typo in the analysis when the decisions are already written — the refusal message explains how to ask for it: the AI only uses `force` with your explicit confirmation in the chat, and the response warns that the document was overwritten.
+Creating a phase document that doesn't exist yet is never refused; a new receipt is, once phase 5 is present. Names are compared ignoring case and in the same Unicode form, so spelling them differently doesn't get around the protection. If a legitimate fix is needed — a typo in the analysis when the decisions are already written — the refusal message explains how to ask for it: the AI only uses `force` with your explicit confirmation in the chat, and the response warns that the document was overwritten (or created, if it didn't exist).
 
 On top of that, `write_central_doc` only writes **inside the folder of a task that already exists**: it doesn't create stray folders in the documentation.
 
@@ -429,7 +429,7 @@ Three details that matter:
 - **Layering is by phase number, not by filename.** Your `fase-2-my-way.md` overrides the package's `fase-2-decisiones.md`. You don't have to guess the original's name.
 - **It also adds.** A `fase-6-deployment.md` in your folder creates phase 6, nothing else needed.
 - **Your `global-rules.md` replaces the packaged one, it doesn't stack.** Concatenating two rule sets makes it impossible to tell which file an unwanted instruction came from, exactly when you need to know. If you want the packaged rules plus extras, copy them and add.
-  **Watch out:** the packaged rules include the `BASE DE CADA DECISIÓN` and `PENDIENTES HEREDADOS` sections, which every phase refers to. A `global-rules.md` of your own without them leaves the phases pointing at rules that don't exist; copy them into your file.
+  **Watch out:** the packaged rules include the `EVIDENCIA`, `BASE DE CADA DECISIÓN` and `PENDIENTES HEREDADOS` sections, which the phases refer to. A `global-rules.md` of your own without them leaves the phases pointing at rules that don't exist; copy them into your file.
 
 On the `npx` route this is the **only** way to customise: the packaged prompts live inside `node_modules`, where editing them achieves nothing because the next install wipes them.
 

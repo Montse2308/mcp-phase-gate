@@ -192,10 +192,11 @@ que los overrides operen por ranuras para que nadie las pierda por accidente.
   Fase 4 no se congela con sus recibos: a ellos y a `04 - Ejecución.md` solo los congela una
   Fase 5 presente.
 
-Crear un documento que no existe nunca se rechaza, ni siquiera cuando rellena un hueco, porque
-no pisa nada. Un archivo que no es de ninguna fase (`notas.md`) tampoco. `force` se describe al
+Crear un documento de fase que no existe nunca se rechaza, ni siquiera cuando rellena un hueco,
+porque no pisa nada. Un recibo nuevo sí: con la Fase 5 presente, la ejecución ya se auditó. Un
+archivo que no es de ninguna fase (`notas.md`) tampoco se rechaza. `force` se describe al
 modelo como "solo con confirmación explícita del usuario en el chat", el mensaje de rechazo dice
-cómo pedirla, y la respuesta avisa cuando un documento se sobrescribió con `force`. Lo decide
+cómo pedirla, y la respuesta avisa cuando un documento se sobrescribió, o se creó, con `force`. Lo decide
 `motivoDeProteccion`, con la tabla de verdad del plan maestro v3 en `test/tasks.test.ts`.
 
 **Amplía** la entrada del 2026-08-08 "La Fase 5 deja documento y `start_task` se niega a pisar
@@ -309,9 +310,12 @@ comprobación se hace allí, en el test de los prompts publicados de `test/phase
 ## 2026-10-14 — `write_central_doc` solo escribe dentro de carpetas de tarea, y las carpetas con punto no son proyecto ni tarea
 
 **Decisión.** `write_central_doc` solo escribe dentro de la carpeta de una tarea **que ya
-existe**: `<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/…`. Da igual que la ruta llegue por
-`project + task_name + file_name` o por `file_path`; lo comprueba `ubicarEnTarea`, sobre la ruta
-real y antes de crear ninguna carpeta. Dentro de la tarea ningún segmento puede empezar por `.`.
+existe**: `<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/…`. Llegue la ruta por
+`project + task_name + file_name` o por `file_path`, lo comprueba `ubicarEnTarea`, sobre la ruta
+real y antes de crear ninguna carpeta. Las dos vías difieren en un caso, y las dos son seguras:
+con un enlace dentro de una tarea que lleva a otra tarea, la primera lo rechaza, porque la ruta
+debe quedar dentro de la tarea nombrada, y `file_path` escribe en la tarea de destino, que es una
+tarea válida. Dentro de la tarea ningún segmento puede empezar por `.`.
 Además, una carpeta cuyo nombre empieza por `.` no es proyecto (`discoverProjects`) ni tarea
 (`listarTareas`). `read_central_doc` no cambia: sigue leyendo cualquier archivo dentro de
 `DOCS`.

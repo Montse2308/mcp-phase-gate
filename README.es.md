@@ -72,7 +72,7 @@ DOCUMENTACIÓN/
 
 `PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `ORQUESTADOR_TASKS_SUBDIR` más abajo.
 
-**Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez y cierra cada lote con un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) y un commit. Con un solo lote, el recibo es directamente `04 - Ejecución.md` y no hay subcarpeta. Con varios, los recibos van en `04 - Ejecución/` y `04 - Ejecución.md` es el índice que se escribe al cerrar el último: hasta entonces la fase no aparece como terminada.
+**Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez y cierra cada lote con un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) y un commit. Con un solo lote, el recibo es directamente `04 - Ejecución.md` y no hay subcarpeta, salvo que ese lote falle o se descarte: entonces su recibo va a `04 - Ejecución/` y la fase no se da por cerrada. Con varios, los recibos van en `04 - Ejecución/` y `04 - Ejecución.md` es el índice que se escribe al cerrar el último: hasta entonces la fase no aparece como terminada. Al pedir la Fase 4 o la 5, el servidor añade al prompt la lista de recibos que ya existen, para retomar en otro chat sin adivinar sus nombres.
 
 > El servidor arma esta ruta **automáticamente**. Tú (o el LLM) solo indican `project`, `task_name` y `file_name`; no hay que escribir la ruta completa a mano.
 
@@ -350,7 +350,7 @@ Cada fase trabaja sobre los documentos de las anteriores, así que reescribir un
 - **El contexto inicial** (`00 - Contexto Inicial.md`), siempre, incluso para crearlo. Solo `start_task` lo escribe sin `force`.
 - **El documento de una fase congelada.** Una fase se congela en cuanto existe el documento de una fase posterior, o en cuanto la Fase 4 tiene algún recibo en `04 - Ejecución/`. Los recibos cuentan como de la Fase 4: a ellos y a `04 - Ejecución.md` solo los congela la Fase 5.
 
-Crear un documento que todavía no existe nunca se rechaza. Si hace falta una corrección legítima —una errata en el análisis con las decisiones ya escritas—, el mensaje de rechazo explica cómo pedirla: la IA solo usa `force` con tu confirmación explícita en el chat, y la respuesta avisa de que el documento se sobrescribió.
+Crear un documento de fase que todavía no existe nunca se rechaza; un recibo nuevo sí, cuando la Fase 5 ya está presente. Los nombres se comparan sin distinguir mayúsculas y en la misma forma Unicode, así que escribirlos de otra manera no esquiva la protección. Si hace falta una corrección legítima —una errata en el análisis con las decisiones ya escritas—, el mensaje de rechazo explica cómo pedirla: la IA solo usa `force` con tu confirmación explícita en el chat, y la respuesta avisa de que el documento se sobrescribió (o se creó, si no existía).
 
 Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea que ya existe**: no crea carpetas sueltas en la Documentación.
 
@@ -442,7 +442,7 @@ Tres detalles que importan:
 - **Se superpone por número de fase, no por nombre de archivo.** Tu `fase-2-a-mi-manera.md` pisa al `fase-2-decisiones.md` del paquete. No tienes que adivinar cómo se llama el original.
 - **También sirve para añadir.** Un `fase-6-despliegue.md` en tu carpeta crea la fase 6, sin tocar nada más.
 - **Tu `global-rules.md` sustituye al del paquete, no se suma.** Concatenar dos juegos de reglas hace imposible saber de qué archivo salió la instrucción que estorbó, justo cuando necesitas saberlo. Si quieres las de fábrica y algo más, cópialas y añade.
-  **Ojo:** las de fábrica traen las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS`, que todas las fases citan. Un `global-rules.md` propio que no las incluya deja a las fases citando reglas que no existen; cópialas a tu archivo.
+  **Ojo:** las de fábrica traen las secciones `EVIDENCIA`, `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS`, que las fases citan. Un `global-rules.md` propio que no las incluya deja a las fases citando reglas que no existen; cópialas a tu archivo.
 
 Por el camino `npx` esta es la **única** forma de personalizar: los prompts de fábrica viven dentro de `node_modules` y editarlos ahí no sirve, porque la siguiente instalación se los lleva.
 
