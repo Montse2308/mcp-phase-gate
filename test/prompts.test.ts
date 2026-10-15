@@ -28,7 +28,9 @@ const CATALOGO: Record<string, string[]> = {
 };
 
 const MARCADOR = /^[ \t]*<!--\s*(\/?)ranura(?:\s*:\s*([\w-]+))?\s*-->[ \t]*$/;
-const VALLA = /^[ \t]*(```|~~~)/;
+// Una valla de código se cierra solo con el mismo carácter y al menos la misma longitud, como en
+// CommonMark: un ~~~ dentro de un bloque ``` no lo cierra.
+const VALLA = /^[ \t]*(`{3,}|~{3,})/;
 // Los ejemplos de PR de la Fase 5 van sin bloque de código, entre estas dos líneas, y sus "##"
 // son parte del ejemplo, no secciones del prompt.
 const EJEMPLO = /^--- (INICIO|FIN) EJEMPLO ---$/;
@@ -38,14 +40,25 @@ function revisarRanuras(texto: string, permitidas: string[]): string[] {
   const errores: string[] = [];
   const vistas = new Set<string>();
   let abierta: string | null = null;
-  let enValla = false;
-  let enEjemplo = false;
+  let valla: string | null = null;
+  let ejemploDesde: number | null = null;
 
   for (const [i, linea] of texto.split(/\r?\n/).entries()) {
     const n = i + 1;
-    if (VALLA.test(linea)) enValla = !enValla;
+    const marca = linea.match(VALLA)?.[1];
+    if (marca && !valla) valla = marca;
+    else if (marca && valla && marca[0] === valla[0] && marca.length >= valla.length) valla = null;
+    const enValla = valla !== null || marca !== undefined;
+
     const ejemplo = linea.match(EJEMPLO);
-    if (ejemplo) enEjemplo = ejemplo[1] === "INICIO";
+    if (ejemplo?.[1] === "INICIO") {
+      if (ejemploDesde !== null) errores.push(`${n}: INICIO EJEMPLO sin cerrar el de la línea ${ejemploDesde}`);
+      ejemploDesde = n;
+    } else if (ejemplo?.[1] === "FIN") {
+      if (ejemploDesde === null) errores.push(`${n}: FIN EJEMPLO sin INICIO`);
+      ejemploDesde = null;
+    }
+    const enEjemplo = ejemploDesde !== null;
 
     const marcador = linea.match(MARCADOR);
     if (!marcador) {
@@ -75,7 +88,17 @@ function revisarRanuras(texto: string, permitidas: string[]): string[] {
   }
 
   if (abierta) errores.push(`fin: "${abierta}" sin cerrar`);
+  if (ejemploDesde !== null) errores.push(`fin: el ejemplo de la línea ${ejemploDesde} no tiene FIN EJEMPLO`);
   return errores;
+}
+
+// Los nombres de las ranuras que abre un texto, ordenados.
+function ranurasEn(texto: string): string[] {
+  return texto
+    .split(/\r?\n/)
+    .map((linea) => linea.match(MARCADOR))
+    .flatMap((marcador) => (marcador && !marcador[1] && marcador[2] ? [marcador[2]] : []))
+    .sort();
 }
 
 function identificador(archivo: string): string | null {
@@ -124,6 +147,19 @@ describe("revisarRanuras (el propio validador)", () => {
     assert.deepEqual(revisarRanuras(dentro, PERMITIDAS), []);
     assert.match(revisarRanuras(despues, PERMITIDAS).join("\n"), /encabezado/);
   });
+
+  // Hallazgo 8 de la auditoría de la Etapa 1: un ejemplo sin FIN eximía el resto del archivo, y
+  // un ~~~ cerraba un bloque abierto con ```.
+  it("un ejemplo sin FIN, o un FIN suelto, es un error", () => {
+    assert.match(revisarRanuras("--- INICIO EJEMPLO ---\n## Cambios\n", PERMITIDAS).join("\n"), /no tiene FIN EJEMPLO/);
+    assert.match(revisarRanuras("--- FIN EJEMPLO ---\n", PERMITIDAS).join("\n"), /sin INICIO/);
+  });
+
+  it("una valla solo la cierra otra del mismo tipo", () => {
+    const texto = "<!-- ranura: rol -->\n```markdown\n~~~\n## Dentro del bloque\n```\n## Fuera\n<!-- /ranura -->\n";
+
+    assert.deepEqual(revisarRanuras(texto, PERMITIDAS), ['6: encabezado ## dentro de "rol"']);
+  });
 });
 
 describe("prompts publicados", () => {
@@ -145,6 +181,20 @@ describe("prompts publicados", () => {
     });
   }
 
+  // Hallazgo 8: comprobar solo que cada ranura fuera del catálogo dejaba pasar que se borrara una.
+  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 22 de §3.2.
+  it("cada prompt tiene exactamente las ranuras de su catálogo, 22 en total", () => {
+    let total = 0;
+    for (const archivo of archivos) {
+      const id = identificador(archivo) ?? "";
+      const encontradas = ranurasEn(fs.readFileSync(path.join(PROMPTS, archivo), "utf-8"));
+
+      assert.deepEqual(encontradas, [...(CATALOGO[id] ?? [])].sort(), archivo);
+      total += encontradas.length;
+    }
+    assert.equal(total, 22);
+  });
+
   for (const fase of [1, 2, 3, 4, 5]) {
     it(`get_phase_prompt(${fase}) no entrega ningún comentario HTML`, () => {
       assert.equal(loadPhasePrompt(fase, [PROMPTS]).includes("<!--"), false);
@@ -154,17 +204,11 @@ describe("prompts publicados", () => {
   // L05 (#39 y #40 en las Fases 1 y 2): cada fase ancla Base y Pendientes con frases cortas, y
   // marca como ranura su rol, su verificación y sus ejemplos.
   const leer = (archivo: string): string => fs.readFileSync(path.join(PROMPTS, archivo), "utf-8");
-  const ranurasDe = (texto: string): string[] =>
-    texto
-      .split(/\r?\n/)
-      .map((linea) => linea.match(MARCADOR))
-      .flatMap((marcador) => (marcador && !marcador[1] && marcador[2] ? [marcador[2]] : []))
-      .sort();
 
   it("la Fase 1 marca sus ranuras y pide la Base de cada decisión", () => {
     const texto = leer("fase-1-descubrimiento.md");
 
-    assert.deepEqual(ranurasDe(texto), ["ejemplos", "rol", "verificacion"]);
+    assert.deepEqual(ranurasEn(texto), ["ejemplos", "rol", "verificacion"]);
     for (const fragmento of [
       "- **Base:** ver BASE DE CADA DECISIÓN en las reglas globales.",
       "| Validaciones pendientes | no hubo acceso para comprobar algo, o una medición sale de una fuente",
@@ -180,7 +224,7 @@ describe("prompts publicados", () => {
   it("la Fase 2 abre con los pendientes heredados y lleva la Base en la tabla y en el bloque", () => {
     const texto = leer("fase-2-decisiones.md");
 
-    assert.deepEqual(ranurasDe(texto), ["ejemplos", "rol", "verificacion"]);
+    assert.deepEqual(ranurasEn(texto), ["ejemplos", "rol", "verificacion"]);
     for (const fragmento of [
       "0. **Revisa los pendientes heredados de la Fase 1**",
       "| # | Tema | Decisión | Fundamento | Base |",
@@ -200,7 +244,7 @@ describe("prompts publicados", () => {
     const texto = leer("fase-3-plan-tecnico.md");
     const prompt = loadPhasePrompt(3, [PROMPTS]);
 
-    assert.deepEqual(ranurasDe(texto), ["comprobaciones", "ejemplos", "lotes", "pruebas", "rol"]);
+    assert.deepEqual(ranurasEn(texto), ["comprobaciones", "ejemplos", "lotes", "pruebas", "rol"]);
     assert.equal(/etapas con commits separados/i.test(prompt), false, "sigue la sección condicional de etapas");
     assert.equal(prompt.includes("No hay suite de pruebas automatizadas en el proyecto"), false, "sigue afirmando que no hay suite");
     for (const fragmento of [
@@ -224,7 +268,7 @@ describe("prompts publicados", () => {
     const fases = discoverPhases([PROMPTS]);
     const prompt = `${loadPhasePrompt(4, [PROMPTS])}\n\n${describePhaseFiles(fases, 4)}`;
 
-    assert.deepEqual(ranurasDe(texto), ["commits", "ejemplos", "lotes", "pruebas", "rol", "verificacion"]);
+    assert.deepEqual(ranurasEn(texto), ["commits", "ejemplos", "lotes", "pruebas", "rol", "verificacion"]);
     for (const quitado of ["## NO SUBES NADA", "## EL DOCUMENTO\n", "El proyecto no tiene suite.", "¿Hice commit o subí algo? No debí."]) {
       assert.equal(prompt.includes(quitado), false, `sigue: ${quitado.trim()}`);
     }
@@ -259,7 +303,7 @@ describe("prompts publicados", () => {
     const texto = leer("fase-5-auditoria-pr.md");
     const prompt = loadPhasePrompt(5, [PROMPTS]);
 
-    assert.deepEqual(ranurasDe(texto), ["ejemplos", "pr", "rol"]);
+    assert.deepEqual(ranurasEn(texto), ["ejemplos", "pr", "rol"]);
     assert.equal(prompt.includes("el usuario te indicará los commits o el rango"), false, "la entrada sigue siendo solo la del usuario");
     for (const fragmento of [
       "1. ENTRADA: los commits que registran los recibos de la Fase 4",

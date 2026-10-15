@@ -480,6 +480,26 @@ describe("e2e: usos legítimos que siguen funcionando", () => {
     });
   });
 
+  // §3.8 pedía comprobarlo por el servidor y no solo con loadPhasePrompt (hallazgo 11 de la
+  // auditoría de la Etapa 1): es lo que de verdad le llega al modelo.
+  it("get_phase_prompt entrega las cinco fases sin marcadores, en LF y con las reglas globales", async () => {
+    const e = escenario();
+    await conServidor({ ...e.env, ORQUESTADOR_PROMPTS_PATH: PROMPTS_DEL_REPO }, async (llamar) => {
+      for (const phase of [1, 2, 3, 4, 5]) {
+        const r = await llamar("get_phase_prompt", { phase });
+        assert.equal(r.isError, false, `fase ${phase}: ${r.texto.slice(0, 200)}`);
+        assert.equal(r.texto.includes("<!--"), false, `fase ${phase} entrega un comentario HTML`);
+        assert.equal(r.texto.includes("\r"), false, `fase ${phase} entrega CRLF`);
+        for (const encabezado of ["## BASE DE CADA DECISIÓN", "## PENDIENTES HEREDADOS"]) {
+          assert.ok(r.texto.includes(`\n${encabezado}\n`), `fase ${phase}: falta ${encabezado}`);
+        }
+      }
+
+      const fase4 = await llamar("get_phase_prompt", { phase: 4 });
+      assert.match(fase4.texto, /Los recibos de lote van en la subcarpeta `04 - Ejecución\/`/);
+    });
+  });
+
   // Algunos clientes con modelos en modo estricto mandan null en todo campo opcional.
   it("null en un campo opcional cuenta como ausente: project: null responde igual que sin project", async () => {
     const e = escenario();
