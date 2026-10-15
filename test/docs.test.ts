@@ -50,9 +50,16 @@ describe("sincronía de los comandos de fase", () => {
   it("docs/comandos-de-fase.md remite a prompts/comandos/ y no copia ningún comando", () => {
     const documento = leerTexto(DOCUMENTO);
     assert.match(documento, /prompts\/comandos/);
+    // Cualquier línea con contenido de un comando delata una copia, no solo la primera. Las
+    // cortas ("Pasos:") se saltan: pueden coincidir sin ser copia.
     for (const nombre of comandos(FUENTE)) {
-      const primeraLinea = leerTexto(path.join(FUENTE, nombre)).split("\n")[0]!;
-      assert.equal(documento.includes(primeraLinea), false, `docs/comandos-de-fase.md copia ${nombre}`);
+      const lineas = leerTexto(path.join(FUENTE, nombre))
+        .split("\n")
+        .map((linea) => linea.trim())
+        .filter((linea) => linea.length >= 30);
+      for (const linea of lineas) {
+        assert.equal(documento.includes(linea), false, `docs/comandos-de-fase.md copia de ${nombre}: "${linea}"`);
+      }
     }
   });
 });
