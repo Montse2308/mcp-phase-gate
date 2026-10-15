@@ -12,6 +12,34 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes
+
+**Decisión.** La entrada de la Fase 5 son los commits que registran los recibos de la Fase 4
+(el campo `commit` de cada recibo, o la tabla del índice). Si el usuario indica otro rango,
+manda el suyo, y la auditoría dice si no coincide con los recibos; si no hay ni recibos ni
+rango, se pregunta. Antes de mirar el diff, la auditoría lee el documento de la Fase 4 y sus
+recibos: todo lo que quedó en "Espera al usuario", en `## Validaciones pendientes` o en un lote
+`con pendientes`, `fallido` o `descartado` se nombra, y si toca lo auditado y no hay constancia
+de que el usuario lo comprobó, es **BLOQUEANTE**.
+
+La auditoría gana su propio `PROHIBIDO` y su `AUTOVERIFICACIÓN`, antes de SALIDA 2. Hasta ahora
+los dos existían solo dentro del contrato del PR, y nada de la auditoría se revisaba antes de
+entregar.
+
+**Amplía** la entrada del 2026-08-08 "La Fase 5 deja documento y `start_task` se niega a pisar
+una tarea": la fase sigue siendo de solo lectura y sigue dejando su documento.
+
+**Por qué.** Con los recibos, los commits de la tarea ya están escritos; pedírselos al usuario
+era trabajo repetido y una fuente de auditar un rango equivocado. Y un "LGTM" sobre un cambio
+cuya prueba manual nadie hizo se lee como aprobación de algo que no se comprobó: es justo el
+pendiente heredado (#39) que la regla global obliga a nombrar, llevado a la última compuerta
+antes del PR.
+
+**Ranuras de la Fase 5:** `rol`, `pr` (todo el cuerpo de SALIDA 2) y `ejemplos`. El contrato
+del PR no cambia; solo queda envuelto para que un preset de la Etapa 3 pueda sustituirlo.
+
+---
+
 ## 2026-10-14 — La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario
 
 **Decisión.** La Fase 4 ejecuta el plan **un lote a la vez**, en el orden de la tabla de lotes

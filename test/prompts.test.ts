@@ -29,6 +29,9 @@ const CATALOGO: Record<string, string[]> = {
 
 const MARCADOR = /^[ \t]*<!--\s*(\/?)ranura(?:\s*:\s*([\w-]+))?\s*-->[ \t]*$/;
 const VALLA = /^[ \t]*(```|~~~)/;
+// Los ejemplos de PR de la Fase 5 van sin bloque de código, entre estas dos líneas, y sus "##"
+// son parte del ejemplo, no secciones del prompt.
+const EJEMPLO = /^--- (INICIO|FIN) EJEMPLO ---$/;
 
 // Devuelve los incumplimientos, uno por línea afectada. Vacío si el texto está bien formado.
 function revisarRanuras(texto: string, permitidas: string[]): string[] {
@@ -36,15 +39,18 @@ function revisarRanuras(texto: string, permitidas: string[]): string[] {
   const vistas = new Set<string>();
   let abierta: string | null = null;
   let enValla = false;
+  let enEjemplo = false;
 
   for (const [i, linea] of texto.split(/\r?\n/).entries()) {
     const n = i + 1;
     if (VALLA.test(linea)) enValla = !enValla;
+    const ejemplo = linea.match(EJEMPLO);
+    if (ejemplo) enEjemplo = ejemplo[1] === "INICIO";
 
     const marcador = linea.match(MARCADOR);
     if (!marcador) {
       if (/<!--.*ranura/.test(linea)) errores.push(`${n}: marcador mal escrito`);
-      if (abierta && !enValla && linea.startsWith("## ")) errores.push(`${n}: encabezado ## dentro de "${abierta}"`);
+      if (abierta && !enValla && !enEjemplo && linea.startsWith("## ")) errores.push(`${n}: encabezado ## dentro de "${abierta}"`);
       continue;
     }
 
@@ -109,6 +115,14 @@ describe("revisarRanuras (el propio validador)", () => {
     const texto = "<!-- ranura: rol -->\n```markdown\n## Qué se hizo\n```\n<!-- /ranura -->\n";
 
     assert.deepEqual(revisarRanuras(texto, PERMITIDAS), []);
+  });
+
+  it("un ## dentro de un ejemplo delimitado tampoco cuenta, pero sí al salir de él", () => {
+    const dentro = "<!-- ranura: ejemplos -->\n--- INICIO EJEMPLO ---\n## Cambios\n--- FIN EJEMPLO ---\n<!-- /ranura -->\n";
+    const despues = "<!-- ranura: ejemplos -->\n--- INICIO EJEMPLO ---\n--- FIN EJEMPLO ---\n## ENTREGA\n<!-- /ranura -->\n";
+
+    assert.deepEqual(revisarRanuras(dentro, PERMITIDAS), []);
+    assert.match(revisarRanuras(despues, PERMITIDAS).join("\n"), /encabezado/);
   });
 });
 
@@ -230,6 +244,30 @@ describe("prompts publicados", () => {
     ]) {
       assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
     }
+  });
+
+  // L08: la Fase 5 toma los commits de los recibos y trata los pendientes sin comprobar como
+  // bloqueantes. La auditoría gana su propio PROHIBIDO y su AUTOVERIFICACIÓN; el contrato del
+  // PR solo se envuelve en una ranura.
+  it("la Fase 5 audita desde los recibos y bloquea con pendientes sin comprobar", () => {
+    const texto = leer("fase-5-auditoria-pr.md");
+    const prompt = loadPhasePrompt(5, [PROMPTS]);
+
+    assert.deepEqual(ranurasDe(texto), ["ejemplos", "pr", "rol"]);
+    assert.equal(prompt.includes("el usuario te indicará los commits o el rango"), false, "la entrada sigue siendo solo la del usuario");
+    for (const fragmento of [
+      "1. ENTRADA: los commits que registran los recibos de la Fase 4",
+      "\n## ANTES DE AUDITAR: PENDIENTES HEREDADOS\n",
+      "y no hay constancia de que el usuario lo comprobó, es **BLOQUEANTE**.",
+      "\n### PROHIBIDO (auditoría)\n",
+      "- Auditar commits distintos de los de los recibos sin decirlo.",
+      "\n### AUTOVERIFICACIÓN (auditoría)\n",
+      "3. ¿Los commits auditados coinciden con los de los recibos? Si no, ¿lo dije?",
+    ]) {
+      assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
+    }
+    // Lo nuevo de la auditoría va antes de SALIDA 2, no dentro del contrato del PR.
+    assert.ok(prompt.indexOf("### PROHIBIDO (auditoría)") < prompt.indexOf("## SALIDA 2"));
   });
 
   // L04 (#39 y #40): se escriben una vez en las reglas globales, que se anteponen a cada fase.
