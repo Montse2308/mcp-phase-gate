@@ -32,7 +32,7 @@ flowchart TD
 
 Y entre una fase y otra hay una **compuerta**, que es lo que le da el nombre al servidor: si pides una fase saltándote la anterior, el servidor lo detecta y avisa ([ver abajo](#-la-compuerta-saltarse-una-fase-deja-de-ser-invisible)).
 
-En la fase 5 la IA solo lee. **Los commits y el PR los haces tú**, siempre.
+En la Fase 4 la IA hace el commit de cada lote solo con tu OK; nunca hace push ni abre el PR. En la Fase 5 solo lee.
 
 ## Para quién es
 
@@ -57,7 +57,10 @@ DOCUMENTACIÓN/
 │           ├── 01 - Análisis Técnico.md   ← Fase 1
 │           ├── 02 - Decisiones.md         ← Fase 2
 │           ├── 03 - Plan Técnico.md       ← Fase 3
-│           ├── 04 - Ejecución.md          ← Fase 4
+│           ├── 04 - Ejecución/            ← Fase 4, con más de un lote: un recibo por lote
+│           │   ├── L01 - <slug>.md
+│           │   └── L02 - <slug>.md
+│           ├── 04 - Ejecución.md          ← Fase 4: el recibo, o el índice de los recibos
 │           └── 05 - Auditoría.md          ← Fase 5
 ├── PROYECTO-B/
 │   └── Proyectos/
@@ -68,6 +71,8 @@ DOCUMENTACIÓN/
 ```
 
 `PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `ORQUESTADOR_TASKS_SUBDIR` más abajo.
+
+**Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez y cierra cada lote con un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) y un commit. Con un solo lote, el recibo es directamente `04 - Ejecución.md` y no hay subcarpeta. Con varios, los recibos van en `04 - Ejecución/` y `04 - Ejecución.md` es el índice que se escribe al cerrar el último: hasta entonces la fase no aparece como terminada.
 
 > El servidor arma esta ruta **automáticamente**. Tú (o el LLM) solo indican `project`, `task_name` y `file_name`; no hay que escribir la ruta completa a mano.
 
@@ -291,15 +296,15 @@ Lo que hace cada uno:
 | `/f1` | `start_task` + `get_phase_prompt(1)` | El de la Fase 1 |
 | `/f2` | `get_phase_prompt(2)`, lee el de la Fase 1 | El de la Fase 2, después de que respondas las preguntas |
 | `/f3` | `get_phase_prompt(3)`, lee los anteriores | El de la Fase 3 |
-| `/f4` | `get_phase_prompt(4)`, lee el plan | El de la Fase 4, corto y al final |
+| `/f4` | `get_phase_prompt(4)`, lee el plan | Un recibo por lote; el documento de la fase al cerrar |
 | `/f5` | `get_phase_prompt(5)` | El de la Fase 5: la auditoría y la descripción del PR, que además van en el chat |
 
 Ningún comando nombra un archivo: el nombre lo declara la cabecera del prompt de cada fase
 y `get_phase_prompt` se lo entrega al modelo.
 
-`/f1` y `/f5` esperan datos después del comando: `/f1` necesita project, task_name y el
-requerimiento completo; `/f5`, cuáles commits auditar. Los otros cuatro arrancan de
-`get_active_task`.
+`/f1` espera datos después del comando: project, task_name y el requerimiento completo.
+`/f5` acepta un rango de commits; si no le das ninguno, audita los que registran los recibos
+de la Fase 4, y solo si no hay recibos te pregunta. Los demás arrancan de `get_active_task`.
 
 **Dónde ponerlos según el cliente:**
 
@@ -338,6 +343,19 @@ Tres cosas que **no** hace, a propósito:
 
 ---
 
+## 🔒 Documentos protegidos
+
+Cada fase trabaja sobre los documentos de las anteriores, así que reescribir uno ya superado cambia en silencio la base de lo que vino después. Por eso `write_central_doc` se niega, **sin `force: true`**, a escribir:
+
+- **El contexto inicial** (`00 - Contexto Inicial.md`), siempre, incluso para crearlo. Solo `start_task` lo escribe sin `force`.
+- **El documento de una fase congelada.** Una fase se congela en cuanto existe el documento de una fase posterior, o en cuanto la Fase 4 tiene algún recibo en `04 - Ejecución/`. Los recibos cuentan como de la Fase 4: a ellos y a `04 - Ejecución.md` solo los congela la Fase 5.
+
+Crear un documento que todavía no existe nunca se rechaza. Si hace falta una corrección legítima —una errata en el análisis con las decisiones ya escritas—, el mensaje de rechazo explica cómo pedirla: la IA solo usa `force` con tu confirmación explícita en el chat, y la respuesta avisa de que el documento se sobrescribió.
+
+Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea que ya existe**: no crea carpetas sueltas en la Documentación.
+
+---
+
 ## 🛠 Tools Disponibles
 
 | Tool | Qué hace |
@@ -348,7 +366,7 @@ Tres cosas que **no** hace, a propósito:
 | `switch_task` | Cambia cuál es la tarea activa de un proyecto. **No toca ningún archivo**: es la forma correcta de retomar una tarea que ya existe. |
 | `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). Comprueba de paso la **compuerta**: si pasas `project` y te saltaste una fase, el prompt llega con el aviso al principio. |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
-| `write_central_doc` | Escribe/sobrescribe un archivo. Mismos parámetros que `read_central_doc` + `content`. |
+| `write_central_doc` | Escribe/sobrescribe un archivo dentro de la carpeta de una tarea. Mismos parámetros que `read_central_doc` + `content`, y `force` para los [documentos protegidos](#-documentos-protegidos). |
 | `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde `repo-a` consultar cómo `repo-b` maneja un endpoint) sin cambiar de ventana. |
 
 ### Cómo el servidor arma las rutas
@@ -424,6 +442,7 @@ Tres detalles que importan:
 - **Se superpone por número de fase, no por nombre de archivo.** Tu `fase-2-a-mi-manera.md` pisa al `fase-2-decisiones.md` del paquete. No tienes que adivinar cómo se llama el original.
 - **También sirve para añadir.** Un `fase-6-despliegue.md` en tu carpeta crea la fase 6, sin tocar nada más.
 - **Tu `global-rules.md` sustituye al del paquete, no se suma.** Concatenar dos juegos de reglas hace imposible saber de qué archivo salió la instrucción que estorbó, justo cuando necesitas saberlo. Si quieres las de fábrica y algo más, cópialas y añade.
+  **Ojo:** las de fábrica traen las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS`, que todas las fases citan. Un `global-rules.md` propio que no las incluya deja a las fases citando reglas que no existen; cópialas a tu archivo.
 
 Por el camino `npx` esta es la **única** forma de personalizar: los prompts de fábrica viven dentro de `node_modules` y editarlos ahí no sirve, porque la siguiente instalación se los lleva.
 

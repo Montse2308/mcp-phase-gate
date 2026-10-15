@@ -34,7 +34,7 @@ flowchart TD
 
 And between one phase and the next there is a **gate**, which is what gives the server its name: ask for a phase while skipping the previous one and the server notices and warns you ([see below](#-the-gate-skipping-a-phase-stops-being-invisible)).
 
-In phase 5 the AI only reads. **You always make the commits and open the PR.**
+In phase 4 the AI commits each batch only with your OK; it never pushes or opens the PR. In phase 5 it only reads.
 
 ## Who it's for
 
@@ -59,7 +59,10 @@ DOCUMENTATION/
 │           ├── 01 - Análisis Técnico.md   ← Phase 1
 │           ├── 02 - Decisiones.md         ← Phase 2
 │           ├── 03 - Plan Técnico.md       ← Phase 3
-│           ├── 04 - Ejecución.md          ← Phase 4
+│           ├── 04 - Ejecución/            ← Phase 4, with more than one batch: one receipt each
+│           │   ├── L01 - <slug>.md
+│           │   └── L02 - <slug>.md
+│           ├── 04 - Ejecución.md          ← Phase 4: the receipt, or the index of receipts
 │           └── 05 - Auditoría.md          ← Phase 5
 ├── PROJECT-B/
 │   └── Proyectos/
@@ -70,6 +73,8 @@ DOCUMENTATION/
 ```
 
 The `Proyectos` level is the tasks subfolder, and its name is configurable — see `ORQUESTADOR_TASKS_SUBDIR` below. The document names come from the phase prompts, which is why they are in Spanish by default.
+
+**Batches and receipts.** The phase 3 plan splits the work into batches (`L01`, `L02`…): each one is a change that can be reverted on its own and leaves the application working. Phase 4 runs them one at a time and closes each batch with a short **receipt** (what was done, what was verified, what is waiting for you) and a commit. With a single batch, the receipt is `04 - Ejecución.md` itself and there is no subfolder. With several, the receipts go in `04 - Ejecución/` and `04 - Ejecución.md` is the index written when the last one closes: until then the phase doesn't show as finished.
 
 > The server builds this path **automatically**. You (or the LLM) only supply `project`, `task_name` and `file_name`; nobody has to type a full path.
 
@@ -287,12 +292,12 @@ You invoke them by typing `/f1`, `/f2`, etc. in the chat. **They are orchestrati
 | `/f1` | `start_task` + `get_phase_prompt(1)` | Phase 1's |
 | `/f2` | `get_phase_prompt(2)`, reads phase 1's | Phase 2's, after you answer the questions |
 | `/f3` | `get_phase_prompt(3)`, reads the previous ones | Phase 3's |
-| `/f4` | `get_phase_prompt(4)`, reads the plan | Phase 4's, short and at the end |
+| `/f4` | `get_phase_prompt(4)`, reads the plan | One receipt per batch; the phase document when it closes |
 | `/f5` | `get_phase_prompt(5)` | Phase 5's: the audit and the PR description, which also go in the chat |
 
 No command names a file: the name is declared in each phase prompt's header and `get_phase_prompt` hands it to the model.
 
-`/f1` and `/f5` expect data after the command: `/f1` needs project, task_name and the full requirement; `/f5`, which commits to audit. The other four start from `get_active_task`.
+`/f1` expects data after the command: project, task_name and the full requirement. `/f5` accepts a commit range; without one it audits the commits recorded in the phase 4 receipts, and only asks if there are no receipts. The rest start from `get_active_task`.
 
 **Where to put them, per client:**
 
@@ -329,6 +334,19 @@ Three things it deliberately does **not** do:
 
 ---
 
+## 🔒 Protected documents
+
+Each phase works on top of the previous phases' documents, so rewriting one that's already been passed silently changes the basis of everything that came after. That's why `write_central_doc` refuses, **without `force: true`**, to write:
+
+- **The initial context** (`00 - Contexto Inicial.md`), always, even to create it. Only `start_task` writes it without `force`.
+- **The document of a frozen phase.** A phase freezes as soon as a later phase's document exists, or as soon as phase 4 has any receipt in `04 - Ejecución/`. Receipts count as phase 4: they and `04 - Ejecución.md` are frozen only by phase 5.
+
+Creating a document that doesn't exist yet is never refused. If a legitimate fix is needed — a typo in the analysis when the decisions are already written — the refusal message explains how to ask for it: the AI only uses `force` with your explicit confirmation in the chat, and the response warns that the document was overwritten.
+
+On top of that, `write_central_doc` only writes **inside the folder of a task that already exists**: it doesn't create stray folders in the documentation.
+
+---
+
 ## 🛠 Available tools
 
 | Tool | What it does |
@@ -339,7 +357,7 @@ Three things it deliberately does **not** do:
 | `switch_task` | Changes which task is active for a project. **Touches no files**: it's the correct way to resume an existing task. |
 | `get_phase_prompt` | Returns the behaviour rules for a phase (1–5), with the global rules prepended and the exact document filenames appended. The text lives in `prompts/`. It also checks the **gate**: pass `project` and, if you skipped a phase, the prompt arrives with the warning on top. |
 | `read_central_doc` | Reads a file from the central documentation. **Recommended:** pass `project` + `task_name` + `file_name` and let the server build the path. It also accepts a relative `file_path`. |
-| `write_central_doc` | Writes/overwrites a file. Same parameters as `read_central_doc` plus `content`. |
+| `write_central_doc` | Writes/overwrites a file inside a task folder. Same parameters as `read_central_doc` plus `content`, and `force` for [protected documents](#-protected-documents). |
 | `read_cross_repo` | Reads files from your other local repos, so you can check how another codebase solved something without switching windows. |
 
 ### How the server builds paths
@@ -411,6 +429,7 @@ Three details that matter:
 - **Layering is by phase number, not by filename.** Your `fase-2-my-way.md` overrides the package's `fase-2-decisiones.md`. You don't have to guess the original's name.
 - **It also adds.** A `fase-6-deployment.md` in your folder creates phase 6, nothing else needed.
 - **Your `global-rules.md` replaces the packaged one, it doesn't stack.** Concatenating two rule sets makes it impossible to tell which file an unwanted instruction came from, exactly when you need to know. If you want the packaged rules plus extras, copy them and add.
+  **Watch out:** the packaged rules include the `BASE DE CADA DECISIÓN` and `PENDIENTES HEREDADOS` sections, which every phase refers to. A `global-rules.md` of your own without them leaves the phases pointing at rules that don't exist; copy them into your file.
 
 On the `npx` route this is the **only** way to customise: the packaged prompts live inside `node_modules`, where editing them achieves nothing because the next install wipes them.
 
