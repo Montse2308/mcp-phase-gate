@@ -58,6 +58,7 @@ import {
   tareaDelPrompt,
 } from "./tasks.js";
 import { validarLlamada } from "./schemas.js";
+import { ejecutarCli } from "./cli.js";
 import type { EstadoTarea } from "./tasks.js";
 import type { PhaseFile } from "./phases.js";
 
@@ -481,52 +482,13 @@ function reportarRutas(): void {
   if (delEnv) console.error(`[orquestador] ${delEnv}`);
 }
 
-// Un servidor MCP habla JSON-RPC por stdin y no imprime nada por stdout. Ejecutado a mano en
-// una terminal —que es exactamente lo que hace quien acaba de leer `npx mcp-phase-gate` en el
-// README— se queda esperando entrada, sin señal de vida, y parece roto. Estas dos banderas
-// existen para que ese momento devuelva una explicación en vez de un cursor parpadeando.
-const AYUDA = `${SERVER_NAME} v${SERVER_VERSION}
-
-Servidor MCP que parte cada requerimiento en cinco fases con compuerta y obliga a que cada
-una deje su documento en una documentación central.
-
-Esto NO se ejecuta a mano: lo lanza tu cliente MCP. Ejecutado directamente se queda esperando
-mensajes JSON-RPC por stdin, que es lo que parece que se colgó.
-
-Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
-
-  {
-    "mcpServers": {
-      "${SERVER_NAME}": {
-        "command": "npx",
-        "args": ["-y", "mcp-phase-gate"],
-        "env": {
-          "ORQUESTADOR_DOCS_PATH": "<tu carpeta de documentación>",
-          "ORQUESTADOR_REPOS_PATH": "<tu carpeta de repositorios>"
-        }
-      }
-    }
-  }
-
-Variables de entorno:
-  ORQUESTADOR_DOCS_PATH      Obligatoria. Raíz de la Documentación Central.
-  ORQUESTADOR_REPOS_PATH     Obligatoria. Carpeta con tus repositorios de código.
-  ORQUESTADOR_TASKS_SUBDIR   Subcarpeta de tareas dentro de cada proyecto. Por defecto "Proyectos".
-  ORQUESTADOR_PROMPTS_PATH   Carpeta de prompts propios, que se superponen a los del paquete.
-  ORQUESTADOR_STATE_PATH     Dónde guardar los punteros de tarea activa.
-
-Documentación: https://github.com/Montse2308/mcp-phase-gate`;
-
 async function main() {
-  const bandera = process.argv[2];
-
-  if (bandera === "--version" || bandera === "-v") {
-    console.log(SERVER_VERSION);
-    return;
-  }
-
-  if (bandera === "--help" || bandera === "-h") {
-    console.log(AYUDA);
+  // Con argumentos, el binario es la herramienta de la persona (ayuda, versión, doctor); sin
+  // ellos, el servidor que lanza el cliente. exitCode y no exit(): exit cortaría la salida de
+  // doctor a medio escribir cuando stdout es una tubería.
+  const resultado = ejecutarCli(process.argv.slice(2));
+  if (resultado.accion === "salir") {
+    process.exitCode = resultado.codigo;
     return;
   }
 
