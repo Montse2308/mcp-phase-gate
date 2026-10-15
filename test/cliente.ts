@@ -23,7 +23,7 @@ export async function conectar(capacidades: ClientCapabilities = {}) {
 }
 
 // El texto de la primera parte de una respuesta de tool.
-export function textoDe(resultado: { content?: unknown }): string {
-  const partes = (resultado.content ?? []) as { type: string; text?: string }[];
+export function textoDe(resultado: object): string {
+  const partes = ((resultado as { content?: unknown }).content ?? []) as { type: string; text?: string }[];
   return partes[0]?.text ?? "";
 }

@@ -8,13 +8,15 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { PromptListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import { ElicitRequestSchema, ErrorCode, McpError, PromptListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { ElicitResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { z } from "zod";
 
+import { fijarEsperaDeConfirmacion } from "../src/confirmacion.js";
 import type { Diagnostico } from "../src/diagnostico.js";
 import { diagnosticoShape } from "../src/schemas.js";
-import { conectar } from "./cliente.js";
+import { conectar, textoDe } from "./cliente.js";
 import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno, promptsTemporales } from "./helpers.js";
 
 afterEach(limpiarEntorno);
@@ -356,6 +358,216 @@ describe("MCP Prompts /fN", () => {
       fs.writeFileSync(path.join(capa, "fase-1-uno.md"), "# Uno\n", "utf-8");
       await cliente.callTool({ name: "list_tasks", arguments: {} });
       assert.deepEqual((await cliente.listPrompts()).prompts.map((p) => p.name), ["f1"]);
+    } finally {
+      await cerrar();
+    }
+  });
+});
+
+describe("confirmaciones por elicitation", () => {
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const CONGELADO = "01 - Análisis Técnico.md";
+
+  afterEach(() => fijarEsperaDeConfirmacion(null));
+
+  // Una tarea con la Fase 2 cerrada: su documento de la Fase 1 está congelado.
+  function tareaConCongelado(): { docs: string; tarea: string } {
+    const docs = docsTemporales();
+    estadoTemporal();
+    process.env.PHASE_GATE_PROMPTS_PATH = PROMPTS_DEL_REPO;
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "tarea", ["00 - Contexto Inicial.md", CONGELADO, "02 - Decisiones.md"]);
+    return { docs, tarea };
+  }
+
+  const reescribir = (extra: Record<string, unknown> = {}) => ({
+    name: "write_central_doc",
+    arguments: { project: "PROYECTO-A", task_name: "tarea", file_name: CONGELADO, content: "nuevo", ...extra },
+  });
+
+  // Un cliente que anuncia elicitation y responde con `responder`. Cuenta las preguntas.
+  async function conConfirmacion(responder: (mensaje: string) => Promise<ElicitResult> | ElicitResult) {
+    const conexion = await conectar({ elicitation: {} });
+    const mensajes: string[] = [];
+    conexion.cliente.setRequestHandler(ElicitRequestSchema, async (peticion) => {
+      const mensaje = (peticion.params as { message: string }).message;
+      mensajes.push(mensaje);
+      return responder(mensaje);
+    });
+    return { ...conexion, mensajes };
+  }
+
+  const contenido = (tarea: string): string => fs.readFileSync(path.join(tarea, CONGELADO), "utf-8");
+  const original = `contenido de ${CONGELADO}`;
+
+  it("aceptar con la casilla marcada reescribe y lo dice", async () => {
+    const { tarea } = tareaConCongelado();
+    const { cliente, mensajes, cerrar } = await conConfirmacion(() => ({ action: "accept", content: { confirmar: true } }));
+    try {
+      const r = await cliente.callTool(reescribir());
+      assert.notEqual(r.isError, true, textoDe(r));
+      assert.match(textoDe(r), /\(reescrito con confirmación del usuario\)/);
+      assert.equal(contenido(tarea), "nuevo");
+      assert.equal(mensajes.length, 1);
+      assert.match(mensajes[0]!, /^`01 - Análisis Técnico\.md` de la tarea «tarea» está protegido: .+\. ¿Reescribirlo\?$/);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  const negativas: [string, ElicitResult][] = [
+    ["aceptar sin marcar la casilla", { action: "accept", content: { confirmar: false } }],
+    ["rechazar", { action: "decline" }],
+    ["cancelar", { action: "cancel" }],
+  ];
+  for (const [caso, respuesta] of negativas) {
+    it(`${caso} no escribe nada`, async () => {
+      const { tarea } = tareaConCongelado();
+      const { cliente, cerrar } = await conConfirmacion(() => respuesta);
+      try {
+        const r = await cliente.callTool(reescribir());
+        assert.equal(r.isError, true);
+        assert.match(textoDe(r), /El usuario no confirmó la reescritura de `01 - Análisis Técnico\.md`\. No se escribió nada\./);
+        assert.equal(contenido(tarea), original);
+      } finally {
+        await cerrar();
+      }
+    });
+  }
+
+  // Con elicitation, force lo pone el modelo: justo lo que la confirmación quiere evitar.
+  it("con elicitation, force no basta: si la persona rechaza no se escribe", async () => {
+    const { tarea } = tareaConCongelado();
+    const { cliente, cerrar } = await conConfirmacion(() => ({ action: "decline" }));
+    try {
+      const r = await cliente.callTool(reescribir({ force: true }));
+      assert.equal(r.isError, true);
+      assert.equal(contenido(tarea), original);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("sin elicitation, force se respeta como antes", async () => {
+    const { tarea } = tareaConCongelado();
+    const { cliente, cerrar } = await conectar();
+    try {
+      const sinForce = await cliente.callTool(reescribir());
+      assert.equal(sinForce.isError, true);
+      assert.match(textoDe(sinForce), /force: true/);
+
+      const conForce = await cliente.callTool(reescribir({ force: true }));
+      assert.match(textoDe(conForce), /\(sobrescrito con force\)/);
+      assert.equal(contenido(tarea), "nuevo");
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("vencido el plazo una vez, no se escribe y se sugiere PHASE_GATE_ELICITATION=off", async () => {
+    const { tarea } = tareaConCongelado();
+    fijarEsperaDeConfirmacion(50);
+    const { cliente, cerrar } = await conConfirmacion(() => new Promise<ElicitResult>(() => {}));
+    try {
+      const r = await cliente.callTool(reescribir({ force: true }));
+      assert.equal(r.isError, true);
+      assert.match(textoDe(r), /No se escribió nada\. Si tu cliente no te mostró la confirmación, regístralo con PHASE_GATE_ELICITATION=off/);
+      assert.equal(contenido(tarea), original);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("vencido dos veces seguidas, deja de preguntar en la sesión y vuelve a decidir force", async () => {
+    const { tarea } = tareaConCongelado();
+    fijarEsperaDeConfirmacion(50);
+    const { cliente, mensajes, cerrar } = await conConfirmacion(() => new Promise<ElicitResult>(() => {}));
+    try {
+      await cliente.callTool(reescribir());
+      const segunda = await cliente.callTool(reescribir());
+      assert.equal(segunda.isError, true);
+      assert.match(textoDe(segunda), /force: true\. Tu cliente no respondió a dos confirmaciones seguidas/);
+
+      const tercera = await cliente.callTool(reescribir({ force: true }));
+      assert.notEqual(tercera.isError, true, textoDe(tercera));
+      assert.match(textoDe(tercera), /\(sobrescrito con force\)/);
+      assert.equal(contenido(tarea), "nuevo");
+      assert.equal(mensajes.length, 2, "la tercera no debía preguntar");
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("un cliente que anuncia elicitation y responde MethodNotFound cae a force y no vuelve a preguntar", async () => {
+    const { tarea } = tareaConCongelado();
+    const { cliente, mensajes, cerrar } = await conConfirmacion(() => {
+      throw new McpError(ErrorCode.MethodNotFound, "Method not found");
+    });
+    try {
+      const primera = await cliente.callTool(reescribir());
+      assert.equal(primera.isError, true);
+      assert.match(textoDe(primera), /force: true\. Tu cliente anuncia confirmaciones directas pero no las implementa/);
+
+      const segunda = await cliente.callTool(reescribir({ force: true }));
+      assert.match(textoDe(segunda), /\(sobrescrito con force\)/);
+      assert.equal(contenido(tarea), "nuevo");
+      assert.equal(mensajes.length, 1, "la segunda no debía preguntar");
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("con PHASE_GATE_ELICITATION=off no se pregunta y decide force", async () => {
+    const { tarea } = tareaConCongelado();
+    process.env.PHASE_GATE_ELICITATION = "off";
+    const { cliente, mensajes, cerrar } = await conConfirmacion(() => ({ action: "accept", content: { confirmar: true } }));
+    try {
+      assert.equal((await cliente.callTool(reescribir())).isError, true);
+      const conForce = await cliente.callTool(reescribir({ force: true }));
+      assert.match(textoDe(conForce), /\(sobrescrito con force\)/);
+      assert.equal(contenido(tarea), "nuevo");
+      assert.equal(mensajes.length, 0);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("estrenar un proyecto se confirma; si la persona dice que no, no se crea nada", async () => {
+    const { docs } = tareaConCongelado();
+    const estrenar = (nombre: string) => ({
+      name: "start_task",
+      arguments: { project: nombre, task_name: "t", initial_context: "x", crear_proyecto: true },
+    });
+
+    const si = await conConfirmacion(() => ({ action: "accept", content: { confirmar: true } }));
+    try {
+      const r = await si.cliente.callTool(estrenar("nuevo"));
+      assert.notEqual(r.isError, true, textoDe(r));
+      assert.ok(fs.existsSync(path.join(docs, "NUEVO", "Proyectos", "t")));
+      assert.match(si.mensajes[0]!, /^¿Estrenar el proyecto «NUEVO»\? Se creará la carpeta `.+NUEVO`\.$/);
+    } finally {
+      await si.cerrar();
+    }
+
+    const no = await conConfirmacion(() => ({ action: "decline" }));
+    try {
+      const r = await no.cliente.callTool(estrenar("otro"));
+      assert.equal(r.isError, true);
+      assert.match(textoDe(r), /El usuario no confirmó el proyecto nuevo\. No se creó nada\./);
+      assert.equal(fs.existsSync(path.join(docs, "OTRO")), false);
+    } finally {
+      await no.cerrar();
+    }
+  });
+
+  it("sin crear_proyecto no se pregunta nada ante un proyecto desconocido", async () => {
+    tareaConCongelado();
+    const { cliente, mensajes, cerrar } = await conConfirmacion(() => ({ action: "accept", content: { confirmar: true } }));
+    try {
+      const r = await cliente.callTool({ name: "start_task", arguments: { project: "typo", task_name: "t", initial_context: "x" } });
+      assert.equal(r.isError, true);
+      assert.match(textoDe(r), /No existe el proyecto "typo"/);
+      assert.equal(mensajes.length, 0);
     } finally {
       await cerrar();
     }

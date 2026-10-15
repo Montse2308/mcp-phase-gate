@@ -12,6 +12,53 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Las confirmaciones de `force` y `crear_proyecto` se piden al usuario por elicitation cuando el cliente puede
+
+**Decisión.** Cuando `write_central_doc` va a escribir un documento protegido (congelado, o el
+contexto inicial) y cuando `start_task` va a estrenar un proyecto con `crear_proyecto: true`, el
+servidor le pregunta a la persona con una elicitation de MCP: un formulario de su cliente con
+una casilla ("Reescribir `<archivo>`", "Crear el proyecto `<NOMBRE>`"). Con el cliente que la
+soporta, se pregunta **siempre** y `force` se ignora: confirmada, se escribe y la respuesta lo
+dice ("reescrito con confirmación del usuario"); rechazada, no se escribe nada. Sin elicitation,
+todo sigue como en la Etapa 1: deciden `force` y `crear_proyecto`.
+
+`pedirConfirmacion` (en `src/confirmacion.ts`) distingue tres resultados:
+
+| Qué pasó | Resultado |
+|---|---|
+| Aceptar con la casilla marcada | `confirmada` |
+| Aceptar sin marcarla, rechazar o cerrar el formulario | `rechazada` |
+| Vence el plazo (tres minutos), la primera vez en la sesión | `rechazada`, y la respuesta sugiere `PHASE_GATE_ELICITATION=off` |
+| Vence el plazo por segunda vez seguida | `no-disponible` para el resto de la sesión |
+| El cliente la anuncia pero responde `MethodNotFound`, o un error "does not support" | `no-disponible` para el resto de la sesión |
+| Cualquier otro error | `rechazada` (se falla cerrado) |
+
+Con `no-disponible` se cae al comportamiento de la Etapa 1. `PHASE_GATE_ELICITATION=off` lo
+fuerza desde el principio: es la escotilla para un cliente cuya implementación falle (validación
+V4: hay un bug abierto en Cursor para Windows en el que el formulario no aparece).
+
+**Amplía** la entrada del 2026-08-08 "Los proyectos son las carpetas que existen, no una lista"
+(la puerta de `crear_proyecto`) y la del 2026-10-14 "Un documento de fase se congela cuando
+existe el de una fase posterior" (`force`).
+
+**Por qué.** `force` y `crear_proyecto` los pone el modelo cuando "el usuario lo confirmó en el
+chat". Es exactamente lo que se quería evitar: quien escribe la bandera no es quien debe decidir.
+Con elicitation la respuesta va de la persona al servidor sin pasar por el modelo. Por eso, con
+ella disponible, `force` ya no basta: la descripción del parámetro pasa a decir que solo se usa
+si el cliente no puede preguntar.
+
+**Por qué el rechazo no se convierte en "no disponible".** Una persona que dice que no, o que
+cierra el formulario, nunca puede acabar en un sí por la vía de `force`. Solo un cliente que no
+implementa la pregunta (o que la deja vencer dos veces seguidas, lo más probable cuando el
+formulario no aparece) se trata como uno sin elicitation, y se recuerda para la sesión para no
+hacer esperar tres minutos cada escritura.
+
+**Qué se descartó.** Ofrecer "¿lo creo?" ante un proyecto desconocido sin `crear_proyecto`:
+invitaría a aceptar un nombre mal escrito con un clic. Sin la bandera se devuelve la lista, como
+siempre. Y esperar el minuto por defecto del SDK: es poco para que una persona lea y decida.
+
+---
+
 ## 2026-10-15 — Los comandos de fase se sirven como MCP Prompts desde `prompts/comandos/`
 
 **Decisión.** El texto de cada comando pasa a `prompts/comandos/fN.md`, que viaja en el paquete,

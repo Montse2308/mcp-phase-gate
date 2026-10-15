@@ -145,8 +145,8 @@ export const writeCentralDocShape = {
   force: booleano("force")
     .nullish()
     .describe(
-      "Solo con confirmación explícita del usuario en el chat. Permite reescribir un documento congelado o el " +
-        "contexto inicial."
+      "Permite reescribir un documento congelado o el contexto inicial. Solo se usa si tu cliente no puede " +
+        "pedirle la confirmación al usuario directamente. Nunca lo pongas sin que el usuario lo haya confirmado en el chat."
     ),
 };
 

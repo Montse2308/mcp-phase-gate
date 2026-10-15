@@ -16,6 +16,7 @@ import * as path from "path";
 
 import { DOCS, SERVER_NAME, SERVER_VERSION, requireBasePath, stateFile } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
+import { pedirConfirmacion } from "./confirmacion.js";
 import { conectarLog, log } from "./log.js";
 import {
   describeProjects,
@@ -130,7 +131,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: startTaskShape,
       annotations: anotaciones("Iniciar tarea", false, false, false),
     },
-    sincronizandoTras(async (entrada) => {
+    sincronizandoTras(async (entrada, extra) => {
       const args = sinNulos(entrada);
       const proj = args.project; // el schema ya le quitó los espacios
       const taskName = args.task_name;
@@ -162,6 +163,19 @@ function registrarTools(mcp: McpServer): void {
       const docsBase = requireBasePath(DOCS);
       if (!estaDentroReal(docsBase, carpetaTarea)) {
         throw new Error(`Acceso denegado: la carpeta de la tarea queda fuera de ${docsBase}.`);
+      }
+
+      // Estrenar un proyecto se le confirma a la persona si el cliente puede preguntarle. Sin
+      // crear_proyecto no se pregunta nada: ofrecer "¿lo creo?" ante un nombre desconocido
+      // invitaría a aceptar un typo con un clic.
+      if (estrenado) {
+        const { estado, nota } = await pedirConfirmacion(mcp, extra, {
+          mensaje: `¿Estrenar el proyecto «${carpetaProyecto}»? Se creará la carpeta \`${path.join(docsBase, carpetaProyecto)}\`.`,
+          etiqueta: `Crear el proyecto ${carpetaProyecto}`,
+        });
+        if (estado === "rechazada") {
+          throw new Error(`El usuario no confirmó el proyecto nuevo. No se creó nada.${nota ? ` ${nota}` : ""}`);
+        }
       }
 
       // start_task escribe el contexto inicial sin preguntar, así que llamarlo sobre una tarea
@@ -394,7 +408,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: writeCentralDocShape,
       annotations: anotaciones("Escribir documento", false, true, true),
     },
-    sincronizandoTras(async (entrada) => {
+    sincronizandoTras(async (entrada, extra) => {
       const args = sinNulos(entrada);
       const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(args);
@@ -419,14 +433,44 @@ function registrarTools(mcp: McpServer): void {
         discoverPhases(),
         nombreContextoInicial()
       );
-      if (motivo && args.force !== true) {
-        throw new Error(
-          `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
-            `y vuelve a llamar con force: true.`
-        );
+      const existia = fs.existsSync(fullPath);
+
+      // Un documento protegido se le pregunta a la persona si el cliente puede mostrarle la
+      // pregunta; entonces force no basta, porque lo pone el modelo. Solo sin elicitation decide
+      // force, como antes.
+      let sufijo = "";
+      if (motivo) {
+        const archivo = ubicacion.relativo;
+        const { estado, nota } = await pedirConfirmacion(mcp, extra, {
+          mensaje:
+            `\`${archivo}\` de la tarea «${ubicacion.taskName}» está protegido: ${motivo.replace(/\.$/, "")}. ` +
+            (existia ? "¿Reescribirlo?" : "¿Crearlo?"),
+          etiqueta: `${existia ? "Reescribir" : "Crear"} ${archivo}`,
+        });
+        const conNota = nota ? ` ${nota}` : "";
+
+        if (estado === "rechazada") {
+          throw new Error(`El usuario no confirmó la reescritura de \`${archivo}\`. No se escribió nada.${conNota}`);
+        }
+        if (estado === "no-disponible" && args.force !== true) {
+          throw new Error(
+            `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
+              `y vuelve a llamar con force: true.${conNota}`
+          );
+        }
+
+        // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
+        sufijo =
+          estado === "confirmada"
+            ? existia
+              ? " (reescrito con confirmación del usuario)"
+              : " (creado con confirmación del usuario)"
+            : existia
+              ? " (sobrescrito con force)"
+              : " (creado con force)";
+        if (nota) sufijo += `\n${nota}`;
       }
 
-      const existia = fs.existsSync(fullPath);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, args.content, "utf-8");
 
@@ -434,9 +478,7 @@ function registrarTools(mcp: McpServer): void {
       // uno que ya existía no cambia la lista.
       if (!existia) mcp.sendResourceListChanged();
 
-      // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
-      const forzado = motivo ? (existia ? " (sobrescrito con force)" : " (creado con force)") : "";
-      return responder(`Archivo escrito exitosamente en ${fullPath}${forzado}`);
+      return responder(`Archivo escrito exitosamente en ${fullPath}${sufijo}`);
     })
   );
 
