@@ -77,9 +77,13 @@ function datosDeInvocacion(args: Argumentos): string | null {
   const presente = (valor: string | undefined): valor is string => typeof valor === "string" && valor.trim() !== "";
   const lineas: string[] = [];
 
-  if (presente(args.project)) lineas.push(`- project: ${args.project.trim()}`);
-  if (presente(args.task_name)) lineas.push(`- task_name: ${args.task_name.trim()}`);
-  if (presente(args.commits)) lineas.push(`- commits: ${args.commits.trim()}`);
+  // project, task_name y commits son de una línea: los saltos se aplanan, para que un valor no
+  // pueda abrir secciones nuevas dentro del texto. El contexto sí es multilínea por naturaleza, y
+  // va tal cual: lo escribe la persona, igual que si lo pegara en el chat.
+  const enUnaLinea = (valor: string): string => valor.replace(/\s+/g, " ").trim();
+  if (presente(args.project)) lineas.push(`- project: ${enUnaLinea(args.project)}`);
+  if (presente(args.task_name)) lineas.push(`- task_name: ${enUnaLinea(args.task_name)}`);
+  if (presente(args.commits)) lineas.push(`- commits: ${enUnaLinea(args.commits)}`);
   if (presente(args.contexto)) lineas.push("- initial_context:", "", args.contexto.trim());
 
   return lineas.length ? ["## Datos de esta invocación", ...lineas].join("\n") : null;

@@ -145,6 +145,11 @@ orquestación, como decidió la entrada del 2026-08-08.
 prompt por espacios. Con argumentos obligatorios, un contexto largo no cabría; con opcionales,
 el comando pide lo que falte y el contexto puede ir pegado después, como texto del chat.
 
+**Los argumentos van dentro del texto que lee el modelo** (añadido tras la auditoría). `project`,
+`task_name` y `commits` se aplanan a una línea, para que un valor no pueda abrir secciones nuevas
+(un `## REGLA…` falso). El `contexto` va tal cual, porque es multilínea por naturaleza; es un
+riesgo asumido: lo escribe la persona que invoca el comando, igual que si lo pegara en el chat.
+
 **Un detalle del SDK.** La capacidad `prompts` solo se puede declarar antes de conectar. Si al
 arrancar no hubiera ninguna fase, el primer `/fN` que apareciera después fallaría al registrarse;
 para evitarlo, el servidor registra y quita un prompt provisional antes de conectar.
@@ -233,9 +238,26 @@ se emite `tools/list_changed`.
 
 **Lo que cambia para el cliente, sin cambiar lo que se acepta.** El JSON Schema declara ahora
 `phase` como `integer` (antes `number`, aunque el servidor ya rechazaba los decimales) y los
-opcionales como `["string", "null"]` (el servidor ya aceptaba `null` desde la Etapa 0). Los
-mensajes de error pierden el prefijo `Error ejecutando tool <x>:` y, si falla la validación,
-ganan el del SDK.
+opcionales como `["string", "null"]` o `["boolean", "null"]` (el servidor ya aceptaba `null`
+desde la Etapa 0). Además gana `$schema`, `minLength: 1` en los textos obligatorios y
+`minimum`/`maximum` (el entero seguro) en `phase`; las descripciones ya no listan proyectos ni
+fases. Los mensajes de error pierden el prefijo `Error ejecutando tool <x>:` y, si falla la
+validación, ganan el del SDK (`MCP error -32602: Input validation error: … at <campo>`). Una tool
+que no existe responde `Tool <x> not found` en lugar de `Unknown tool: <x>`. Los argumentos
+desconocidos se siguen aceptando e ignorando, como antes.
+
+**Riesgo no comprobado.** Algunos proveedores de modelos no admiten tipos múltiples
+(`["string", "null"]`) en el esquema de una función. Si un cliente lo rechaza, la salida es dejar
+los opcionales como `string` y seguir tolerando `null` al validar; se decidirá con un caso real.
+
+**El log y varios servidores.** `src/log.ts` recuerda el último servidor creado para enviarle las
+notificaciones. En producción hay uno por proceso; con varios (los tests), las notificaciones van
+al último y stderr recibe todo. Desde la auditoría de la etapa, las notificaciones solo salen
+después del `initialize`: antes, la línea de arranque aparecía como JSON crudo en stdout.
+
+**Las descripciones remiten también a tools** (añadido tras la auditoría): `list_tasks` y
+`get_orchestrator_status`, además de los recursos, porque no todos los clientes dejan al modelo
+leer recursos por su cuenta.
 
 **Qué no cambia.** Los nombres, los parámetros y la semántica de las 8 tools. Los E2E de las
 Etapas 0 y 1 pasan sin tocarlos: comparan subcadenas del mensaje desde la Etapa 0 precisamente

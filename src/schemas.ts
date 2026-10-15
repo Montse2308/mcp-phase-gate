@@ -64,11 +64,12 @@ function booleano(campo: string) {
 // recursos phase-gate://estado y phase-gate://fases, que sí avisan cuando cambian.
 const PROYECTO =
   "Proyecto: el nombre de una carpeta de proyecto de la Documentación Central. Si no existe, la " +
-  "tool te devuelve los que hay. También los lista el recurso `phase-gate://estado`.";
+  "tool te devuelve los que hay. También los listan `list_tasks`, `get_orchestrator_status` y el recurso " +
+  "`phase-gate://estado`.";
 
 const FASE =
-  "Número de fase. Con los prompts de fábrica son 1 a 5; el recurso `phase-gate://fases` lista las " +
-  "disponibles con su título y documento.";
+  "Número de fase. Con los prompts de fábrica son 1 a 5; `get_orchestrator_status` y el recurso " +
+  "`phase-gate://fases` listan las disponibles con su título y documento.";
 
 const TAREA = "Nombre de la carpeta de la tarea.";
 

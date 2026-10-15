@@ -140,3 +140,13 @@ describe("el binario", () => {
     assert.match(resultado.stderr, /Uso:/);
   });
 });
+
+// Ajuste de la auditoría de la Etapa 2: antes del initialize no sale nada por stdout.
+describe("el servidor al arrancar", () => {
+  it("sin cliente que envíe initialize, no escribe nada en stdout", () => {
+    const resultado = lanzar([], entornoCorrecto());
+
+    assert.equal(resultado.stdout, "");
+    assert.match(resultado.stderr, /\[mcp-phase-gate\]/);
+  });
+});

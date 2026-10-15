@@ -12,6 +12,8 @@ import { SERVER_NAME } from "./config.js";
 
 export const PREFIJO_LOG = `[${SERVER_NAME}]`;
 
+// Un solo servidor por proceso, que es lo que hay en producción. Si se crean varios (los tests),
+// las notificaciones van al último que se creó; stderr sigue recibiendo todo.
 let conectado: McpServer | null = null;
 
 // Lo llama crearServidor. Desde ese momento, si el servidor está conectado, cada línea del log
@@ -23,7 +25,9 @@ export function conectarLog(mcp: McpServer | null): void {
 export function log(nivel: LoggingLevel, texto: string): void {
   console.error(`${PREFIJO_LOG} ${texto}`);
 
-  if (!conectado?.isConnected()) return;
+  // Solo después del initialize: antes, el cliente no espera notificaciones, y en una terminal la
+  // línea JSON aparecía cruda en stdout al arrancar.
+  if (!conectado?.isConnected() || !conectado.server.getClientVersion()) return;
 
   // El SDK descarta solo lo que esté por debajo del nivel que pidió el cliente. Un fallo al
   // notificar no puede tumbar la operación que estaba registrando: ya quedó en stderr.
