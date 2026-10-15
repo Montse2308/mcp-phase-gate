@@ -13,7 +13,7 @@ import { ResourceListChangedNotificationSchema } from "@modelcontextprotocol/sdk
 import { LIMITE_LECTURA_BYTES } from "../src/paths.js";
 import { guardarPuntero } from "../src/tasks.js";
 import { conectar } from "./cliente.js";
-import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
+import { carpetaTemporal, crearProyecto, crearSymlink, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
 afterEach(limpiarEntorno);
 
@@ -308,6 +308,65 @@ describe("notificaciones y autocompletado", () => {
         context: { arguments: { proyecto: "PROYECTO-A", tarea: "Tokens login" } },
       });
       assert.deepEqual(documentos.completion.values, [ANALISIS]);
+    } finally {
+      await cerrar();
+    }
+  });
+});
+
+// Ajustes de la auditoría de la Etapa 2: el listado no enseña lo que está fuera de la tarea, y los
+// errores llegan con un código que dice qué pasó.
+describe("recursos: contención del listado y códigos de error", () => {
+  it("una subcarpeta de recibos que es un enlace hacia fuera no se lista ni se autocompleta", async () => {
+    const { docs } = escenario();
+    const fuera = carpetaTemporal("fuera");
+    fs.writeFileSync(path.join(fuera, "secreto.md"), "no debe verse", "utf-8");
+    const enlazada = crearTarea(docs, "PROYECTO-A", "enlazada", [CONTEXTO]);
+    crearSymlink(fuera, path.join(enlazada, RECIBOS));
+    guardarPuntero("PROYECTO-A", "enlazada");
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const { resources } = await cliente.listResources();
+      assert.equal(resources.some((r) => r.uri.includes("secreto")), false);
+
+      const recibos = await cliente.complete({
+        ref: { type: "ref/resource", uri: "phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}" },
+        argument: { name: "recibo", value: "" },
+        context: { arguments: { proyecto: "PROYECTO-A", tarea: "enlazada" } },
+      });
+      assert.deepEqual(recibos.completion.values, []);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  async function codigoAlLeer(leerRecurso: () => Promise<unknown>): Promise<number | undefined> {
+    try {
+      await leerRecurso();
+    } catch (error) {
+      return (error as { code?: number }).code;
+    }
+    assert.fail("la lectura debía fallar");
+  }
+
+  it("un documento que no existe es -32002, y un URI inválido es -32602", async () => {
+    escenario();
+    const { cliente, cerrar } = await conectar();
+    try {
+      assert.equal(
+        await codigoAlLeer(() => cliente.readResource({ uri: "phase-gate://tareas/PROYECTO-A/Tokens%20login/no-existe.md" })),
+        -32002
+      );
+      assert.equal(await codigoAlLeer(() => cliente.readResource({ uri: "phase-gate://tareas/NADA/x/y.md" })), -32002);
+      assert.equal(
+        await codigoAlLeer(() => cliente.readResource({ uri: "phase-gate://tareas/PROYECTO-A/Tokens%20login/a%2Fb.md" })),
+        -32602
+      );
+      assert.equal(
+        await codigoAlLeer(() => cliente.readResource({ uri: "phase-gate://tareas/PROYECTO-A/Tokens%20login/.oculto.md" })),
+        -32602
+      );
     } finally {
       await cerrar();
     }

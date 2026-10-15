@@ -186,6 +186,14 @@ lo colapsa y no queda plantilla que encaje. La ruta final tiene que quedar dentr
 la tarea (sobre rutas reales), los archivos y carpetas con punto no se exponen, y la lectura está
 acotada a 1 MB de texto. Una URI mal codificada se rechaza con un mensaje que lo dice.
 
+**Añadido tras la auditoría de la etapa.** El listado y el autocompletado pasan por la misma
+contención que la lectura: un enlace dentro de la tarea (una subcarpeta de recibos que es una
+junction, un documento que es un symlink) que lleva fuera de ella no se lista, porque enseñaría el
+nombre y la fecha de un archivo de fuera aunque luego no se pudiera leer. Y los errores de lectura
+llegan con un código que dice qué pasó: `-32002` si el recurso no existe (el que propone la
+especificación de MCP), `-32602` si el URI o lo que apunta no es válido, y `-32603` solo para un
+fallo de E/S inesperado.
+
 **Qué se descartó.** Exponer los documentos con escritura (recursos suscribibles o una tool de
 escritura por recurso): escribir sigue siendo `write_central_doc`, que es donde viven la
 contención, la protección de los documentos congelados y la confirmación.

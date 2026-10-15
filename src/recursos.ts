@@ -14,6 +14,7 @@
 
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import type { ReadResourceResult, Resource } from "@modelcontextprotocol/sdk/types.js";
 import type { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js";
 import * as fs from "fs";
@@ -29,7 +30,7 @@ import {
   taskFolderPath,
   validarSegmento,
 } from "./paths.js";
-import { discoverPhases, nombreContextoInicial } from "./phases.js";
+import { discoverPhases, esCarpeta, nombreContextoInicial } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { listarTareas, tareaActiva } from "./tasks.js";
 
@@ -53,12 +54,41 @@ function subcarpetaDeRecibos(phases: Map<number, PhaseFile>): string | null {
   return conRecibos?.[1].recibos ?? null;
 }
 
+// statSync con throwIfNoEntry solo calla el ENOENT; un tramo de la ruta que es un archivo
+// (ENOTDIR) o un permiso denegado no son un error para preguntar "¿es un archivo?".
 function esArchivo(ruta: string): boolean {
-  return fs.statSync(ruta, { throwIfNoEntry: false })?.isFile() ?? false;
+  try {
+    return fs.statSync(ruta, { throwIfNoEntry: false })?.isFile() ?? false;
+  } catch {
+    return false;
+  }
 }
 
-function esCarpeta(ruta: string): boolean {
-  return fs.statSync(ruta, { throwIfNoEntry: false })?.isDirectory() ?? false;
+// Lo que se lista o se autocompleta pasa por la misma contención que la lectura: un enlace dentro
+// de la tarea que lleva fuera de ella no se lee, y tampoco se enseña su nombre ni su fecha.
+function dentroDeLaTarea(carpetaTarea: string, ruta: string): boolean {
+  try {
+    return estaDentroReal(carpetaTarea, ruta);
+  } catch {
+    return false;
+  }
+}
+
+// Los errores de lectura llegan al cliente con un código que dice qué pasó, no como un error
+// interno: -32002 si el recurso no existe (el que propone la especificación de MCP), -32602 si el
+// URI o lo que apunta no es válido, y -32603 solo para un fallo de E/S inesperado.
+const RECURSO_NO_ENCONTRADO = -32002;
+
+function conCodigo<T>(leerRecurso: () => T): T {
+  try {
+    return leerRecurso();
+  } catch (error) {
+    if (error instanceof McpError) throw error;
+    const mensaje = error instanceof Error ? error.message : String(error);
+    if (/^No existe/.test(mensaje)) throw new McpError(RECURSO_NO_ENCONTRADO, mensaje);
+    if (typeof (error as NodeJS.ErrnoException)?.code === "string") throw new McpError(ErrorCode.InternalError, mensaje);
+    throw new McpError(ErrorCode.InvalidParams, mensaje);
+  }
 }
 
 // El SDK entrega las variables tal como venían en el URI, con su codificación porcentual. Se
@@ -147,7 +177,7 @@ function listarDocumentos(): Resource[] {
     ];
     for (const documento of nombres) {
       const ruta = path.join(carpeta, documento);
-      if (!esArchivo(ruta)) continue;
+      if (!esArchivo(ruta) || !dentroDeLaTarea(carpeta, ruta)) continue;
       lista.push(recurso(uriDeDocumento(proyecto, tarea, documento), `${proyecto}/${tarea}/${documento}`, `${tarea} · ${documento}`, ruta));
     }
   }
@@ -158,11 +188,12 @@ function recibosDe(carpetaTarea: string, phases: Map<number, PhaseFile>): string
   const subcarpeta = subcarpetaDeRecibos(phases);
   if (!subcarpeta) return [];
   const carpeta = path.join(carpetaTarea, subcarpeta);
-  if (!esCarpeta(carpeta)) return [];
+  if (!esCarpeta(carpeta) || !dentroDeLaTarea(carpetaTarea, carpeta)) return [];
   return fs
     .readdirSync(carpeta, { withFileTypes: true })
     .filter((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md") && !entrada.name.startsWith("."))
     .map((entrada) => entrada.name)
+    .filter((nombre) => dentroDeLaTarea(carpetaTarea, path.join(carpeta, nombre)))
     .sort();
 }
 
@@ -230,6 +261,7 @@ function completarDocumento(escrito: string, contexto?: { arguments?: Record<str
       .readdirSync(carpeta, { withFileTypes: true })
       .filter((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md") && !entrada.name.startsWith("."))
       .map((entrada) => entrada.name)
+      .filter((nombre) => dentroDeLaTarea(carpeta, path.join(carpeta, nombre)))
       .sort();
     return filtrar(documentos, escrito);
   });
@@ -301,15 +333,16 @@ export function registrarRecursos(mcp: McpServer): void {
       description: "Un recibo de lote de la Fase 4, en la subcarpeta que declara su prompt.",
       mimeType: MIME,
     },
-    async (uri, variables) => {
-      const subcarpeta = subcarpetaDeRecibos(discoverPhases());
-      if (!subcarpeta) throw new Error("Ninguna fase declara una subcarpeta de recibos.");
-      const { ruta } = archivoDeTarea(variable(variables, "proyecto"), variable(variables, "tarea"), [
-        subcarpeta,
-        variable(variables, "recibo"),
-      ]);
-      return leer(uri, ruta);
-    }
+    async (uri, variables) =>
+      conCodigo(() => {
+        const subcarpeta = subcarpetaDeRecibos(discoverPhases());
+        if (!subcarpeta) throw new Error("No existe ninguna fase que declare una subcarpeta de recibos.");
+        const { ruta } = archivoDeTarea(variable(variables, "proyecto"), variable(variables, "tarea"), [
+          subcarpeta,
+          variable(variables, "recibo"),
+        ]);
+        return leer(uri, ruta);
+      })
   );
 
   mcp.registerResource(
@@ -323,11 +356,12 @@ export function registrarRecursos(mcp: McpServer): void {
       description: "Un archivo de la carpeta de una tarea: el contexto inicial o el documento de una fase.",
       mimeType: MIME,
     },
-    async (uri, variables) => {
-      const { ruta } = archivoDeTarea(variable(variables, "proyecto"), variable(variables, "tarea"), [
-        variable(variables, "documento"),
-      ]);
-      return leer(uri, ruta);
-    }
+    async (uri, variables) =>
+      conCodigo(() => {
+        const { ruta } = archivoDeTarea(variable(variables, "proyecto"), variable(variables, "tarea"), [
+          variable(variables, "documento"),
+        ]);
+        return leer(uri, ruta);
+      })
   );
 }
