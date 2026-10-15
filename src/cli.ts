@@ -10,6 +10,7 @@ import { parseArgs } from "util";
 
 import { SERVER_NAME, SERVER_VERSION } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
+import { ejecutarEject } from "./eject.js";
 import { CLAVE_VALIDA, CLIENTES } from "./init.js";
 import type { Cliente, OpcionesInit } from "./init.js";
 
@@ -26,6 +27,8 @@ Uso:
   ${SERVER_NAME} doctor          Revisa la instalación: variables, prompts, proyectos y avisos.
   ${SERVER_NAME} doctor --json   Lo mismo, como JSON.
   ${SERVER_NAME} init            Registra el servidor en tus clientes (Claude Code, Cursor, VS Code).
+  ${SERVER_NAME} eject <objetivo> --a global|proyecto:<NOMBRE>
+                                Copia un prompt, una ranura, un comando o un preset para editarlo.
   ${SERVER_NAME} --version       La versión.
   ${SERVER_NAME} --help          Esta ayuda.
 
@@ -40,6 +43,14 @@ init:
     --solo-este-equipo   En vez de manifiestos, presetPorDefecto en el machine.json de este equipo.
   --dry-run              Dice lo que haría, sin escribir nada.
   --yes                  Confirma los cambios sobre lo que ya existe sin preguntar.
+
+eject <objetivo>:
+  fase-3                 El prompt de fábrica de la fase, con sus ranuras.
+  fase-3/pruebas         El contenido efectivo de una ranura (con preset y reglas), como bloque.
+  global/evidencia       Igual, para una ranura de las reglas globales.
+  comando-f4             El texto del comando /f4.
+  preset:<nombre>        El archivo del preset (siempre a tu carpeta de configuración).
+  --a global|proyecto:<NOMBRE>   A qué capa. --dry-run lo enseña sin escribir; --fuerza reemplaza con copia.
 
 Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
 
@@ -91,6 +102,7 @@ function invalido(salida: Salida, motivo?: string): ResultadoCli {
 const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
+  eject: ["a", "dry-run", "fuerza"],
 };
 
 type Valores = {
@@ -107,6 +119,8 @@ type Valores = {
   "solo-este-equipo"?: boolean;
   "dry-run"?: boolean;
   yes?: boolean;
+  a?: string;
+  fuerza?: boolean;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -168,6 +182,8 @@ export function ejecutarCli(
         "solo-este-equipo": { type: "boolean" },
         "dry-run": { type: "boolean" },
         yes: { type: "boolean", short: "y" },
+        a: { type: "string" },
+        fuerza: { type: "boolean" },
       },
     }));
   } catch (error) {
@@ -193,6 +209,11 @@ export function ejecutarCli(
     const diagnostico = diagnosticar();
     salida.out(valores.json ? JSON.stringify(diagnostico, null, 2) : formatearDiagnostico(diagnostico, "texto"));
     return { accion: "salir", codigo: diagnostico.hallazgos.some((h) => h.severidad === "error") ? 1 : 0 };
+  }
+
+  if (posicionales.length === 2 && subcomando === "eject") {
+    const codigo = ejecutarEject(posicionales[1]!, { destino: valores.a ?? null, dryRun: Boolean(valores["dry-run"]), fuerza: Boolean(valores.fuerza) }, salida);
+    return { accion: "salir", codigo };
   }
 
   if (posicionales.length === 1 && subcomando === "init") {

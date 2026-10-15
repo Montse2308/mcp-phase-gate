@@ -16,7 +16,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { aplicarBloques, leerBloques, omitirRanuraVacia } from "./bloques.js";
+import { aplicarBloques, leerBloques, omitirRanuraVacia, ranurasDe } from "./bloques.js";
 import type { Bloque, Procedencia } from "./bloques.js";
 import { DOCS, IDIOMA_POR_DEFECTO, carpetaPromptsGlobal, defaultPromptsPath, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
@@ -410,6 +410,39 @@ export function ensamblarFase(
   const ensamblado = ensamblarConCapas(fase, capasConConfiguracion(config), opciones);
   if (!carpetaProyecto || opciones.incluirConfigProyecto === false) return ensamblado;
   return { ...ensamblado, texto: `${ensamblado.texto}\n\n${bloqueDeConfiguracion(config, reposDeLaTarea(config), opciones.estadoDeRepo)}` };
+}
+
+// El texto con sus ranuras (marcadores incluidos) de un archivo: "global" o "fase-N", el cuerpo que
+// gana en esas capas. null si no existe.
+function cuerpoDe(capas: Capa[], archivo: string): string | null {
+  const rutas = rutasDeCuerpos(capas);
+  if (archivo === "global") {
+    const reglas = resolveGlobalRules(rutas);
+    return reglas ? leerPromptNormalizado(reglas) : null;
+  }
+  const entrada = discoverPhases(rutas).get(Number(archivo.slice("fase-".length)));
+  return entrada ? parsePhaseFile(entrada.file).cuerpo : null;
+}
+
+// Las ranuras que tiene un archivo en estas capas, en orden. Vacío si el archivo no existe.
+export function ranurasDisponibles(capas: Capa[], archivo: string): string[] {
+  const texto = cuerpoDe(capas, archivo);
+  return texto === null ? [] : ranurasDe(texto).map((ranura) => ranura.nombre);
+}
+
+// El contenido de una ranura tal como le llega al modelo con estas capas: el del cuerpo que gana con
+// todos los bloques aplicados. Es lo que copia `eject fase-3/pruebas`. null si no existe.
+export function contenidoEfectivoDeRanura(capas: Capa[], id: string): { contenido: string; procedencia: Procedencia } | null {
+  const [archivo = "", ranura = ""] = id.split("/");
+  const texto = cuerpoDe(capas, archivo);
+  if (texto === null) return null;
+  const aplicado = aplicarBloques(texto, archivo, bloquesDe(capas).bloques, () => "");
+  const encontrada = ranurasDe(aplicado.texto).find((r) => r.nombre === ranura);
+  if (!encontrada) return null;
+  return {
+    contenido: aplicado.texto.split("\n").slice(encontrada.apertura + 1, encontrada.cierre).join("\n"),
+    procedencia: aplicado.procedencia.find((p) => p.ranura === id)!,
+  };
 }
 
 // Los bloques que no encajan en ningún sitio, mirando todas las fases a la vez: lo que lista doctor.
