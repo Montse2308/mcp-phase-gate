@@ -6,6 +6,7 @@ import * as path from "node:path";
 import type { PhaseFile } from "../src/phases.js";
 import {
   avisoDeCompuerta,
+  avisoDePendientes,
   avisoDeSalto,
   bloqueDeRecibos,
   describeEstado,
@@ -17,7 +18,9 @@ import {
   listarTareas,
   motivoDeProteccion,
   tareaActiva,
+  tieneValidacionesPendientes,
 } from "../src/tasks.js";
+import type { EstadoTarea } from "../src/tasks.js";
 import { stateFile } from "../src/config.js";
 import {
   crearProyecto,
@@ -617,5 +620,124 @@ describe("avisoDeCompuerta", () => {
     crearProyecto(docs, "PROYECTO-A");
 
     assert.equal(avisoDeCompuerta(4, FASES, { project: "proyecto-a" }), null);
+  });
+});
+
+describe("avisoDePendientes", () => {
+  // Las fases reales, con la subcarpeta de recibos que declara la Fase 4.
+  const CON_RECIBOS = new Map(FASES);
+  CON_RECIBOS.set(4, { ...FASES.get(4)!, recibos: "04 - Ejecución" });
+
+  function tareaCon(documentos: Record<string, string>): EstadoTarea {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "tarea", []);
+    for (const [relativo, contenido] of Object.entries(documentos)) {
+      const ruta = path.join(carpeta, ...relativo.split("/"));
+      fs.mkdirSync(path.dirname(ruta), { recursive: true });
+      fs.writeFileSync(ruta, contenido, "utf-8");
+    }
+    return estadoDeTarea("tarea", carpeta, CON_RECIBOS);
+  }
+
+  const PLAN_CON_PENDIENTES = "# Plan\n\n## Validaciones pendientes\n\n- Probar el login con SSO en staging.\n\n## Lotes\n\n| L01 |";
+
+  it("aparece cuando el documento de la fase anterior tiene `## Validaciones pendientes` con contenido", () => {
+    const estado = tareaCon({ "03 - Plan Técnico.md": PLAN_CON_PENDIENTES });
+
+    const aviso = avisoDePendientes(4, estado, CON_RECIBOS);
+    assert.equal(
+      aviso,
+      [
+        "## PENDIENTES HEREDADOS (detectados por el servidor)",
+        "",
+        "- `03 - Plan Técnico.md` tiene una sección `## Validaciones pendientes`.",
+        "",
+        "Nómbraselos al usuario antes de empezar (ver PENDIENTES HEREDADOS en las reglas globales).",
+      ].join("\n")
+    );
+  });
+
+  // La sección termina en el siguiente "## ": un "### " dentro es parte de su contenido.
+  it("cuenta como contenido un subencabezado dentro de la sección, y la sección al final del archivo", () => {
+    assert.ok(avisoDePendientes(4, tareaCon({ "03 - Plan Técnico.md": "## Validaciones pendientes\n### Staging\n" }), CON_RECIBOS));
+    assert.ok(avisoDePendientes(4, tareaCon({ "03 - Plan Técnico.md": "x\n## Validaciones pendientes\r\n- algo\r\n" }), CON_RECIBOS));
+  });
+
+  for (const vacia of ["", "Ninguna.", "Nada.", "Sin pendientes.", "Fase cerrada sin pendientes.", "  NINGUNA  ", "nada"]) {
+    it(`no aparece con la sección vacía o que solo dice ${JSON.stringify(vacia)}`, () => {
+      const estado = tareaCon({ "03 - Plan Técnico.md": `# Plan\n\n## Validaciones pendientes\n\n${vacia}\n\n## Lotes\n` });
+
+      assert.equal(avisoDePendientes(4, estado, CON_RECIBOS), null);
+    });
+  }
+
+  it("no aparece sin la sección, ni con un encabezado parecido que no es el exacto", () => {
+    assert.equal(avisoDePendientes(4, tareaCon({ "03 - Plan Técnico.md": "# Plan\n\n## Lotes\n" }), CON_RECIBOS), null);
+    assert.equal(
+      avisoDePendientes(4, tareaCon({ "03 - Plan Técnico.md": "### Validaciones pendientes\n- algo\n" }), CON_RECIBOS),
+      null
+    );
+  });
+
+  // Solo la fase anterior con documento: lo de más atrás ya lo nombró la fase siguiente a ella.
+  it("mira solo el documento existente más reciente por debajo de la fase pedida", () => {
+    const estado = tareaCon({
+      "02 - Decisiones.md": "## Validaciones pendientes\n- algo viejo\n",
+      "03 - Plan Técnico.md": "# Plan sin pendientes\n",
+    });
+
+    assert.equal(avisoDePendientes(4, estado, CON_RECIBOS), null);
+    assert.ok(avisoDePendientes(3, estado, CON_RECIBOS));
+  });
+
+  it("en la Fase 5 lista los recibos con pendientes, fallidos o descartados, y no los hechos", () => {
+    const recibo = (estado: string) => `---\nlote: L01\nestado: ${estado}\ncommit: abc1234\n---\n# L0x\n`;
+    const estado = tareaCon({
+      "04 - Ejecución.md": "# Ejecución\n\n## Lotes\n",
+      "04 - Ejecución/L01 - base.md": recibo("hecho"),
+      "04 - Ejecución/L02 - api.md": recibo("con pendientes"),
+      "04 - Ejecución/L03 - filtro por categoría.md": recibo("fallido"),
+      "04 - Ejecución/L04 - ui.md": recibo("Descartado"),
+    });
+
+    const aviso = avisoDePendientes(5, estado, CON_RECIBOS) ?? "";
+    assert.match(aviso, /- `04 - Ejecución\/L02 - api\.md`: estado `con pendientes`\./);
+    assert.match(aviso, /- `04 - Ejecución\/L03 - filtro por categoría\.md`: estado `fallido`\./);
+    assert.match(aviso, /- `04 - Ejecución\/L04 - ui\.md`: estado `descartado`\./);
+    assert.equal(aviso.includes("L01"), false);
+  });
+
+  // Con lotes: 1 el recibo es el documento de la fase.
+  it("con un solo lote, mira el frontmatter del documento de la Fase 4", () => {
+    const estado = tareaCon({ "04 - Ejecución.md": "---\nlote: L01\nestado: con pendientes\n---\n# L01\n" });
+
+    assert.match(avisoDePendientes(5, estado, CON_RECIBOS) ?? "", /- `04 - Ejecución\.md`: estado `con pendientes`\./);
+  });
+
+  it("los recibos solo cuentan para las fases posteriores a la que los declara", () => {
+    const estado = tareaCon({ "04 - Ejecución/L01 - x.md": "---\nestado: fallido\n---\n" });
+
+    assert.equal(avisoDePendientes(4, estado, CON_RECIBOS), null);
+  });
+});
+
+// Ajustes de la auditoría de la Etapa 2: la heurística de "sección vacía".
+describe("tieneValidacionesPendientes", () => {
+  const conSeccion = (cuerpo: string, encabezado = "## Validaciones pendientes") =>
+    `# Plan\n\n${encabezado}\n\n${cuerpo}\n\n## Lotes\n`;
+
+  for (const vacia of ["- Ninguna.", "Ninguna pendiente.", "N/A", "_Ninguna._", "Ninguna...", "* Nada", "1. Ninguno", "**No aplica.**", "Ninguna…"]) {
+    it(`cuenta como vacía ${JSON.stringify(vacia)}`, () => {
+      assert.equal(tieneValidacionesPendientes(conSeccion(vacia)), false);
+    });
+  }
+
+  it("una sección con un pendiente real sí cuenta, aunque empiece por \"Ninguna\"", () => {
+    assert.equal(tieneValidacionesPendientes(conSeccion("- Ninguna de las pruebas de staging se corrió.")), true);
+  });
+
+  it("reconoce el encabezado en otras mayúsculas", () => {
+    assert.equal(tieneValidacionesPendientes(conSeccion("- probar en staging", "## Validaciones Pendientes")), true);
   });
 });

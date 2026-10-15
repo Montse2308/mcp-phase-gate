@@ -126,8 +126,8 @@ export function describeProjects(): string {
     const nombres = [...discoverProjects().values()].sort();
     return nombres.length ? nombres.join(", ") : "(ninguno todavía)";
   } catch {
-    // Sin ORQUESTADOR_DOCS_PATH configurada no se pueden listar; el error real lo da la tool.
-    return "(no se pudieron leer: revisa ORQUESTADOR_DOCS_PATH)";
+    // Sin DOCS_PATH configurada no se pueden listar; el error real lo da la tool.
+    return "(no se pudieron leer: revisa PHASE_GATE_DOCS_PATH)";
   }
 }
 
@@ -148,7 +148,7 @@ export function requireProjectFolder(project: string): string {
 
 // ─── Carpetas de tarea ──────────────────────────────────────────────────────
 // La ruta de una tarea SIEMPRE se arma aquí, en un solo lugar.
-// Estructura: <ORQUESTADOR_DOCS_PATH>/<PROYECTO>/<subcarpeta de tareas>/<tarea>
+// Estructura: <PHASE_GATE_DOCS_PATH>/<PROYECTO>/<subcarpeta de tareas>/<tarea>
 export function taskFolderPath(carpetaProyecto: string, taskName: string): string {
   validarSegmento(taskName, "task_name");
   return path.join(requireBasePath(DOCS), carpetaProyecto, tasksSubdir(), taskName);

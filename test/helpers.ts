@@ -9,6 +9,8 @@ import * as os from "os";
 import * as path from "path";
 import { after } from "node:test";
 
+import { VARIABLES, reiniciarEnv } from "../src/config.js";
+
 export const SUBDIR_POR_DEFECTO = "Proyectos";
 
 // Todo lo que crea carpetaTemporal se borra al terminar. Antes no se borraba nada: cada
@@ -102,11 +104,16 @@ export function estadoTemporal(): string {
 }
 
 // Las variables de entorno son globales al proceso y los tests corren en el mismo:
-// dejarlas puestas hace que un test contamine al siguiente.
+// dejarlas puestas hace que un test contamine al siguiente. Se borran los dos nombres de cada
+// variable, y también lo que haya cargado un .env (y su error de UTF-16).
 export function limpiarEntorno(): void {
-  delete process.env.ORQUESTADOR_DOCS_PATH;
-  delete process.env.ORQUESTADOR_REPOS_PATH;
-  delete process.env.ORQUESTADOR_TASKS_SUBDIR;
-  delete process.env.ORQUESTADOR_PROMPTS_PATH;
-  delete process.env.ORQUESTADOR_STATE_PATH;
+  reiniciarEnv();
+  for (const { principal, alias } of Object.values(VARIABLES)) {
+    delete process.env[principal];
+    if (alias) delete process.env[alias];
+  }
 }
+
+// Una PHASE_GATE_* que quien corre los tests tenga en su terminal ganaría a las ORQUESTADOR_* que
+// ponen los tests. Se limpia al importar, antes del primer test de cada archivo.
+limpiarEntorno();

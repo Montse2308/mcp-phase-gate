@@ -1,87 +1,24 @@
 // Los argumentos de cada tool, declarados una sola vez con zod.
 //
 // Antes cada tool leía sus argumentos con String(args?.x), que no valida nada: sin task_name,
-// String(undefined) creaba la tarea "undefined/" y la dejaba activa. Ahora todo pasa por aquí
-// antes de usarse, y el error nombra el campo.
+// String(undefined) creaba la tarea "undefined/" y la dejaba activa. Desde la Etapa 0 todo pasa
+// por aquí antes de usarse, y el error nombra el campo.
 //
-// Se exportan shapes (los campos sueltos) y no z.object(...): es lo que recibe registerTool
-// del SDK, al que se pasarán tal cual en la migración a McpServer (Etapa 2).
+// Se exportan shapes (los campos sueltos) y no z.object(...): es lo que recibe registerTool del
+// SDK. El SDK genera con ellos el JSON Schema que ve el cliente —por eso cada campo lleva aquí su
+// descripción— y valida cada llamada antes del callback.
+//
+// Los mensajes de error van en cada campo, en español, porque el SDK los entrega tal cual detrás
+// de su prefijo en inglés ("Input validation error: Invalid arguments for tool …"). Sin ellos
+// llegaría el texto genérico de zod ("expected string, received undefined"), que no le dice al
+// modelo cómo corregir la llamada.
 //
 // Los opcionales son .nullish() y null cuenta como ausente: algunos clientes con modelos en
 // modo estricto mandan null en todo campo opcional. Un número en texto (phase: "3") no se
 // convierte: se rechaza con un mensaje que dice qué se espera. Es raro, el modelo lo corrige
-// al primer intento, y convertirlo complicaría el JSON Schema que se generará desde aquí.
+// al primer intento, y convertirlo complicaría el JSON Schema que se genera desde aquí.
 
 import { z } from "zod";
-
-export const startTaskShape = {
-  project: z.string().trim().min(1, "Falta `project`."),
-  task_name: z.string().min(1, "Falta `task_name`."),
-  initial_context: z.string().min(1, "Falta `initial_context`."),
-  crear_proyecto: z.boolean().nullish(),
-};
-
-export const getPhasePromptShape = {
-  phase: z.number().int(),
-  project: z.string().nullish(),
-  task_name: z.string().nullish(),
-};
-
-export const getActiveTaskShape = {
-  project: z.string().nullish(),
-};
-
-export const listTasksShape = {
-  project: z.string().nullish(),
-};
-
-export const switchTaskShape = {
-  project: z.string().trim().min(1, "Falta `project`."),
-  task_name: z.string().min(1, "Falta `task_name`."),
-};
-
-// Los cuatro son opcionales por separado: qué combinación vale lo decide resolveDocPath.
-export const readCentralDocShape = {
-  project: z.string().nullish(),
-  task_name: z.string().nullish(),
-  file_name: z.string().nullish(),
-  file_path: z.string().nullish(),
-};
-
-export const writeCentralDocShape = {
-  ...readCentralDocShape,
-  content: z.string(),
-  // Solo con confirmación explícita del usuario en el chat. Permite reescribir un documento
-  // congelado o el contexto inicial.
-  force: z.boolean().nullish(),
-};
-
-export const readCrossRepoShape = {
-  repo_name: z.string().min(1, "Falta `repo_name`."),
-  file_path: z.string().min(1, "Falta `file_path`."),
-};
-
-const SHAPES = {
-  start_task: startTaskShape,
-  get_phase_prompt: getPhasePromptShape,
-  get_active_task: getActiveTaskShape,
-  list_tasks: listTasksShape,
-  switch_task: switchTaskShape,
-  read_central_doc: readCentralDocShape,
-  write_central_doc: writeCentralDocShape,
-  read_cross_repo: readCrossRepoShape,
-};
-
-type NombreTool = keyof typeof SHAPES;
-
-// validarLlamada quita los null, así que ninguna tool los ve.
-type SinNulos<T> = { [K in keyof T]: Exclude<T[K], null> };
-
-// Una llamada ya validada. Es una unión discriminada por `tool`: al comprobar el nombre,
-// TypeScript sabe qué argumentos trae y de qué tipo, sin un solo String().
-export type LlamadaValidada = {
-  [K in NombreTool]: { tool: K; args: SinNulos<z.output<z.ZodObject<(typeof SHAPES)[K]>>> };
-}[NombreTool];
 
 // Lo que se espera de cada tipo, dicho como se le diría al modelo para que corrija la llamada.
 // El único número es `phase`, de ahí el ejemplo.
@@ -93,45 +30,197 @@ const TIPOS: Record<string, string> = {
   object: "un objeto",
 };
 
-function describirProblema(issue: z.core.$ZodIssue, recibidos: Record<string, unknown>): string {
-  const campo = issue.path.map(String).join(".");
-  if (!campo) return "los argumentos tienen que ser un objeto.";
-
+// El mensaje de un campo. null también es "falta": en un opcional se tolera antes de llegar aquí,
+// en un obligatorio es lo mismo que no venir.
+function mensaje(campo: string): (issue: z.core.$ZodRawIssue) => string {
   const nombre = `\`${campo}\``;
-
-  // null también es "falta": en un opcional se tolera, en un obligatorio es lo mismo que no venir.
-  if (issue.code === "invalid_type") {
-    return recibidos[campo] == null
-      ? `Falta ${nombre}.`
-      : `${nombre} debe ser ${TIPOS[issue.expected] ?? issue.expected}.`;
-  }
-
-  // Los mínimos llevan su mensaje en español en el propio shape ("Falta `task_name`.").
-  if (issue.code === "too_small") return issue.message;
-
-  // Los máximos no: el único que puede saltar es el del entero seguro de `phase`.
-  if (issue.code === "too_big") return `${nombre} es demasiado grande.`;
-
-  return `${nombre}: ${issue.message}.`;
+  return (issue) => {
+    if (issue.input === undefined || issue.input === null) return `Falta ${nombre}.`;
+    if (issue.code === "invalid_type") return `${nombre} debe ser ${TIPOS[issue.expected] ?? issue.expected}.`;
+    // El único máximo que puede saltar es el del entero seguro de `phase`.
+    if (issue.code === "too_big") return `${nombre} es demasiado grande.`;
+    return `${nombre} no es válido.`;
+  };
 }
 
-export function validarLlamada(tool: string, args: unknown): LlamadaValidada {
-  if (!Object.hasOwn(SHAPES, tool)) {
-    throw new Error(`Unknown tool: ${tool}`);
-  }
+function texto(campo: string) {
+  return z.string({ error: mensaje(campo) });
+}
 
-  const resultado = z.object(SHAPES[tool as NombreTool]).safeParse(args ?? {});
+// `recortar` quita los espacios ANTES de exigir el mínimo: "   " cuenta como que falta.
+function obligatorio(campo: string, opciones: { recortar?: boolean } = {}) {
+  const base = opciones.recortar ? texto(campo).trim() : texto(campo);
+  return base.min(1, `Falta \`${campo}\`.`);
+}
 
-  if (!resultado.success) {
-    const recibidos = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
-    const problemas = resultado.error.issues.map((issue) => describirProblema(issue, recibidos));
-    throw new Error(`Argumentos no válidos. ${problemas.join(" ")}`);
-  }
+function booleano(campo: string) {
+  return z.boolean({ error: mensaje(campo) });
+}
 
-  // null cuenta como ausente: se quita aquí, una vez, para que ninguna tool tenga que
-  // distinguir entre un campo que no vino y uno que vino vacío.
-  const sinNulos = Object.fromEntries(Object.entries(resultado.data).filter(([, valor]) => valor !== null));
+// ─── Descripciones ──────────────────────────────────────────────────────────
+// Son estáticas: no nombran proyectos ni fases concretas. Antes se armaban al arrancar con la
+// lista de proyectos y de fases, y se quedaban viejas en cuanto alguien creaba una carpeta con el
+// cliente abierto, porque la lista de tools no se vuelve a pedir. Lo que cambia vive ahora en los
+// recursos phase-gate://estado y phase-gate://fases, que sí avisan cuando cambian.
+const PROYECTO =
+  "Proyecto: el nombre de una carpeta de proyecto de la Documentación Central. Si no existe, la " +
+  "tool te devuelve los que hay. También los listan `list_tasks`, `get_orchestrator_status` y el recurso " +
+  "`phase-gate://estado`.";
 
-  // El cast es seguro: los datos los acaba de producir el shape de esta misma tool.
-  return { tool, args: sinNulos } as LlamadaValidada;
+const FASE =
+  "Número de fase. Con los prompts de fábrica son 1 a 5; `get_orchestrator_status` y el recurso " +
+  "`phase-gate://fases` listan las disponibles con su título y documento.";
+
+const TAREA = "Nombre de la carpeta de la tarea.";
+
+const ARCHIVO =
+  "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md').";
+
+// ─── Shapes ─────────────────────────────────────────────────────────────────
+export const startTaskShape = {
+  project: obligatorio("project", { recortar: true }).describe(PROYECTO),
+  task_name: obligatorio("task_name").describe("Nombre de la tarea (creará una carpeta con este nombre)."),
+  initial_context: obligatorio("initial_context").describe("El contexto, correo o requerimiento inicial completo."),
+  crear_proyecto: booleano("crear_proyecto")
+    .nullish()
+    .describe(
+      "Solo para ESTRENAR un proyecto que todavía no existe. Déjalo sin poner salvo que el usuario te haya " +
+        "dicho explícitamente que quiere crear un proyecto nuevo: sirve para que un nombre mal escrito no cree " +
+        "una carpeta suelta en la Documentación."
+    ),
+};
+
+export const getPhasePromptShape = {
+  phase: z.number({ error: mensaje("phase") }).int({ error: mensaje("phase") }).describe(FASE),
+  project: texto("project")
+    .nullish()
+    .describe(
+      `${PROYECTO} Pásalo siempre que lo sepas —lo sabes por el repositorio que tienes abierto— para que se ` +
+        "pueda comprobar que no te saltas una fase. La tarea se toma de la activa de ese proyecto."
+    ),
+  task_name: texto("task_name")
+    .nullish()
+    .describe("Solo si quieres comprobar contra una tarea distinta de la activa del proyecto. Normalmente se omite."),
+};
+
+export const getActiveTaskShape = {
+  project: texto("project")
+    .nullish()
+    .describe(`${PROYECTO} Si lo omites, se devuelve la tarea activa de cada proyecto.`),
+};
+
+export const listTasksShape = {
+  project: texto("project").nullish().describe(`${PROYECTO} Si lo omites, se listan todos.`),
+};
+
+export const switchTaskShape = {
+  project: obligatorio("project", { recortar: true }).describe(PROYECTO),
+  task_name: obligatorio("task_name").describe(
+    "Nombre de la carpeta de la tarea a activar. Si no existe, la tool te devuelve las que sí."
+  ),
+};
+
+// Los cuatro son opcionales por separado: qué combinación vale lo decide resolveDocPath.
+export const readCentralDocShape = {
+  project: texto("project").nullish().describe(`${PROYECTO} Úsalo junto con task_name y file_name.`),
+  task_name: texto("task_name").nullish().describe(TAREA),
+  file_name: texto("file_name").nullish().describe(ARCHIVO),
+  file_path: texto("file_path")
+    .nullish()
+    .describe(
+      "ALTERNATIVA: ruta relativa dentro de la Documentación Central (ej. " +
+        "'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Solo si no usas project+task_name."
+    ),
+};
+
+export const writeCentralDocShape = {
+  ...readCentralDocShape,
+  file_path: texto("file_path")
+    .nullish()
+    .describe(
+      "ALTERNATIVA: ruta relativa dentro de la Documentación Central, que tiene que caer dentro de la carpeta " +
+        "de una tarea que ya existe (ej. 'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Los archivos " +
+        "del proyecto no se escriben con esta tool. Solo si no usas project+task_name."
+    ),
+  content: texto("content").describe("Contenido a escribir."),
+  force: booleano("force")
+    .nullish()
+    .describe(
+      "Permite reescribir un documento congelado o el contexto inicial. Solo se usa si tu cliente no puede " +
+        "pedirle la confirmación al usuario directamente. Nunca lo pongas sin que el usuario lo haya confirmado en el chat."
+    ),
+};
+
+export const readCrossRepoShape = {
+  repo_name: obligatorio("repo_name").describe("Nombre del repositorio (ej. 'repo-a', 'repo-b')."),
+  file_path: obligatorio("file_path").describe("Ruta relativa del archivo dentro del repositorio (ej. 'src/main.ts')."),
+};
+
+// get_orchestrator_status no recibe nada.
+export const getOrchestratorStatusShape = {};
+
+// ─── Salida de get_orchestrator_status ──────────────────────────────────────
+// El objeto Diagnostico de diagnostico.ts, campo por campo. Con un outputSchema el cliente recibe
+// además `structuredContent`, y el SDK comprueba antes de enviarlo que cuadra con este shape:
+// si diagnostico.ts cambia y esto no, la tool falla en los tests en vez de mentir al cliente.
+const estadoRuta = z.object({ ruta: z.string().optional(), existe: z.boolean(), error: z.string().optional() });
+
+export const diagnosticoShape = {
+  paquete: z.object({
+    version: z.string(),
+    ruta: z.string(),
+    via: z.enum(["npx", "global", "dependencia", "clon"]),
+  }),
+  node: z.object({ version: z.string(), plataforma: z.string() }),
+  variables: z.array(
+    z.object({
+      logica: z.enum(["DOCS_PATH", "REPOS_PATH", "TASKS_SUBDIR", "PROMPTS_PATH", "STATE_PATH", "ELICITATION"]),
+      valor: z.string().optional(),
+      usada: z.string().nullable(),
+      fuente: z.enum(["entorno", ".env", "sin definir"]),
+      discrepancia: z.string().nullable(),
+    })
+  ),
+  rutas: z.object({ docs: estadoRuta, repos: estadoRuta }),
+  estado: z.object({ archivo: z.string(), existe: z.boolean(), punteros: z.number().int() }),
+  capas: z.array(z.object({ ruta: z.string(), etiqueta: z.enum(["fábrica", "propia"]), existe: z.boolean() })),
+  reglasGlobales: z.object({ archivo: z.string().nullable(), capa: z.string().nullable(), faltan: z.array(z.string()) }),
+  fases: z.array(
+    z.object({
+      numero: z.number().int(),
+      titulo: z.string(),
+      archivo: z.string(),
+      capa: z.string(),
+      documento: z.string().optional(),
+      recibos: z.string().optional(),
+      comando: z.string().nullable(),
+    })
+  ),
+  proyectos: z.array(
+    z.object({
+      nombre: z.string(),
+      tareas: z.number().int(),
+      activa: z
+        .object({ tarea: z.string(), origen: z.enum(["puntero", "deducida"]), fase: z.string() })
+        .nullable(),
+    })
+  ),
+  cliente: z
+    .object({
+      nombre: z.string(),
+      version: z.string(),
+      capacidades: z.object({ elicitation: z.boolean(), roots: z.boolean() }),
+    })
+    .optional(),
+  hallazgos: z.array(
+    z.object({ severidad: z.enum(["error", "aviso", "info"]), codigo: z.string(), texto: z.string() })
+  ),
+};
+
+// null cuenta como ausente: se quita una vez, al entrar en la tool, para que ninguna tenga que
+// distinguir entre un campo que no vino y uno que vino vacío.
+export type SinNulos<T> = { [K in keyof T]: Exclude<T[K], null> };
+
+export function sinNulos<T extends Record<string, unknown>>(args: T): SinNulos<T> {
+  return Object.fromEntries(Object.entries(args).filter(([, valor]) => valor !== null)) as SinNulos<T>;
 }

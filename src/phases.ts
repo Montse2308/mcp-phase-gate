@@ -5,10 +5,39 @@
 import * as fs from "fs";
 import * as path from "path";
 import { promptsLayers } from "./config.js";
+import { log } from "./log.js";
 import { claveDeNombre, validarSegmento } from "./paths.js";
 
 // Las reglas globales se anteponen a cada fase.
-const GLOBAL_RULES_FILE = "global-rules.md";
+export const GLOBAL_RULES_FILE = "global-rules.md";
+
+// Comando de cada fase (`/fN`): `comandos/fN.md` dentro de una capa de prompts. Gana la capa más
+// alta que lo tenga, igual que las fases; sin ninguno, la fase usa un texto genérico.
+export const CARPETA_COMANDOS = "comandos";
+
+export function resolveCommandFile(numero: number, capas: string[] = promptsLayers()): string | null {
+  for (const base of [...capas].reverse()) {
+    const ruta = path.join(base, CARPETA_COMANDOS, `f${numero}.md`);
+    if (tipoDe(ruta) === "archivo") return ruta;
+  }
+  return null;
+}
+
+// statSync con throwIfNoEntry solo calla el ENOENT: si un tramo de la ruta es un archivo
+// (ENOTDIR) o no hay permiso, lanza igual. Para preguntar "¿es una carpeta?" eso no es un error.
+function tipoDe(ruta: string): "archivo" | "carpeta" | "otro" | null {
+  try {
+    const info = fs.statSync(ruta, { throwIfNoEntry: false });
+    if (!info) return null;
+    return info.isDirectory() ? "carpeta" : info.isFile() ? "archivo" : "otro";
+  } catch {
+    return null;
+  }
+}
+
+export function esCarpeta(ruta: string): boolean {
+  return tipoDe(ruta) === "carpeta";
+}
 
 // Acepta "fase-1-descubrimiento.md" y también "phase-1-discovery.md",
 // para que un juego de prompts en inglés funcione sin tocar el código.
@@ -33,7 +62,7 @@ export type PhaseFile = {
 // tests va siempre en LF y sin BOM. Con el BOM delante, el frontmatter no se reconocía y la fase
 // se quedaba sin documento.
 function aLF(texto: string): string {
-  return texto.replace(/^﻿/, "").replace(/\r\n/g, "\n");
+  return texto.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
 }
 
 // Quita los marcadores de ranura y conserva su contenido. El modelo nunca los ve.
@@ -56,7 +85,7 @@ const RESTO_DE_MARCADOR = /<!--[^\n]*?ranura/i;
 function entregable(texto: string, archivo: string): string {
   const limpio = quitarMarcadores(texto);
   if (RESTO_DE_MARCADOR.test(limpio)) {
-    console.error(`[orquestador] ${archivo} tiene un marcador de ranura que no se reconoce: llega tal cual al modelo.`);
+    log("warning", `${archivo} tiene un marcador de ranura que no se reconoce: llega tal cual al modelo.`);
   }
   return limpio.trim();
 }
@@ -71,7 +100,7 @@ function leerRecibos(valor: string | undefined, archivo: string): string | undef
     if (segmento.startsWith(".")) throw new Error("no puede empezar por punto.");
     return segmento;
   } catch (error: any) {
-    console.error(`[orquestador] Se ignora el frontmatter recibos de ${archivo}: ${error.message}`);
+    log("warning", `Se ignora el frontmatter recibos de ${archivo}: ${error.message}`);
     return undefined;
   }
 }
@@ -89,8 +118,9 @@ function descartarRecibosQueChocan(phases: Map<number, PhaseFile>): void {
 
   for (const datos of phases.values()) {
     if (datos.recibos && documentos.has(claveDeNombre(datos.recibos))) {
-      console.error(
-        `[orquestador] Se ignora el frontmatter recibos de ${datos.file}: ` +
+      log(
+        "warning",
+        `Se ignora el frontmatter recibos de ${datos.file}: ` +
           `"${datos.recibos}" es el nombre de un documento de fase.`
       );
       datos.recibos = undefined;
@@ -99,7 +129,13 @@ function descartarRecibosQueChocan(phases: Map<number, PhaseFile>): void {
 }
 
 export function parsePhaseFile(fullPath: string): { meta: Record<string, string>; cuerpo: string } {
-  const crudo = aLF(fs.readFileSync(fullPath, "utf-8"));
+  return separarFrontmatter(fs.readFileSync(fullPath, "utf-8"));
+}
+
+// La cabecera "clave: valor" de un texto ya leído, y el resto. Sirve igual para un prompt que
+// para un recibo de lote, que usan el mismo formato.
+export function separarFrontmatter(texto: string): { meta: Record<string, string>; cuerpo: string } {
+  const crudo = aLF(texto);
   const encontrada = crudo.match(PHASE_FRONTMATTER);
 
   if (!encontrada) return { meta: {}, cuerpo: crudo };
@@ -131,7 +167,9 @@ export function discoverPhases(capas: string[] = promptsLayers()): Map<number, P
   const phases = new Map<number, PhaseFile>();
 
   for (const base of capas) {
-    if (!fs.existsSync(base)) continue;
+    // Una capa que no existe o que no es una carpeta (PHASE_GATE_PROMPTS_PATH apuntando a un
+    // archivo) se salta: doctor la avisa, y las fases de las demás capas siguen sirviendo.
+    if (!esCarpeta(base)) continue;
 
     // Se resuelve capa por capa: dentro de una, gana el primero por orden alfabético; entre
     // capas, gana la de más arriba. Sin este mapa intermedio la regla alfabética de la capa
@@ -222,13 +260,19 @@ export function loadPhasePrompt(phase: number, capas: string[] = promptsLayers()
 // fábrica, no se suman: concatenar dos juegos de reglas hace imposible saber de qué archivo
 // salió la instrucción que estorbó cuando algo sale raro, que es justo el momento en que hay
 // que saberlo. Si quieres las de fábrica y algo más, las copias y añades.
-function resolveGlobalRules(capas: string[]): string | null {
+export function resolveGlobalRules(capas: string[] = promptsLayers()): string | null {
   for (const base of [...capas].reverse()) {
     const ruta = path.join(base, GLOBAL_RULES_FILE);
     if (fs.existsSync(ruta)) return ruta;
   }
 
   return null;
+}
+
+// El texto de un prompt propio tal como lo ve el modelo: en LF y sin BOM. Lo usan quienes leen
+// un archivo de prompts fuera de este módulo, como el diagnóstico.
+export function leerPromptNormalizado(ruta: string): string {
+  return aLF(fs.readFileSync(ruta, "utf-8"));
 }
 
 // Bloque que se añade al final del prompt con los nombres exactos de los documentos: el que
@@ -276,14 +320,4 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
   }
 
   return lineas.join("\n");
-}
-
-export function describePhases(): string {
-  const available = discoverPhases();
-  if (available.size === 0) return "No se encontraron prompts de fase.";
-
-  return [...available.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([number, { title }]) => `${number}: ${title}`)
-    .join(", ");
 }

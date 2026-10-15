@@ -12,6 +12,331 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — El servidor avisa de los pendientes heredados leyendo encabezados, sin guardar estado
+
+**Decisión.** `get_phase_prompt` añade un bloque `## PENDIENTES HEREDADOS (detectados por el
+servidor)` justo después del aviso de la compuerta, si lo hay, cuando:
+
+- el documento de la **fase anterior** (la de mayor número, por debajo de la pedida, cuyo
+  documento existe) tiene una línea `## Validaciones pendientes` y la sección **no está vacía**.
+  La sección es el texto hasta el siguiente `## ` o el final, y el encabezado se reconoce sin
+  distinguir mayúsculas. Cuenta como vacía si, sin viñetas ni numeración, sin énfasis de Markdown,
+  sin puntos suspensivos ni punto final y en minúsculas, no queda nada o queda `ninguna`,
+  `ninguno`, `ninguna pendiente`, `nada`, `sin pendientes`, `no hay pendientes`,
+  `fase cerrada sin pendientes`, `n/a` o `no aplica` (la lista y la normalización se ampliaron
+  tras la auditoría de la etapa, que encontró falsos positivos con "- Ninguna." o "_Ninguna._");
+- o, en las fases posteriores a la que declara recibos (con los prompts de fábrica, la Fase 5),
+  algún recibo tiene en su frontmatter `estado` `con pendientes`, `fallido` o `descartado`. Con
+  un solo lote, el recibo es el documento de la Fase 4 y se mira también.
+
+La tarea se resuelve igual que en la compuerta: con `project`, con `task_name` o con el único
+puntero. Si no se puede resolver, no hay aviso. Un documento ilegible no produce aviso.
+
+**Amplía** la entrada del 2026-10-14 "Base de cada decisión y pendientes heredados viven en las
+reglas globales": la regla obliga al modelo a nombrar los pendientes, y ahora el servidor le
+señala dónde están.
+
+**Por qué no contradice la #39.** La issue rechazó que la **compuerta** dependiera de un
+`Estado:` escrito por el modelo. Este aviso no bloquea ni cambia la fase deducida: solo señala un
+encabezado que el prompt ya obliga a escribir. Si el modelo no lo escribió, el aviso no sale y
+todo sigue como en la Etapa 1.
+
+**Por qué la lista de "vacía".** El índice de cierre de la Fase 4 solo escribe
+`## Validaciones pendientes` si quedó algo abierto, pero en cualquier fase se puede escribir el
+encabezado por costumbre con "Ninguna.". Un aviso que salta sin motivo enseña a ignorarlos todos.
+
+**Por qué solo la fase anterior.** Lo que dejó abierto una fase más vieja ya lo tuvo que nombrar
+la siguiente a ella. Mirar todas las anteriores repetiría el mismo aviso en cada fase.
+
+---
+
+## 2026-10-15 — Las confirmaciones de `force` y `crear_proyecto` se piden al usuario por elicitation cuando el cliente puede
+
+**Decisión.** Cuando `write_central_doc` va a escribir un documento protegido (congelado, o el
+contexto inicial) y cuando `start_task` va a estrenar un proyecto con `crear_proyecto: true`, el
+servidor le pregunta a la persona con una elicitation de MCP: un formulario de su cliente con
+una casilla ("Reescribir `<archivo>`", "Crear el proyecto `<NOMBRE>`"). Con el cliente que la
+soporta, se pregunta **siempre** y `force` se ignora: confirmada, se escribe y la respuesta lo
+dice ("reescrito con confirmación del usuario"); rechazada, no se escribe nada. Sin elicitation,
+todo sigue como en la Etapa 1: deciden `force` y `crear_proyecto`.
+
+`pedirConfirmacion` (en `src/confirmacion.ts`) distingue tres resultados:
+
+| Qué pasó | Resultado |
+|---|---|
+| Aceptar con la casilla marcada | `confirmada` |
+| Aceptar sin marcarla, rechazar o cerrar el formulario | `rechazada` |
+| Vence el plazo (tres minutos), la primera vez en la sesión | `rechazada`, y la respuesta sugiere `PHASE_GATE_ELICITATION=off` |
+| Vence el plazo por segunda vez seguida | `rechazada` en esa llamada, y `no-disponible` desde la siguiente y para el resto de la sesión |
+| El cliente cancela la llamada a la tool antes de que la persona responda | `rechazada`, sin contar como vencimiento; y no se escribe nada aunque la persona acepte después |
+| El cliente la anuncia pero responde `MethodNotFound`, o un error "does not support" | `no-disponible` para el resto de la sesión |
+| Cualquier otro error | `rechazada` (se falla cerrado) |
+
+Con `no-disponible` se cae al comportamiento de la Etapa 1. `PHASE_GATE_ELICITATION=off` lo
+fuerza desde el principio (también acepta `false`, `0` y `no`, sin distinguir mayúsculas): es la
+escotilla para un cliente cuya implementación falle (validación V4: hay un bug abierto en Cursor
+para Windows en el que el formulario no aparece).
+
+**Dos casos añadidos tras la auditoría de la etapa.** *El segundo vencimiento seguido falla
+cerrado en esa misma llamada.* Antes, esa llamada ya pasaba a `no-disponible` y, si traía
+`force: true`, escribía: una persona ausente dos veces más un `force` puesto por el modelo acababan
+en escritura sin que nadie confirmara. Ahora `force` decide solo a partir de la llamada siguiente.
+*La cancelación del cliente cancela la pregunta.* La elicitation va con la señal de la llamada, y
+antes de escribir se comprueba que no se haya cancelado: si el cliente se rindió por su propio
+plazo (casi todos esperan menos que los tres minutos de la pregunta), escribir después dejaría un
+archivo que el modelo cree que no existe.
+
+**Consecuencia aceptada.** "No disponible" se recuerda durante toda la sesión, sin caducar. En una
+sesión de días, un cliente que se arregle a mitad no vuelve a preguntar hasta reiniciar el servidor.
+
+**Amplía** la entrada del 2026-08-08 "Los proyectos son las carpetas que existen, no una lista"
+(la puerta de `crear_proyecto`) y la del 2026-10-14 "Un documento de fase se congela cuando
+existe el de una fase posterior" (`force`).
+
+**Por qué.** `force` y `crear_proyecto` los pone el modelo cuando "el usuario lo confirmó en el
+chat". Es exactamente lo que se quería evitar: quien escribe la bandera no es quien debe decidir.
+Con elicitation la respuesta va de la persona al servidor sin pasar por el modelo. Por eso, con
+ella disponible, `force` ya no basta: la descripción del parámetro pasa a decir que solo se usa
+si el cliente no puede preguntar.
+
+**Por qué el rechazo no se convierte en "no disponible".** Una persona que dice que no, o que
+cierra el formulario, nunca puede acabar en un sí por la vía de `force`. Solo un cliente que no
+implementa la pregunta (o que la deja vencer dos veces seguidas, lo más probable cuando el
+formulario no aparece) se trata como uno sin elicitation, y se recuerda para la sesión para no
+hacer esperar tres minutos cada escritura.
+
+**Qué se descartó.** Ofrecer "¿lo creo?" ante un proyecto desconocido sin `crear_proyecto`:
+invitaría a aceptar un nombre mal escrito con un clic. Sin la bandera se devuelve la lista, como
+siempre. Y esperar el minuto por defecto del SDK: es poco para que una persona lea y decida.
+
+---
+
+## 2026-10-15 — Los comandos de fase se sirven como MCP Prompts desde `prompts/comandos/`
+
+**Decisión.** El texto de cada comando pasa a `prompts/comandos/fN.md`, que viaja en el paquete,
+y el servidor lo ofrece como un MCP Prompt llamado `fN`, con título `Fase N · <título>`. Se
+resuelve por capas como las fases: un `comandos/fN.md` en la carpeta propia gana al de fábrica,
+y una fase sin comando (una `fase-6` propia, por ejemplo) recibe un texto genérico que hace lo
+mismo que los demás. Todos los argumentos son opcionales: `project`; en `/f1` también
+`task_name` y `contexto`; en `/f5`, `commits`. Lo que llega como argumento se añade al final,
+en una sección `## Datos de esta invocación`; sin argumentos, el prompt es el comando tal cual.
+
+Los prompts se registran según las fases que existan: una fase nueva gana su `/fN`, una que
+desaparece lo pierde, y un cambio de título lo actualiza; cada cambio emite
+`prompts/list_changed`. Se sincroniza al arrancar, tras cada llamada a una tool y, como mejora
+oportunista, cuando `fs.watch` avisa de un cambio en una capa (con 300 ms de espera). En
+OneDrive `fs.watch` no es fiable: lo que garantiza el resultado es la sincronización tras cada
+tool.
+
+`.claude/commands/` se conserva, idéntico a `prompts/comandos/`, para quien trabaja en este repo
+y para los clientes que no muestran bien los MCP Prompts; `test/docs.test.ts` compara ahora esas
+dos carpetas. `docs/comandos-de-fase.md` deja de copiar los cinco comandos: explica cómo llegan a
+cada cliente y remite a la fuente.
+
+**Resuelve** "Lo que esta decisión no resuelve" de la entrada del 2026-08-07 "La configuración
+por dispositivo no vive en el repo": los comandos vivían solo en la carpeta del usuario y
+editarlos en un equipo dejaba al otro con la versión vieja. Ahora llegan con el paquete, a
+cualquier cliente que muestre prompts. **Amplía** la del 2026-08-08 "El servidor se llama `phase-gate` y deja de presuponer Cursor", que los versionó en
+`.claude/commands/`: esa copia sigue, pero ya no es la que manda.
+
+**Por qué el prompt no incluye el prompt de la fase.** `/f4` podría devolver ya el texto de
+`get_phase_prompt(4)` y ahorrar una llamada. Se descartó: serían dos caminos para recibir el
+mismo prompt, y en uno de ellos la compuerta no sabría el `project`. El comando sigue siendo
+orquestación, como decidió la entrada del 2026-08-08 "El nombre del documento lo declara el prompt
+de su fase".
+
+**Por qué todos los argumentos son opcionales.** Algunos clientes parten los argumentos de un
+prompt por espacios. Con argumentos obligatorios, un contexto largo no cabría; con opcionales,
+el comando pide lo que falte y el contexto puede ir pegado después, como texto del chat.
+
+**Los argumentos van dentro del texto que lee el modelo** (añadido tras la auditoría). `project`,
+`task_name` y `commits` se aplanan a una línea, para que un valor no pueda abrir secciones nuevas
+(un `## REGLA…` falso). El `contexto` va tal cual, porque es multilínea por naturaleza; es un
+riesgo asumido: lo escribe la persona que invoca el comando, igual que si lo pegara en el chat.
+
+**Un detalle del SDK.** La capacidad `prompts` solo se puede declarar antes de conectar. Si al
+arrancar no hubiera ninguna fase, el primer `/fN` que apareciera después fallaría al registrarse;
+para evitarlo, el servidor registra y quita un prompt provisional antes de conectar.
+
+---
+
+## 2026-10-15 — Los documentos de las tareas se exponen como recursos de solo lectura
+
+**Decisión.** El servidor expone cuatro MCP Resources, todos de solo lectura y en
+`text/markdown`:
+
+| Recurso | URI | Contenido |
+|---|---|---|
+| `estado` | `phase-gate://estado` | El diagnóstico de `doctor`, en Markdown |
+| `fases` | `phase-gate://fases` | Número, título, documento, recibos, capa y archivo de cada fase |
+| `documento` | `phase-gate://tareas/{proyecto}/{tarea}/{documento}` | Un archivo de la carpeta de una tarea |
+| `recibo` | `phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}` | Un recibo de la subcarpeta que declara la Fase 4 |
+
+`resources/list` devuelve los dos fijos y solo los documentos **existentes** de la **tarea
+activa de cada proyecto**: el contexto inicial, los documentos de fase y los recibos. El resto se
+alcanza por plantilla, con autocompletado de proyecto, tarea, documento y recibo. Cada documento
+listado lleva `audience: ["assistant", "user"]` y `lastModified`. `start_task`, `switch_task` y
+un `write_central_doc` que crea un archivo emiten `resources/list_changed`; reescribir un archivo
+que ya existía no cambia la lista y no lo emite.
+
+**Por qué.** Con "@", los clientes que muestran recursos dejan a la persona adjuntar al chat el
+plan técnico o un recibo sin pedírselo al modelo, y al modelo leerlos sin gastar una llamada a
+`read_central_doc`. Y los dos fijos son el sitio donde vive lo que antes estaba congelado en las
+descripciones de las tools: la lista de proyectos y la de fases.
+
+**Por qué solo la tarea activa en el listado.** Listar todas las tareas de todos los proyectos
+inundaría el selector de "@": con una Documentación real son cientos de archivos. La activa es
+casi siempre la que interesa, y las demás siguen a un autocompletado de distancia.
+
+**Las defensas son las de `read_central_doc`.** El SDK entrega las variables con su codificación
+porcentual, así que cada una se decodifica y **después** se valida como un segmento portable: un
+`%2F` decodificado a `/` se rechaza ahí. Un `%2E%2E` ni siquiera llega: la normalización del URI
+lo colapsa y no queda plantilla que encaje. La ruta final tiene que quedar dentro de la carpeta de
+la tarea (sobre rutas reales), los archivos y carpetas con punto no se exponen, y la lectura está
+acotada a 1 MB de texto. Una URI mal codificada se rechaza con un mensaje que lo dice.
+
+**Añadido tras la auditoría de la etapa.** El listado y el autocompletado pasan por la misma
+contención que la lectura: un enlace dentro de la tarea (una subcarpeta de recibos que es una
+junction, un documento que es un symlink) que lleva fuera de ella no se lista, porque enseñaría el
+nombre y la fecha de un archivo de fuera aunque luego no se pudiera leer. Y los errores de lectura
+llegan con un código que dice qué pasó: `-32002` si el recurso no existe (el que propone la
+especificación de MCP), `-32602` si el URI o lo que apunta no es válido, y `-32603` solo para un
+fallo de E/S inesperado.
+
+**Qué se descartó.** Exponer los documentos con escritura (recursos suscribibles o una tool de
+escritura por recurso): escribir sigue siendo `write_central_doc`, que es donde viven la
+contención, la protección de los documentos congelados y la confirmación.
+
+---
+
+## 2026-10-15 — Las tools se registran en `McpServer`; sus descripciones son estáticas y la parte que cambia vive en Resources y Prompts
+
+**Decisión.** El servidor pasa de la clase `Server` con un `switch` sobre `CallToolRequestSchema`
+a `McpServer`, con un `registerTool` por tool. Queda repartido así:
+
+- `src/servidor.ts` exporta `crearServidor()`, que registra las tools y no conecta ningún
+  transporte. `src/index.ts` solo despacha: la línea de comandos o el servidor por stdio.
+  Los tests conectan el servidor a un cliente con un transporte en memoria.
+- Cada tool recibe su shape de `src/schemas.ts`. El SDK genera el JSON Schema que ve el cliente
+  y valida cada llamada antes del callback. `validarLlamada` desaparece: los mensajes en español
+  que nombran el campo ("Falta `task_name`.", "`phase` debe ser un número, por ejemplo 3") van
+  ahora en cada campo del shape, y el SDK los entrega detrás de su prefijo en inglés
+  (`Input validation error: Invalid arguments for tool …`). Los callbacks lanzan `Error`, y el
+  SDK los convierte en `isError`.
+- Todas las tools declaran sus cuatro anotaciones (`readOnlyHint`, `destructiveHint`,
+  `idempotentHint`, `openWorldHint`) y un `title`. Los valores por defecto del protocolo son
+  pesimistas (destructiva y de mundo abierto): sin declararlos, un cliente cauto pediría permiso
+  hasta para listar tareas. Solo `write_central_doc` es destructiva, y ninguna es de mundo
+  abierto.
+- El log pasa del prefijo `[orquestador]` a `[mcp-phase-gate]`, en `src/log.ts`. Se declara la
+  capacidad `logging`: cada línea va a stderr y, con un cliente conectado, también como
+  `notifications/message`.
+
+**Reemplaza** el comentario de la caché estática de descripciones de `src/index.ts`. Las
+descripciones de `project` y de `phase` se armaban al arrancar con la lista de proyectos y de
+fases, y se quedaban viejas en cuanto alguien creaba una carpeta con el cliente abierto, porque
+el cliente no vuelve a pedir la lista de tools. Ahora son estáticas y remiten a los recursos
+`phase-gate://estado` y `phase-gate://fases` (llegan en esta misma etapa), que sí pueden
+notificar cuando cambian. Con descripciones estáticas, la lista de tools no cambia nunca y no
+se emite `tools/list_changed`.
+
+**Lo que cambia para el cliente, sin cambiar lo que se acepta.** El JSON Schema declara ahora
+`phase` como `integer` (antes `number`, aunque el servidor ya rechazaba los decimales) y los
+opcionales como `["string", "null"]` o `["boolean", "null"]` (el servidor ya aceptaba `null`
+desde la Etapa 0). Además gana `$schema`, `minLength: 1` en los textos obligatorios y
+`minimum`/`maximum` (el entero seguro) en `phase`; las descripciones ya no listan proyectos ni
+fases. Los mensajes de error pierden el prefijo `Error ejecutando tool <x>:` y, si falla la
+validación, ganan el del SDK (`MCP error -32602: Input validation error: … at <campo>`). Una tool
+que no existe responde `Tool <x> not found` en lugar de `Unknown tool: <x>`. Los argumentos
+desconocidos se siguen aceptando e ignorando, como antes.
+
+**Riesgo no comprobado.** Algunos proveedores de modelos no admiten tipos múltiples
+(`["string", "null"]`) en el esquema de una función. Si un cliente lo rechaza, la salida es dejar
+los opcionales como `string` y seguir tolerando `null` al validar; se decidirá con un caso real.
+
+**El log y varios servidores.** `src/log.ts` recuerda el último servidor creado para enviarle las
+notificaciones. En producción hay uno por proceso; con varios (los tests), las notificaciones van
+al último y stderr recibe todo. Desde la auditoría de la etapa, las notificaciones solo salen
+después del `initialize`: antes, la línea de arranque aparecía como JSON crudo en stdout.
+
+**Las descripciones remiten también a tools** (añadido tras la auditoría): `list_tasks` y
+`get_orchestrator_status`, además de los recursos, porque no todos los clientes dejan al modelo
+leer recursos por su cuenta.
+
+**Qué no cambia.** Los nombres, los parámetros y la semántica de las 8 tools. Los E2E de las
+Etapas 0 y 1 pasan sin tocarlos: comparan subcadenas del mensaje desde la Etapa 0 precisamente
+para sobrevivir a este prefijo (riesgo E2-R1).
+
+**Qué se descartó.** Seguir validando con `validarLlamada` y pasarle al SDK un esquema
+permisivo. Habría conservado el formato exacto de los mensajes, pero el JSON Schema que ve el
+cliente ya no saldría de los shapes, y serían dos fuentes para lo mismo.
+
+---
+
+## 2026-10-15 — El `.env` se lee con un lector propio sobre `util.parseEnv`, sin `dotenv`
+
+**Decisión.** `src/config.ts` lee el `.env` de la raíz del paquete con un lector propio:
+lee los bytes, rechaza el UTF-16 (BOM `FF FE` o `FE FF`, o un byte NUL en los primeros 512),
+decodifica como UTF-8, quita un BOM inicial, parsea con `util.parseEnv` de Node y asigna solo
+las claves que no estén ya en el entorno. Un `.env` en UTF-16 **no se carga** y deja un error
+guardado que aparece en el mensaje de la variable que falta y en el log al arrancar. `dotenv`
+sale de las dependencias: quedan el SDK y `zod`, que es su *peer dependency*.
+
+Se exportan `cargarEnv(archivo?)`, `reiniciarEnv()`, `clavesDeEnv()` y `errorDeEnv()`: los
+tests cargan archivos temporales, y el diagnóstico de la Etapa 2 dice de dónde salió cada
+variable. `cargarEnv` se llama una vez al importar el módulo; volver a llamarla sustituye lo
+que cargó la vez anterior.
+
+**Por qué no `process.loadEnvFile`.** Era el candidato natural en Node 22, y se comprobó antes de
+elegirlo: no quita el BOM de UTF-8. Con un `.env` guardado con BOM la primera clave llega como
+`\uFEFFORQUESTADOR_DOCS_PATH` y la variable "desaparece" sin ningún error. `dotenv` sí lo quita,
+pero tampoco detecta el UTF-16, que es lo que sale de PowerShell con `>` y el caso que ya mordió
+una vez: los acentos llegaban rotos y el mensaje hablaba de una carpeta que no existe.
+
+**Lo que se conserva.** El bloque `env` del cliente sigue ganando al `.env`. `util.parseEnv`
+conserva las barras invertidas de una ruta de Windows sin comillas y acepta comentarios `#` y
+el prefijo `export`, igual que `dotenv`.
+
+**Lo que no se resuelve.** Un `.env` guardado en ANSI (Windows-1252) con acentos se decodifica
+mal sin ninguna señal fiable para detectarlo. El mensaje de una ruta inexistente sigue
+sugiriendo revisar que el archivo esté en UTF-8.
+
+---
+
+## 2026-10-15 — Las variables se llaman `PHASE_GATE_*` y `ORQUESTADOR_*` queda como alias
+
+**Decisión.** Cada variable tiene un nombre lógico (`DOCS_PATH`, `REPOS_PATH`, `TASKS_SUBDIR`,
+`PROMPTS_PATH`, `STATE_PATH`) y dos nombres de entorno: `PHASE_GATE_*`, el principal, y
+`ORQUESTADOR_*`, que sigue funcionando como alias. Si las dos existen y difieren (las rutas se
+comparan resueltas), gana `PHASE_GATE_*`, y `leerVariable` devuelve el texto de la discrepancia
+que el servidor deja en el log al arrancar. Llega además `PHASE_GATE_ELICITATION`, sin alias.
+Los mensajes de error nombran las dos: "Falta `PHASE_GATE_DOCS_PATH` (o su alias
+`ORQUESTADOR_DOCS_PATH`)"; y cuando la ruta está mal, nombran la que se usó.
+
+"Definida" es que exista en el entorno, aunque esté vacía: `TASKS_SUBDIR` vacía significa que
+las tareas cuelgan del proyecto, y eso se tiene que poder decir con el nombre nuevo. En las
+variables de **ruta**, vacía cuenta como ausente: una ruta vacía no significa nada y no debe tapar
+un alias que apunta a una carpeta (se avisa como discrepancia).
+
+**Qué gana cuando cada nombre llega por una vía distinta** (añadido tras la auditoría de la
+etapa): primero la **fuente** —el entorno, es decir el bloque `env` del cliente, gana al `.env`—
+y, dentro de la misma fuente, el **nombre** —`PHASE_GATE_*` gana a `ORQUESTADOR_*`—. Así un `.env`
+con `PHASE_GATE_DOCS_PATH` no le gana a un bloque `env` con `ORQUESTADOR_DOCS_PATH`, y "el cliente
+gana al `.env`" sigue siendo cierto sin excepciones. La discrepancia dice cuál se usó y por qué.
+
+De paso, `stateDir` recorta y resuelve su variable como las demás rutas; antes se usaba tal
+cual, y un espacio al final del valor creaba otra carpeta de estado.
+
+**Reemplaza** el punto "Qué NO se renombró" de la entrada del 2026-08-10 "Un solo nombre". Aquel
+punto decía que alinear el prefijo rompía configuraciones a cambio de nada visible. Con el alias
+no se rompe ninguna, y lo visible llega ahora: el diagnóstico de la Etapa 2 enseña las
+variables por su nombre, y `ORQUESTADOR_*` era el último resto del nombre viejo.
+
+**Qué se descartó.** Retirar el alias en una versión mayor. Mantenerlo cuesta una línea por
+variable, y quitarlo rompería configuraciones que nadie tiene por qué tocar.
+
+---
+
 ## 2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes
 
 **Decisión.** La entrada de la Fase 5 son los commits que registran los recibos de la Fase 4
@@ -651,6 +976,9 @@ releases de GitHub salen de los tags, y el *por qué* ya vive en este archivo.
 
 ## 2026-08-10 — Un solo nombre: `mcp-phase-gate` en el repo, el paquete y el servidor
 
+> **Reemplazada en parte** el 2026-10-15 por "Las variables se llaman `PHASE_GATE_*` y
+> `ORQUESTADOR_*` queda como alias": el punto "Qué NO se renombró" ya no vale. El resto sigue.
+
 **Decisión.** El paquete de npm pasa a llamarse `mcp-phase-gate`, `SERVER_NAME` deja de ser
 `phase-gate` para ser también `mcp-phase-gate`, y el repo se renombra igual. De paso, el
 `package.json` se prepara para publicarse: `files`, `engines`, `keywords` y `prepublishOnly`.
@@ -1046,6 +1374,10 @@ mayúsculas y deja intacto el de la carpeta hermana, que es el que importa.
 ---
 
 ## 2026-08-07 — La configuración por dispositivo no vive en el repo
+
+> **Matizada** el 2026-10-15 por "Los comandos de fase se sirven como MCP Prompts desde
+> `prompts/comandos/`": lo que esta entrada dejaba sin resolver —los comandos vivían solo en la
+> carpeta del usuario— queda resuelto; llegan con el paquete. El resto sigue.
 
 **Decisión.** El `.cursor/mcp.json` sale del repositorio y queda gitignoreado. La
 configuración que cambia de un equipo a otro vive en la carpeta del usuario

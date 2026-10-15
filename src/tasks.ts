@@ -15,7 +15,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MODULE_DIR, stateDir, stateFile } from "./config.js";
-import { claveDeNombre, findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
+import { log } from "./log.js";
+import { claveDeNombre, findProjectFolder, leerTextoAcotado, requireProjectFolder, tasksRootPath } from "./paths.js";
+import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
@@ -78,7 +80,7 @@ export function limpiarEstadoViejo(): void {
     try {
       if (fs.existsSync(viejo)) {
         fs.unlinkSync(viejo);
-        console.error(`[orquestador] Estado en formato anterior eliminado: ${viejo}`);
+        log("info", `Estado en formato anterior eliminado: ${viejo}`);
       }
     } catch {
       // Que no se pueda borrar no impide trabajar: el archivo viejo ya no se lee.
@@ -426,6 +428,128 @@ export function bloqueDeRecibos(
     "",
     "Léelos con `read_central_doc` usando estas rutas tal cual:",
     ...lineas,
+  ].join("\n");
+}
+
+// ─── Pendientes heredados ───────────────────────────────────────────────────
+// Refuerzo del servidor para la regla global PENDIENTES HEREDADOS (#39): si la fase anterior dejó
+// algo sin comprobar, el prompt de la siguiente llega con un aviso que lo nombra. Lee encabezados
+// y frontmatter de documentos que el prompt ya obliga a escribir; no guarda estado ni cambia la
+// deducción de fase. Si el modelo no escribió la sección, el aviso no sale y todo sigue igual.
+//
+// No contradice el rechazo de la #39 a un campo `Estado:`: aquello era hacer depender la
+// compuerta de algo escrito por el modelo. Esto no bloquea ni cambia la fase: solo señala.
+const ENCABEZADO_PENDIENTES = "## Validaciones pendientes";
+
+// Lo que se escribe por costumbre en una sección que no tiene nada: no es un pendiente.
+const SECCION_VACIA = new Set([
+  "",
+  "ninguna",
+  "ninguno",
+  "ninguna pendiente",
+  "nada",
+  "sin pendientes",
+  "no hay pendientes",
+  "fase cerrada sin pendientes",
+  "n/a",
+  "no aplica",
+]);
+
+// La sección reducida a su texto: sin viñetas ni numeración, sin énfasis de Markdown (_ * `),
+// sin puntos suspensivos ni punto final, en una línea y en minúsculas. Así "- Ninguna.",
+// "_Ninguna._" o "Ninguna..." cuentan igual que "Ninguna".
+function textoDeSeccion(seccion: string): string {
+  return seccion
+    .split("\n")
+    .map((linea) => linea.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ""))
+    .join(" ")
+    .replace(/[_*`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(?:\.+|…)$/, "")
+    .trim()
+    .toLowerCase();
+}
+
+const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
+
+// La sección es el texto entre su encabezado y el siguiente "## " (o el final). Devuelve true si
+// existe y tiene algo que no sea una forma de decir "ninguna".
+export function tieneValidacionesPendientes(texto: string): boolean {
+  const lineas = separarFrontmatter(texto).cuerpo.split("\n");
+  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale.
+  const buscado = ENCABEZADO_PENDIENTES.toLowerCase();
+  const inicio = lineas.findIndex((linea) => linea.trimEnd().normalize("NFC").toLowerCase() === buscado);
+  if (inicio === -1) return false;
+
+  const resto = lineas.slice(inicio + 1);
+  const fin = resto.findIndex((linea) => linea.startsWith("## "));
+  const seccion = (fin === -1 ? resto : resto.slice(0, fin)).join("\n");
+
+  return !SECCION_VACIA.has(textoDeSeccion(seccion));
+}
+
+function leerSinFallar(ruta: string): string | null {
+  try {
+    return leerTextoAcotado(ruta);
+  } catch {
+    return null; // un documento ilegible no es un pendiente: el aviso es una ayuda, no un control
+  }
+}
+
+export function avisoDePendientes(
+  fasePedida: number,
+  estado: EstadoTarea,
+  phases: Map<number, PhaseFile>
+): string | null {
+  const ordenadas = [...phases.entries()].sort((a, b) => a[0] - b[0]);
+  const lineas: string[] = [];
+
+  // La fase anterior es la de mayor número, por debajo de la pedida, cuyo documento existe.
+  const anterior = ordenadas
+    .filter(([numero, datos]) => numero < fasePedida && datos.documento)
+    .reverse()
+    .find(([, datos]) => fs.existsSync(path.join(estado.folderPath, datos.documento!)));
+
+  if (anterior) {
+    const documento = anterior[1].documento!;
+    const texto = leerSinFallar(path.join(estado.folderPath, documento));
+    if (texto !== null && tieneValidacionesPendientes(texto)) {
+      lineas.push(`- \`${documento}\` tiene una sección \`${ENCABEZADO_PENDIENTES}\`.`);
+    }
+  }
+
+  // Los recibos de lote de las fases anteriores que quedaron con pendientes, fallidos o
+  // descartados. Con un solo lote, el recibo es el documento de la fase y se mira también.
+  for (const [numero, datos] of ordenadas) {
+    if (numero >= fasePedida || !datos.recibos) continue;
+
+    const candidatos: string[] = [];
+    if (datos.documento) candidatos.push(datos.documento);
+    const subcarpeta = path.join(estado.folderPath, datos.recibos);
+    if (fs.existsSync(subcarpeta)) {
+      for (const entrada of fs.readdirSync(subcarpeta, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        if (entrada.isFile() && entrada.name.toLowerCase().endsWith(".md")) candidatos.push(`${datos.recibos}/${entrada.name}`);
+      }
+    }
+
+    for (const relativo of candidatos) {
+      const ruta = path.join(estado.folderPath, ...relativo.split("/"));
+      if (!fs.existsSync(ruta)) continue;
+      const texto = leerSinFallar(ruta);
+      const valor = texto === null ? "" : (separarFrontmatter(texto).meta.estado ?? "").trim().toLowerCase();
+      if (ESTADOS_PENDIENTES.has(valor)) lineas.push(`- \`${relativo}\`: estado \`${valor}\`.`);
+    }
+  }
+
+  if (lineas.length === 0) return null;
+
+  return [
+    "## PENDIENTES HEREDADOS (detectados por el servidor)",
+    "",
+    ...lineas,
+    "",
+    "Nómbraselos al usuario antes de empezar (ver PENDIENTES HEREDADOS en las reglas globales).",
   ].join("\n");
 }
 
