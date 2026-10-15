@@ -573,3 +573,30 @@ describe("confirmaciones por elicitation", () => {
     }
   });
 });
+
+describe("get_phase_prompt con pendientes heredados", () => {
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+
+  it("el aviso va después del de la compuerta y antes del prompt", async () => {
+    const docs = docsTemporales();
+    estadoTemporal();
+    process.env.PHASE_GATE_PROMPTS_PATH = PROMPTS_DEL_REPO;
+    crearProyecto(docs, "PROYECTO-A");
+    const tarea = crearTarea(docs, "PROYECTO-A", "tarea", ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md", "02 - Decisiones.md"]);
+    fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "## Validaciones pendientes\n- probar en staging\n", "utf-8");
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      // La Fase 5 con la 4 sin hacer: hay salto y hay pendientes de la 3.
+      const texto = textoDe(await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 5, project: "PROYECTO-A" } }));
+      const compuerta = texto.indexOf("## ATENCIÓN — COMPUERTA DE FASE");
+      const pendientes = texto.indexOf("## PENDIENTES HEREDADOS (detectados por el servidor)");
+      const reglas = texto.indexOf("## REGLA GLOBAL INQUEBRANTABLE");
+      assert.ok(compuerta === 0, texto.slice(0, 200));
+      assert.ok(pendientes > compuerta && reglas > pendientes, `${compuerta} ${pendientes} ${reglas}`);
+      assert.match(texto, /- `03 - Plan Técnico\.md` tiene una sección `## Validaciones pendientes`\./);
+    } finally {
+      await cerrar();
+    }
+  });
+});

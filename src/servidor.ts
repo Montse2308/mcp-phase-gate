@@ -51,6 +51,7 @@ import {
 } from "./schemas.js";
 import {
   avisoDeCompuerta,
+  avisoDePendientes,
   bloqueDeRecibos,
   describeEstado,
   guardarPuntero,
@@ -229,6 +230,7 @@ function registrarTools(mcp: McpServer): void {
       // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
       // Lo mismo con la lista de recibos: es una ayuda, no una condición.
       let aviso: string | null = null;
+      let pendientes: string | null = null;
       let recibos: string | null = null;
       try {
         const phases = discoverPhases();
@@ -236,12 +238,16 @@ function registrarTools(mcp: McpServer): void {
         aviso = avisoDeCompuerta(phase, phases, opciones);
 
         const estado = tareaDelPrompt(phases, opciones);
-        if (estado && estado !== "ambigua") recibos = bloqueDeRecibos(phase, estado, phases);
+        if (estado && estado !== "ambigua") {
+          pendientes = avisoDePendientes(phase, estado, phases);
+          recibos = bloqueDeRecibos(phase, estado, phases);
+        }
       } catch (error) {
         log("warning", `No se pudo comprobar la compuerta: ${error instanceof Error ? error.message : String(error)}`);
       }
 
-      return responder([aviso, prompt, recibos].filter(Boolean).join("\n\n"));
+      // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
+      return responder([aviso, pendientes, prompt, recibos].filter(Boolean).join("\n\n"));
     })
   );
 

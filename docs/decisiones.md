@@ -12,6 +12,41 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — El servidor avisa de los pendientes heredados leyendo encabezados, sin guardar estado
+
+**Decisión.** `get_phase_prompt` añade un bloque `## PENDIENTES HEREDADOS (detectados por el
+servidor)` justo después del aviso de la compuerta, si lo hay, cuando:
+
+- el documento de la **fase anterior** (la de mayor número, por debajo de la pedida, cuyo
+  documento existe) tiene una línea `## Validaciones pendientes` y la sección **no está vacía**.
+  La sección es el texto hasta el siguiente `## ` o el final. Cuenta como vacía si, recortada,
+  sin punto final y en minúsculas, no queda nada o queda `ninguna`, `nada`, `sin pendientes` o
+  `fase cerrada sin pendientes`;
+- o, en las fases posteriores a la que declara recibos (con los prompts de fábrica, la Fase 5),
+  algún recibo tiene en su frontmatter `estado` `con pendientes`, `fallido` o `descartado`. Con
+  un solo lote, el recibo es el documento de la Fase 4 y se mira también.
+
+La tarea se resuelve igual que en la compuerta: con `project`, con `task_name` o con el único
+puntero. Si no se puede resolver, no hay aviso. Un documento ilegible no produce aviso.
+
+**Amplía** la entrada del 2026-10-14 "Base de cada decisión y pendientes heredados viven en las
+reglas globales": la regla obliga al modelo a nombrar los pendientes, y ahora el servidor le
+señala dónde están.
+
+**Por qué no contradice la #39.** La issue rechazó que la **compuerta** dependiera de un
+`Estado:` escrito por el modelo. Este aviso no bloquea ni cambia la fase deducida: solo señala un
+encabezado que el prompt ya obliga a escribir. Si el modelo no lo escribió, el aviso no sale y
+todo sigue como en la Etapa 1.
+
+**Por qué la lista de "vacía".** El índice de cierre de la Fase 4 solo escribe
+`## Validaciones pendientes` si quedó algo abierto, pero en cualquier fase se puede escribir el
+encabezado por costumbre con "Ninguna.". Un aviso que salta sin motivo enseña a ignorarlos todos.
+
+**Por qué solo la fase anterior.** Lo que dejó abierto una fase más vieja ya lo tuvo que nombrar
+la siguiente a ella. Mirar todas las anteriores repetiría el mismo aviso en cada fase.
+
+---
+
 ## 2026-10-15 — Las confirmaciones de `force` y `crear_proyecto` se piden al usuario por elicitation cuando el cliente puede
 
 **Decisión.** Cuando `write_central_doc` va a escribir un documento protegido (congelado, o el

@@ -113,7 +113,13 @@ function descartarRecibosQueChocan(phases: Map<number, PhaseFile>): void {
 }
 
 export function parsePhaseFile(fullPath: string): { meta: Record<string, string>; cuerpo: string } {
-  const crudo = aLF(fs.readFileSync(fullPath, "utf-8"));
+  return separarFrontmatter(fs.readFileSync(fullPath, "utf-8"));
+}
+
+// La cabecera "clave: valor" de un texto ya leído, y el resto. Sirve igual para un prompt que
+// para un recibo de lote, que usan el mismo formato.
+export function separarFrontmatter(texto: string): { meta: Record<string, string>; cuerpo: string } {
+  const crudo = aLF(texto);
   const encontrada = crudo.match(PHASE_FRONTMATTER);
 
   if (!encontrada) return { meta: {}, cuerpo: crudo };
