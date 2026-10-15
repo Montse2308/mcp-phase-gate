@@ -12,6 +12,47 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Los documentos de las tareas se exponen como recursos de solo lectura
+
+**Decisión.** El servidor expone cuatro MCP Resources, todos de solo lectura y en
+`text/markdown`:
+
+| Recurso | URI | Contenido |
+|---|---|---|
+| `estado` | `phase-gate://estado` | El diagnóstico de `doctor`, en Markdown |
+| `fases` | `phase-gate://fases` | Número, título, documento, recibos, capa y archivo de cada fase |
+| `documento` | `phase-gate://tareas/{proyecto}/{tarea}/{documento}` | Un archivo de la carpeta de una tarea |
+| `recibo` | `phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}` | Un recibo de la subcarpeta que declara la Fase 4 |
+
+`resources/list` devuelve los dos fijos y solo los documentos **existentes** de la **tarea
+activa de cada proyecto**: el contexto inicial, los documentos de fase y los recibos. El resto se
+alcanza por plantilla, con autocompletado de proyecto, tarea, documento y recibo. Cada documento
+listado lleva `audience: ["assistant", "user"]` y `lastModified`. `start_task`, `switch_task` y
+un `write_central_doc` que crea un archivo emiten `resources/list_changed`; reescribir un archivo
+que ya existía no cambia la lista y no lo emite.
+
+**Por qué.** Con "@", los clientes que muestran recursos dejan a la persona adjuntar al chat el
+plan técnico o un recibo sin pedírselo al modelo, y al modelo leerlos sin gastar una llamada a
+`read_central_doc`. Y los dos fijos son el sitio donde vive lo que antes estaba congelado en las
+descripciones de las tools: la lista de proyectos y la de fases.
+
+**Por qué solo la tarea activa en el listado.** Listar todas las tareas de todos los proyectos
+inundaría el selector de "@": con una Documentación real son cientos de archivos. La activa es
+casi siempre la que interesa, y las demás siguen a un autocompletado de distancia.
+
+**Las defensas son las de `read_central_doc`.** El SDK entrega las variables con su codificación
+porcentual, así que cada una se decodifica y **después** se valida como un segmento portable: un
+`%2F` decodificado a `/` se rechaza ahí. Un `%2E%2E` ni siquiera llega: la normalización del URI
+lo colapsa y no queda plantilla que encaje. La ruta final tiene que quedar dentro de la carpeta de
+la tarea (sobre rutas reales), los archivos y carpetas con punto no se exponen, y la lectura está
+acotada a 1 MB de texto. Una URI mal codificada se rechaza con un mensaje que lo dice.
+
+**Qué se descartó.** Exponer los documentos con escritura (recursos suscribibles o una tool de
+escritura por recurso): escribir sigue siendo `write_central_doc`, que es donde viven la
+contención, la protección de los documentos congelados y la confirmación.
+
+---
+
 ## 2026-10-15 — Las tools se registran en `McpServer`; sus descripciones son estáticas y la parte que cambia vive en Resources y Prompts
 
 **Decisión.** El servidor pasa de la clase `Server` con un `switch` sobre `CallToolRequestSchema`

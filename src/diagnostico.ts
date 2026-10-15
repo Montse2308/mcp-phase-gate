@@ -30,6 +30,7 @@ import {
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder } from "./paths.js";
 import { discoverPhases, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
+import type { PhaseFile } from "./phases.js";
 import { describeEstado, leerPunteros, listarTareas, tareaActiva } from "./tasks.js";
 
 export type Severidad = "error" | "aviso" | "info";
@@ -102,6 +103,41 @@ function estadoRuta(requerida: RutaRequerida): EstadoRuta {
   }
 }
 
+// ─── Capas y fases ──────────────────────────────────────────────────────────
+// También las usa el recurso phase-gate://fases, que enseña lo mismo sin el resto del diagnóstico.
+export function capasDePrompts(): Diagnostico["capas"] {
+  return promptsLayers().map((ruta, i) => ({
+    ruta,
+    etiqueta: (i === 0 ? "fábrica" : "propia") as EtiquetaCapa,
+    existe: esCarpeta(ruta),
+  }));
+}
+
+// La capa de un archivo es la más alta que lo contiene.
+export function capaDeArchivo(archivo: string, capas: Diagnostico["capas"]): EtiquetaCapa | null {
+  let encontrada: EtiquetaCapa | null = null;
+  for (const capa of capas) if (estaDentro(capa.ruta, archivo)) encontrada = capa.etiqueta;
+  return encontrada;
+}
+
+export function fasesConCapa(
+  capas: Diagnostico["capas"] = capasDePrompts(),
+  phases: Map<number, PhaseFile> = discoverPhases(capas.map((capa) => capa.ruta))
+): Diagnostico["fases"] {
+  const rutasCapas = capas.map((capa) => capa.ruta);
+  return [...phases.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([numero, datos]) => ({
+      numero,
+      titulo: datos.title,
+      archivo: datos.file,
+      capa: capaDeArchivo(datos.file, capas) ?? "desconocida",
+      ...(datos.documento ? { documento: datos.documento } : {}),
+      ...(datos.recibos ? { recibos: datos.recibos } : {}),
+      comando: resolveCommandFile(numero, rutasCapas),
+    }));
+}
+
 // ─── El diagnóstico ─────────────────────────────────────────────────────────
 export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}): Diagnostico {
   const hallazgos: Hallazgo[] = [];
@@ -136,12 +172,8 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
   const estado = { archivo: archivoEstado, existe: fs.existsSync(archivoEstado), punteros: Object.keys(punteros).length };
 
   // Capas de prompts.
-  const rutasCapas = promptsLayers();
-  const capas = rutasCapas.map((ruta, i) => ({
-    ruta,
-    etiqueta: (i === 0 ? "fábrica" : "propia") as EtiquetaCapa,
-    existe: esCarpeta(ruta),
-  }));
+  const capas = capasDePrompts();
+  const rutasCapas = capas.map((capa) => capa.ruta);
 
   for (const capa of capas) {
     if (capa.etiqueta === "propia" && !capa.existe) {
@@ -154,12 +186,7 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
     }
   }
 
-  // La capa de un archivo es la más alta que lo contiene.
-  const capaDe = (archivo: string): EtiquetaCapa | null => {
-    let encontrada: EtiquetaCapa | null = null;
-    for (const capa of capas) if (estaDentro(capa.ruta, archivo)) encontrada = capa.etiqueta;
-    return encontrada;
-  };
+  const capaDe = (archivo: string): EtiquetaCapa | null => capaDeArchivo(archivo, capas);
 
   // Reglas globales.
   const archivoGlobales = resolveGlobalRules(rutasCapas);
@@ -185,17 +212,7 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
 
   // Fases.
   const phases = discoverPhases(rutasCapas);
-  const fases: Diagnostico["fases"] = [...phases.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([numero, datos]) => ({
-      numero,
-      titulo: datos.title,
-      archivo: datos.file,
-      capa: capaDe(datos.file) ?? "desconocida",
-      ...(datos.documento ? { documento: datos.documento } : {}),
-      ...(datos.recibos ? { recibos: datos.recibos } : {}),
-      comando: resolveCommandFile(numero, rutasCapas),
-    }));
+  const fases = fasesConCapa(capas, phases);
 
   for (const fase of fases) {
     if (!fase.documento) {

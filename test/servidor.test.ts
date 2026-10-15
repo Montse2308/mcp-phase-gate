@@ -5,33 +5,14 @@
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { ClientCapabilities } from "@modelcontextprotocol/sdk/types.js";
-
 import { z } from "zod";
 
 import type { Diagnostico } from "../src/diagnostico.js";
 import { diagnosticoShape } from "../src/schemas.js";
-import { crearServidor } from "../src/servidor.js";
+import { conectar } from "./cliente.js";
 import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
 afterEach(limpiarEntorno);
-
-async function conectar(capacidades: ClientCapabilities = {}) {
-  const servidor = crearServidor();
-  const cliente = new Client({ name: "cliente-de-prueba", version: "1.0.0" }, { capabilities: capacidades });
-  const [delCliente, delServidor] = InMemoryTransport.createLinkedPair();
-  await Promise.all([servidor.connect(delServidor), cliente.connect(delCliente)]);
-  return {
-    servidor,
-    cliente,
-    cerrar: async () => {
-      await cliente.close();
-      await servidor.close();
-    },
-  };
-}
 
 // Las 8 de siempre más get_orchestrator_status, que llega en la Etapa 2.
 const TOOLS = [

@@ -32,6 +32,7 @@ import {
   validarSegmento,
 } from "./paths.js";
 import { discoverPhases, loadPhasePrompt, nombreContextoInicial } from "./phases.js";
+import { registrarRecursos } from "./recursos.js";
 import type { PhaseFile } from "./phases.js";
 import {
   diagnosticoShape,
@@ -87,6 +88,7 @@ export function crearServidor(): McpServer {
 
   conectarLog(mcp);
   registrarTools(mcp);
+  registrarRecursos(mcp);
 
   return mcp;
 }
@@ -157,6 +159,8 @@ function registrarTools(mcp: McpServer): void {
       // Queda como activa de SU proyecto. Otra ventana trabajando en otro proyecto conserva
       // la suya: los punteros son independientes.
       guardarPuntero(carpetaProyecto, taskName);
+      // Cambia la tarea activa, y con ella qué documentos se listan como recursos.
+      mcp.sendResourceListChanged();
 
       const aviso = estrenado ? `\nProyecto "${carpetaProyecto}" estrenado.` : "";
 
@@ -319,6 +323,7 @@ function registrarTools(mcp: McpServer): void {
       }
 
       guardarPuntero(carpetaProyecto, taskName);
+      mcp.sendResourceListChanged();
 
       return responder(
         `Tarea activa de ${carpetaProyecto}: ${taskName}.\nFase: ${describeEstado(encontrada, phases)}\n` +
@@ -399,6 +404,10 @@ function registrarTools(mcp: McpServer): void {
       const existia = fs.existsSync(fullPath);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, args.content, "utf-8");
+
+      // Un archivo nuevo puede ser un documento o un recibo que se lista como recurso. Reescribir
+      // uno que ya existía no cambia la lista.
+      if (!existia) mcp.sendResourceListChanged();
 
       // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
       const forzado = motivo ? (existia ? " (sobrescrito con force)" : " (creado con force)") : "";
