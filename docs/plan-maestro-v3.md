@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Iteración | **15** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13) puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7) |
+| Iteración | **16** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13), puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7), y con la ejecución de la Etapa 2 (iteración 16, §9.8) |
 | Base del análisis | commit `d7594ea`, árbol limpio |
-| Versión publicada | `2.0.0` |
-| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapa 0 ejecutada** (L01 a L10, §9.6) y en `master`. **Etapa 1 ejecutada** (L01 a L11, §9.7); faltan el PR, el tag `v2.1.0` y la publicación, que hace la autora |
+| Versión publicada | `2.1.0` |
+| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapas 0 y 1 ejecutadas** (§9.6 y §9.7), en `master` y publicadas (`2.0.1` y `2.1.0`). **Etapa 2 ejecutada** (L01 a L11, §9.8); faltan la matriz de clientes de L10, la auditoría, el PR, el tag `v2.2.0` y la publicación, que hace la autora |
 | Ejecución | La hace el agente local de la autora, lote por lote, con la política `agente-commitea-con-OK` |
 | Fuente | Desde E0 L09, esta copia en `docs/plan-maestro-v3.md` es la fuente del plan (§9.2) |
 
@@ -1592,6 +1592,8 @@ Nómbraselos al usuario antes de empezar (ver PENDIENTES HEREDADOS en las reglas
 | **L09** | Aviso de pendientes heredados | `src/tasks.ts`, `src/servidor.ts`, `test/tasks.test.ts`, `docs/decisiones.md` | Aparece con `## Validaciones pendientes` con contenido y con recibos `con pendientes`. **No** aparece sin ellos, ni con la sección vacía o que solo diga "Ninguna.", "Nada.", "Sin pendientes." o "Fase cerrada sin pendientes." | `feat(compuerta): avisar de los pendientes que dejó la fase anterior` |
 | **L10** | Verificación en los tres clientes y README | `README.md`, `README.es.md` | Matriz manual, de abajo, rellenada con lo observado | `docs(clientes): documentar prompts, recursos y confirmaciones en cada cliente` |
 | **L11** | Versión `2.2.0` | `package.json`, `package-lock.json` | Base verde. El tag `v2.2.0` lo pone la autora | `chore(release): 2.2.0` |
+
+> **Estado de ejecución:** de L01 a L11 hechos; la matriz de clientes de L10 queda por rellenar con lo observado. Commits y desvíos en §9.8.
 
 **Por qué este orden.** La configuración primero, porque el diagnóstico la necesita; el diagnóstico antes que el CLI y la tool que lo muestran. La migración (L04) va antes que todo lo que solo existe en `McpServer` (`outputSchema`, recursos, prompts, elicitation), y se hace sin cambiar comportamiento, así que la red E2E la valida sola. La elicitation va después de los prompts porque es el cambio de comportamiento más sensible.
 
@@ -4265,6 +4267,46 @@ Los textos de §3.3 y §3.5.2 de este plan describen los prompts tal como se dis
 
 **Pendiente de comprobar fuera de este equipo:** como en la Etapa 0, todos los tests corrieron solo en Windows (Node 24). Su primera ejecución en Linux y en Node 22 será la CI del PR.
 
+### 9.8 Ejecución de la Etapa 2
+
+Rama `etapa-2/protocolo-mcp`, creada desde `master` en `e0f2337` (el merge de la Etapa 1, etiquetado `v2.1.0`). Un commit por lote, con `git add` archivo por archivo y ningún `push`. A diferencia de la Etapa 1, la autora dio un **OK general** para toda la etapa antes de empezar: el agente commiteó cada lote en cuanto quedó en verde, y se reservó parar solo ante una decisión de peso (no hizo falta ninguna). Todos los lotes pasaron `npm run build && npm test` antes de su commit; la etapa empezó con `npm ci` sobre una base de 272 tests (270 pasan, 2 omitidos).
+
+| Lote | Estado | Commit | Tests al cerrar | Desvíos |
+|---|---|---|---|---|
+| L01 | Hecho | `b37c054` | 291 (antes 272) | E2-D1 |
+| L02 | Hecho | `8da0a58` | 314 | E2-D2 |
+| L03 | Hecho | `2843ff0` | 324 | — |
+| L04 | Hecho | `373f5f6` | 331 | E2-D3 |
+| L05 | Hecho | `c387a12` | 335 | E2-D4 |
+| L06 | Hecho | `f701bff` | 351 | E2-D5 |
+| L07 | Hecho | `4cb5fd3` | 358 | E2-D6 |
+| L08 | Hecho | `604a076` | 370 | E2-D7 |
+| L09 | Hecho | `90d404c` | 385 | E2-D8 |
+| L10 | Hecho, con la matriz de clientes **sin rellenar** | `5bb099c` | 385 | E2-D9 |
+| L11 | Hecho en el commit `chore(release): 2.2.0`; el tag `v2.2.0` y la publicación los hace la autora | — | 385 | E2-D10 |
+
+En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_HOME` y el FIFO).
+
+**§4.1 repetido sobre el SDK 1.32.1** (primer paso de L04, riesgo E2-R5): las firmas de `registerTool`, `registerPrompt` y `registerResource` no cambian; un fallo de validación sigue llegando como `isError` con el prefijo `Input validation error: Invalid arguments for tool <x>:`; `elicitInput` sigue lanzando `Client does not support form elicitation.` sin la capacidad; `DEFAULT_REQUEST_TIMEOUT_MSEC` sigue en 60 000; `UriTemplate.match` sigue sin decodificar, y una variable simple casa con `([^/,]+)`. Dos detalles nuevos: el texto del error de validación llega además con el prefijo `MCP error -32602:` y un sufijo ` at <campo>`; y el SDK hace `new URL(uri)` antes de buscar plantilla, lo que colapsa un `%2E%2E` antes de que llegue al callback. La capacidad `prompts` solo se puede declarar antes de conectar (E2-D6). Base: leído en código (`node_modules/@modelcontextprotocol/sdk/dist/esm`).
+
+**Desvíos:**
+
+- **E2-D1 · L01.** Toca también `src/index.ts` (al cambiar `RutaRequerida.variable` por `logica`, `reportarRutas` lo necesitaba; de paso deja en el log las discrepancias y el error del `.env`) y `src/paths.ts` (un mensaje con el nombre viejo). `test/helpers.ts` limpia el entorno también al importarse: una `PHASE_GATE_*` en la terminal de quien corre los tests ganaría a las `ORQUESTADOR_*` que ponen los tests. "Definida" es que exista aunque esté vacía, para que `PHASE_GATE_TASKS_SUBDIR=""` signifique lo mismo que con el alias. `cargarEnv` sustituye la carga anterior al volver a llamarla. Base: leído en código.
+- **E2-D2 · L02.** Toca `src/phases.ts`: exporta `resolveGlobalRules`, `leerPromptNormalizado` y `resolveCommandFile` (este último se adelanta de L07, porque el diagnóstico ya informa del comando de cada fase), y el BOM literal de `aLF` pasa a escribirse `﻿` (mismo comportamiento). `GLOBAL-SIN-BASE` comprueba también `## EVIDENCIA`, que los README piden desde el hallazgo 10 de la auditoría de la Etapa 1. Dos códigos de hallazgo que la tabla de §4.3.1 no tenía: `ENV-ILEGIBLE` (un `.env` que no se puede leer por otro motivo que el UTF-16) y `DOCS-ILEGIBLE` (un fallo al recorrer la Documentación). Base: leído en código.
+- **E2-D3 · L04.** Los E2E de las Etapas 0 y 1 exigen los mensajes en español ("`phase` debe ser un número, por ejemplo 3"). Para que pasen sin cambios, cada campo de los shapes lleva su mensaje con la opción `error` de zod v4, y `validarLlamada` desaparece. El log vive en un `src/log.ts` nuevo y no en `servidor.ts`, porque `phases.ts` y `tasks.ts` también lo usan y habría un import circular. `describePhases` se elimina (se quedó sin uso). `resources/list_changed` se difiere a L06: sin recursos registrados no hay capacidad que notificar. Base: medido (los 324 tests de antes pasaron sin tocar ninguno).
+- **E2-D4 · L05.** El `outputSchema` (`diagnosticoShape`) vive en `src/schemas.ts`, junto a los demás shapes, y `test/servidor.test.ts` comprueba al compilar que el tipo `Diagnostico` cuadra con él. Base: leído en código.
+- **E2-D5 · L06.** Toca `src/diagnostico.ts` (extrae `capasDePrompts`, `capaDeArchivo` y `fasesConCapa`, que reutiliza `phase-gate://fases`), crea `test/cliente.ts` (el cliente en memoria compartido) y adapta `test/servidor.test.ts`. Además de documentos y recibos con punto, se rechaza una **tarea** con punto inicial. Sin `DOCS_PATH`, el listado devuelve solo los dos recursos fijos en vez de fallar. Base: medido.
+- **E2-D6 · L07.** Toca `src/diagnostico.ts` y su test: `FASE-SIN-COMANDO` y el formato dicen que la fase usa el texto genérico. La capacidad `prompts` solo se puede declarar antes de conectar, así que si al arrancar no hubiera ninguna fase, el servidor registra y quita un prompt provisional para dejarla declarada. `docs/comandos-de-fase.md` describe cómo se invocan los prompts en cada cliente "según su documentación", a la espera de la matriz de L10. Base: medido (un test arranca sin fases y añade una después).
+- **E2-D7 · L08.** `pedirConfirmacion` devuelve `{ estado, nota? }` y no solo el estado: la nota lleva al modelo el aviso del primer vencimiento (`PHASE_GATE_ELICITATION=off`) y el de que la sesión pasó a `no-disponible`. Si lo protegido es el contexto inicial que falta, la pregunta dice "¿Crearlo?" en vez de "¿Reescribirlo?". El plazo se inyecta en los tests con `fijarEsperaDeConfirmacion`. Base: leído en código.
+- **E2-D8 · L09.** Toca `src/phases.ts` (`separarFrontmatter`, extraído de `parsePhaseFile`, para leer el frontmatter de los recibos) y suma un test de integración en `test/servidor.test.ts` (el orden compuerta → pendientes → prompt). Interpretaciones: la línea del encabezado admite espacios al final; los recibos se miran en cualquier fase posterior a la que los declara, no solo en la 5; con un solo lote se mira el frontmatter del documento de la Fase 4, que es su recibo. Base: leído en código.
+- **E2-D9 · L10.** La matriz de clientes **no se rellenó con lo observado**: el agente no puede manejar Cursor ni VS Code, ni recargar el servidor de su propia sesión de Claude Code. Los README la publican con "Por verificar" y lo que dice la documentación de cada cliente, en vez de inventar resultados. De paso, los ejemplos de varios registros usan las claves `pg-trabajo`/`pg-personal`. Base: inferido (la rellena la autora con los tres clientes; ver abajo).
+- **E2-D10 · L11.** El commit de la release toca también este plan (la cabecera, la nota de estado de §4.9, esta sección y el Anexo A), como en las Etapas 0 y 1 (E1-D6). La cabecera corrige además "Versión publicada", que seguía en `2.0.0`. Base: leído en código.
+
+**Pendiente antes del tag `v2.2.0`:**
+
+1. **Rellenar la matriz de L10** en los dos README con lo observado en Claude Code, Cursor y VS Code: `/f1`…`/f5` visibles y cómo se invocan, argumentos con espacios, recursos con `@`, y si aparece el formulario de confirmación (`write_central_doc` sobre un documento congelado). Si algún cliente contradice lo documentado, corregir también `docs/comandos-de-fase.md`.
+2. **La CI del PR**: como en las etapas anteriores, todos los tests corrieron solo en Windows (Node 24). Su primera ejecución en Linux y en Node 22 será la CI.
+
 ---
 
 ## 10. Cierre del plan
@@ -4309,3 +4351,4 @@ Los textos de §3.3 y §3.5.2 de este plan describen los prompts tal como se dis
 | 13 | 2026-10-14 | E0 L09: el plan entra al repo como `docs/plan-maestro-v3.md` y pasa a ser la fuente. Sección 9 puesta al día con lo ejecutado (§9.6: commits de L01 a L08 y desvíos E0-D1 a E0-D5). Revisión de privacidad del texto entero: fuera la rama de la sesión en la nube y el nombre corto 8.3 real; los ejemplos de recibos de la Etapa 4 pasan a un caso genérico de tienda; los detalles del equipo de la autora se generalizan; la estrategia de difusión personal (§8.9.1) sale del repo |
 | 14 | 2026-10-14 | Etapa 1 ejecutada (L01 a L11) en la rama `etapa-1/lotes-y-recibos`. Nueva §9.7 con los commits y los desvíos E1-D1 a E1-D6. El más relevante: el validador de ranuras de `test/prompts.test.ts` trata los ejemplos de PR de la Fase 5 (`--- INICIO EJEMPLO ---` … `--- FIN EJEMPLO ---`) como una valla de código, porque sus `##` son parte del ejemplo |
 | 15 | 2026-10-14 | Auditoría externa de la Etapa 1, a ciegas y con permiso para cuestionar las ADRs: apto con observaciones (3 hallazgos medios, 12 bajos y 3 cuestionamientos). Se resolvieron con los ajustes A1 a A6, en commits nuevos encima de L11 (§9.7). Los de más peso: R4 compara los nombres sin mayúsculas y en NFC, la Fase 4 comprueba la rama antes de commitear, un único lote fallido deja su recibo en la subcarpeta, y `get_phase_prompt` lista los recibos que ya existen. Se corrigen los tamaños de los prompts de §9.7, que mezclaban conteos en CRLF, y la frase de §3.3 sobre el "paso 0" |
+| 16 | 2026-10-15 | Etapa 2 ejecutada (L01 a L11) en la rama `etapa-2/protocolo-mcp`, con un OK general de la autora para los commits. Nueva §9.8 con los commits, la repetición de §4.1 sobre el SDK 1.32.1 y los desvíos E2-D1 a E2-D10. Los de más peso: los mensajes de validación en español pasan a cada campo de los shapes (zod v4) para que los E2E sobrevivan a la migración sin cambios, el log se muda a `src/log.ts`, y la matriz de clientes de L10 queda por rellenar con lo observado |
