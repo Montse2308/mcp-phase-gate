@@ -600,3 +600,24 @@ describe("get_phase_prompt con pendientes heredados", () => {
     }
   });
 });
+
+describe("una capa de prompts que no es carpeta", () => {
+  it("get_orchestrator_status y phase-gate://estado responden en vez de fallar", async () => {
+    estadoTemporal();
+    const archivo = path.join(docsTemporales(), "no-carpeta.md");
+    fs.writeFileSync(archivo, "x", "utf-8");
+    process.env.PHASE_GATE_PROMPTS_PATH = archivo;
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const r = await cliente.callTool({ name: "get_orchestrator_status", arguments: {} });
+      assert.notEqual(r.isError, true, textoDe(r));
+      assert.match(textoDe(r), /CAPA-NO-ES-CARPETA/);
+
+      const estado = await cliente.readResource({ uri: "phase-gate://estado" });
+      assert.match((estado.contents[0] as { text: string }).text, /CAPA-NO-ES-CARPETA/);
+    } finally {
+      await cerrar();
+    }
+  });
+});

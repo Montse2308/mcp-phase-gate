@@ -18,9 +18,25 @@ export const CARPETA_COMANDOS = "comandos";
 export function resolveCommandFile(numero: number, capas: string[] = promptsLayers()): string | null {
   for (const base of [...capas].reverse()) {
     const ruta = path.join(base, CARPETA_COMANDOS, `f${numero}.md`);
-    if (fs.statSync(ruta, { throwIfNoEntry: false })?.isFile()) return ruta;
+    if (tipoDe(ruta) === "archivo") return ruta;
   }
   return null;
+}
+
+// statSync con throwIfNoEntry solo calla el ENOENT: si un tramo de la ruta es un archivo
+// (ENOTDIR) o no hay permiso, lanza igual. Para preguntar "¿es una carpeta?" eso no es un error.
+function tipoDe(ruta: string): "archivo" | "carpeta" | "otro" | null {
+  try {
+    const info = fs.statSync(ruta, { throwIfNoEntry: false });
+    if (!info) return null;
+    return info.isDirectory() ? "carpeta" : info.isFile() ? "archivo" : "otro";
+  } catch {
+    return null;
+  }
+}
+
+export function esCarpeta(ruta: string): boolean {
+  return tipoDe(ruta) === "carpeta";
 }
 
 // Acepta "fase-1-descubrimiento.md" y también "phase-1-discovery.md",
@@ -151,7 +167,9 @@ export function discoverPhases(capas: string[] = promptsLayers()): Map<number, P
   const phases = new Map<number, PhaseFile>();
 
   for (const base of capas) {
-    if (!fs.existsSync(base)) continue;
+    // Una capa que no existe o que no es una carpeta (PHASE_GATE_PROMPTS_PATH apuntando a un
+    // archivo) se salta: doctor la avisa, y las fases de las demás capas siguen sirviendo.
+    if (!esCarpeta(base)) continue;
 
     // Se resuelve capa por capa: dentro de una, gana el primero por orden alfabético; entre
     // capas, gana la de más arriba. Sin este mapa intermedio la regla alfabética de la capa

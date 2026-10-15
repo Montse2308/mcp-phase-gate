@@ -301,3 +301,43 @@ describe("formatearDiagnostico", () => {
     assert.match(formatearDiagnostico(d, "markdown"), /\| info \| PRUEBA \| a \\\| b \|/);
   });
 });
+
+// Ajustes de la auditoría de la Etapa 2: el diagnóstico no puede lanzar ante una instalación rota.
+describe("diagnosticar ante instalaciones rotas", () => {
+  it("PROMPTS_PATH apuntando a un archivo no lanza y lo avisa como CAPA-NO-ES-CARPETA", () => {
+    instalacionCorrecta();
+    const archivo = path.join(carpetaTemporal("diag"), "prompts.md");
+    fs.writeFileSync(archivo, "no soy una carpeta", "utf-8");
+    process.env.PHASE_GATE_PROMPTS_PATH = archivo;
+
+    const d = diagnosticar();
+    const hallazgo = d.hallazgos.find((h) => h.codigo === "CAPA-NO-ES-CARPETA");
+    assert.equal(hallazgo?.severidad, "aviso");
+    assert.match(hallazgo?.texto ?? "", /no es una carpeta/);
+    assert.ok(!codigos(d).includes("CAPA-NO-EXISTE"));
+    assert.doesNotThrow(() => formatearDiagnostico(d, "texto"));
+  });
+
+  it("un active-tasks.json corrupto se avisa como ESTADO-ILEGIBLE", () => {
+    instalacionCorrecta();
+    fs.writeFileSync(path.join(process.env.ORQUESTADOR_STATE_PATH!, "active-tasks.json"), "{ esto no es json", "utf-8");
+
+    const hallazgo = diagnosticar().hallazgos.find((h) => h.codigo === "ESTADO-ILEGIBLE");
+    assert.equal(hallazgo?.severidad, "aviso");
+  });
+
+  it("un active-tasks.json válido no produce ESTADO-ILEGIBLE", () => {
+    instalacionCorrecta();
+    fs.writeFileSync(path.join(process.env.ORQUESTADOR_STATE_PATH!, "active-tasks.json"), "{}", "utf-8");
+
+    assert.ok(!codigos(diagnosticar()).includes("ESTADO-ILEGIBLE"));
+  });
+
+  it("un .env que no se puede leer (una carpeta) es ENV-ILEGIBLE", () => {
+    instalacionCorrecta();
+    cargarEnv(carpetaTemporal("env-carpeta"));
+
+    const hallazgo = diagnosticar().hallazgos.find((h) => h.codigo === "ENV-ILEGIBLE");
+    assert.equal(hallazgo?.severidad, "error");
+  });
+});

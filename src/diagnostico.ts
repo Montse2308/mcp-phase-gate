@@ -29,7 +29,7 @@ import {
 } from "./config.js";
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder } from "./paths.js";
-import { discoverPhases, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
+import { discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { describeEstado, leerPunteros, listarTareas, tareaActiva } from "./tasks.js";
 
@@ -90,16 +90,25 @@ export function deducirVia(ruta: string, entorno: NodeJS.ProcessEnv = process.en
   return "dependencia";
 }
 
-function esCarpeta(ruta: string): boolean {
-  return fs.statSync(ruta, { throwIfNoEntry: false })?.isDirectory() ?? false;
+function mensajeDe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function estadoLegible(archivo: string): boolean {
+  try {
+    const crudo: unknown = JSON.parse(fs.readFileSync(archivo, "utf-8"));
+    return crudo !== null && typeof crudo === "object" && !Array.isArray(crudo);
+  } catch {
+    return false;
+  }
 }
 
 function estadoRuta(requerida: RutaRequerida): EstadoRuta {
   try {
     return { ruta: requireBasePath(requerida), existe: true };
-  } catch (error: any) {
+  } catch (error) {
     const { valor } = leerVariable(requerida.logica);
-    return { ...(valor ? { ruta: path.resolve(valor) } : {}), existe: false, error: String(error?.message ?? error) };
+    return { ...(valor ? { ruta: path.resolve(valor) } : {}), existe: false, error: mensajeDe(error) };
   }
 }
 
@@ -171,6 +180,17 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
   }
   const estado = { archivo: archivoEstado, existe: fs.existsSync(archivoEstado), punteros: Object.keys(punteros).length };
 
+  // leerPunteros calla un archivo corrupto (para no dejar sin servicio), y doctor lo contaba como
+  // "0 punteros". Aquí se dice: la tarea activa de cada proyecto se está deduciendo.
+  if (estado.existe && !estadoLegible(archivoEstado)) {
+    hallar(
+      "aviso",
+      "ESTADO-ILEGIBLE",
+      `${archivoEstado} no es un JSON con la forma esperada: se ignora y la tarea activa de cada proyecto se deduce. ` +
+        `Un switch_task lo vuelve a escribir.`
+    );
+  }
+
   // Capas de prompts.
   const capas = capasDePrompts();
   const rutasCapas = capas.map((capa) => capa.ruta);
@@ -178,11 +198,19 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
   for (const capa of capas) {
     if (capa.etiqueta === "propia" && !capa.existe) {
       const { usada } = leerVariable("PROMPTS_PATH");
-      hallar(
-        "aviso",
-        "CAPA-NO-EXISTE",
-        `${usada} apunta a "${capa.ruta}", que no existe: se usan solo los prompts de fábrica.`
-      );
+      if (fs.existsSync(capa.ruta)) {
+        hallar(
+          "aviso",
+          "CAPA-NO-ES-CARPETA",
+          `${usada} apunta a "${capa.ruta}", que no es una carpeta: se usan solo los prompts de fábrica.`
+        );
+      } else {
+        hallar(
+          "aviso",
+          "CAPA-NO-EXISTE",
+          `${usada} apunta a "${capa.ruta}", que no existe: se usan solo los prompts de fábrica.`
+        );
+      }
     }
   }
 
@@ -211,7 +239,14 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
   }
 
   // Fases.
-  const phases = discoverPhases(rutasCapas);
+  // discoverPhases ya salta las capas que no son carpeta; esto cubre lo que quede (una carpeta
+  // sin permiso de lectura, por ejemplo). El diagnóstico no lanza nunca: lo convierte en hallazgo.
+  let phases = new Map<number, PhaseFile>();
+  try {
+    phases = discoverPhases(rutasCapas);
+  } catch (error) {
+    hallar("error", "PROMPTS-ILEGIBLES", `No se pudieron leer las carpetas de prompts: ${mensajeDe(error)}`);
+  }
   const fases = fasesConCapa(capas, phases);
 
   for (const fase of fases) {
@@ -260,8 +295,8 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
           );
         }
       }
-    } catch (error: any) {
-      hallar("error", "DOCS-ILEGIBLE", `No se pudo leer la Documentación Central: ${error?.message ?? error}`);
+    } catch (error) {
+      hallar("error", "DOCS-ILEGIBLE", `No se pudo leer la Documentación Central: ${mensajeDe(error)}`);
     }
   }
 
