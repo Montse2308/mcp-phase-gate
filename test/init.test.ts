@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { CANDADO_DE_PUSH, MARCA_DE_COMANDO, diffDeLineas, ejecutarInit, quitarComentarios } from "../src/init.js";
+import { CANDADO_DE_PUSH, MARCA_DE_COMANDO, diffDeLineas, ejecutaPhaseGate, ejecutarInit, quitarComentarios, registroEnClaude } from "../src/init.js";
 import type { EntornoInit, Ejecucion, OpcionesInit } from "../src/init.js";
 import { carpetaTemporal, configTemporal, crearProyecto, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
@@ -62,7 +62,16 @@ function entornoDePrueba(
 }
 
 const claudeVacio = (args: string[]): Ejecucion =>
-  args[0] === "--version" ? { codigo: 0, stdout: "2.1.0 (Claude Code)", stderr: "" } : args[1] === "list" ? { codigo: 0, stdout: "hermes: npx -y otro - ✔ Connected\n", stderr: "" } : { codigo: 0, stdout: "", stderr: "" };
+  args[0] === "--version" ? { codigo: 0, stdout: "2.1.0 (Claude Code)", stderr: "" } : args[1] === "list" ? { codigo: 0, stdout: "otro-servidor: npx -y otro-servidor - ✔ Connected\n", stderr: "" } : { codigo: 0, stdout: "", stderr: "" };
+
+// Un clon de desarrollo de mentira: <carpeta>/package.json con ese nombre y <carpeta>/build/index.js.
+function clonDe(nombre: string): string {
+  const carpeta = carpetaTemporal("clon");
+  fs.mkdirSync(path.join(carpeta, "build"));
+  fs.writeFileSync(path.join(carpeta, "package.json"), JSON.stringify({ name: nombre }), "utf-8");
+  fs.writeFileSync(path.join(carpeta, "build", "index.js"), "", "utf-8");
+  return path.join(carpeta, "build", "index.js");
+}
 
 function rutas(): { docs: string; repos: string } {
   estadoTemporal();
@@ -170,13 +179,70 @@ describe("init: registrar en los clientes", () => {
     const r = rutas();
     const p = entornoDePrueba({ plataforma: "linux", terminal: true, respuestas: ["s"] });
     fs.mkdirSync(path.join(p.home, ".cursor"));
-    fs.writeFileSync(cursorJson(p), JSON.stringify({ mcpServers: { viejo: { command: "node", args: ["C:/repo/build/index.js"] } } }), "utf-8");
+    const clon = clonDe("mcp-phase-gate");
+    fs.writeFileSync(cursorJson(p), JSON.stringify({ mcpServers: { viejo: { command: "node", args: [clon] } } }), "utf-8");
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"], clave: "pg" }), p.entorno), 0, p.errores());
     const servidores = leer(cursorJson(p)).mcpServers;
     assert.deepEqual(Object.keys(servidores), ["pg"]);
-    assert.equal(servidores.pg.args[0], "C:/repo/build/index.js", "conserva el comando de un clon de desarrollo");
+    assert.equal(servidores.pg.args[0], clon, "conserva el comando de un clon de desarrollo");
     assert.match(p.texto(), /--clave pide renombrarlo a «pg»/);
+  });
+
+  // Hallazgo 5 de la auditoría de la Etapa 3: contener el nombre o ser un build/index.js cualquiera no
+  // basta para ser mcp-phase-gate.
+  it("no toma por suyo un servidor ajeno: otro build/index.js, ni un paquete cuyo nombre contiene mcp-phase-gate", async () => {
+    const r = rutas();
+    const p = entornoDePrueba({ plataforma: "linux" });
+    fs.mkdirSync(path.join(p.home, ".cursor"));
+    const ajenos = {
+      fs: { command: "node", args: [clonDe("server-filesystem")] },
+      visor: { command: "npx", args: ["-y", "mcp-phase-gate-viewer"] },
+    };
+    fs.writeFileSync(cursorJson(p), JSON.stringify({ mcpServers: ajenos }), "utf-8");
+
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"] }), p.entorno), 0, p.errores());
+    const servidores = leer(cursorJson(p)).mcpServers;
+    assert.deepEqual(Object.keys(servidores), ["fs", "visor", "pg"]);
+    assert.deepEqual([servidores.fs, servidores.visor], [ajenos.fs, ajenos.visor], "los ajenos quedan intactos");
+  });
+
+  it("reconoce el paquete exacto, con versión, y el clon cuyo package.json es el suyo", () => {
+    assert.equal(ejecutaPhaseGate({ command: "npx", args: ["-y", "mcp-phase-gate@3"] }), true);
+    assert.equal(ejecutaPhaseGate({ command: "node", args: [clonDe("mcp-phase-gate")] }), true);
+    assert.equal(ejecutaPhaseGate({ command: "node", args: [clonDe("otro")] }), false);
+    assert.equal(registroEnClaude("pg: npx -y mcp-phase-gate - ✔ Connected\n"), "pg");
+    assert.equal(registroEnClaude("visor: npx -y mcp-phase-gate-viewer - ✔ Connected\nfs: node C:/x/build/index.js - ✔ Connected\n"), null);
+  });
+
+  // Hallazgo 6: las comas finales se quitaban también dentro de las cadenas.
+  it("las comas finales se quitan fuera de las cadenas, y una // en una URL no cuenta como comentario", async () => {
+    const r = rutas();
+    const p = entornoDePrueba({ plataforma: "linux" });
+    fs.mkdirSync(path.join(p.home, ".cursor"));
+    fs.writeFileSync(cursorJson(p), '{ "mcpServers": { "otro": { "command": "x", "args": ["--sep=,}", "https://a.b/c"], }, }, }', "utf-8");
+
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"] }), p.entorno), 0, p.errores());
+    assert.deepEqual(leer(cursorJson(p)).mcpServers.otro.args, ["--sep=,}", "https://a.b/c"]);
+    assert.equal(p.texto().includes("tiene comentarios"), false);
+  });
+
+  it("no toca un mcp.json cuya sección o cuyo env no es un objeto, ni sigue si claude mcp list falla", async () => {
+    const r = rutas();
+    const p = entornoDePrueba({
+      plataforma: "linux",
+      responder: (args) => (args[1] === "list" ? { codigo: 1, stdout: "", stderr: "sin red" } : claudeVacio(args)),
+    });
+    fs.mkdirSync(path.join(p.home, ".cursor"));
+    for (const contenido of ['{ "mcpServers": [1, 2] }', '{ "mcpServers": { "otro": { "command": "x", "env": "A=1" } } }']) {
+      fs.writeFileSync(cursorJson(p), contenido, "utf-8");
+      assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"], yes: true }), p.entorno), 1);
+      assert.equal(fs.readFileSync(cursorJson(p), "utf-8"), contenido);
+    }
+
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["claude-code"] }), p.entorno), 1);
+    assert.match(p.errores(), /claude mcp list falló \(sin red\); no se registra para no duplicarlo/);
+    assert.equal(p.llamadas.some((l) => l[2] === "add"), false);
   });
 
   it("una clave que ya usa otro servidor no se pisa", async () => {

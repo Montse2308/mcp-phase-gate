@@ -87,6 +87,11 @@ export async function ejecutarComando(comando: string, args: string[]): Promise<
     if (directo.noEncontrado) throw new Error(`${comando} no está instalado o no está en el PATH.`);
     return directo;
   }
+  // Dentro de cmd.exe /c, un % se expande aunque vaya entre comillas, y una comilla rompe la cita: no
+  // hay forma fiable de pasarlos. Antes que arriesgar otro comando, se pide hacerlo a mano.
+  if (args.some((arg) => /[%"]/.test(arg))) {
+    throw new Error(`no se puede lanzar ${comando}.cmd con seguridad: algún argumento lleva % o comillas. Ejecuta el comando a mano.`);
+  }
   const linea = [`${comando}.cmd`, ...args].map(citarParaCmd).join(" ");
   const porCmd = await lanzar(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${linea}"`], { verbatim: true });
   if (porCmd.codigo !== 0 && /no se reconoce|is not recognized/i.test(porCmd.stderr)) {
@@ -120,8 +125,12 @@ export function entornoDelProceso(salida: Salida): EntornoInit {
 // Los mcp.json de los clientes admiten comentarios y comas finales. Se toleran SOLO para leer: lo que
 // se escribe es JSON estricto. Recorre el texto respetando las cadenas, para no tomar un "//" de una
 // URL por un comentario.
-export function quitarComentarios(texto: string): string {
+// Las comas finales se quitan en el mismo recorrido, fuera de las cadenas: una expresión regular sobre
+// el texto entero cambiaba también un argumento como "--sep=,}" de otro servidor (hallazgo 6 de la
+// auditoría de la Etapa 3). Devuelve además si había comentarios, para avisar de que se perderán.
+export function limpiarJsonc(texto: string): { limpio: string; comentarios: boolean } {
   let salida = "";
+  let comentarios = false;
   let i = 0;
   while (i < texto.length) {
     const c = texto[i]!;
@@ -131,17 +140,26 @@ export function quitarComentarios(texto: string): string {
       salida += texto.slice(i, j + 1);
       i = j + 1;
     } else if (c === "/" && texto[i + 1] === "/") {
+      comentarios = true;
       while (i < texto.length && texto[i] !== "\n") i++;
     } else if (c === "/" && texto[i + 1] === "*") {
+      comentarios = true;
       const fin = texto.indexOf("*/", i + 2);
       i = fin === -1 ? texto.length : fin + 2;
+    } else if (c === "}" || c === "]") {
+      // Una coma final es la última cosa no blanca que se escribió antes de cerrar.
+      salida = salida.replace(/,(\s*)$/, "$1") + c;
+      i++;
     } else {
       salida += c;
       i++;
     }
   }
-  // Comas finales: una coma seguida (salvo espacios) de } o ].
-  return salida.replace(/,(\s*[}\]])/g, "$1");
+  return { limpio: salida, comentarios };
+}
+
+export function quitarComentarios(texto: string): string {
+  return limpiarJsonc(texto).limpio;
 }
 
 export type LecturaJson = { estado: "ausente" | "vacio" | "valido" | "roto"; datos: Record<string, unknown>; comentarios: boolean; error?: string };
@@ -157,8 +175,7 @@ export function leerJsonTolerante(archivo: string): LecturaJson {
   // En algunas instalaciones el mcp.json de VS Code existe con 0 bytes (validación V5).
   if (texto.trim() === "") return { estado: "vacio", datos: {}, comentarios: false };
 
-  const limpio = quitarComentarios(texto);
-  const comentarios = limpio.replace(/\s+/g, "") !== texto.replace(/\s+/g, "") && /\/\/|\/\*/.test(texto);
+  const { limpio, comentarios } = limpiarJsonc(texto);
   try {
     const datos: unknown = JSON.parse(limpio);
     if (!datos || typeof datos !== "object" || Array.isArray(datos)) {
@@ -294,13 +311,28 @@ export function entradaDelServidor(cliente: Cliente, rutas: Rutas, plataforma: N
   return cliente === "vscode" ? { type: "stdio", ...base } : base;
 }
 
-// ¿Esta entrada de un mcp.json ejecuta mcp-phase-gate? Un `npx … mcp-phase-gate` o una ruta a un
-// build/index.js (un clon de desarrollo).
+// ¿Esta parte de un comando lanza mcp-phase-gate? El paquete exacto (`mcp-phase-gate`, o con versión
+// `mcp-phase-gate@3`), el binario global, o un build/index.js cuyo package.json, dos carpetas más
+// arriba, se llama mcp-phase-gate (un clon de desarrollo). Antes bastaba con contener el nombre o con
+// ser un build/index.js cualquiera, y init le inyectaba sus variables a un servidor ajeno (hallazgo 5
+// de la auditoría de la Etapa 3).
+export function lanzaPhaseGate(parte: string): boolean {
+  if (parte === SERVER_NAME || parte.startsWith(`${SERVER_NAME}@`)) return true;
+  if (path.basename(parte).replace(/\.(cmd|exe)$/i, "") === SERVER_NAME && /[\\/]/.test(parte)) return true;
+  if (!/(^|[\\/])build[\\/]index\.js$/.test(parte)) return false;
+  try {
+    const paquete = JSON.parse(fs.readFileSync(path.join(path.dirname(path.dirname(parte)), "package.json"), "utf-8")) as { name?: unknown };
+    return paquete.name === SERVER_NAME;
+  } catch {
+    return false;
+  }
+}
+
 export function ejecutaPhaseGate(entrada: unknown): boolean {
   if (!entrada || typeof entrada !== "object") return false;
   const { command, args } = entrada as { command?: unknown; args?: unknown };
   const partes = [command, ...(Array.isArray(args) ? args : [])].filter((p): p is string => typeof p === "string");
-  return partes.some((p) => p.includes(SERVER_NAME) || /build[\\/]index\.js$/.test(p));
+  return partes.some(lanzaPhaseGate);
 }
 
 // Lo que cambia init en una entrada que ya existe: las dos rutas, con los nombres nuevos. Conserva el
@@ -335,7 +367,21 @@ async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", r
   }
 
   const datos = lectura.datos;
-  const servidores = { ...((datos[seccion] as Record<string, unknown> | undefined) ?? {}) };
+  // Una sección o un env que no son un objeto no se "arreglan" por su cuenta: no se toca el archivo.
+  const esObjeto = (valor: unknown): valor is Record<string, unknown> => valor !== null && typeof valor === "object" && !Array.isArray(valor);
+  const seccionActual = datos[seccion];
+  const formaRara =
+    (seccionActual !== undefined && !esObjeto(seccionActual)) ||
+    (esObjeto(seccionActual) && Object.values(seccionActual).some((e) => esObjeto(e) && e.env !== undefined && !esObjeto(e.env)));
+  if (formaRara) {
+    fallar(
+      ctx,
+      `${nombre}: en ${archivo}, "${seccion}" o el "env" de alguna entrada no es un objeto. No se toca. Para registrarlo a mano, añade:\n` +
+        bloqueParaPegar(seccion, clave, deseada)
+    );
+    return;
+  }
+  const servidores = { ...((seccionActual as Record<string, unknown> | undefined) ?? {}) };
 
   // ¿Ya está registrado? Se busca primero bajo la clave pedida y después bajo cualquier otra.
   const yaRegistrada = Object.keys(servidores).find((k) => k === clave && ejecutaPhaseGate(servidores[k])) ?? Object.keys(servidores).find((k) => ejecutaPhaseGate(servidores[k]));
@@ -386,8 +432,9 @@ export function registroEnClaude(lista: string): string | null {
   for (const linea of lista.split(/\r?\n/)) {
     const corte = linea.indexOf(": ");
     if (corte <= 0) continue;
-    const resto = linea.slice(corte + 2);
-    if (resto.includes(SERVER_NAME) || /build[\\/]index\.js/.test(resto)) return linea.slice(0, corte);
+    // "<comando y args> - <estado>": las partes del comando, sin el estado del final.
+    const comando = linea.slice(corte + 2).replace(/\s+-\s+\S*\s.*$/, "");
+    if (comando.split(/\s+/).some(lanzaPhaseGate)) return linea.slice(0, corte);
   }
   return null;
 }
@@ -406,6 +453,11 @@ async function registrarEnClaude(ctx: Contexto, rutas: Rutas): Promise<void> {
     lista = await ctx.entorno.ejecutar("claude", ["mcp", "list"]);
   } catch (error) {
     fallar(ctx, `Claude Code: no se pudo ejecutar claude mcp list (${error instanceof Error ? error.message : String(error)}).`);
+    return;
+  }
+  // Sin la lista no se puede saber si ya está registrado: añadirlo podría duplicarlo.
+  if (lista.codigo !== 0) {
+    fallar(ctx, `Claude Code: claude mcp list falló (${lista.stderr.trim() || `código ${lista.codigo}`}); no se registra para no duplicarlo.`);
     return;
   }
 
@@ -461,6 +513,10 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
     for (const { numero, texto } of comandos) {
       const archivo = path.join(carpeta, `f${numero}.md`);
       const contenido = `${MARCA_DE_COMANDO} v${SERVER_VERSION} -->\n${texto}\n`;
+      if (fs.statSync(archivo, { throwIfNoEntry: false })?.isDirectory()) {
+        fallar(ctx, `${nombre}: ${archivo} es una carpeta; no se toca.`);
+        continue;
+      }
       const actual = fs.existsSync(archivo) ? fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n") : null;
 
       if (actual !== null && !actual.startsWith(MARCA_DE_COMANDO)) {
