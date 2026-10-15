@@ -9,6 +9,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { ClientCapabilities } from "@modelcontextprotocol/sdk/types.js";
 
+import { z } from "zod";
+
+import type { Diagnostico } from "../src/diagnostico.js";
+import { diagnosticoShape } from "../src/schemas.js";
 import { crearServidor } from "../src/servidor.js";
 import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
@@ -29,8 +33,10 @@ async function conectar(capacidades: ClientCapabilities = {}) {
   };
 }
 
-const TOOLS_DE_SIEMPRE = [
+// Las 8 de siempre más get_orchestrator_status, que llega en la Etapa 2.
+const TOOLS = [
   "get_active_task",
+  "get_orchestrator_status",
   "get_phase_prompt",
   "list_tasks",
   "read_central_doc",
@@ -41,11 +47,11 @@ const TOOLS_DE_SIEMPRE = [
 ];
 
 describe("tools/list", () => {
-  it("devuelve las 8 tools de siempre, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
+  it("devuelve las 8 tools de siempre y get_orchestrator_status, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
     const { cliente, cerrar } = await conectar();
     try {
       const { tools } = await cliente.listTools();
-      assert.deepEqual(tools.map((t) => t.name).sort(), TOOLS_DE_SIEMPRE);
+      assert.deepEqual(tools.map((t) => t.name).sort(), TOOLS);
 
       for (const tool of tools) {
         const a = tool.annotations ?? {};
@@ -71,7 +77,7 @@ describe("tools/list", () => {
         tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name),
         ["write_central_doc"]
       );
-      for (const nombre of ["get_phase_prompt", "get_active_task", "list_tasks", "read_central_doc", "read_cross_repo"]) {
+      for (const nombre of ["get_phase_prompt", "get_active_task", "list_tasks", "read_central_doc", "read_cross_repo", "get_orchestrator_status"]) {
         assert.equal(porNombre.get(nombre)?.readOnlyHint, true, nombre);
       }
       assert.equal(porNombre.get("start_task")?.idempotentHint, false);
@@ -157,3 +163,77 @@ describe("llamadas", () => {
     }
   });
 });
+
+describe("get_orchestrator_status", () => {
+  it("devuelve el Markdown con las secciones del diagnóstico y structuredContent que valida contra el outputSchema", async () => {
+    const docs = docsTemporales();
+    estadoTemporal();
+    crearProyecto(docs, "PROYECTO-A");
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const r = await cliente.callTool({ name: "get_orchestrator_status", arguments: {} });
+      assert.notEqual(r.isError, true, JSON.stringify(r.content));
+
+      const texto = (r.content as { type: string; text: string }[])[0]!.text;
+      for (const seccion of ["Variables", "Estado", "Prompts", "Proyectos", "Hallazgos"]) {
+        assert.match(texto, new RegExp(`^### ${seccion}$`, "m"));
+      }
+
+      // El SDK ya la validó antes de enviarla; aquí se comprueba también del lado del cliente.
+      const estructurado = z.object(diagnosticoShape).parse(r.structuredContent);
+      assert.deepEqual(estructurado.proyectos.map((p) => p.nombre), ["PROYECTO-A"]);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("incluye el cliente conectado y sus capacidades", async () => {
+    estadoTemporal();
+
+    const { cliente, cerrar } = await conectar({ elicitation: {} });
+    try {
+      const r = await cliente.callTool({ name: "get_orchestrator_status", arguments: {} });
+      const estructurado = z.object(diagnosticoShape).parse(r.structuredContent);
+      assert.deepEqual(estructurado.cliente, {
+        nombre: "cliente-de-prueba",
+        version: "1.0.0",
+        capacidades: { elicitation: true, roots: false },
+      });
+      assert.match((r.content as { text: string }[])[0]!.text, /cliente-de-prueba 1\.0\.0 · elicitation: sí · roots: no/);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  // Diagnosticar una instalación rota es justo para lo que existe: no puede fallar por eso.
+  it("sin nada configurado no es un error: los VAR-FALTA van en los hallazgos", async () => {
+    estadoTemporal();
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const r = await cliente.callTool({ name: "get_orchestrator_status", arguments: {} });
+      assert.notEqual(r.isError, true);
+      const estructurado = z.object(diagnosticoShape).parse(r.structuredContent);
+      assert.ok(estructurado.hallazgos.some((h) => h.codigo === "VAR-FALTA"));
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("anuncia su outputSchema en tools/list", async () => {
+    const { cliente, cerrar } = await conectar();
+    try {
+      const { tools } = await cliente.listTools();
+      const tool = tools.find((t) => t.name === "get_orchestrator_status");
+      assert.equal(tool?.outputSchema?.type, "object");
+      assert.ok(tool?.outputSchema?.properties?.hallazgos);
+    } finally {
+      await cerrar();
+    }
+  });
+});
+
+// Si diagnostico.ts y el outputSchema se separan, esto deja de compilar.
+const _diagnosticoCuadra: z.input<z.ZodObject<typeof diagnosticoShape>> = {} as Diagnostico;
+void _diagnosticoCuadra;

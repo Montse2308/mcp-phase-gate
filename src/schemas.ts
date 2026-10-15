@@ -155,6 +155,67 @@ export const readCrossRepoShape = {
   file_path: obligatorio("file_path").describe("Ruta relativa del archivo dentro del repositorio (ej. 'src/main.ts')."),
 };
 
+// get_orchestrator_status no recibe nada.
+export const getOrchestratorStatusShape = {};
+
+// ─── Salida de get_orchestrator_status ──────────────────────────────────────
+// El objeto Diagnostico de diagnostico.ts, campo por campo. Con un outputSchema el cliente recibe
+// además `structuredContent`, y el SDK comprueba antes de enviarlo que cuadra con este shape:
+// si diagnostico.ts cambia y esto no, la tool falla en los tests en vez de mentir al cliente.
+const estadoRuta = z.object({ ruta: z.string().optional(), existe: z.boolean(), error: z.string().optional() });
+
+export const diagnosticoShape = {
+  paquete: z.object({
+    version: z.string(),
+    ruta: z.string(),
+    via: z.enum(["npx", "global", "dependencia", "clon"]),
+  }),
+  node: z.object({ version: z.string(), plataforma: z.string() }),
+  variables: z.array(
+    z.object({
+      logica: z.enum(["DOCS_PATH", "REPOS_PATH", "TASKS_SUBDIR", "PROMPTS_PATH", "STATE_PATH", "ELICITATION"]),
+      valor: z.string().optional(),
+      usada: z.string().nullable(),
+      fuente: z.enum(["entorno", ".env", "sin definir"]),
+      discrepancia: z.string().nullable(),
+    })
+  ),
+  rutas: z.object({ docs: estadoRuta, repos: estadoRuta }),
+  estado: z.object({ archivo: z.string(), existe: z.boolean(), punteros: z.number().int() }),
+  capas: z.array(z.object({ ruta: z.string(), etiqueta: z.enum(["fábrica", "propia"]), existe: z.boolean() })),
+  reglasGlobales: z.object({ archivo: z.string().nullable(), capa: z.string().nullable(), faltan: z.array(z.string()) }),
+  fases: z.array(
+    z.object({
+      numero: z.number().int(),
+      titulo: z.string(),
+      archivo: z.string(),
+      capa: z.string(),
+      documento: z.string().optional(),
+      recibos: z.string().optional(),
+      comando: z.string().nullable(),
+    })
+  ),
+  proyectos: z.array(
+    z.object({
+      nombre: z.string(),
+      tareas: z.number().int(),
+      activa: z
+        .object({ tarea: z.string(), origen: z.enum(["puntero", "deducida"]), fase: z.string() })
+        .nullable(),
+    })
+  ),
+  cliente: z
+    .object({
+      nombre: z.string(),
+      version: z.string(),
+      capacidades: z.object({ elicitation: z.boolean(), roots: z.boolean() }),
+    })
+    .optional(),
+  hallazgos: z.array(
+    z.object({ severidad: z.enum(["error", "aviso", "info"]), codigo: z.string(), texto: z.string() })
+  ),
+};
+
 // null cuenta como ausente: se quita una vez, al entrar en la tool, para que ninguna tenga que
 // distinguir entre un campo que no vino y uno que vino vacío.
 export type SinNulos<T> = { [K in keyof T]: Exclude<T[K], null> };

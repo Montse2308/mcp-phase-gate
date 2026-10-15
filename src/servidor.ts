@@ -15,6 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { DOCS, SERVER_NAME, SERVER_VERSION, requireBasePath, stateFile } from "./config.js";
+import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
 import { conectarLog, log } from "./log.js";
 import {
   describeProjects,
@@ -33,7 +34,9 @@ import {
 import { discoverPhases, loadPhasePrompt, nombreContextoInicial } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import {
+  diagnosticoShape,
   getActiveTaskShape,
+  getOrchestratorStatusShape,
   getPhasePromptShape,
   listTasksShape,
   readCentralDocShape,
@@ -400,6 +403,39 @@ function registrarTools(mcp: McpServer): void {
       // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
       const forzado = motivo ? (existia ? " (sobrescrito con force)" : " (creado con force)") : "";
       return responder(`Archivo escrito exitosamente en ${fullPath}${forzado}`);
+    }
+  );
+
+  // La misma radiografía que `npx mcp-phase-gate doctor`, más lo que solo se sabe desde dentro de
+  // una sesión: qué cliente está conectado y qué capacidades anunció.
+  mcp.registerTool(
+    "get_orchestrator_status",
+    {
+      title: "Estado de la instalación",
+      description:
+        "Radiografía de la instalación: versión y ruta del paquete, variables y de dónde salió cada una, qué " +
+        "archivo de prompt gana en cada fase, proyectos y tarea activa, y avisos. Úsala cuando algo no se " +
+        "comporte como esperas.",
+      inputSchema: getOrchestratorStatusShape,
+      outputSchema: diagnosticoShape,
+      annotations: anotaciones("Estado de la instalación", true, false, true),
+    },
+    async () => {
+      const version = mcp.server.getClientVersion();
+      const capacidades = mcp.server.getClientCapabilities();
+      const cliente = version
+        ? {
+            nombre: version.name,
+            version: version.version,
+            capacidades: { elicitation: Boolean(capacidades?.elicitation?.form), roots: Boolean(capacidades?.roots) },
+          }
+        : undefined;
+
+      const diagnostico = diagnosticar(cliente ? { cliente } : {});
+      return {
+        content: [{ type: "text", text: formatearDiagnostico(diagnostico, "markdown") }],
+        structuredContent: diagnostico,
+      };
     }
   );
 
