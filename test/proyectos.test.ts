@@ -236,6 +236,8 @@ describe("bloqueDeConfiguracion", () => {
         `  - \`web\`: \`${enOtroSitio}\``,
         "- Comandos de verificación del proyecto: `npm test`, `npm run lint`",
         "- Una descripción de PR por repositorio (fase5.prPorRepo).",
+        "",
+        "Usa `read_repo_file` y `repo_status` con estos ids.",
       ].join("\n")
     );
   });

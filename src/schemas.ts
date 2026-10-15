@@ -180,6 +180,48 @@ export const readCrossRepoShape = {
 // get_orchestrator_status no recibe nada.
 export const getOrchestratorStatusShape = {};
 
+// ─── Repos de un proyecto (Etapa 3) ─────────────────────────────────────────
+const ID_REPO = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const REPO =
+  "Id del repo, tal como lo declara el phase-gate.json del proyecto (ej. 'api'). Los de la tarea salen en el " +
+  "bloque CONFIGURACIÓN DEL PROYECTO de get_phase_prompt.";
+
+export const readRepoFileShape = {
+  project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+  repo: texto("repo").regex(ID_REPO, "`repo` es el id de un repo: minúsculas, números y guiones (ej. 'api').").describe(REPO),
+  path: obligatorio("path").describe("Ruta relativa del archivo dentro del repo (ej. 'src/main.ts'). No puede entrar en .git."),
+};
+
+export const repoStatusShape = {
+  project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+  repo: texto("repo")
+    .regex(ID_REPO, "`repo` es el id de un repo: minúsculas, números y guiones (ej. 'api').")
+    .nullish()
+    .describe(`${REPO} Si lo omites, se devuelven los repos de la tarea activa.`),
+};
+
+// Salida de repo_status: el estado de cada repo, campo por campo (EstadoDeRepo de repos.ts).
+export const repoStatusSalidaShape = {
+  proyecto: z.string(),
+  repos: z.array(
+    z.object({
+      id: z.string(),
+      ruta: z.string().nullable(),
+      existe: z.boolean(),
+      esGit: z.boolean(),
+      rama: z.string().nullable(),
+      separado: z.boolean(),
+      head: z.string().nullable(),
+      adelante: z.number().int().nullable(),
+      atras: z.number().int().nullable(),
+      limpio: z.boolean().nullable(),
+      cambios: z.number().int(),
+      sinSeguimiento: z.number().int(),
+      error: z.string().nullable(),
+    })
+  ),
+};
+
 // ─── Salida de get_orchestrator_status ──────────────────────────────────────
 // El objeto Diagnostico de diagnostico.ts, campo por campo. Con un outputSchema el cliente recibe
 // además `structuredContent`, y el SDK comprueba antes de enviarlo que cuadra con este shape:

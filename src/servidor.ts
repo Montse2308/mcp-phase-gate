@@ -33,9 +33,11 @@ import {
   validarSegmento,
 } from "./paths.js";
 import type { ArgumentosDeDocumento } from "./paths.js";
-import { contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerfano } from "./capas.js";
+import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerfano, reposDeLaTarea } from "./capas.js";
 import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
+import type { RepoResuelto } from "./manifiesto.js";
+import { columnaDeConfiguracion, estadoDeRepo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
 import { errorSinProyecto, iniciarRoots, lineaDeDeduccion, proyectoPorRaices } from "./roots.js";
@@ -48,6 +50,9 @@ import {
   listTasksShape,
   readCentralDocShape,
   readCrossRepoShape,
+  readRepoFileShape,
+  repoStatusSalidaShape,
+  repoStatusShape,
   sinNulos,
   startTaskShape,
   switchTaskShape,
@@ -357,7 +362,8 @@ function registrarTools(mcp: McpServer): void {
 
       // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su
       // lugar sería el fallo silencioso que el manifiesto evita.
-      const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea);
+      const columnas = carpetaProyecto ? await columnasDeGit(carpetaProyecto, carpetaTarea) : new Map<string, string>();
+      const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea, { estadoDeRepo: (repo) => columnas.get(repo.id) ?? null });
       const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map(notaDeHuerfano);
       for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
 
@@ -654,7 +660,8 @@ function registrarTools(mcp: McpServer): void {
     {
       title: "Leer archivo de repositorio",
       description:
-        "Lee archivos de otros repositorios locales, dentro de la carpeta configurada en PHASE_GATE_REPOS_PATH.",
+        "Lee un archivo de cualquier carpeta dentro de PHASE_GATE_REPOS_PATH. Si el proyecto declara repos en " +
+        "phase-gate.json, usa read_repo_file.",
       inputSchema: readCrossRepoShape,
       annotations: anotaciones("Leer archivo de repositorio", true, false, true),
     },
@@ -663,4 +670,86 @@ function registrarTools(mcp: McpServer): void {
       return responder(leerTextoAcotado(resolveRepoPath(args.repo_name, args.file_path)));
     })
   );
+
+  mcp.registerTool(
+    "read_repo_file",
+    {
+      title: "Leer archivo de un repo del proyecto",
+      description:
+        "Lee un archivo de uno de los repos que declara el phase-gate.json del proyecto, por su id, esté donde esté " +
+        "en este equipo. No lee nada de .git.",
+      inputSchema: readRepoFileShape,
+      annotations: anotaciones("Leer archivo de un repo del proyecto", true, false, true),
+    },
+    sincronizandoTras(async (entrada) => {
+      const args = sinNulos(entrada);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project);
+      const resultado = responder(leerArchivoDeRepo(requireProjectFolder(nombre), args.repo, args.path));
+      if (deducido) resultado.content.push({ type: "text", text: deducido });
+      return resultado;
+    })
+  );
+
+  mcp.registerTool(
+    "repo_status",
+    {
+      title: "Estado de git de los repos",
+      description:
+        "Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo del proyecto o de todos los " +
+        "de la tarea activa. Solo lee: no toma locks ni ejecuta hooks.",
+      inputSchema: repoStatusShape,
+      outputSchema: repoStatusSalidaShape,
+      annotations: anotaciones("Estado de git de los repos", true, false, true),
+    },
+    sincronizandoTras(async (entrada) => {
+      const args = sinNulos(entrada);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project);
+      const carpetaProyecto = requireProjectFolder(nombre);
+
+      let repos: RepoResuelto[];
+      let titulo: string;
+      if (args.repo) {
+        repos = [resolverRepo(carpetaProyecto, args.repo)];
+        titulo = `Repo \`${args.repo}\` de ${carpetaProyecto}:`;
+      } else {
+        const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
+        repos = reposDeLaTarea(configuracionDe(carpetaProyecto, activa?.estado.folderPath ?? null));
+        if (repos.length === 0) {
+          throw new Error(`El proyecto ${carpetaProyecto} no declara repos en su phase-gate.json.`);
+        }
+        titulo = activa ? `Repos de la tarea «${activa.estado.taskName}» de ${carpetaProyecto}:` : `Repos de ${carpetaProyecto}:`;
+      }
+
+      const estados = await Promise.all(repos.map((repo) => estadoDeRepo(repo)));
+      const texto = [titulo, ...estados.map((estado) => `- ${lineaDeEstado(estado)}`), ...(deducido ? ["", deducido] : [])].join("\n");
+      return { content: [{ type: "text", text: texto }], structuredContent: { proyecto: carpetaProyecto, repos: estados } };
+    })
+  );
+}
+
+// El estado de git de los repos de la tarea, para el bloque CONFIGURACIÓN DEL PROYECTO. Si tarda más de
+// 3 s o falla, la columna se omite y el prompt se entrega igual: es una ayuda, no una condición.
+export const ESPERA_DE_ESTADO_MS = 3000;
+
+async function columnasDeGit(carpetaProyecto: string, carpetaTarea: string | null): Promise<Map<string, string>> {
+  let repos: RepoResuelto[];
+  try {
+    repos = reposDeLaTarea(configuracionDe(carpetaProyecto, carpetaTarea));
+  } catch {
+    return new Map(); // el error de configuración lo da ensamblarFase
+  }
+  if (repos.length === 0) return new Map();
+
+  let temporizador: NodeJS.Timeout | undefined;
+  const plazo = new Promise<null>((resolver) => {
+    temporizador = setTimeout(() => resolver(null), ESPERA_DE_ESTADO_MS);
+    temporizador.unref();
+  });
+  const todas = Promise.all(repos.map(async (repo) => [repo.id, columnaDeConfiguracion(await estadoDeRepo(repo))] as const));
+  try {
+    const resultado = await Promise.race([todas, plazo]);
+    return new Map((resultado ?? []).flatMap(([id, columna]) => (columna ? [[id, columna] as [string, string]] : [])));
+  } finally {
+    clearTimeout(temporizador);
+  }
 }

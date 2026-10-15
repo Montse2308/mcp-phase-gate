@@ -222,6 +222,7 @@ export function bloqueDeConfiguracion(
     lineas.push(`- Comandos de verificación del proyecto: ${m.reglas.verificacion.map((c) => `\`${c}\``).join(", ")}`);
   }
   if (m?.fase5.prPorRepo) lineas.push("- Una descripción de PR por repositorio (fase5.prPorRepo).");
+  if (repos.length) lineas.push("", "Usa `read_repo_file` y `repo_status` con estos ids.");
 
   return lineas.join("\n");
 }

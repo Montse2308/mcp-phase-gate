@@ -12,6 +12,56 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Git se consulta por una sola puerta, de solo lectura y sin efectos
+
+**Decisión.** Toda llamada a git pasa por `git(dir, args)` de `src/git.ts`: `execFile` (sin
+shell), con `-c core.fsmonitor=false` delante de todo, `GIT_OPTIONAL_LOCKS=0`,
+`GIT_TERMINAL_PROMPT=0` y `LC_ALL=C`, un plazo de 10 s, salida acotada a 1 MB y `windowsHide`.
+Los argumentos son constantes del código: ningún texto que venga del modelo llega a la línea de
+comandos. Los errores se dicen para una persona: git no instalado, "no es un repositorio",
+"dubious ownership" (con el `git config --global --add safe.directory …` exacto) o el plazo
+vencido.
+
+Sobre ella, dos tools nuevas, de solo lectura e idempotentes:
+
+- **`read_repo_file(project?, repo, path)`** lee un archivo de un repo del proyecto por su id,
+  esté donde esté en este equipo (`machine.json` o `<PHASE_GATE_REPOS_PATH>/<dir>`). Contención
+  con la ruta real, cada segmento portable, y **nada de `.git`**: se rechaza todo segmento que sea
+  `.git` o empiece por `.git`, sin distinguir mayúsculas, y la misma regla se aplica a la ruta ya
+  resuelta, para que un enlace interno (o un nombre corto 8.3 como `GIT~1`) no lleve a
+  `.git/config`. Lectura acotada a 1 MB de texto.
+- **`repo_status(project?, repo?)`** devuelve, de un repo o de los de la tarea activa, la rama (o
+  si está separado), el commit, cuántos van adelante y atrás de su upstream, y si el árbol está
+  limpio, con cuántos cambios y cuántos sin seguimiento. Sale de `git status --porcelain=v2
+  --branch`, un formato estable para máquinas, y va también como `structuredContent` con su
+  `outputSchema`.
+
+El bloque CONFIGURACIÓN DEL PROYECTO añade a cada repo su estado (`· git · rama \`feat/x\` · árbol
+limpio`). Si tarda más de 3 s o falla, esa columna se omite y el prompt se entrega igual.
+`read_cross_repo` se conserva tal cual; su descripción remite a `read_repo_file` cuando el proyecto
+declara repos.
+
+**Por qué una puerta y esas banderas.** Leer también tiene efectos. `git status` puede reescribir el
+índice y tomar `index.lock`, y estorbar al commit que el agente esté haciendo en ese momento. Y si el
+repo configura `core.fsmonitor`, git **ejecuta** ese comando: un repo clonado de cualquier sitio
+podría traerlo. Se comprobó en este equipo (git 2.51 para Windows): una trampa en `core.fsmonitor`
+se dispara con un `git status` normal y no con la puerta; el test lo repite con su control positivo.
+`LC_ALL=C` hace que "not a git repository" se reconozca sin depender del idioma del equipo.
+
+**Sigue sin escribir en git** (principio 3 del plan): los commits los hace el agente con su terminal.
+Esta puerta es la única forma en que el servidor toca git, y solo lee.
+
+**Una excepción a la regla de `.git`: `.github`.** No puede resolver a `.git` (es otro nombre, y la
+ruta resuelta se comprueba igual) y guarda los workflows de CI, que una revisión de varios repos
+necesita leer. Consecuencia aceptada: `.gitignore`, `.gitattributes` y `.gitmodules` no se leen con
+esta tool (`.gitmodules` puede llevar una URL con credenciales).
+
+**Qué se descartó.** Exponer `git log` o `git diff` como tools: la Fase 5 los usa desde la terminal
+del agente, que ya los tiene; repetirlos aquí sería una superficie más que defender sin un caso que
+la pida.
+
+---
+
 ## 2026-10-15 — El servidor deduce el proyecto de las raíces del cliente
 
 **Decisión.** El servidor pide al cliente sus raíces (MCP Roots: las carpetas que tiene abiertas)
