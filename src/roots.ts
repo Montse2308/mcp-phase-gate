@@ -12,6 +12,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
 
@@ -21,7 +22,7 @@ import { leerMaquina, manifiestoDe, resolverRepos } from "./manifiesto.js";
 import { discoverProjects, estaDentroReal, rutaReal } from "./paths.js";
 
 export type ResolucionProyecto =
-  | { tipo: "unico"; carpetaProyecto: string; motivo: string }
+  | { tipo: "unico"; carpetaProyecto: string; motivo: string; fuerza: "fuerte" | "debil" }
   | { tipo: "ambiguo"; candidatos: string[] }
   | { tipo: "ninguno" };
 
@@ -49,11 +50,16 @@ export function rutaDeRaiz(uri: string): string {
 export function iniciarRoots(mcp: McpServer): void {
   const estado = estadoDe(mcp);
 
+  // Solo cuenta la respuesta de la última petición: una anterior que llega tarde, después de un
+  // roots/list_changed, traería raíces viejas (hallazgo 4 de la auditoría de la Etapa 3).
+  let ultima = 0;
   const pedir = (): void => {
     if (!mcp.server.getClientCapabilities()?.roots) return;
+    const esta = ++ultima;
     const peticion = mcp.server
       .listRoots(undefined, { timeout: ESPERA_DE_RAICES_MS })
       .then(({ roots }) => {
+        if (esta !== ultima) return;
         estado.raices = roots.flatMap((raiz) => {
           try {
             return [rutaDeRaiz(raiz.uri)];
@@ -65,7 +71,7 @@ export function iniciarRoots(mcp: McpServer): void {
       })
       .catch((error: unknown) => {
         log("warning", `No se pudieron pedir las raíces al cliente: ${error instanceof Error ? error.message : String(error)}`);
-        estado.raices = [];
+        if (esta === ultima) estado.raices = [];
       });
     estado.pendiente = peticion;
   };
@@ -87,6 +93,19 @@ export async function raicesActuales(mcp: McpServer): Promise<string[]> {
 }
 
 type Coincidencia = { proyecto: string; fuerza: "fuerte" | "debil"; motivo: string };
+
+// La raíz de un disco o la carpeta del usuario "contienen" los repos de cualquier proyecto: abrirlas no
+// dice nada de en qué proyecto se trabaja, así que no dan coincidencia débil (hallazgo 3 de la
+// auditoría de la Etapa 3).
+export function esDemasiadoAmplia(raiz: string): boolean {
+  const resuelta = path.resolve(raiz);
+  if (path.dirname(resuelta) === resuelta) return true;
+  try {
+    return path.relative(rutaReal(os.homedir()), resuelta) === "";
+  } catch {
+    return false;
+  }
+}
 
 function coincidencias(raices: string[]): Coincidencia[] {
   if (raices.length === 0) return [];
@@ -116,7 +135,7 @@ function coincidencias(raices: string[]): Coincidencia[] {
       for (const repo of repos) {
         if (dentro(repo.ruta, raiz)) {
           encontradas.push({ proyecto, fuerza: "fuerte", motivo: `la carpeta abierta \`${raiz}\` es el repo \`${repo.id}\` de ${proyecto}` });
-        } else if (dentro(raiz, repo.ruta)) {
+        } else if (!esDemasiadoAmplia(raiz) && dentro(raiz, repo.ruta)) {
           encontradas.push({ proyecto, fuerza: "debil", motivo: `la carpeta abierta \`${raiz}\` contiene el repo \`${repo.id}\` de ${proyecto}` });
         }
       }
@@ -151,9 +170,9 @@ export function resolverPorRaices(raices: string[]): ResolucionProyecto {
   const motivoDe = (proyecto: string, fuerza: Coincidencia["fuerza"]): string =>
     encontradas.find((c) => c.proyecto === proyecto && c.fuerza === fuerza)!.motivo;
 
-  if (fuertes.length === 1) return { tipo: "unico", carpetaProyecto: fuertes[0]!, motivo: motivoDe(fuertes[0]!, "fuerte") };
+  if (fuertes.length === 1) return { tipo: "unico", carpetaProyecto: fuertes[0]!, motivo: motivoDe(fuertes[0]!, "fuerte"), fuerza: "fuerte" };
   if (fuertes.length > 1) return { tipo: "ambiguo", candidatos: fuertes };
-  if (debiles.length === 1) return { tipo: "unico", carpetaProyecto: debiles[0]!, motivo: motivoDe(debiles[0]!, "debil") };
+  if (debiles.length === 1) return { tipo: "unico", carpetaProyecto: debiles[0]!, motivo: motivoDe(debiles[0]!, "debil"), fuerza: "debil" };
   // Varias débiles (una carpeta que contiene repos de varios proyectos) no apuntan a ninguno.
   return { tipo: "ninguno" };
 }

@@ -82,18 +82,31 @@ function mensajeDe(error: unknown): string {
 // El proyecto de una llamada que lo necesita: el que se indica o, si no, el que deducen las raíces
 // del cliente. Si no se puede deducir, la llamada falla pidiéndolo (con los candidatos si hay varios).
 // `deducido` es la línea que la respuesta añade para que se vea de dónde salió.
-async function proyectoDeLaLlamada(mcp: McpServer, project: string | undefined): Promise<{ nombre: string; deducido: string | null }> {
+//
+// Para escribir hace falta una coincidencia fuerte (la carpeta abierta ES un repo del proyecto o está en
+// su carpeta de la Documentación). Una débil (la carpeta abierta solo CONTIENE un repo suyo) basta para
+// leer, pero no para escribir en un proyecto que la IA no nombró (hallazgo 3 de la auditoría de la Etapa 3).
+async function proyectoDeLaLlamada(
+  mcp: McpServer,
+  project: string | undefined,
+  uso: "lee" | "escribe"
+): Promise<{ nombre: string; deducido: string | null }> {
   if (project) return { nombre: project, deducido: null };
   const porRaices = await proyectoPorRaices(mcp);
   if (porRaices.tipo !== "unico") throw errorSinProyecto(porRaices);
+  if (uso === "escribe" && porRaices.fuerza === "debil") {
+    throw new Error(
+      `La carpeta abierta solo contiene un repo de ${porRaices.carpetaProyecto} (${porRaices.motivo}): para escribir, indica \`project\`.`
+    );
+  }
   return { nombre: porRaices.carpetaProyecto, deducido: lineaDeDeduccion(porRaices) };
 }
 
 // Para read_central_doc y write_central_doc: solo hace falta proyecto cuando se usa la forma
 // recomendada (task_name + file_name) sin project; con file_path, no.
-async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args: T): Promise<{ args: T; deducido: string | null }> {
+async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args: T, uso: "lee" | "escribe"): Promise<{ args: T; deducido: string | null }> {
   if (args.project || args.file_path || !args.task_name || !args.file_name) return { args, deducido: null };
-  const { nombre, deducido } = await proyectoDeLaLlamada(mcp, undefined);
+  const { nombre, deducido } = await proyectoDeLaLlamada(mcp, undefined, uso);
   return { args: { ...args, project: nombre }, deducido };
 }
 
@@ -232,7 +245,7 @@ function registrarTools(mcp: McpServer): void {
       if (!args.project && args.crear_proyecto === true) {
         throw new Error("Para estrenar un proyecto, indica su nombre en `project`.");
       }
-      const { nombre: proj, deducido } = await proyectoDeLaLlamada(mcp, args.project); // el schema ya le quitó los espacios
+      const { nombre: proj, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe"); // el schema ya le quitó los espacios
 
       // Estrenar proyecto tiene que ser deliberado: sin esta puerta, un nombre mal escrito
       // creaba una carpeta suelta en la Documentación y nadie se enteraba hasta buscarla.
@@ -475,7 +488,7 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
-      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe");
       const carpetaProyecto = requireProjectFolder(nombre);
       const phases = fasesDe(carpetaProyecto);
       const taskName = args.task_name;
@@ -514,7 +527,7 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const docsBase = requireBasePath(DOCS);
-      const { args, deducido } = await conProyecto(mcp, sinNulos(entrada));
+      const { args, deducido } = await conProyecto(mcp, sinNulos(entrada), "lee");
       const fullPath = resolveDocPath(args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
@@ -544,7 +557,7 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada, extra) => {
       const docsBase = requireBasePath(DOCS);
-      const { args, deducido } = await conProyecto(mcp, sinNulos(entrada));
+      const { args, deducido } = await conProyecto(mcp, sinNulos(entrada), "escribe");
       const fullPath = resolveDocPath(args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
@@ -685,7 +698,7 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
-      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "lee");
       const resultado = responder(leerArchivoDeRepo(requireProjectFolder(nombre), args.repo, args.path));
       if (deducido) resultado.content.push({ type: "text", text: deducido });
       return resultado;
@@ -705,7 +718,7 @@ function registrarTools(mcp: McpServer): void {
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
-      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "lee");
       const carpetaProyecto = requireProjectFolder(nombre);
 
       let repos: RepoResuelto[];

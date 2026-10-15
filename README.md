@@ -558,7 +558,7 @@ Without a manifest, the preset line says `(por defecto; este proyecto no tiene p
 
 ### The project comes from the open folder
 
-If your client announces its open folders (MCP Roots), the server matches them against your projects: if an open folder **is one of the project's repos** (per its manifest and `machine.json`) or sits **inside its documentation folder**, that's the project. If you opened a folder that contains a single repo of one project, that works too. `project` then becomes optional, and the response says so: *"Proyecto deducido de la carpeta abierta: PROJECT-A (…)"*. If it matches several, the tool asks for `project` and tells you which ones. Without Roots, everything works as before.
+If your client announces its open folders (MCP Roots), the server matches them against your projects: if an open folder **is one of the project's repos** (per its manifest and `machine.json`) or sits **inside its documentation folder**, that's the project. If you opened a folder that contains a single repo of one project, that works too, but only for reading: to write (`start_task`, `switch_task`, `write_central_doc`) you have to name the project, and a drive root or your user folder don't count. `project` then becomes optional, and the response says so: *"Proyecto deducido de la carpeta abierta: PROJECT-A (…)"*. If it matches several, the tool asks for `project` and tells you which ones. Without Roots, everything works as before.
 
 ### Several repositories: `read_repo_file` and `repo_status`
 

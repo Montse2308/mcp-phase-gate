@@ -176,6 +176,15 @@ proyecto, no en qué proyecto está esta ventana. Para la compuerta, equivocarse
 más; para elegir el preset, las reglas o el proyecto donde escribir, cuesta instrucciones o
 archivos equivocados. Las raíces sí dicen dónde está la ventana.
 
+**Una coincidencia débil no basta para escribir** (añadido tras la auditoría de la etapa). Con la raíz
+de un disco o la carpeta del usuario abiertas, cualquier proyecto con repos "estaba dentro", y si solo
+uno los declaraba, `write_central_doc` escribía en él sin que la IA lo nombrara. Ahora esas dos raíces
+no dan coincidencia débil, y una débil sirve para leer (`get_phase_prompt`, `read_central_doc`,
+`read_repo_file`, `repo_status`, `/fN`) pero no para escribir: `start_task`, `switch_task` y
+`write_central_doc` piden `project` si la carpeta abierta solo contiene un repo del proyecto. Además,
+solo cuenta la respuesta de la última petición de raíces: una anterior que llegaba tarde, tras un
+`roots/list_changed`, volvía a poner las raíces viejas.
+
 **Las raíces se esperan.** Una tool llamada justo después del initialize espera a que llegue la
 respuesta de `roots/list` (como mucho 5 s): sin eso, la primera llamada de cada sesión no vería el
 proyecto. Si el cliente no responde, todo sigue como sin raíces.

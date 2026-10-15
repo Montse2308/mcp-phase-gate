@@ -4,6 +4,7 @@
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -12,7 +13,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { resolverPorRaices, rutaDeRaiz } from "../src/roots.js";
+import { esDemasiadoAmplia, resolverPorRaices, rutaDeRaiz } from "../src/roots.js";
 import { conectar, textoDe } from "./cliente.js";
 import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
@@ -95,6 +96,65 @@ describe("resolverPorRaices", () => {
 
     const r = resolverPorRaices([e.repos, e.web]);
     assert.equal(r.tipo === "unico" && r.carpetaProyecto, "PROYECTO-B");
+  });
+});
+
+describe("raíces demasiado amplias (hallazgo 3 de la auditoría de la Etapa 3)", () => {
+  it("la raíz de un disco y la carpeta del usuario no dan coincidencia débil", () => {
+    const e = escenario();
+    const raizDelDisco = path.parse(e.repos).root;
+
+    assert.equal(esDemasiadoAmplia(raizDelDisco), true);
+    assert.equal(esDemasiadoAmplia(os.homedir()), true);
+    assert.equal(esDemasiadoAmplia(e.grupo), false);
+    assert.deepEqual(resolverPorRaices([raizDelDisco]), { tipo: "ninguno" });
+  });
+
+  it("una coincidencia débil sirve para leer, pero no para escribir sin project", async () => {
+    const e = escenario();
+    const { cliente, cerrar } = await clienteConRaices({ actuales: [e.grupo] });
+    try {
+      const destino = { task_name: "tarea", file_name: "01 - Análisis Técnico.md" };
+      const escrito = await cliente.callTool({ name: "write_central_doc", arguments: { ...destino, content: "x" } });
+      assert.equal(escrito.isError, true);
+      assert.match(textoDe(escrito), /solo contiene un repo de PROYECTO-A .*para escribir, indica `project`/);
+
+      fs.writeFileSync(path.join(e.docs, "PROYECTO-A", "Proyectos", "tarea", destino.file_name), "análisis", "utf-8");
+      const leido = await cliente.callTool({ name: "read_central_doc", arguments: destino });
+      assert.equal(textoDe(leido), "análisis");
+
+      const creada = await cliente.callTool({ name: "start_task", arguments: { task_name: "nueva", initial_context: "x" } });
+      assert.equal(creada.isError, true);
+    } finally {
+      await cerrar();
+    }
+  });
+});
+
+describe("roots/list_changed fuera de orden (hallazgo 4)", () => {
+  it("una respuesta vieja que llega tarde no pisa a la nueva", async () => {
+    const e = escenario();
+    let llamada = 0;
+    const { cliente, cerrar } = await conectar({ roots: { listChanged: true } }, (c: Client) => {
+      c.setRequestHandler(ListRootsRequestSchema, async () => {
+        llamada++;
+        if (llamada === 2) {
+          await new Promise((resolver) => setTimeout(resolver, 400)); // la vieja, lenta
+          return { roots: [{ uri: uri(e.api) }] };
+        }
+        return { roots: [{ uri: uri(llamada === 1 ? e.api : e.web) }] };
+      });
+    });
+    try {
+      assert.match(await promptSinProyecto(cliente), /deducido de la carpeta abierta: PROYECTO-A/);
+      await cliente.sendRootsListChanged(); // 2.ª petición: lenta, con las raíces viejas
+      await new Promise((resolver) => setTimeout(resolver, 50));
+      await cliente.sendRootsListChanged(); // 3.ª: rápida, con las nuevas
+      await new Promise((resolver) => setTimeout(resolver, 700));
+      assert.match(await promptSinProyecto(cliente), /deducido de la carpeta abierta: PROYECTO-B/);
+    } finally {
+      await cerrar();
+    }
   });
 });
 

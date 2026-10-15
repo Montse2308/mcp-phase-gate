@@ -578,7 +578,7 @@ Sin manifiesto, la línea del preset dice `(por defecto; este proyecto no tiene 
 
 ### El proyecto sale de la carpeta abierta
 
-Si tu cliente anuncia sus carpetas abiertas (MCP Roots), el servidor las cruza con tus proyectos: si una carpeta abierta **es un repo del proyecto** (según su manifiesto y `machine.json`) o está **dentro de su carpeta de la Documentación**, ese es el proyecto. Si abriste una carpeta que contiene un solo repo de un proyecto, también. Entonces `project` es opcional y la respuesta lo dice: *"Proyecto deducido de la carpeta abierta: PROYECTO-A (…)"*. Si coincide con varios, la tool te pide `project` y te dice cuáles. Sin Roots, todo funciona como antes.
+Si tu cliente anuncia sus carpetas abiertas (MCP Roots), el servidor las cruza con tus proyectos: si una carpeta abierta **es un repo del proyecto** (según su manifiesto y `machine.json`) o está **dentro de su carpeta de la Documentación**, ese es el proyecto. Si abriste una carpeta que contiene un solo repo de un proyecto, también, pero solo para leer: para escribir (`start_task`, `switch_task`, `write_central_doc`) hay que nombrar el proyecto, y la raíz de un disco o tu carpeta de usuario no cuentan. Entonces `project` es opcional y la respuesta lo dice: *"Proyecto deducido de la carpeta abierta: PROYECTO-A (…)"*. Si coincide con varios, la tool te pide `project` y te dice cuáles. Sin Roots, todo funciona como antes.
 
 ### Varios repositorios: `read_repo_file` y `repo_status`
 
