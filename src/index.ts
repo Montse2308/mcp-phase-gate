@@ -15,7 +15,17 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 
-import { DOCS, REPOS, SERVER_NAME, SERVER_VERSION, requireBasePath, stateFile } from "./config.js";
+import {
+  DOCS,
+  NOMBRES_LOGICOS,
+  REPOS,
+  SERVER_NAME,
+  SERVER_VERSION,
+  errorDeEnv,
+  leerVariable,
+  requireBasePath,
+  stateFile,
+} from "./config.js";
 import {
   describeProjects,
   discoverProjects,
@@ -454,11 +464,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 function reportarRutas(): void {
   for (const requerida of [DOCS, REPOS]) {
     try {
-      console.error(`[orquestador] ${requerida.variable} = ${requireBasePath(requerida)}`);
+      const ruta = requireBasePath(requerida);
+      console.error(`[orquestador] ${leerVariable(requerida.logica).usada} = ${ruta}`);
     } catch (error: any) {
       console.error(`[orquestador] SIN CONFIGURAR: ${error.message}`);
     }
   }
+
+  // Las dos variables de un mismo nombre lógico, con valores distintos: se avisa una vez.
+  for (const logica of NOMBRES_LOGICOS) {
+    const { discrepancia } = leerVariable(logica);
+    if (discrepancia) console.error(`[orquestador] ${discrepancia}`);
+  }
+
+  const delEnv = errorDeEnv();
+  if (delEnv) console.error(`[orquestador] ${delEnv}`);
 }
 
 // Un servidor MCP habla JSON-RPC por stdin y no imprime nada por stdout. Ejecutado a mano en

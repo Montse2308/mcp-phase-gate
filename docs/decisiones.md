@@ -12,6 +12,62 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — El `.env` se lee con un lector propio sobre `util.parseEnv`, sin `dotenv`
+
+**Decisión.** `src/config.ts` lee el `.env` de la raíz del paquete con un lector propio:
+lee los bytes, rechaza el UTF-16 (BOM `FF FE` o `FE FF`, o un byte NUL en los primeros 512),
+decodifica como UTF-8, quita un BOM inicial, parsea con `util.parseEnv` de Node y asigna solo
+las claves que no estén ya en el entorno. Un `.env` en UTF-16 **no se carga** y deja un error
+guardado que aparece en el mensaje de la variable que falta y en el log al arrancar. `dotenv`
+sale de las dependencias: quedan el SDK y `zod`, que es su *peer dependency*.
+
+Se exportan `cargarEnv(archivo?)`, `reiniciarEnv()`, `clavesDeEnv()` y `errorDeEnv()`: los
+tests cargan archivos temporales, y el diagnóstico de la Etapa 2 dice de dónde salió cada
+variable. `cargarEnv` se llama una vez al importar el módulo; volver a llamarla sustituye lo
+que cargó la vez anterior.
+
+**Por qué no `process.loadEnvFile`.** Era el candidato natural en Node 22, y se comprobó antes de
+elegirlo: no quita el BOM de UTF-8. Con un `.env` guardado con BOM la primera clave llega como
+`\uFEFFORQUESTADOR_DOCS_PATH` y la variable "desaparece" sin ningún error. `dotenv` sí lo quita,
+pero tampoco detecta el UTF-16, que es lo que sale de PowerShell con `>` y el caso que ya mordió
+una vez: los acentos llegaban rotos y el mensaje hablaba de una carpeta que no existe.
+
+**Lo que se conserva.** El bloque `env` del cliente sigue ganando al `.env`. `util.parseEnv`
+conserva las barras invertidas de una ruta de Windows sin comillas y acepta comentarios `#` y
+el prefijo `export`, igual que `dotenv`.
+
+**Lo que no se resuelve.** Un `.env` guardado en ANSI (Windows-1252) con acentos se decodifica
+mal sin ninguna señal fiable para detectarlo. El mensaje de una ruta inexistente sigue
+sugiriendo revisar que el archivo esté en UTF-8.
+
+---
+
+## 2026-10-15 — Las variables se llaman `PHASE_GATE_*` y `ORQUESTADOR_*` queda como alias
+
+**Decisión.** Cada variable tiene un nombre lógico (`DOCS_PATH`, `REPOS_PATH`, `TASKS_SUBDIR`,
+`PROMPTS_PATH`, `STATE_PATH`) y dos nombres de entorno: `PHASE_GATE_*`, el principal, y
+`ORQUESTADOR_*`, que sigue funcionando como alias. Si las dos existen y difieren (las rutas se
+comparan resueltas), gana `PHASE_GATE_*`, y `leerVariable` devuelve el texto de la discrepancia
+que el servidor deja en el log al arrancar. Llega además `PHASE_GATE_ELICITATION`, sin alias.
+Los mensajes de error nombran las dos: "Falta `PHASE_GATE_DOCS_PATH` (o su alias
+`ORQUESTADOR_DOCS_PATH`)"; y cuando la ruta está mal, nombran la que se usó.
+
+"Definida" es que exista en el entorno, aunque esté vacía: `TASKS_SUBDIR` vacía significa que
+las tareas cuelgan del proyecto, y eso se tiene que poder decir con el nombre nuevo.
+
+De paso, `stateDir` recorta y resuelve su variable como las demás rutas; antes se usaba tal
+cual, y un espacio al final del valor creaba otra carpeta de estado.
+
+**Reemplaza** el punto "Qué NO se renombró" de la entrada del 2026-08-10 "Un solo nombre". Aquel
+punto decía que alinear el prefijo rompía configuraciones a cambio de nada visible. Con el alias
+no se rompe ninguna, y lo visible llega ahora: el diagnóstico de la Etapa 2 enseña las
+variables por su nombre, y `ORQUESTADOR_*` era el último resto del nombre viejo.
+
+**Qué se descartó.** Retirar el alias en una versión mayor. Mantenerlo cuesta una línea por
+variable, y quitarlo rompería configuraciones que nadie tiene por qué tocar.
+
+---
+
 ## 2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes
 
 **Decisión.** La entrada de la Fase 5 son los commits que registran los recibos de la Fase 4
