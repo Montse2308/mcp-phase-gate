@@ -70,7 +70,7 @@ DOCUMENTACIÓN/
         └── <nombre_de_la_tarea>/
 ```
 
-`PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `ORQUESTADOR_TASKS_SUBDIR` más abajo.
+`PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `PHASE_GATE_TASKS_SUBDIR` más abajo.
 
 **Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez y cierra cada lote con un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) y un commit. Con un solo lote, el recibo es directamente `04 - Ejecución.md` y no hay subcarpeta, salvo que ese lote falle o se descarte: entonces su recibo va a `04 - Ejecución/` y la fase no se da por cerrada. Con varios, los recibos van en `04 - Ejecución/` y `04 - Ejecución.md` es el índice que se escribe al cerrar el último: hasta entonces la fase no aparece como terminada. Al pedir la Fase 4 o la 5, el servidor añade al prompt la lista de recibos que ya existen, para retomar en otro chat sin adivinar sus nombres.
 
@@ -99,7 +99,7 @@ El código es idéntico en todos lados; lo único que cambia de un equipo a otro
 
 No hay nada que instalar: `npx` descarga el paquete la primera vez y lo cachea. Todo se configura en el archivo de tu cliente MCP.
 
-**La clave que le pongas es la que identifica al servidor y la que prefija sus tools**, así que puedes ponerle la que quieras. En los ejemplos va `mcp-phase-gate`, igual que el nombre del paquete y el que el servidor declara de sí mismo: el mismo nombre en los tres sitios, para que no haya que recordar cuál era cuál.
+**La clave que le pongas es la que identifica al servidor y la que prefija sus tools y sus comandos**, así que puedes ponerle la que quieras. En los ejemplos va `mcp-phase-gate`, igual que el nombre del paquete y el que el servidor declara de sí mismo. Si lo registras por primera vez, una clave corta como `pg` deja los comandos más cortos (`/pg:f1` en Claude Code). **Si ya lo tienes registrado, conserva tu clave**: cambiarla cambia el nombre de todas las tools y comandos, y tendrías que volver a conceder sus permisos.
 
 Recuerda que en JSON cada `\` va doble `\\`.
 
@@ -113,8 +113,8 @@ Recuerda que en JSON cada `\` va doble `\\`.
       "command": "npx",
       "args": ["-y", "mcp-phase-gate"],
       "env": {
-        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
-        "ORQUESTADOR_REPOS_PATH": "C:\\proyectos"
+        "PHASE_GATE_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
+        "PHASE_GATE_REPOS_PATH": "C:\\proyectos"
       }
     }
   }
@@ -135,8 +135,8 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
       "command": "npx",
       "args": ["-y", "mcp-phase-gate"],
       "env": {
-        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
-        "ORQUESTADOR_REPOS_PATH": "C:\\proyectos"
+        "PHASE_GATE_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
+        "PHASE_GATE_REPOS_PATH": "C:\\proyectos"
       }
     }
   }
@@ -148,19 +148,21 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
 <summary><b>Claude Code</b> — de una sola línea</summary>
 
 ```bash
-claude mcp add mcp-phase-gate --env ORQUESTADOR_DOCS_PATH="C:\Users\TU_USUARIO\Documentos\DOCUMENTACIÓN" --env ORQUESTADOR_REPOS_PATH="C:\proyectos" -- npx -y mcp-phase-gate
+claude mcp add mcp-phase-gate --env PHASE_GATE_DOCS_PATH="C:\Users\TU_USUARIO\Documentos\DOCUMENTACIÓN" --env PHASE_GATE_REPOS_PATH="C:\proyectos" -- npx -y mcp-phase-gate
 ```
 
 O a mano, en un `.mcp.json` en la raíz del proyecto, con la misma forma que el de Cursor.
 </details>
 
-Ese `ORQUESTADOR_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. Sirve igual `G:\Mi unidad\Documentación`, `D:\Dropbox\Docs` o `C:\Docs` sin nube ninguna.
+Ese `PHASE_GATE_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. Sirve igual `G:\Mi unidad\Documentación`, `D:\Dropbox\Docs` o `C:\Docs` sin nube ninguna.
 
 > **Por este camino no hay archivo `.env`.** El paquete vive dentro de `node_modules`, donde no tiene sentido dejar tu configuración, así que las rutas van **obligatoriamente** en el bloque `"env"`. El `.env` solo existe en el camino de abajo.
 
 **Las dos variables son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
 
-> `npx mcp-phase-gate` escrito directamente en una terminal **parece que se cuelga**, y no está roto: es un servidor MCP esperando mensajes por stdin. Si lo que quieres es comprobar que está ahí, usa `npx mcp-phase-gate --help`.
+> **¿Ya lo usabas con `ORQUESTADOR_*`?** Esos nombres siguen funcionando como alias de `PHASE_GATE_*`; no tienes que tocar nada. Si defines los dos con valores distintos gana `PHASE_GATE_*`, y `doctor` y el log del servidor te avisan.
+
+> `npx mcp-phase-gate` escrito directamente en una terminal **parece que se cuelga**, y no está roto: es un servidor MCP esperando mensajes por stdin. Si lo que quieres es comprobar tu instalación, usa `npx mcp-phase-gate doctor` ([ver abajo](#-revisar-la-instalación-doctor)).
 
 ---
 
@@ -186,11 +188,11 @@ copy .env.example .env
 Averigua tu ruta real abriendo la carpeta en el explorador y copiando la ruta de la barra de direcciones. Aquí las barras invertidas van **simples**, sin comillas:
 
 ```ini
-ORQUESTADOR_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN
-ORQUESTADOR_REPOS_PATH=C:\proyectos
+PHASE_GATE_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN
+PHASE_GATE_REPOS_PATH=C:\proyectos
 ```
 
-> Guarda el `.env` en **UTF-8 sin BOM**. Si lo creas desde PowerShell con `>` sale en UTF-16, los acentos de `DOCUMENTACIÓN` llegan rotos y la ruta "no existe" aunque la veas bien.
+> Guarda el `.env` en **UTF-8** (con o sin BOM, da igual). Si lo creas desde PowerShell con `>` sale en UTF-16: el servidor lo detecta, no lo carga y te lo dice, tanto en el error de la variable que falta como en `doctor`.
 
 **3. Registra el servidor** igual que en el camino A, pero cambiando `command` y `args` por el `build/index.js` de tu clon, y sin bloque `"env"` (las rutas ya vienen del `.env`):
 
@@ -207,8 +209,20 @@ En **Claude Code**, un `.mcp.json` en la raíz de este repo puede usar ruta **re
 
 ### ✅ Verificar que funciona
 1. Reinicia el cliente, o desactiva y vuelve a activar el servidor en su panel de MCP.
-2. Debe aparecer activo con sus 8 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
-3. Pruébalo pidiendo en el chat: *"Usa la tool `get_active_task` del mcp-phase-gate"* — debe responder, aunque sea para decir que no hay tarea activa todavía.
+2. Debe aparecer activo con sus 9 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
+3. Pruébalo pidiendo en el chat: *"Usa la tool `get_orchestrator_status` del mcp-phase-gate"* — te devuelve la radiografía de la instalación: qué variables ve, qué prompts usa y qué proyectos encuentra.
+
+### 🔍 Revisar la instalación: `doctor`
+
+Desde una terminal, con las mismas variables que le das al cliente:
+
+```bash
+npx mcp-phase-gate doctor
+```
+
+Te dice qué versión corre y desde dónde (`npx`, global, una dependencia o un clon), qué valor tiene cada variable y de dónde salió (el entorno o el `.env`, y si usaste el nombre nuevo o el alias), qué archivo de prompt gana en cada fase, qué proyectos hay con su tarea activa, y una lista de hallazgos: una variable obligatoria que falta, un `.env` en UTF-16, un `global-rules.md` propio al que le faltan secciones que las fases citan, una fase sin documento… Sale con código `1` si hay algún error, así que sirve también en un script. `doctor --json` da lo mismo como JSON.
+
+Es la misma información que devuelve la tool `get_orchestrator_status` y el recurso `phase-gate://estado`; desde el chat, además, incluye qué cliente está conectado y qué capacidades anunció.
 
 ---
 
@@ -236,23 +250,23 @@ Puede que quieras documentaciones separadas que no se mezclen: una del trabajo y
 ```jsonc
 {
   "mcpServers": {
-    "orquestador-trabajo": {
+    "pg-trabajo": {
       "command": "npx",
       "args": ["-y", "mcp-phase-gate"],
       "env": {
-        "ORQUESTADOR_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
-        "ORQUESTADOR_REPOS_PATH": "C:\\proyectos",
-        "ORQUESTADOR_STATE_PATH": "C:\\Users\\TU_USUARIO\\.orquestador\\trabajo"
+        "PHASE_GATE_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
+        "PHASE_GATE_REPOS_PATH": "C:\\proyectos",
+        "PHASE_GATE_STATE_PATH": "C:\\Users\\TU_USUARIO\\.orquestador\\trabajo"
       }
     },
-    "orquestador-personal": {
+    "pg-personal": {
       "command": "npx",
       "args": ["-y", "mcp-phase-gate"],
       "env": {
-        "ORQUESTADOR_DOCS_PATH": "G:\\Mi unidad\\Documentación",
-        "ORQUESTADOR_REPOS_PATH": "D:\\dev",
-        "ORQUESTADOR_TASKS_SUBDIR": "",
-        "ORQUESTADOR_STATE_PATH": "C:\\Users\\TU_USUARIO\\.orquestador\\personal"
+        "PHASE_GATE_DOCS_PATH": "G:\\Mi unidad\\Documentación",
+        "PHASE_GATE_REPOS_PATH": "D:\\dev",
+        "PHASE_GATE_TASKS_SUBDIR": "",
+        "PHASE_GATE_STATE_PATH": "C:\\Users\\TU_USUARIO\\.orquestador\\personal"
       }
     }
   }
@@ -261,12 +275,12 @@ Puede que quieras documentaciones separadas que no se mezclen: una del trabajo y
 
 Es el mismo paquete en los dos: lo único que cambia son las rutas. Cada registro puede tener incluso su propia subcarpeta de tareas — arriba, la personal la deja vacía para que las tareas cuelguen directo del proyecto.
 
-> ⚠️ **`ORQUESTADOR_STATE_PATH` tiene que ser distinto en cada registro.** Si se comparte, los punteros de tarea activa se pisan **en silencio**: la clave del estado es el nombre del proyecto, así que dos documentaciones con un proyecto que se llame igual acaban compartiendo entrada y una le contesta a la otra. No da error; simplemente te responde la tarea equivocada.
+> ⚠️ **`PHASE_GATE_STATE_PATH` tiene que ser distinto en cada registro.** Si se comparte, los punteros de tarea activa se pisan **en silencio**: la clave del estado es el nombre del proyecto, así que dos documentaciones con un proyecto que se llame igual acaban compartiendo entrada y una le contesta a la otra. No da error; simplemente te responde la tarea equivocada.
 
 Dos cosas más que muerden y no son evidentes:
 
 - **Modo espejo, no streaming.** Google Drive en modo *streaming* y OneDrive con *Archivos a Petición* dejan los archivos como marcadores hasta que algo los abre. Este servidor vive de listar carpetas y comprobar si existen archivos, así que con marcadores se vuelve lento o falla cuando no hay red. Si puedes, ten la carpeta de Documentación **descargada localmente**.
-- **Los repos de código, fuera de la carpeta sincronizada.** La Documentación en la nube no da problema. El código sí: la sincronización compitiendo con git sobre `.git/` corrompe repositorios. Que `ORQUESTADOR_REPOS_PATH` apunte a un disco local.
+- **Los repos de código, fuera de la carpeta sincronizada.** La Documentación en la nube no da problema. El código sí: la sincronización compitiendo con git sobre `.git/` corrompe repositorios. Que `PHASE_GATE_REPOS_PATH` apunte a un disco local.
 
 ---
 
@@ -280,7 +294,7 @@ cambios, la causa está casi siempre aquí.
 | El servidor compilado | `build/` en tu clon | Está gitignoreado. **Después de cada `git pull` que traiga cambios en `src/`, corre `npm run build`** o el cliente seguirá ejecutando la versión anterior. |
 | Las rutas de este equipo | `.env` en la raíz ([camino B](#-camino-b--desde-el-código), paso 2) | Cambian el usuario del sistema y dónde tengas la carpeta de Documentación. |
 | El registro del MCP | La configuración de tu cliente ([camino A](#-camino-a--con-npx-recomendado), o el paso 3 del [camino B](#-camino-b--desde-el-código)) | En Cursor y VS Code contiene la ruta absoluta a `build/index.js`, que depende de dónde clonaste y apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos. Ver [`docs/decisiones.md`](docs/decisiones.md). La excepción es el `.mcp.json` de Claude Code, que va con ruta relativa. |
-| Los comandos `/f1`–`/f5` en **Cursor** | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` | Cursor solo los lee de la carpeta del usuario, así que se copian a mano en cada equipo. En **Claude Code** no aplica: están versionados en `.claude/commands/` y llegan con el `git pull`. |
+| Los comandos `/f1`–`/f5` como archivos, **solo si tu cliente no muestra bien los MCP Prompts** | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` en Cursor | Desde la 2.2.0 el servidor los ofrece como MCP Prompts y llegan solos con cada versión ([ver abajo](#los-comandos-de-fase)). La copia en archivos solo hace falta como respaldo; en **Claude Code** dentro de este repo ya está versionada en `.claude/commands/`. |
 
 ### Los comandos de fase
 
@@ -302,19 +316,32 @@ Lo que hace cada uno:
 Ningún comando nombra un archivo: el nombre lo declara la cabecera del prompt de cada fase
 y `get_phase_prompt` se lo entrega al modelo.
 
-`/f1` espera datos después del comando: project, task_name y el requerimiento completo.
-`/f5` acepta un rango de commits; si no le das ninguno, audita los que registran los recibos
-de la Fase 4, y solo si no hay recibos te pregunta. Los demás arrancan de `get_active_task`.
+`/f1` necesita project, task_name y el requerimiento completo. `/f5` acepta un rango de
+commits; si no le das ninguno, audita los que registran los recibos de la Fase 4, y solo si no
+hay recibos te pregunta. Los demás arrancan de `get_active_task`.
 
-**Dónde ponerlos según el cliente:**
+**Llegan solos, como MCP Prompts.** Desde la 2.2.0 el servidor ofrece cada comando como un
+prompt MCP (`f1`…`f5`), con su texto en [`prompts/comandos/`](prompts/comandos). No hay que
+copiar nada a ninguna carpeta y se actualizan con cada versión del paquete. Todos sus
+argumentos son opcionales —`project`; en `/f1` también `task_name` y `contexto`; en `/f5`,
+`commits`—: lo que no pases te lo pide el propio comando, y un contexto largo puede ir pegado
+después del comando como texto normal. Una fase que añadas tú (una `fase-6`) recibe su `/f6`
+con un texto genérico, y un `comandos/fN.md` en tu carpeta de prompts propia gana al de
+fábrica.
 
-- **Claude Code:** ya están en [`.claude/commands/`](.claude/commands), versionados. Funcionan al abrir este repo sin configurar nada. Para usarlos desde tus otros proyectos, cópialos a `C:\Users\<TU_USUARIO>\.claude\commands\`.
-- **Cursor:** cópialos a `C:\Users\<TU_USUARIO>\.cursor\commands\`. Desde ahí sirven en todos tus proyectos.
-- **VS Code:** no tiene comandos de barra propios; pega el contenido del archivo en el chat.
+Cómo se ven en cada cliente:
 
-El contenido exacto de los cinco está también en
-[`docs/comandos-de-fase.md`](docs/comandos-de-fase.md), para leerlos sin abrir la carpeta o
-pegarlos en un cliente que no tenga comandos.
+| Cliente | `/f1`…`/f5` visibles | Argumentos con espacios | `@` recursos | Confirmaciones directas | Notas |
+|---------|----------------------|-------------------------|--------------|-------------------------|-------|
+| Claude Code | Por verificar (según su documentación: `/<clave>:f1 (MCP)`, y `/mcp__<clave>__f1` como alias) | Por verificar | Por verificar | Por verificar | |
+| Cursor | Por verificar (según su documentación: en el menú de prompts MCP) | Por verificar | Por verificar | Por verificar | En Windows, `PHASE_GATE_ELICITATION=off` mientras siga abierto el bug del formulario ([ver abajo](#-documentos-protegidos)) |
+| VS Code | Por verificar (su documentación se contradice entre `/<clave>.f1` y `mcp.<clave>.f1`) | Por verificar | Por verificar | Por verificar | |
+
+**Si tu cliente no los muestra cómodamente**, usa los archivos: en este repo, Claude Code ya
+los lee de [`.claude/commands/`](.claude/commands) (idénticos a `prompts/comandos/`); para
+usarlos en tus otros proyectos, cópialos a `C:\Users\<TU_USUARIO>\.claude\commands\`, o a
+`C:\Users\<TU_USUARIO>\.cursor\commands\` en Cursor. Más detalle en
+[`docs/comandos-de-fase.md`](docs/comandos-de-fase.md).
 
 ---
 
@@ -341,6 +368,8 @@ Tres cosas que **no** hace, a propósito:
 - **No te obliga a escribir nada más.** Sigues escribiendo `/f4` a secas. Quien averigua de qué tarea se habla es el servidor, con el puntero que ya mantiene — no el modelo preguntándotelo.
 - **No se calla cuando no puede comprobar.** Si tienes varios proyectos con tarea activa y no se indicó cuál, lo dice en vez de fingir que todo está en orden.
 
+**También señala los pendientes que dejó la fase anterior.** Si el documento de la fase anterior tiene una sección `## Validaciones pendientes` con algo dentro, o si al pedir la Fase 5 algún recibo de lote quedó `con pendientes`, `fallido` o `descartado`, el prompt llega además con un bloque `## PENDIENTES HEREDADOS (detectados por el servidor)` que los nombra, para que la IA te los diga antes de empezar. Una sección que solo dice "Ninguna." no cuenta. Tampoco bloquea nada: solo señala lo que el prompt ya obligaba a escribir.
+
 ---
 
 ## 🔒 Documentos protegidos
@@ -350,7 +379,16 @@ Cada fase trabaja sobre los documentos de las anteriores, así que reescribir un
 - **El contexto inicial** (`00 - Contexto Inicial.md`), siempre, incluso para crearlo. Solo `start_task` lo escribe sin `force`.
 - **El documento de una fase congelada.** Una fase se congela en cuanto existe el documento de una fase posterior, o en cuanto la Fase 4 tiene algún recibo en `04 - Ejecución/`. Los recibos cuentan como de la Fase 4: a ellos y a `04 - Ejecución.md` solo los congela la Fase 5.
 
-Crear un documento de fase que todavía no existe nunca se rechaza; un recibo nuevo sí, cuando la Fase 5 ya está presente. Los nombres se comparan sin distinguir mayúsculas y en la misma forma Unicode, así que escribirlos de otra manera no esquiva la protección. Si hace falta una corrección legítima —una errata en el análisis con las decisiones ya escritas—, el mensaje de rechazo explica cómo pedirla: la IA solo usa `force` con tu confirmación explícita en el chat, y la respuesta avisa de que el documento se sobrescribió (o se creó, si no existía).
+Crear un documento de fase que todavía no existe nunca se rechaza; un recibo nuevo sí, cuando la Fase 5 ya está presente. Los nombres se comparan sin distinguir mayúsculas y en la misma forma Unicode, así que escribirlos de otra manera no esquiva la protección.
+
+**Si hace falta una corrección legítima** —una errata en el análisis con las decisiones ya escritas—, depende de tu cliente:
+
+- **Si tu cliente admite confirmaciones directas** (elicitation de MCP), el servidor **te pregunta a ti**, en un formulario de tu cliente con una casilla: "Reescribir `01 - Análisis Técnico.md`". Si la marcas y aceptas, se escribe y la respuesta dice que fue con tu confirmación; si dices que no o cierras el formulario, no se escribe nada. Aquí `force` no basta: lo pone la IA, y justo eso es lo que la pregunta evita.
+- **Si no la admite**, sigue como antes: el mensaje de rechazo le explica a la IA que necesita tu confirmación explícita en el chat y `force: true`, y la respuesta avisa de que el documento se sobrescribió (o se creó, si no existía).
+
+Lo mismo para **estrenar un proyecto** con `crear_proyecto: true`: con confirmaciones directas, el servidor te pregunta antes de crear la carpeta.
+
+Si tu cliente anuncia confirmaciones directas pero el formulario nunca aparece, el servidor espera tres minutos y no escribe nada; a la segunda vez seguida deja de preguntar durante esa sesión. Para evitarlo desde el principio, registra el servidor con `PHASE_GATE_ELICITATION=off`. **En Cursor para Windows se recomienda `off`** mientras siga abierto el bug en el que el formulario no aparece.
 
 Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea que ya existe**: no crea carpetas sueltas en la Documentación.
 
@@ -360,18 +398,34 @@ Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea qu
 
 | Tool | Qué hace |
 |------|----------|
-| `start_task` | Crea la carpeta de una tarea **nueva** (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y la deja como **activa de su proyecto**. Si la tarea ya existe se niega y te manda a `switch_task`, para no reescribir el contexto inicial. |
+| `start_task` | Crea la carpeta de una tarea **nueva** (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y la deja como **activa de su proyecto**. Si la tarea ya existe se niega y te manda a `switch_task`, para no reescribir el contexto inicial. Estrenar un proyecto pide `crear_proyecto: true` y, si tu cliente puede, tu confirmación directa. |
 | `get_active_task` | Devuelve la tarea activa y **en qué fase va**, deducida de los documentos que ya tiene. Sin `project` responde la de cada proyecto. Úsalo al abrir un chat nuevo o si se perdió el contexto. |
 | `list_tasks` | Lista las tareas que existen y la fase de cada una, de la más reciente a la más antigua. Para retomar algo viejo o ver qué quedó a medias. |
 | `switch_task` | Cambia cuál es la tarea activa de un proyecto. **No toca ningún archivo**: es la forma correcta de retomar una tarea que ya existe. |
-| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). Comprueba de paso la **compuerta**: si pasas `project` y te saltaste una fase, el prompt llega con el aviso al principio. |
+| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR. El texto vive en `prompts/` (ver abajo). Comprueba de paso la **compuerta**: si pasas `project` y te saltaste una fase, el prompt llega con el aviso al principio, seguido de los pendientes heredados si los hay. |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
-| `write_central_doc` | Escribe/sobrescribe un archivo dentro de la carpeta de una tarea. Mismos parámetros que `read_central_doc` + `content`, y `force` para los [documentos protegidos](#-documentos-protegidos). |
+| `write_central_doc` | Escribe/sobrescribe un archivo dentro de la carpeta de una tarea. Mismos parámetros que `read_central_doc` + `content`, y `force` para los [documentos protegidos](#-documentos-protegidos) cuando tu cliente no admite confirmaciones directas. |
 | `read_cross_repo` | Lee archivos de otros repos locales en tu carpeta de proyectos (ej. desde `repo-a` consultar cómo `repo-b` maneja un endpoint) sin cambiar de ventana. |
+| `get_orchestrator_status` | La radiografía de la instalación, igual que [`doctor`](#-revisar-la-instalación-doctor): versión y ruta del paquete, variables y de dónde salió cada una, qué prompt gana en cada fase, proyectos con su tarea activa y avisos. Además, el cliente conectado y sus capacidades. Úsala cuando algo no se comporte como esperas. |
+
+Todas declaran sus anotaciones MCP (solo lectura, destructiva, idempotente), así que un cliente cauto puede dejar pasar sin preguntar las de lectura. Solo `write_central_doc` es destructiva.
+
+### Recursos `phase-gate://`
+
+El servidor expone además los documentos como **recursos de solo lectura**, que los clientes compatibles muestran al escribir `@` en el chat para adjuntarlos sin pedírselo a la IA:
+
+| Recurso | Qué es |
+|---------|--------|
+| `phase-gate://estado` | La radiografía de `doctor`, en Markdown |
+| `phase-gate://fases` | Las fases disponibles, con su documento, sus recibos y qué archivo de prompt gana |
+| `phase-gate://tareas/{proyecto}/{tarea}/{documento}` | Un documento de una tarea |
+| `phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}` | Un recibo de lote de la Fase 4 |
+
+La lista solo incluye los documentos que existen de la **tarea activa de cada proyecto**, para no inundar el selector; el resto se alcanza con la plantilla, que autocompleta proyecto, tarea y documento. Tienen las mismas defensas que `read_central_doc`: no se salen de la carpeta de la tarea, no exponen archivos con punto y no leen más de 1 MB.
 
 ### Cómo el servidor arma las rutas
-- **Documentación:** `ORQUESTADOR_DOCS_PATH` / `<PROYECTO>` / `ORQUESTADOR_TASKS_SUBDIR` / `<tarea>` / `<archivo>`
-- **Repos de código:** `ORQUESTADOR_REPOS_PATH` / `<repo>` / `<archivo>`
+- **Documentación:** `PHASE_GATE_DOCS_PATH` / `<PROYECTO>` / `PHASE_GATE_TASKS_SUBDIR` / `<tarea>` / `<archivo>`
+- **Repos de código:** `PHASE_GATE_REPOS_PATH` / `<repo>` / `<archivo>`
 
 ### Qué cuenta como proyecto
 
@@ -379,7 +433,7 @@ No hay ninguna lista de proyectos que mantener. **Es proyecto la carpeta que con
 
 Un proyecto que no existe se rechaza mostrando la lista de los que sí, en vez de crear una carpeta suelta. Para **estrenar** un proyecto hay que pedirlo a propósito: `start_task` acepta `crear_proyecto: true`, y sin esa bandera un nombre mal escrito no ensucia tu Documentación.
 
-> Si dejas `ORQUESTADOR_TASKS_SUBDIR` vacío, la regla no se puede aplicar y **cualquier** carpeta cuenta como proyecto.
+> Si dejas `PHASE_GATE_TASKS_SUBDIR` vacío, la regla no se puede aplicar y **cualquier** carpeta cuenta como proyecto.
 
 ---
 
@@ -394,7 +448,10 @@ prompts/
 ├── fase-2-decisiones.md
 ├── fase-3-plan-tecnico.md
 ├── fase-4-ejecucion.md
-└── fase-5-auditoria-pr.md       ← incluye el contrato de la descripción del PR
+├── fase-5-auditoria-pr.md       ← incluye el contrato de la descripción del PR
+└── comandos/                    ← el texto de /f1…/f5, que el servidor sirve como MCP Prompts
+    ├── f1.md
+    └── …
 ```
 
 **Se leen en cada llamada.** Si editas un `.md`, la siguiente vez que la IA invoque
@@ -426,7 +483,7 @@ Reglas del formato:
 
 ### Usar tus propios prompts sin perder los de fábrica
 
-`ORQUESTADOR_PROMPTS_PATH` apunta a una carpeta tuya que **se superpone** a la del paquete. No la sustituye.
+`PHASE_GATE_PROMPTS_PATH` apunta a una carpeta tuya que **se superpone** a la del paquete. No la sustituye.
 
 Si quieres cambiar solo la Fase 2, tu carpeta lleva **un archivo**:
 
@@ -482,13 +539,16 @@ Se cargan desde el archivo `.env` de la raíz del repo (o desde el bloque `"env"
 
 Las dos primeras **son obligatorias y no tienen valor por defecto**: apuntan a carpetas que solo existen en tu equipo, así que cualquier default sería la ruta de la máquina de otra persona. Si falta una, o apunta a algo que no existe o que no es una carpeta, las tools que la usan devuelven el nombre de la variable y dónde configurarla. Las que no dependen de ella —como `get_phase_prompt`— siguen funcionando.
 
+Cada variable tiene además un **alias** con el nombre de antes, `ORQUESTADOR_*` (por ejemplo, `ORQUESTADOR_DOCS_PATH`), que sigue funcionando para no romper ninguna configuración. Si defines los dos con valores distintos gana `PHASE_GATE_*`, y `doctor` y el log del servidor te avisan.
+
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
-| `ORQUESTADOR_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación. Sincronizada o no, da igual. **Distinta en cada dispositivo.** |
-| `ORQUESTADOR_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
-| `ORQUESTADOR_TASKS_SUBDIR` | `Proyectos` | Subcarpeta donde viven las tareas dentro de cada proyecto. Vacía = las tareas cuelgan directo del proyecto. Es además la regla que decide qué carpeta cuenta como proyecto (ver abajo). |
-| `ORQUESTADOR_PROMPTS_PATH` | ninguno | Carpeta de prompts propios, que **se superponen** a los del paquete en vez de reemplazarlos: basta con poner los archivos de las fases que quieras cambiar ([ver arriba](#usar-tus-propios-prompts-sin-perder-los-de-fábrica)). |
-| `ORQUESTADOR_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas y es **obligatoria si registras el servidor más de una vez** (ver [¿Varias carpetas de Documentación?](#-varias-carpetas-de-documentación-opcional)). |
+| `PHASE_GATE_DOCS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta raíz de la Documentación. Sincronizada o no, da igual. **Distinta en cada dispositivo.** |
+| `PHASE_GATE_REPOS_PATH` | **ninguno, es obligatoria** | Ruta a la carpeta donde están tus repositorios de código. |
+| `PHASE_GATE_TASKS_SUBDIR` | `Proyectos` | Subcarpeta donde viven las tareas dentro de cada proyecto. Vacía = las tareas cuelgan directo del proyecto. Es además la regla que decide qué carpeta cuenta como proyecto (ver abajo). |
+| `PHASE_GATE_PROMPTS_PATH` | ninguno | Carpeta de prompts propios, que **se superponen** a los del paquete en vez de reemplazarlos: basta con poner los archivos de las fases que quieras cambiar ([ver arriba](#usar-tus-propios-prompts-sin-perder-los-de-fábrica)). |
+| `PHASE_GATE_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas y es **obligatoria si registras el servidor más de una vez** (ver [¿Varias carpetas de Documentación?](#-varias-carpetas-de-documentación-opcional)). |
+| `PHASE_GATE_ELICITATION` | ninguno (activadas) | `off` para que el servidor no pida [confirmaciones directas](#-documentos-protegidos) al cliente y decida `force`, como antes. Recomendado en Cursor para Windows. No tiene alias. |
 
 ---
 
@@ -502,11 +562,19 @@ El código fuente está en `src/`, repartido por responsabilidad:
 
 | Archivo | De qué se encarga |
 |---------|-------------------|
-| `config.ts` | Rutas del entorno, dónde vive el estado, identidad del servidor |
+| `config.ts` | Variables del entorno y su alias, lectura del `.env`, dónde vive el estado, identidad del servidor |
 | `paths.ts` | Cómo se arma cada ruta y la comprobación de que no se salga de su base |
 | `phases.ts` | Descubrir las fases y armar el prompt de cada una |
-| `tasks.ts` | Qué tareas existen, en qué fase va cada una y cuál está activa |
-| `index.ts` | Las tools del servidor. No calcula nada: traduce entre el protocolo y lo anterior |
+| `tasks.ts` | Qué tareas existen, en qué fase va cada una, cuál está activa, la compuerta y los pendientes heredados |
+| `schemas.ts` | Los argumentos de cada tool, con su descripción y su mensaje de error |
+| `servidor.ts` | Las tools del servidor. No calcula nada: traduce entre el protocolo y lo anterior |
+| `recursos.ts` | Los recursos `phase-gate://` |
+| `prompts-mcp.ts` | Los comandos `/f1`…`/fN` como MCP Prompts |
+| `confirmacion.ts` | Las confirmaciones directas al usuario (elicitation) |
+| `diagnostico.ts` | La radiografía que comparten `doctor`, `get_orchestrator_status` y `phase-gate://estado` |
+| `cli.ts` | La línea de comandos: `doctor`, `--help`, `--version` |
+| `log.ts` | El log: stderr y, con un cliente conectado, notificaciones MCP |
+| `index.ts` | El punto de entrada: la línea de comandos, o el servidor por stdio |
 
 El cliente ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
 
@@ -532,7 +600,7 @@ no tocan la tuya. El CI los corre en cada PR.
 |------------|-------|
 | Lo que el proyecto hace hoy | Este README (y su gemelo en inglés, [`README.md`](README.md) — **si cambias uno, cambia el otro**) |
 | Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
-| Los comandos `/f1`–`/f5`, para recrearlos en otro equipo | [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
+| Los comandos `/f1`–`/f5` | Su texto en [`prompts/comandos/`](prompts/comandos); cómo llegan a cada cliente en [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
 | Que un cambio no rompió nada | [`test/`](test), con `npm test`. El CI los corre en cada PR |
 | Lo que falta por hacer | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
 | Lo que ya se hizo | El historial de commits y los PRs mergeados |
