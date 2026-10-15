@@ -20,6 +20,9 @@
 
 import { z } from "zod";
 
+import { NOMBRES_LOGICOS } from "./config.js";
+import type { NombreLogico } from "./config.js";
+
 // Lo que se espera de cada tipo, dicho como se le diría al modelo para que corrija la llamada.
 // El único número es `phase`, de ahí el ejemplo.
 const TIPOS: Record<string, string> = {
@@ -174,7 +177,7 @@ export const diagnosticoShape = {
   node: z.object({ version: z.string(), plataforma: z.string() }),
   variables: z.array(
     z.object({
-      logica: z.enum(["DOCS_PATH", "REPOS_PATH", "TASKS_SUBDIR", "PROMPTS_PATH", "STATE_PATH", "ELICITATION"]),
+      logica: z.enum(NOMBRES_LOGICOS as [NombreLogico, ...NombreLogico[]]),
       valor: z.string().optional(),
       usada: z.string().nullable(),
       fuente: z.enum(["entorno", ".env", "sin definir"]),

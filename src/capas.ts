@@ -4,7 +4,8 @@
 //   1    fábrica   <paquete>/prompts/<idioma>/            fase-N-*.md, global-rules.md, comandos/
 //   2    preset    un archivo de bloques                   solo bloques
 //   2.5  reglas    variantes de regla del paquete          solo bloques
-//   3    global    PHASE_GATE_PROMPTS_PATH                 fase-N-*.md, global-rules.md, comandos/, bloques.md
+//   3    global    PHASE_GATE_PROMPTS_PATH, o si no, <configDir>/prompts/ cuando existe
+//                  (lo mismo que la fábrica, más un bloques.md)
 //   4    proyecto  <DOCS>/<PROYECTO>/.phase-gate/prompts/  lo mismo que la 3
 //
 // El CUERPO de una fase sale de la capa más alta (entre 1, 3 y 4) que tenga su fase-N-*.md, y su
@@ -17,7 +18,7 @@ import * as path from "path";
 
 import { aplicarBloques, leerBloques, omitirRanuraVacia } from "./bloques.js";
 import type { Bloque, Procedencia } from "./bloques.js";
-import { DOCS, defaultPromptsPath, leerVariable, requireBasePath } from "./config.js";
+import { DOCS, carpetaPromptsGlobal, defaultPromptsPath, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { describePhaseFiles, discoverPhases, entregable, GLOBAL_RULES_FILE, leerPromptNormalizado, parsePhaseFile, resolveGlobalRules } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
@@ -37,15 +38,9 @@ export function carpetaPromptsDeProyecto(carpetaProyecto: string): string {
   return path.join(requireBasePath(DOCS), carpetaProyecto, ".phase-gate", "prompts");
 }
 
-// La capa global: la carpeta propia del usuario, si la definió.
-export function carpetaGlobal(): string | null {
-  const propia = leerVariable("PROMPTS_PATH").valor;
-  return propia ? path.resolve(propia) : null;
-}
-
 export function capasDe(carpetaProyecto: string | null, _carpetaTarea?: string | null): Capa[] {
   const capas: Capa[] = [{ orden: 1, etiqueta: "fábrica", ruta: defaultPromptsPath() }];
-  const global = carpetaGlobal();
+  const global = carpetaPromptsGlobal();
   if (global) capas.push({ orden: 3, etiqueta: "global", ruta: global });
   if (carpetaProyecto) capas.push({ orden: 4, etiqueta: "proyecto", ruta: carpetaPromptsDeProyecto(carpetaProyecto) });
   return capas;

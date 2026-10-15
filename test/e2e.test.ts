@@ -62,6 +62,9 @@ function escenario(): Escenario {
       ORQUESTADOR_TASKS_SUBDIR: "Proyectos",
       // El estado va aparte: no debe contar como "algo creado" dentro de <raiz>.
       ORQUESTADOR_STATE_PATH: carpetaTemporal("state"),
+      // Y la configuración local también: el servidor lanzado hereda APPDATA y, sin esto, leería el
+      // machine.json y los presets reales de quien corre la suite.
+      PHASE_GATE_CONFIG_PATH: carpetaTemporal("config"),
     },
   };
 }

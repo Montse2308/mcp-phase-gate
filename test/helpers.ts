@@ -96,6 +96,14 @@ export function promptsTemporales(archivos: Record<string, string>): string {
   return carpeta;
 }
 
+// Configuración local aislada (machine.json, presets y prompts propios en <configDir>), para no
+// leer la del usuario que corre los tests.
+export function configTemporal(): string {
+  const carpeta = carpetaTemporal("config");
+  process.env.PHASE_GATE_CONFIG_PATH = carpeta;
+  return carpeta;
+}
+
 // Estado local aislado, para no tocar el del usuario que corre los tests.
 export function estadoTemporal(): string {
   const carpeta = carpetaTemporal("state");
@@ -106,12 +114,18 @@ export function estadoTemporal(): string {
 // Las variables de entorno son globales al proceso y los tests corren en el mismo:
 // dejarlas puestas hace que un test contamine al siguiente. Se borran los dos nombres de cada
 // variable, y también lo que haya cargado un .env (y su error de UTF-16).
+//
+// Después deja PHASE_GATE_CONFIG_PATH apuntando a una carpeta vacía: sin ella, cualquier test que
+// resuelva un proyecto leería el machine.json, los presets y la carpeta prompts/ reales de quien
+// corre la suite (en Windows, %APPDATA%\mcp-phase-gate). El test que quiera la ruta por defecto la
+// borra.
 export function limpiarEntorno(): void {
   reiniciarEnv();
   for (const { principal, alias } of Object.values(VARIABLES)) {
     delete process.env[principal];
     if (alias) delete process.env[alias];
   }
+  configTemporal();
 }
 
 // Una PHASE_GATE_* que quien corre los tests tenga en su terminal ganaría a las ORQUESTADOR_* que

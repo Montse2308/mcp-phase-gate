@@ -12,6 +12,65 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Cada proyecto puede declarar un `phase-gate.json`; cada equipo, un `machine.json`
+
+**Decisión.** Dos archivos de configuración, los dos opcionales:
+
+- **`<DOCS>/<PROYECTO>/phase-gate.json`**, el manifiesto del proyecto: `version: 1`, `preset`
+  (`software` por defecto), `idioma` (`es`), `repos` (cada uno con `id`, `dir` relativo a
+  `PHASE_GATE_REPOS_PATH` y `rol`), `reglas` (`lotes`, `commits`, `verificacion`) y
+  `fase5.prPorRepo`. Viaja con la Documentación, así que vale en todos los equipos.
+- **`<configDir>/machine.json`**, lo de este equipo: `repos` con la ruta absoluta de un repo
+  concreto (`"<PROYECTO>/<id>"`, con el proyecto comparado en minúsculas) y `presetPorDefecto`
+  para los proyectos sin manifiesto. `configDir()` es `PHASE_GATE_CONFIG_PATH` si está definida;
+  si no, `%APPDATA%\mcp-phase-gate\` en Windows, `~/Library/Application Support/mcp-phase-gate/`
+  en macOS y `$XDG_CONFIG_HOME/mcp-phase-gate/` (o `~/.config/…`) en Linux.
+
+Los valida un shape zod de `src/manifiesto.ts`, más lo que zod no expresa: ids de repo únicos, un
+`dir` que no es absoluto (en ningún sistema, porque el manifiesto viaja entre equipos) ni tiene
+`..`, y un `preset` que existe (si no, `PRESET-NO-EXISTE` con la lista de los disponibles).
+`schema/project.json` y `schema/machine.json` se **generan** de esos shapes
+(`scripts/generar-esquemas.mjs`) y un test exige que lo publicado coincida: una sola fuente. Los
+presets disponibles son los del paquete (`presets/<idioma>/`) más los del usuario
+(`<configDir>/presets/`), que ganan con el mismo nombre; `software` existe siempre, porque son los
+prompts de fábrica sin bloques.
+
+`<configDir>/prompts/` pasa a ser la capa global cuando `PHASE_GATE_PROMPTS_PATH` no está
+definida y la carpeta existe: se puede tener una capa propia sin tocar ninguna variable.
+
+**Un archivo inválido es un error, no un "no hay".** Un manifiesto o un `machine.json` que existe
+y está mal escrito se rechaza con la ruta exacta del problema (`repos[1].dir: no puede ser una
+ruta absoluta…`). Caer a los valores por defecto en silencio es el fallo silencioso que este
+diseño evita: un preset mal escrito que se ignora cambiaría el comportamiento de todas las fases
+sin que nadie lo note.
+
+**Reemplaza en parte** el rechazo a un archivo de configuración de las entradas del 2026-08-08
+"Los proyectos son las carpetas que existen, no una lista" (la issue #3) y "El nombre del
+documento lo declara el prompt de su fase". Lo que aquellas protegían sigue en pie: **los
+proyectos siguen siendo las carpetas que existen** (el manifiesto no declara proyectos, vive
+dentro de uno) y **el nombre de cada documento sigue en la cabecera de su prompt** (el manifiesto
+no tiene nombres de documento). Lo que cambia es que ya hay datos que no caben en una variable de
+entorno ni en el disco: qué preset usa un proyecto, qué repos toca y dónde está cada uno en cada
+equipo. **Matiza** la del 2026-08-10 "Varias documentaciones se resuelven registrando el servidor
+dos veces, no con código": su "introducir un formato de configuración nuevo" ya no es un costo por
+pagar, pero los "espacios" con `use_space` siguen descartados; varias documentaciones siguen siendo
+varios registros.
+
+**Por qué dos archivos y no uno.** El manifiesto viaja con la Documentación por OneDrive y lo leen
+todos los equipos; una ruta como `D:\trabajo\backend-api` solo vale en uno. Mezclarlas obligaría a
+elegir entre rutas que no existen en el otro equipo o repos que hay que declarar dos veces.
+`machine.json` vive fuera de `DOCS` y ninguna tool puede escribirlo (SEG-M), así que puede apuntar
+fuera de `PHASE_GATE_REPOS_PATH` sin abrir una puerta.
+
+**Quién los escribe.** Solo la persona y el CLI (`init`, `eject`). `write_central_doc` no puede
+escribir `phase-gate.json` desde la Etapa 1.
+
+**Para los tests.** `limpiarEntorno()` deja `PHASE_GATE_CONFIG_PATH` en una carpeta temporal vacía
+(`configTemporal()`), y los E2E se la pasan al servidor que lanzan: sin eso, la suite leería el
+`machine.json` y los presets reales de quien la corre.
+
+---
+
 ## 2026-10-15 — Los presets y las personalizaciones se escriben como bloques sobre ranuras, en un solo archivo, con modos `reemplazar`, `antes` y `despues`
 
 **Decisión.** Un archivo de bloques cambia el contenido de las ranuras sin copiar el prompt:
@@ -1111,6 +1170,10 @@ pero por accidente, que es la peor forma de funcionar. Ahora se declara qué se 
 
 ## 2026-08-10 — Varias documentaciones se resuelven registrando el servidor dos veces, no con código
 
+> **Matizada** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`; cada equipo,
+> un `machine.json`": ya existe un formato de configuración, pero los espacios con `use_space`
+> siguen descartados.
+
 **Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se
 documenta como un patrón de configuración: **registrar el servidor más de una vez** en el
 cliente, con un bloque `env` distinto en cada registro. No se añade nada al código.
@@ -1367,6 +1430,10 @@ panel de los otros dos clientes muestre el nombre de un editor que no es el que 
 
 ## 2026-08-08 — Los proyectos son las carpetas que existen, no una lista
 
+> **Reemplazada en parte** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`;
+> cada equipo, un `machine.json`": el descarte de un archivo de configuración ya no vale. Los
+> proyectos siguen siendo las carpetas que existen.
+
 **Decisión.** Se borra `PROJECT_DOC_DIRS`. Es proyecto la carpeta que contenga la subcarpeta
 de tareas. Un proyecto inexistente se rechaza mostrando los válidos; para estrenar uno hay que
 pasar `crear_proyecto: true` a `start_task`.
@@ -1391,6 +1458,10 @@ archivo que mantener para reproducir peor lo que el disco ya sabe.
 ---
 
 ## 2026-08-08 — El nombre del documento lo declara el prompt de su fase
+
+> **Reemplazada en parte** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`;
+> cada equipo, un `machine.json`": el descarte de `orquestador.config.json` ya no vale. El
+> nombre de cada documento sigue en la cabecera de su prompt.
 
 **Decisión.** Cada `prompts/fase-N-*.md` declara en una cabecera cómo se llama el documento
 que produce. `get_phase_prompt` la lee y le entrega al modelo el nombre exacto del documento

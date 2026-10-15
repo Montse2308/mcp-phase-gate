@@ -94,7 +94,14 @@ cargarEnv();
 // nombre del paquete, y ORQUESTADOR_*, el de siempre, que queda como alias para no romper ninguna
 // configuración existente. Si están las dos y dicen cosas distintas gana PHASE_GATE_*, y la
 // discrepancia se avisa: doctor la muestra y el servidor la deja en el log al arrancar.
-export type NombreLogico = "DOCS_PATH" | "REPOS_PATH" | "TASKS_SUBDIR" | "PROMPTS_PATH" | "STATE_PATH" | "ELICITATION";
+export type NombreLogico =
+  | "DOCS_PATH"
+  | "REPOS_PATH"
+  | "TASKS_SUBDIR"
+  | "PROMPTS_PATH"
+  | "STATE_PATH"
+  | "CONFIG_PATH"
+  | "ELICITATION";
 
 type Nombres = { principal: string; alias: string | null; esRuta: boolean };
 
@@ -104,6 +111,8 @@ export const VARIABLES: Record<NombreLogico, Nombres> = {
   TASKS_SUBDIR: { principal: "PHASE_GATE_TASKS_SUBDIR", alias: "ORQUESTADOR_TASKS_SUBDIR", esRuta: false },
   PROMPTS_PATH: { principal: "PHASE_GATE_PROMPTS_PATH", alias: "ORQUESTADOR_PROMPTS_PATH", esRuta: true },
   STATE_PATH: { principal: "PHASE_GATE_STATE_PATH", alias: "ORQUESTADOR_STATE_PATH", esRuta: true },
+  // Sin alias: nació con el nombre nuevo (Etapa 3), igual que ELICITATION.
+  CONFIG_PATH: { principal: "PHASE_GATE_CONFIG_PATH", alias: null, esRuta: true },
   ELICITATION: { principal: "PHASE_GATE_ELICITATION", alias: null, esRuta: false },
 };
 
@@ -276,13 +285,31 @@ export function defaultPromptsPath(idioma: string = IDIOMA_POR_DEFECTO): string 
 }
 
 // De menor a mayor prioridad. La del usuario va al final: gana.
+// Las capas que aportan cuerpos (fase-N-*.md, global-rules.md, comandos/) sin proyecto: la de
+// fábrica y la global. Desde la Etapa 3 el ensamblado completo, con presets, reglas y la capa del
+// proyecto, lo arma capasDe en capas.ts; esto queda como su versión sin proyecto.
 export function promptsLayers(): string[] {
   const capas = [defaultPromptsPath()];
-  const propia = leerVariable("PROMPTS_PATH").valor;
+  const global = carpetaPromptsGlobal();
 
-  if (propia) capas.push(path.resolve(propia));
+  if (global) capas.push(global);
 
   return capas;
+}
+
+// La capa global: PHASE_GATE_PROMPTS_PATH si está definida; si no, <configDir>/prompts/ cuando
+// existe. Así se puede tener una capa propia sin definir ninguna variable: basta con crear la
+// carpeta (eject --a global la crea).
+export function carpetaPromptsGlobal(): string | null {
+  const propia = leerVariable("PROMPTS_PATH").valor;
+  if (propia) return path.resolve(propia);
+
+  const enConfig = path.join(configDir(), "prompts");
+  try {
+    return fs.statSync(enConfig).isDirectory() ? enConfig : null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Estado local ───────────────────────────────────────────────────────────
@@ -316,6 +343,29 @@ export function stateDir(): string {
 
   const stateHome = process.env.XDG_STATE_HOME || path.join(home, ".local", "state");
   return path.join(stateHome, APP_DIR_NAME);
+}
+
+// ─── Configuración local ────────────────────────────────────────────────────
+// La carpeta de machine.json y de los presets propios: lo que es de este equipo y no viaja con la
+// Documentación. En Windows y macOS coincide con la del estado; en Linux no (estado en
+// XDG_STATE_HOME, configuración en XDG_CONFIG_HOME), que es lo que espera cada sistema.
+export function configDir(): string {
+  const propia = leerVariable("CONFIG_PATH").valor;
+  if (propia) return path.resolve(propia);
+
+  const home = os.homedir();
+
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
+    return path.join(appData, APP_DIR_NAME);
+  }
+
+  if (process.platform === "darwin") {
+    return path.join(home, "Library", "Application Support", APP_DIR_NAME);
+  }
+
+  const configHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+  return path.join(configHome, APP_DIR_NAME);
 }
 
 // El nombre es plural porque el archivo guarda un puntero por proyecto, no una sola tarea.
