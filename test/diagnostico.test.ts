@@ -269,7 +269,7 @@ describe("formatearDiagnostico", () => {
     assert.match(texto, /^mcp-phase-gate \S+ · vía \w+$/m);
     assert.match(texto, /^ {2}DOCS_PATH +✓ .+ORQUESTADOR_DOCS_PATH · entorno$/m);
     assert.match(texto, /^ {2}TASKS_SUBDIR +· Proyectos +ORQUESTADOR_TASKS_SUBDIR · entorno$/m);
-    assert.match(texto, /^ {2}Fase 4 .+← propia +· 04 - Ejecución\.md \+ 04 - Ejecución\/$/m);
+    assert.match(texto, /^ {2}Fase 4 .+← propia +· 04 - Ejecución\.md \+ 04 - Ejecución\/ · \/f4$/m);
     assert.match(texto, /^ {2}PROYECTO-A +0 tareas$/m);
   });
 

@@ -32,6 +32,7 @@ import {
   validarSegmento,
 } from "./paths.js";
 import { discoverPhases, loadPhasePrompt, nombreContextoInicial } from "./phases.js";
+import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
 import type { PhaseFile } from "./phases.js";
 import {
@@ -90,10 +91,34 @@ export function crearServidor(): McpServer {
   registrarTools(mcp);
   registrarRecursos(mcp);
 
+  // Los /fN se registran ya, antes de conectar, y se vuelven a sincronizar tras cada tool y
+  // cuando cambia una capa de prompts.
+  sincronizarPrompts(mcp);
+  asegurarCapacidadDePrompts(mcp);
+  const dejarDeVigilar = vigilarCapas(mcp);
+  const alCerrar = mcp.server.onclose;
+  mcp.server.onclose = () => {
+    dejarDeVigilar();
+    alCerrar?.();
+  };
+
   return mcp;
 }
 
 function registrarTools(mcp: McpServer): void {
+  // Tras cada llamada a una tool se sincronizan los prompts /fN. Leer las carpetas de prompts
+  // cuesta milisegundos, y es lo único que garantiza que una fase nueva aparezca en OneDrive,
+  // donde fs.watch no avisa.
+  const sincronizandoTras =
+    <A extends unknown[], R>(callback: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      try {
+        return await callback(...args);
+      } finally {
+        sincronizarPrompts(mcp);
+      }
+    };
+
   // start_task no es destructiva (se niega a pisar una tarea) ni idempotente (la segunda llamada falla).
   mcp.registerTool(
     "start_task",
@@ -105,7 +130,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: startTaskShape,
       annotations: anotaciones("Iniciar tarea", false, false, false),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
       const proj = args.project; // el schema ya le quitó los espacios
       const taskName = args.task_name;
@@ -168,7 +193,7 @@ function registrarTools(mcp: McpServer): void {
         `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${contextoInicial}\n` +
           `Tarea activa de ${carpetaProyecto}: ${taskName}.${aviso}`
       );
-    }
+    })
   );
 
   mcp.registerTool(
@@ -181,7 +206,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: getPhasePromptShape,
       annotations: anotaciones("Prompt de fase", true, false, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice loadPhasePrompt.
       const { phase, project, task_name } = sinNulos(entrada);
       const prompt = loadPhasePrompt(phase);
@@ -203,7 +228,7 @@ function registrarTools(mcp: McpServer): void {
       }
 
       return responder([aviso, prompt, recibos].filter(Boolean).join("\n\n"));
-    }
+    })
   );
 
   mcp.registerTool(
@@ -216,7 +241,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: getActiveTaskShape,
       annotations: anotaciones("Tarea activa", true, false, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const phases = discoverPhases();
       const pedido = sinNulos(entrada).project ?? "";
 
@@ -252,7 +277,7 @@ function registrarTools(mcp: McpServer): void {
       }
 
       return responder(`${bloques.join("\n\n")}\n\nPunteros guardados en: ${stateFile()}`);
-    }
+    })
   );
 
   mcp.registerTool(
@@ -265,7 +290,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: listTasksShape,
       annotations: anotaciones("Listar tareas", true, false, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const phases = discoverPhases();
       const pedido = sinNulos(entrada).project ?? "";
 
@@ -291,7 +316,7 @@ function registrarTools(mcp: McpServer): void {
       }
 
       return responder(bloques.join("\n\n") || "No hay proyectos todavía.");
-    }
+    })
   );
 
   // Escribe el puntero, así que no es de solo lectura; pero repetirla da el mismo estado.
@@ -305,7 +330,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: switchTaskShape,
       annotations: anotaciones("Cambiar de tarea activa", false, false, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
       const phases = discoverPhases();
       const carpetaProyecto = requireProjectFolder(args.project);
@@ -329,7 +354,7 @@ function registrarTools(mcp: McpServer): void {
         `Tarea activa de ${carpetaProyecto}: ${taskName}.\nFase: ${describeEstado(encontrada, phases)}\n` +
           `Carpeta: ${encontrada.folderPath}`
       );
-    }
+    })
   );
 
   mcp.registerTool(
@@ -343,7 +368,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: readCentralDocShape,
       annotations: anotaciones("Leer documento", true, false, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(sinNulos(entrada));
 
@@ -352,7 +377,7 @@ function registrarTools(mcp: McpServer): void {
       }
 
       return responder(leerTextoAcotado(fullPath));
-    }
+    })
   );
 
   // La única destructiva: puede sobrescribir un documento. Repetirla con el mismo contenido deja
@@ -369,7 +394,7 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: writeCentralDocShape,
       annotations: anotaciones("Escribir documento", false, true, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
       const docsBase = requireBasePath(DOCS);
       const fullPath = resolveDocPath(args);
@@ -412,7 +437,7 @@ function registrarTools(mcp: McpServer): void {
       // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
       const forzado = motivo ? (existia ? " (sobrescrito con force)" : " (creado con force)") : "";
       return responder(`Archivo escrito exitosamente en ${fullPath}${forzado}`);
-    }
+    })
   );
 
   // La misma radiografía que `npx mcp-phase-gate doctor`, más lo que solo se sabe desde dentro de
@@ -429,7 +454,7 @@ function registrarTools(mcp: McpServer): void {
       outputSchema: diagnosticoShape,
       annotations: anotaciones("Estado de la instalación", true, false, true),
     },
-    async () => {
+    sincronizandoTras(async () => {
       const version = mcp.server.getClientVersion();
       const capacidades = mcp.server.getClientCapabilities();
       const cliente = version
@@ -445,7 +470,7 @@ function registrarTools(mcp: McpServer): void {
         content: [{ type: "text", text: formatearDiagnostico(diagnostico, "markdown") }],
         structuredContent: diagnostico,
       };
-    }
+    })
   );
 
   mcp.registerTool(
@@ -457,9 +482,9 @@ function registrarTools(mcp: McpServer): void {
       inputSchema: readCrossRepoShape,
       annotations: anotaciones("Leer archivo de repositorio", true, false, true),
     },
-    async (entrada) => {
+    sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
       return responder(leerTextoAcotado(resolveRepoPath(args.repo_name, args.file_path)));
-    }
+    })
   );
 }

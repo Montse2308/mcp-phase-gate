@@ -12,6 +12,49 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-15 — Los comandos de fase se sirven como MCP Prompts desde `prompts/comandos/`
+
+**Decisión.** El texto de cada comando pasa a `prompts/comandos/fN.md`, que viaja en el paquete,
+y el servidor lo ofrece como un MCP Prompt llamado `fN`, con título `Fase N · <título>`. Se
+resuelve por capas como las fases: un `comandos/fN.md` en la carpeta propia gana al de fábrica,
+y una fase sin comando (una `fase-6` propia, por ejemplo) recibe un texto genérico que hace lo
+mismo que los demás. Todos los argumentos son opcionales: `project`; en `/f1` también
+`task_name` y `contexto`; en `/f5`, `commits`. Lo que llega como argumento se añade al final,
+en una sección `## Datos de esta invocación`; sin argumentos, el prompt es el comando tal cual.
+
+Los prompts se registran según las fases que existan: una fase nueva gana su `/fN`, una que
+desaparece lo pierde, y un cambio de título lo actualiza; cada cambio emite
+`prompts/list_changed`. Se sincroniza al arrancar, tras cada llamada a una tool y, como mejora
+oportunista, cuando `fs.watch` avisa de un cambio en una capa (con 300 ms de espera). En
+OneDrive `fs.watch` no es fiable: lo que garantiza el resultado es la sincronización tras cada
+tool.
+
+`.claude/commands/` se conserva, idéntico a `prompts/comandos/`, para quien trabaja en este repo
+y para los clientes que no muestran bien los MCP Prompts; `test/docs.test.ts` compara ahora esas
+dos carpetas. `docs/comandos-de-fase.md` deja de copiar los cinco comandos: explica cómo llegan a
+cada cliente y remite a la fuente.
+
+**Resuelve** "Lo que esta decisión no resuelve" de la entrada del 2026-08-07 "La configuración
+por dispositivo no vive en el repo": los comandos vivían solo en la carpeta del usuario y
+editarlos en un equipo dejaba al otro con la versión vieja. Ahora llegan con el paquete, a
+cualquier cliente que muestre prompts. **Amplía** la del 2026-08-08 que los versionó en
+`.claude/commands/`: esa copia sigue, pero ya no es la que manda.
+
+**Por qué el prompt no incluye el prompt de la fase.** `/f4` podría devolver ya el texto de
+`get_phase_prompt(4)` y ahorrar una llamada. Se descartó: serían dos caminos para recibir el
+mismo prompt, y en uno de ellos la compuerta no sabría el `project`. El comando sigue siendo
+orquestación, como decidió la entrada del 2026-08-08.
+
+**Por qué todos los argumentos son opcionales.** Algunos clientes parten los argumentos de un
+prompt por espacios. Con argumentos obligatorios, un contexto largo no cabría; con opcionales,
+el comando pide lo que falte y el contexto puede ir pegado después, como texto del chat.
+
+**Un detalle del SDK.** La capacidad `prompts` solo se puede declarar antes de conectar. Si al
+arrancar no hubiera ninguna fase, el primer `/fN` que apareciera después fallaría al registrarse;
+para evitarlo, el servidor registra y quita un prompt provisional antes de conectar.
+
+---
+
 ## 2026-10-15 — Los documentos de las tareas se exponen como recursos de solo lectura
 
 **Decisión.** El servidor expone cuatro MCP Resources, todos de solo lectura y en

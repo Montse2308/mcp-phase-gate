@@ -226,7 +226,8 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
       hallar(
         "info",
         "FASE-SIN-COMANDO",
-        `La Fase ${fase.numero} (${fase.titulo}) no tiene \`comandos/f${fase.numero}.md\` en ninguna capa de prompts.`
+        `La Fase ${fase.numero} (${fase.titulo}) no tiene \`comandos/f${fase.numero}.md\` en ninguna capa de ` +
+          `prompts: su comando /f${fase.numero} usa el texto genérico.`
       );
     }
   }
@@ -370,7 +371,7 @@ function formatearTexto(d: Diagnostico): string {
   }
   const anchoFase = Math.max(0, ...d.fases.map((fase) => `Fase ${fase.numero} ${fase.titulo}`.length)) + 3;
   for (const fase of d.fases) {
-    const comando = fase.comando ? ` · /f${fase.numero}` : "";
+    const comando = fase.comando ? ` · /f${fase.numero}` : ` · /f${fase.numero} (texto genérico)`;
     lineas.push(
       `  ${columna(`Fase ${fase.numero} ${fase.titulo}`, anchoFase)}← ${columna(fase.capa, 9)}· ${archivosDeFase(fase)}${comando}`
     );
@@ -457,7 +458,7 @@ function formatearMarkdown(d: Diagnostico): string {
         fase.capa,
         codigo(fase.documento ?? ""),
         codigo(fase.recibos ? `${fase.recibos}/` : ""),
-        fase.comando ? `/f${fase.numero}` : "",
+        fase.comando ? `/f${fase.numero}` : `/f${fase.numero} (texto genérico)`,
         codigo(fase.archivo),
       ])
     )

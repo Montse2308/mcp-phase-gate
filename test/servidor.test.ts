@@ -4,13 +4,18 @@
 
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { PromptListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import { z } from "zod";
 
 import type { Diagnostico } from "../src/diagnostico.js";
 import { diagnosticoShape } from "../src/schemas.js";
 import { conectar } from "./cliente.js";
-import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
+import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno, promptsTemporales } from "./helpers.js";
 
 afterEach(limpiarEntorno);
 
@@ -218,3 +223,141 @@ describe("get_orchestrator_status", () => {
 // Si diagnostico.ts y el outputSchema se separan, esto deja de compilar.
 const _diagnosticoCuadra: z.input<z.ZodObject<typeof diagnosticoShape>> = {} as Diagnostico;
 void _diagnosticoCuadra;
+
+describe("MCP Prompts /fN", () => {
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const comandoDelRepo = (numero: number): string =>
+    fs.readFileSync(path.join(PROMPTS_DEL_REPO, "comandos", `f${numero}.md`), "utf-8").replace(/\r\n/g, "\n").trim();
+  const esperar = () => new Promise((resolver) => setImmediate(resolver));
+
+  function textoDelPrompt(resultado: { messages: { content: unknown }[] }): string {
+    return (resultado.messages[0]!.content as { type: string; text: string }).text;
+  }
+
+  it("prompts/list devuelve f1…f5 con su título de fase", async () => {
+    estadoTemporal();
+    process.env.PHASE_GATE_PROMPTS_PATH = PROMPTS_DEL_REPO;
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const { prompts } = await cliente.listPrompts();
+      assert.deepEqual(prompts.map((p) => p.name), ["f1", "f2", "f3", "f4", "f5"]);
+      assert.equal(prompts.find((p) => p.name === "f4")?.title, "Fase 4 · Ejecución");
+      assert.equal(prompts.find((p) => p.name === "f4")?.description, "Arranca la Fase 4 (Ejecución) del flujo de mcp-phase-gate.");
+      assert.deepEqual(prompts.find((p) => p.name === "f1")?.arguments?.map((a) => [a.name, a.required ?? false]), [
+        ["project", false],
+        ["task_name", false],
+        ["contexto", false],
+      ]);
+      assert.deepEqual(prompts.find((p) => p.name === "f5")?.arguments?.map((a) => a.name), ["project", "commits"]);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("prompts/get de f1 con argumentos devuelve el comando y los Datos de esta invocación", async () => {
+    estadoTemporal();
+    process.env.PHASE_GATE_PROMPTS_PATH = PROMPTS_DEL_REPO;
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      const resultado = await cliente.getPrompt({
+        name: "f1",
+        arguments: { project: "PROYECTO-A", task_name: "login", contexto: "El correo\ncon dos líneas" },
+      });
+      assert.equal(resultado.messages.length, 1);
+      assert.equal(resultado.messages[0]!.role, "user");
+      assert.equal(
+        textoDelPrompt(resultado),
+        `${comandoDelRepo(1)}\n\n## Datos de esta invocación\n- project: PROYECTO-A\n- task_name: login\n- initial_context:\n\nEl correo\ncon dos líneas`
+      );
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("sin argumentos, el prompt es el comando tal cual, sin la sección de datos", async () => {
+    estadoTemporal();
+    process.env.PHASE_GATE_PROMPTS_PATH = PROMPTS_DEL_REPO;
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      assert.equal(textoDelPrompt(await cliente.getPrompt({ name: "f3" })), comandoDelRepo(3));
+      const f5 = textoDelPrompt(await cliente.getPrompt({ name: "f5", arguments: { commits: "abc123..def456" } }));
+      assert.ok(f5.endsWith("## Datos de esta invocación\n- commits: abc123..def456"), f5);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("una fase-6 en una capa propia aparece, con texto genérico, y emite prompts/list_changed; al quitarla desaparece", async () => {
+    estadoTemporal();
+    const capa = promptsTemporales({ "fase-1-uno.md": "---\ndocumento: 01.md\n---\n# Uno\n" });
+
+    const { cliente, cerrar } = await conectar();
+    let avisos = 0;
+    cliente.setNotificationHandler(PromptListChangedNotificationSchema, async () => {
+      avisos++;
+    });
+
+    try {
+      assert.deepEqual((await cliente.listPrompts()).prompts.map((p) => p.name), ["f1"]);
+
+      fs.writeFileSync(path.join(capa, "fase-6-extra.md"), "---\ndocumento: 06.md\n---\n# Extra\n", "utf-8");
+      await cliente.callTool({ name: "get_orchestrator_status", arguments: {} });
+      await esperar();
+
+      assert.ok(avisos >= 1, "debía emitir prompts/list_changed");
+      const { prompts } = await cliente.listPrompts();
+      assert.deepEqual(prompts.map((p) => p.name), ["f1", "f6"]);
+      assert.equal(prompts.find((p) => p.name === "f6")?.title, "Fase 6 · Extra");
+
+      const f6 = textoDelPrompt(await cliente.getPrompt({ name: "f6", arguments: { project: "PROYECTO-A" } }));
+      assert.match(f6, /^Vas a iniciar la FASE 6 \(Extra\) del flujo del mcp-phase-gate\./);
+      assert.match(f6, /get_phase_prompt\(6\)/);
+      assert.ok(f6.endsWith("## Datos de esta invocación\n- project: PROYECTO-A"));
+
+      fs.rmSync(path.join(capa, "fase-6-extra.md"));
+      await cliente.callTool({ name: "get_orchestrator_status", arguments: {} });
+      assert.deepEqual((await cliente.listPrompts()).prompts.map((p) => p.name), ["f1"]);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("un comandos/fN.md propio gana al texto genérico, y cambiar el título de la fase actualiza el prompt", async () => {
+    estadoTemporal();
+    const capa = promptsTemporales({ "fase-1-uno.md": "---\ndocumento: 01.md\n---\n# Uno\n" });
+    fs.mkdirSync(path.join(capa, "comandos"));
+    fs.writeFileSync(path.join(capa, "comandos", "f1.md"), "---\nnota: se quita\n---\nMi comando propio\r\n", "utf-8");
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      assert.equal(textoDelPrompt(await cliente.getPrompt({ name: "f1" })), "Mi comando propio");
+
+      fs.writeFileSync(path.join(capa, "fase-1-uno.md"), "---\ndocumento: 01.md\n---\n# Uno renombrada\n", "utf-8");
+      await cliente.callTool({ name: "list_tasks", arguments: {} });
+      assert.equal((await cliente.listPrompts()).prompts[0]?.title, "Fase 1 · Uno renombrada");
+    } finally {
+      await cerrar();
+    }
+  });
+
+  // La capacidad prompts solo se puede declarar antes de conectar.
+  it("sin ninguna fase al arrancar, una que aparece después se registra sin error", async () => {
+    estadoTemporal();
+    const capa = promptsTemporales({});
+
+    const { cliente, cerrar } = await conectar();
+    try {
+      assert.ok(cliente.getServerCapabilities()?.prompts);
+      assert.deepEqual((await cliente.listPrompts()).prompts, []);
+
+      fs.writeFileSync(path.join(capa, "fase-1-uno.md"), "# Uno\n", "utf-8");
+      await cliente.callTool({ name: "list_tasks", arguments: {} });
+      assert.deepEqual((await cliente.listPrompts()).prompts.map((p) => p.name), ["f1"]);
+    } finally {
+      await cerrar();
+    }
+  });
+});
