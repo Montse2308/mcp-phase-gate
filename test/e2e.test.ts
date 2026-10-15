@@ -315,6 +315,24 @@ describe("e2e: documentos congelados (R4)", () => {
     );
   });
 
+  // Cuestionamiento B de la auditoría de la Etapa 1: al retomar, el modelo no tenía cómo
+  // descubrir los recibos; ahora los nombra el servidor.
+  it("get_phase_prompt nombra los recibos que ya existen en la tarea", async () => {
+    const e = escenario();
+    conFases(e, [D01, D02, D03]);
+    fs.mkdirSync(path.join(e.tareaA, "04 - Ejecución"));
+    fs.writeFileSync(path.join(e.tareaA, "04 - Ejecución", "L01 - rutas.md"), "recibo", "utf-8");
+
+    await conServidor(e.env, async (llamar) => {
+      const fase4 = await llamar("get_phase_prompt", { phase: 4, project: "PROYECTO-A", task_name: "tarea-a" });
+      assert.equal(fase4.isError, false, fase4.texto);
+      assert.match(fase4.texto, /RECIBOS QUE YA EXISTEN EN LA TAREA "tarea-a"[\s\S]*`04 - Ejecución\/L01 - rutas\.md`/);
+
+      const fase3 = await llamar("get_phase_prompt", { phase: 3, project: "PROYECTO-A", task_name: "tarea-a" });
+      assert.equal(fase3.texto.includes("RECIBOS QUE YA EXISTEN"), false);
+    });
+  });
+
   // Hallazgo 13 de la auditoría de la Etapa 1: force también crea el contexto cuando falta.
   it("crear el contexto con force responde 'creado', no 'sobrescrito'", async () => {
     const e = escenario();

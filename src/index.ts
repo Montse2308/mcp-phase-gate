@@ -38,12 +38,14 @@ import {
 } from "./phases.js";
 import {
   avisoDeCompuerta,
+  bloqueDeRecibos,
   describeEstado,
   guardarPuntero,
   limpiarEstadoViejo,
   listarTareas,
   motivoDeProteccion,
   tareaActiva,
+  tareaDelPrompt,
 } from "./tasks.js";
 import { validarLlamada } from "./schemas.js";
 import type { EstadoTarea } from "./tasks.js";
@@ -256,18 +258,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
       // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
+      // Lo mismo con la lista de recibos: es una ayuda, no una condición.
       let aviso: string | null = null;
+      let recibos: string | null = null;
       try {
-        aviso = avisoDeCompuerta(phase, discoverPhases(), {
-          ...(project ? { project } : {}),
-          ...(task_name ? { taskName: task_name } : {}),
-        });
+        const phases = discoverPhases();
+        const opciones = { ...(project ? { project } : {}), ...(task_name ? { taskName: task_name } : {}) };
+        aviso = avisoDeCompuerta(phase, phases, opciones);
+
+        const estado = tareaDelPrompt(phases, opciones);
+        if (estado && estado !== "ambigua") recibos = bloqueDeRecibos(phase, estado, phases);
       } catch (error: any) {
         console.error(`[orquestador] No se pudo comprobar la compuerta: ${error.message}`);
       }
 
+      const texto = [aviso, prompt, recibos].filter(Boolean).join("\n\n");
       return {
-        content: [{ type: "text", text: aviso ? `${aviso}\n\n${prompt}` : prompt }],
+        content: [{ type: "text", text: texto }],
       };
     }
 

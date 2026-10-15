@@ -293,6 +293,13 @@ texto de cada prompt que lo menciona es la forma de que un día dos prompts diga
 **Todavía no se ve.** Ningún prompt publicado declara `recibos` hasta que la Fase 4 pase a
 ejecutar por lotes (L07 de la Etapa 1). Hasta entonces el servidor no anuncia nada nuevo.
 
+**El servidor lista los recibos que ya existen.** Ninguna tool lista una carpeta, y los slugs son
+libres, así que al retomar la Fase 4 en otro chat, o al auditar en una Fase 5 sin índice, el
+modelo no tenía cómo descubrirlos. Cuando `get_phase_prompt` puede resolver la tarea (la indicada
+o la activa del proyecto), añade al final la lista de los `.md` de la subcarpeta, en la fase que
+declara los recibos y en las posteriores. Si no hay recibos, no añade nada. Lo pidió la auditoría
+de la Etapa 1; en la Etapa 4, `get_batch_status` da además el estado de cada uno.
+
 **Desvío E1-D2 (aprobado por la autora).** El plan pedía comprobar en este lote que la Fase 4
 declara `recibos`. Ese frontmatter llega con el prompt de la Fase 4, en L07, así que la
 comprobación se hace allí, en el test de los prompts publicados de `test/phases.test.ts`.

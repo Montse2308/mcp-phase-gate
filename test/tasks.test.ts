@@ -7,6 +7,7 @@ import type { PhaseFile } from "../src/phases.js";
 import {
   avisoDeCompuerta,
   avisoDeSalto,
+  bloqueDeRecibos,
   describeEstado,
   detectarSalto,
   estadoDeTarea,
@@ -232,6 +233,44 @@ describe("motivoDeProteccion", () => {
 
     fs.writeFileSync(path.join(carpeta, "04 - Ejecución", "notas.txt"), "x", "utf-8");
     assert.equal(motivoDeProteccion(carpeta, D03, CON_RECIBOS, CONTEXTO), null);
+  });
+});
+
+// Cuestionamiento B de la auditoría de la Etapa 1: ninguna tool lista una carpeta, así que el
+// servidor nombra los recibos que existen al final del prompt.
+describe("bloqueDeRecibos", () => {
+  const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
+  CON_RECIBOS.set(4, { ...(FASES.get(4) as PhaseFile), recibos: "04 - Ejecución" });
+
+  function tareaConRecibos(archivos: string[]): string {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", ["00 - Contexto Inicial.md"]);
+    fs.mkdirSync(path.join(carpeta, "04 - Ejecución"));
+    for (const archivo of archivos) fs.writeFileSync(path.join(carpeta, "04 - Ejecución", archivo), "x", "utf-8");
+    return carpeta;
+  }
+
+  it("en la fase de los recibos y en las posteriores, los lista ordenados y solo los .md", () => {
+    const carpeta = tareaConRecibos(["L02 - filtro.md", "L01 - rutas.md", "notas.txt"]);
+    const estado = estadoDeTarea("login-sso", carpeta, CON_RECIBOS);
+
+    for (const fase of [4, 5]) {
+      const bloque = bloqueDeRecibos(fase, estado, CON_RECIBOS) ?? "";
+
+      assert.match(bloque, /RECIBOS QUE YA EXISTEN EN LA TAREA "login-sso"/);
+      assert.ok(bloque.indexOf("L01 - rutas.md") < bloque.indexOf("L02 - filtro.md"), bloque);
+      assert.ok(bloque.includes("- Fase 4: `04 - Ejecución/L01 - rutas.md`"), bloque);
+      assert.equal(bloque.includes("notas.txt"), false);
+    }
+  });
+
+  it("antes de la fase de los recibos, o sin recibos, no añade nada", () => {
+    const conRecibos = tareaConRecibos(["L01 - rutas.md"]);
+    const sinRecibos = tareaConRecibos([]);
+
+    assert.equal(bloqueDeRecibos(3, estadoDeTarea("login-sso", conRecibos, CON_RECIBOS), CON_RECIBOS), null);
+    assert.equal(bloqueDeRecibos(4, estadoDeTarea("login-sso", sinRecibos, CON_RECIBOS), CON_RECIBOS), null);
   });
 });
 

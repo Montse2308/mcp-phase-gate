@@ -343,27 +343,24 @@ export function detectarSalto(
 // `project` y `taskName` son solo anulación manual, para comprobar contra una tarea distinta de
 // la activa. Sin ellos se usa el puntero; y cuando de verdad no se puede saber se dice en voz
 // alta, en vez de callar como si todo estuviera en orden.
-export function avisoDeCompuerta(
-  fasePedida: number,
+export type OpcionesDeTarea = { project?: string; taskName?: string };
+
+// La tarea de la que habla una llamada a get_phase_prompt: la indicada, o la activa del proyecto.
+// Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa; con
+// varios, se devuelve "ambigua" para que quien llama lo diga en vez de callar.
+export function tareaDelPrompt(
   phases: Map<number, PhaseFile>,
-  opciones: { project?: string; taskName?: string } = {}
-): string | null {
+  opciones: OpcionesDeTarea = {}
+): EstadoTarea | "ambigua" | null {
   let carpetaProyecto: string;
 
   if (opciones.project) {
     carpetaProyecto = requireProjectFolder(opciones.project);
   } else {
-    // Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa.
     const conPuntero = Object.keys(leerPunteros());
 
     if (conPuntero.length === 0) return null; // Nada empezado: no hay nada que comprobar.
-
-    if (conPuntero.length > 1) {
-      return (
-        "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
-        "proyectos con tarea activa. Pasa `project` para que se compruebe."
-      );
-    }
+    if (conPuntero.length > 1) return "ambigua";
 
     const encontrada = findProjectFolder(conPuntero[0] as string);
     if (!encontrada) return null; // Puntero de un proyecto que ya no existe: se ignora.
@@ -374,10 +371,62 @@ export function avisoDeCompuerta(
     ? listarTareas(carpetaProyecto, phases).find((tarea) => tarea.taskName === opciones.taskName)
     : tareaActiva(carpetaProyecto, phases)?.estado;
 
-  if (!estado) return null; // Proyecto sin tareas, o un nombre de tarea que no existe.
+  return estado ?? null; // null: proyecto sin tareas, o un nombre de tarea que no existe.
+}
+
+export function avisoDeCompuerta(
+  fasePedida: number,
+  phases: Map<number, PhaseFile>,
+  opciones: OpcionesDeTarea = {}
+): string | null {
+  const estado = tareaDelPrompt(phases, opciones);
+
+  if (estado === "ambigua") {
+    return (
+      "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
+      "proyectos con tarea activa. Pasa `project` para que se compruebe."
+    );
+  }
+  if (!estado) return null;
 
   const salto = detectarSalto(fasePedida, estado, phases);
   return salto ? avisoDeSalto(salto, estado.taskName, phases) : null;
+}
+
+// ─── Recibos que ya existen ─────────────────────────────────────────────────
+// Ninguna tool lista una carpeta, así que al retomar la Fase 4 en otro chat, o al auditar en la
+// Fase 5 sin índice, el modelo no tenía cómo saber qué recibos hay ni cómo se llaman sus slugs.
+// Se los da el servidor al final del prompt de la fase que los declara y de las posteriores.
+export function bloqueDeRecibos(
+  fasePedida: number,
+  estado: EstadoTarea,
+  phases: Map<number, PhaseFile>
+): string | null {
+  const lineas: string[] = [];
+
+  for (const [numero, datos] of [...phases.entries()].sort((a, b) => a[0] - b[0])) {
+    if (!datos.recibos || numero > fasePedida) continue;
+
+    const subcarpeta = path.join(estado.folderPath, datos.recibos);
+    if (!fs.existsSync(subcarpeta)) continue;
+
+    const recibos = fs
+      .readdirSync(subcarpeta, { withFileTypes: true })
+      .filter((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md"))
+      .map((entrada) => entrada.name)
+      .sort();
+
+    for (const recibo of recibos) lineas.push(`- Fase ${numero}: \`${datos.recibos}/${recibo}\``);
+  }
+
+  if (lineas.length === 0) return null;
+
+  return [
+    `## RECIBOS QUE YA EXISTEN EN LA TAREA "${estado.taskName}"`,
+    "",
+    "Léelos con `read_central_doc` usando estas rutas tal cual:",
+    ...lineas,
+  ].join("\n");
 }
 
 export function avisoDeSalto(
