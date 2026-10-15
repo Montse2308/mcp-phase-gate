@@ -189,6 +189,198 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
   });
 });
 
+// SEG-M: write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe. Lo
+// del proyecto (phase-gate.json, .phase-gate/) queda para el CLI y la UI.
+const SOLO_EN_TAREA = /solo escribe dentro de la carpeta de una tarea que ya existe/;
+
+describe("e2e: write_central_doc solo escribe dentro de una tarea (SEG-M)", () => {
+  it("rechaza phase-gate.json del proyecto por file_path", async () => {
+    await debeRechazar("write_central_doc", () => ({ file_path: "PROYECTO-A/phase-gate.json", content: "{}" }), SOLO_EN_TAREA);
+  });
+
+  it("rechaza un archivo en la raíz de la Documentación por file_path", async () => {
+    await debeRechazar("write_central_doc", () => ({ file_path: "nota.md", content: "x" }), SOLO_EN_TAREA);
+  });
+
+  // Antes el mkdir recursivo creaba la carpeta y la tarea aparecía sin contexto inicial.
+  it("rechaza una tarea que no existe sin crear su carpeta", async () => {
+    let docs = "";
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "no-existe", file_name: "01 - Análisis Técnico.md", content: "x" }),
+      SOLO_EN_TAREA,
+      (e) => {
+        docs = e.docs;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(docs, "PROYECTO-A", "Proyectos", "no-existe")), false);
+
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ file_path: "PROYECTO-A/Proyectos/no-existe/01 - Análisis Técnico.md", content: "x" }),
+      SOLO_EN_TAREA
+    );
+  });
+
+  it("rechaza una carpeta con punto dentro de una tarea", async () => {
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: ".phase-gate/estado.json", content: "{}" }),
+      SOLO_EN_TAREA
+    );
+  });
+
+  // Lo crearía una carpeta que list_tasks no ve y en la que write_central_doc no escribe.
+  it("start_task rechaza un task_name que empieza por punto (E1-D1)", async () => {
+    await debeRechazar(
+      "start_task",
+      () => ({ project: "PROYECTO-A", task_name: ".oculta", initial_context: "x" }),
+      /task_name.*empezar por punto/s
+    );
+  });
+
+  it("start_task rechaza estrenar un project que empieza por punto (E1-D1)", async () => {
+    await debeRechazar(
+      "start_task",
+      () => ({ project: ".oculto", task_name: "tarea-x", initial_context: "x", crear_proyecto: true }),
+      /project.*empezar por punto/s
+    );
+  });
+
+  it("con la subcarpeta vacía, .phase-gate/ y .obsidian/ no aparecen en list_tasks", async () => {
+    const e = escenario();
+    fs.mkdirSync(path.join(e.docs, "PROYECTO-A", ".phase-gate"));
+    fs.mkdirSync(path.join(e.docs, ".obsidian"));
+
+    await conServidor({ ...e.env, ORQUESTADOR_TASKS_SUBDIR: "" }, async (llamar) => {
+      const r = await llamar("list_tasks", {});
+      assert.equal(r.isError, false, r.texto);
+      assert.match(r.texto, /PROYECTO-A \(1\)/);
+      assert.doesNotMatch(r.texto, /\.phase-gate/);
+      assert.doesNotMatch(r.texto, /\.obsidian/);
+    });
+  });
+});
+
+// R4: las fases se declaran como en los prompts publicados y, en la 4, con la subcarpeta de
+// recibos que llega en L07. Sin prompts al lado del servidor de build-test no habría fases.
+function conFases(e: Escenario, documentos: string[]): void {
+  const prompts = carpetaTemporal("prompts");
+  const cabeceras: Array<[string, string]> = [
+    ["fase-1-descubrimiento.md", "documento: 01 - Análisis Técnico.md\ndocumento_inicial: 00 - Contexto Inicial.md"],
+    ["fase-2-decisiones.md", "documento: 02 - Decisiones.md"],
+    ["fase-3-plan-tecnico.md", "documento: 03 - Plan Técnico.md"],
+    ["fase-4-ejecucion.md", "documento: 04 - Ejecución.md\nrecibos: 04 - Ejecución"],
+    ["fase-5-auditoria-pr.md", "documento: 05 - Auditoría.md"],
+  ];
+  for (const [archivo, cabecera] of cabeceras) {
+    fs.writeFileSync(path.join(prompts, archivo), `---\n${cabecera}\n---\n\n# Fase\n`, "utf-8");
+  }
+  e.env.ORQUESTADOR_PROMPTS_PATH = prompts;
+
+  for (const documento of documentos) {
+    fs.writeFileSync(path.join(e.tareaA, documento), `original de ${documento}`, "utf-8");
+  }
+}
+
+const D01 = "01 - Análisis Técnico.md";
+const D02 = "02 - Decisiones.md";
+const D03 = "03 - Plan Técnico.md";
+
+describe("e2e: documentos congelados (R4)", () => {
+  it("rechaza reescribir 01 cuando existe 02 y lo acepta con force: true", async () => {
+    const e = escenario();
+    conFases(e, [D01, D02]);
+    const destino = { project: "PROYECTO-A", task_name: "tarea-a", file_name: D01 };
+
+    await conServidor(e.env, async (llamar) => {
+      const rechazo = await llamar("write_central_doc", { ...destino, content: "nuevo" });
+      assert.equal(rechazo.isError, true, rechazo.texto);
+      assert.match(rechazo.texto, /congelado: la Fase 2.*force: true/s);
+      assert.equal(fs.readFileSync(path.join(e.tareaA, D01), "utf-8"), `original de ${D01}`);
+
+      const forzado = await llamar("write_central_doc", { ...destino, content: "nuevo", force: true });
+      assert.equal(forzado.isError, false, forzado.texto);
+      assert.match(forzado.texto, /\(sobrescrito con force\)/);
+      assert.equal(fs.readFileSync(path.join(e.tareaA, D01), "utf-8"), "nuevo");
+    });
+  });
+
+  it("el contexto inicial no se reescribe sin force", async () => {
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: CONTEXTO_INICIAL, content: "pisado" }),
+      /contexto inicial está siempre protegido/,
+      (e) => conFases(e, [])
+    );
+  });
+
+  // Cuestionamiento B de la auditoría de la Etapa 1: al retomar, el modelo no tenía cómo
+  // descubrir los recibos; ahora los nombra el servidor.
+  it("get_phase_prompt nombra los recibos que ya existen en la tarea", async () => {
+    const e = escenario();
+    conFases(e, [D01, D02, D03]);
+    fs.mkdirSync(path.join(e.tareaA, "04 - Ejecución"));
+    fs.writeFileSync(path.join(e.tareaA, "04 - Ejecución", "L01 - rutas.md"), "recibo", "utf-8");
+
+    await conServidor(e.env, async (llamar) => {
+      const fase4 = await llamar("get_phase_prompt", { phase: 4, project: "PROYECTO-A", task_name: "tarea-a" });
+      assert.equal(fase4.isError, false, fase4.texto);
+      assert.match(fase4.texto, /RECIBOS QUE YA EXISTEN EN LA TAREA "tarea-a"[\s\S]*`04 - Ejecución\/L01 - rutas\.md`/);
+
+      const fase3 = await llamar("get_phase_prompt", { phase: 3, project: "PROYECTO-A", task_name: "tarea-a" });
+      assert.equal(fase3.texto.includes("RECIBOS QUE YA EXISTEN"), false);
+    });
+  });
+
+  // Hallazgo 13 de la auditoría de la Etapa 1: force también crea el contexto cuando falta.
+  it("crear el contexto con force responde 'creado', no 'sobrescrito'", async () => {
+    const e = escenario();
+    conFases(e, []);
+    fs.rmSync(path.join(e.tareaA, CONTEXTO_INICIAL));
+    const destino = { project: "PROYECTO-A", task_name: "tarea-a", file_name: "00 - contexto inicial.md", content: "nuevo" };
+
+    await conServidor(e.env, async (llamar) => {
+      const rechazo = await llamar("write_central_doc", destino);
+      assert.equal(rechazo.isError, true, rechazo.texto);
+      assert.match(rechazo.texto, /contexto inicial está siempre protegido/);
+
+      const creado = await llamar("write_central_doc", { ...destino, file_name: CONTEXTO_INICIAL, force: true });
+      assert.equal(creado.isError, false, creado.texto);
+      assert.match(creado.texto, /\(creado con force\)/);
+    });
+  });
+
+  it("escribe un recibo en la subcarpeta, y el recibo congela el plan", async () => {
+    const e = escenario();
+    conFases(e, [D01, D02, D03]);
+
+    await conServidor(e.env, async (llamar) => {
+      const recibo = await llamar("write_central_doc", { project: "PROYECTO-A", task_name: "tarea-a", file_name: "04 - Ejecución/L01 - rutas.md", content: "recibo" });
+      assert.equal(recibo.isError, false, recibo.texto);
+      assert.equal(fs.readFileSync(path.join(e.tareaA, "04 - Ejecución", "L01 - rutas.md"), "utf-8"), "recibo");
+
+      const plan = await llamar("write_central_doc", { project: "PROYECTO-A", task_name: "tarea-a", file_name: D03, content: "otro plan" });
+      assert.equal(plan.isError, true, plan.texto);
+      assert.match(plan.texto, /congelado: la Fase 4/);
+    });
+  });
+
+  // En Windows y macOS otro uso de mayúsculas abre el mismo archivo: no puede esquivar R4.
+  it(
+    "cambiar las mayúsculas del nombre no esquiva el congelamiento",
+    { skip: process.platform === "linux" },
+    async () => {
+      await debeRechazar(
+        "write_central_doc",
+        () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: "01 - análisis técnico.md", content: "pisado" }),
+        /congelado/,
+        (e) => conFases(e, [D01, D02])
+      );
+    }
+  );
+});
+
 // Las dos tools de lectura comparten los límites: cada caso de S9 se prueba en ambas.
 type Lector = {
   tool: string;
@@ -306,6 +498,26 @@ describe("e2e: usos legítimos que siguen funcionando", () => {
     });
   });
 
+  // §3.8 pedía comprobarlo por el servidor y no solo con loadPhasePrompt (hallazgo 11 de la
+  // auditoría de la Etapa 1): es lo que de verdad le llega al modelo.
+  it("get_phase_prompt entrega las cinco fases sin marcadores, en LF y con las reglas globales", async () => {
+    const e = escenario();
+    await conServidor({ ...e.env, ORQUESTADOR_PROMPTS_PATH: PROMPTS_DEL_REPO }, async (llamar) => {
+      for (const phase of [1, 2, 3, 4, 5]) {
+        const r = await llamar("get_phase_prompt", { phase });
+        assert.equal(r.isError, false, `fase ${phase}: ${r.texto.slice(0, 200)}`);
+        assert.equal(r.texto.includes("<!--"), false, `fase ${phase} entrega un comentario HTML`);
+        assert.equal(r.texto.includes("\r"), false, `fase ${phase} entrega CRLF`);
+        for (const encabezado of ["## BASE DE CADA DECISIÓN", "## PENDIENTES HEREDADOS"]) {
+          assert.ok(r.texto.includes(`\n${encabezado}\n`), `fase ${phase}: falta ${encabezado}`);
+        }
+      }
+
+      const fase4 = await llamar("get_phase_prompt", { phase: 4 });
+      assert.match(fase4.texto, /Los recibos de lote van en la subcarpeta `04 - Ejecución\/`/);
+    });
+  });
+
   // Algunos clientes con modelos en modo estricto mandan null en todo campo opcional.
   it("null en un campo opcional cuenta como ausente: project: null responde igual que sin project", async () => {
     const e = escenario();
@@ -366,6 +578,15 @@ describe("e2e: usos legítimos que siguen funcionando", () => {
       const leido = await llamar("read_central_doc", destino);
       assert.equal(leido.isError, false, leido.texto);
       assert.equal(leido.texto, "recibo L01");
+    });
+  });
+
+  it("file_path a un documento de una tarea que existe sigue valiendo", async () => {
+    const e = escenario();
+    await conServidor(e.env, async (llamar) => {
+      const escrito = await llamar("write_central_doc", { file_path: "PROYECTO-A/Proyectos/tarea-a/01 - Análisis Técnico.md", content: "análisis" });
+      assert.equal(escrito.isError, false, escrito.texto);
+      assert.equal(fs.readFileSync(path.join(e.tareaA, "01 - Análisis Técnico.md"), "utf-8"), "análisis");
     });
   });
 

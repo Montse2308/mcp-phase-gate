@@ -26,6 +26,8 @@ import {
   resolveDocPath,
   resolveRepoPath,
   taskFolderPath,
+  ubicarEnTarea,
+  validarNombreVisible,
   validarSegmento,
 } from "./paths.js";
 import {
@@ -36,11 +38,14 @@ import {
 } from "./phases.js";
 import {
   avisoDeCompuerta,
+  bloqueDeRecibos,
   describeEstado,
   guardarPuntero,
   limpiarEstadoViejo,
   listarTareas,
+  motivoDeProteccion,
   tareaActiva,
+  tareaDelPrompt,
 } from "./tasks.js";
 import { validarLlamada } from "./schemas.js";
 import type { EstadoTarea } from "./tasks.js";
@@ -153,8 +158,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             project: { type: "string", description: `Proyecto, uno de los existentes: ${PROJECTS_DESCRIPTION}. Úsalo junto con task_name y file_name.` },
             task_name: { type: "string", description: "Nombre de la carpeta de la tarea." },
             file_name: { type: "string", description: "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md')." },
-            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN. Solo si no usas project+task_name." },
-            content: { type: "string", description: "Contenido a escribir" }
+            file_path: { type: "string", description: "ALTERNATIVA: ruta relativa dentro de DOCUMENTACIÓN, que tiene que caer dentro de la carpeta de una tarea que ya existe (ej. 'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Los archivos del proyecto no se escriben con esta tool. Solo si no usas project+task_name." },
+            content: { type: "string", description: "Contenido a escribir" },
+            force: { type: "boolean", description: "Solo con confirmación explícita del usuario en el chat. Permite reescribir un documento congelado o el contexto inicial." }
           },
           required: ["content"],
         },
@@ -203,10 +209,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         // El nombre se vuelve carpeta tal cual: "../evil" la creaba fuera de la Documentación.
         validarSegmento(proj, "project");
+        validarNombreVisible(proj, "project");
         carpetaProyecto = proj.toUpperCase();
         estrenado = true;
       }
 
+      validarNombreVisible(taskName, "task_name");
       const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
       const contextoInicial = path.join(carpetaTarea, nombreContextoInicial());
 
@@ -250,18 +258,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
       // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
+      // Lo mismo con la lista de recibos: es una ayuda, no una condición.
       let aviso: string | null = null;
+      let recibos: string | null = null;
       try {
-        aviso = avisoDeCompuerta(phase, discoverPhases(), {
-          ...(project ? { project } : {}),
-          ...(task_name ? { taskName: task_name } : {}),
-        });
+        const phases = discoverPhases();
+        const opciones = { ...(project ? { project } : {}), ...(task_name ? { taskName: task_name } : {}) };
+        aviso = avisoDeCompuerta(phase, phases, opciones);
+
+        const estado = tareaDelPrompt(phases, opciones);
+        if (estado && estado !== "ambigua") recibos = bloqueDeRecibos(phase, estado, phases);
       } catch (error: any) {
         console.error(`[orquestador] No se pudo comprobar la compuerta: ${error.message}`);
       }
 
+      const texto = [aviso, prompt, recibos].filter(Boolean).join("\n\n");
       return {
-        content: [{ type: "text", text: aviso ? `${aviso}\n\n${prompt}` : prompt }],
+        content: [{ type: "text", text: texto }],
       };
     }
 
@@ -387,11 +400,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
       }
 
+      // Antes del mkdir: con una tarea mal escrita, el mkdir recursivo creaba su carpeta.
+      const ubicacion = ubicarEnTarea(fullPath);
+      if (!ubicacion) {
+        throw new Error(
+          "write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe " +
+            "(<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/). Los archivos del proyecto, como " +
+            "phase-gate.json, no se escriben con esta tool. Para una tarea nueva, usa start_task."
+        );
+      }
+
+      const motivo = motivoDeProteccion(
+        ubicacion.carpetaTarea, ubicacion.relativo, discoverPhases(), nombreContextoInicial()
+      );
+      if (motivo && llamada.args.force !== true) {
+        throw new Error(
+          `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
+            `y vuelve a llamar con force: true.`
+        );
+      }
+
+      const existia = fs.existsSync(fullPath);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, content, "utf-8");
 
+      // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
+      const forzado = motivo ? (existia ? " (sobrescrito con force)" : " (creado con force)") : "";
       return {
-        content: [{ type: "text", text: `Archivo escrito exitosamente en ${fullPath}` }],
+        content: [{ type: "text", text: `Archivo escrito exitosamente en ${fullPath}${forzado}` }],
       };
     }
 

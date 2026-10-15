@@ -84,9 +84,8 @@ Pasos:
 2. Llama a `get_phase_prompt(3)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol.
 3. Lee los documentos de las fases anteriores con `read_central_doc`; `get_phase_prompt` te dio sus nombres exactos.
 4. Comprueba contra el código real lo que el plan va a afirmar, ANTES de escribirlo.
-5. Con las decisiones ya tomadas, genera el plan de implementación paso a paso (archivos a crear/modificar), respetando "Cero Rupturas".
+5. Con las decisiones ya tomadas, genera el plan con su tabla de lotes, respetando "Cero Rupturas".
 6. Guárdalo con `write_central_doc`, con el nombre que te indicó `get_phase_prompt`.
-7. Incluye una sección de cómo verificar rápidamente que todo funcionará.
 ```
 
 ## `f4.md` — Ejecución
@@ -97,11 +96,11 @@ Vas a iniciar la FASE 4 (Ejecución) del flujo del mcp-phase-gate.
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name).
 2. Llama a `get_phase_prompt(4)` indicándole también el `project` en el que estoy trabajando —con eso comprueba que no me esté saltando una fase— y asume ese rol.
-3. Lee el plan técnico de la Fase 3 con `read_central_doc` —`get_phase_prompt` te dio su nombre exacto— y ejecútalo paso a paso, aplicando las reglas del repositorio actual.
-4. Verifica ejecutando lo que se pueda ejecutar, no describiendo. Al terminar cada bloque de cambios, dime cómo verificar lo que solo yo puedo verificar antes de avanzar.
-5. Al cerrar, guarda el documento de la fase con `write_central_doc`, con el nombre que te indicó `get_phase_prompt` y la estructura que pide el prompt.
+3. Lee el plan técnico de la Fase 3 con `read_central_doc` —`get_phase_prompt` te dio su nombre exacto— y nómbrame sus pendientes antes de tocar código.
+4. Ejecútalo **lote por lote**, como indica el prompt: implementa un lote, verifícalo ejecutando, escribe su recibo, muéstrame archivos y mensaje de commit, y con mi OK haz el commit antes de abrir el siguiente. Nunca hagas push.
+5. Con un solo lote, su recibo es el documento de la fase. Con más de uno, el documento de la fase es el índice y se escribe solo al cerrar el último.
 
-El entregable de esta fase es el código funcionando; el documento es el recibo, así que va al final y corto.
+El entregable de esta fase es el código funcionando, lote por lote; cada recibo es corto y se escribe al cerrar su lote.
 ```
 
 ## `f5.md` — Auditoría / Pre-PR
@@ -109,7 +108,7 @@ El entregable de esta fase es el código funcionando; el documento es el recibo,
 ```markdown
 Vas a iniciar la FASE 5 (Auditoría / Pre-PR) del flujo del mcp-phase-gate.
 
-Commits a auditar: tómalos del texto que escribí después del comando (ej. "los últimos 6 commits de esta rama" o un rango). Si no especifiqué nada, pregúntame cuáles antes de seguir.
+Commits a auditar: si escribí un rango después del comando, usa ese. Si no, tómalos de los recibos de la Fase 4. Si tampoco hay recibos, pregúntame cuáles antes de seguir.
 
 Pasos:
 1. Si no sabes la tarea activa, llama a `get_active_task` (o pídeme project + task_name): la auditoría se guarda en su carpeta.

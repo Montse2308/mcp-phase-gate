@@ -8,6 +8,7 @@ import {
   loadPhasePrompt,
   nombreContextoInicial,
   parsePhaseFile,
+  quitarMarcadores,
 } from "../src/phases.js";
 import { promptsLayers } from "../src/config.js";
 import { limpiarEntorno, promptsTemporales } from "./helpers.js";
@@ -34,6 +35,14 @@ documento: 02 - Decisiones.md
 # Decisiones
 
 Cuerpo de la fase 2.
+`;
+
+const FASE_4 = `---
+documento: 04 - Ejecución.md
+recibos: 04 - Ejecución
+---
+
+# Ejecución
 `;
 
 describe("discoverPhases", () => {
@@ -179,6 +188,7 @@ describe("promptsLayers", () => {
       assert.ok(datos.documento, `la fase ${numero} no declara documento en su cabecera`);
     }
     assert.equal(fases.get(1)?.documentoInicial, "00 - Contexto Inicial.md");
+    assert.equal(fases.get(4)?.recibos, "04 - Ejecución");
   });
 });
 
@@ -247,5 +257,165 @@ describe("describePhaseFiles", () => {
     const bloque = describePhaseFiles(discoverPhases([capa]), 5);
 
     assert.equal(bloque.includes("no deja documento"), true);
+  });
+
+  // El nombre de la subcarpeta vive en el frontmatter de la Fase 4, como el del documento: el
+  // modelo lo recibe del servidor y no de un texto copiado en cada prompt.
+  it("la fase que declara recibos nombra su subcarpeta", () => {
+    const capa = promptsTemporales({ "fase-2-decisiones.md": FASE_2, "fase-4-ejecucion.md": FASE_4 });
+
+    const bloque = describePhaseFiles(discoverPhases([capa]), 4);
+
+    assert.ok(bloque.includes("Los recibos de lote van en la subcarpeta `04 - Ejecución/`, uno por lote"), bloque);
+    assert.ok(bloque.includes("`04 - Ejecución/L01 - <slug>.md`"), bloque);
+    assert.ok(bloque.includes("Con un solo lote no hay subcarpeta: el recibo es el documento de esta fase."), bloque);
+  });
+
+  it("una fase posterior ve la subcarpeta junto al documento de la Fase 4", () => {
+    const capa = promptsTemporales({
+      "fase-4-ejecucion.md": FASE_4,
+      "fase-5-auditoria.md": "---\ndocumento: 05 - Auditoría.md\n---\n\n# Auditoría\n",
+    });
+
+    const bloque = describePhaseFiles(discoverPhases([capa]), 5);
+
+    assert.ok(bloque.includes("- Fase 4: `04 - Ejecución.md` (recibos de lote en `04 - Ejecución/`)"), bloque);
+  });
+
+  it("sin recibos declarados no menciona ninguna subcarpeta", () => {
+    const capa = promptsTemporales({ "fase-1-descubrimiento.md": FASE_1, "fase-2-decisiones.md": FASE_2 });
+
+    assert.equal(describePhaseFiles(discoverPhases([capa]), 2).includes("recibos"), false);
+  });
+});
+
+describe("recibos en el frontmatter", () => {
+  it("discoverPhases lee la subcarpeta de recibos", () => {
+    const capa = promptsTemporales({ "fase-4-ejecucion.md": FASE_4, "fase-2-decisiones.md": FASE_2 });
+
+    const fases = discoverPhases([capa]);
+
+    assert.equal(fases.get(4)?.recibos, "04 - Ejecución");
+    assert.equal(fases.get(2)?.recibos, undefined);
+  });
+
+  // La subcarpeta acaba dentro de un file_name: tiene que ser un solo segmento portable.
+  it("un valor que no es un solo segmento portable se ignora y se registra en el log", (t) => {
+    const log = t.mock.method(console, "error", () => {});
+
+    for (const valor of ["../fuera", "04/Ejecución", "CON", "recibos."]) {
+      const capa = promptsTemporales({ "fase-4-ejecucion.md": `---\ndocumento: 04 - Ejecución.md\nrecibos: ${valor}\n---\n\n# Ejecución\n` });
+
+      assert.equal(discoverPhases([capa]).get(4)?.recibos, undefined, valor);
+    }
+    assert.ok(log.mock.callCount() >= 4, `se registraron ${log.mock.callCount()} avisos`);
+    assert.match(String(log.mock.calls[0]?.arguments[0]), /recibos/);
+  });
+
+  // Hallazgo 2 de la auditoría de la Etapa 1: un valor visible y portable puede igual romper el
+  // flujo. Con punto delante, write_central_doc no escribe ahí; con el nombre de un documento, la
+  // carpeta hace que ese documento "exista" al primer recibo.
+  it("se ignora un valor con punto delante o con el nombre de un documento de fase", (t) => {
+    const log = t.mock.method(console, "error", () => {});
+    const FASE_3 = "---\ndocumento: 03 - Plan Técnico.md\n---\n\n# Plan\n";
+
+    for (const valor of [".recibos", "04 - Ejecución.md", "04 - ejecución.MD", "00 - Contexto Inicial.md", "03 - Plan Técnico.md"]) {
+      const capa = promptsTemporales({
+        "fase-1-descubrimiento.md": FASE_1,
+        "fase-3-plan-tecnico.md": FASE_3,
+        "fase-4-ejecucion.md": `---\ndocumento: 04 - Ejecución.md\nrecibos: ${valor}\n---\n\n# Ejecución\n`,
+      });
+
+      assert.equal(discoverPhases([capa]).get(4)?.recibos, undefined, valor);
+    }
+    assert.equal(log.mock.callCount(), 5);
+  });
+});
+
+describe("quitarMarcadores", () => {
+  it("quita las líneas de marcador enteras y conserva su contenido", () => {
+    const texto = "## ROL\n<!-- ranura: rol -->\nEres X.\n<!-- /ranura -->\n\n## OTRA\n";
+
+    assert.equal(quitarMarcadores(texto), "## ROL\nEres X.\n\n## OTRA\n");
+  });
+
+  it("tolera sangría, espacios y un marcador al final sin salto de línea", () => {
+    assert.equal(quitarMarcadores("  <!--ranura:verificacion-->  \nA\n\t<!--  /ranura  -->"), "A\n");
+  });
+
+  // Solo se quitan los marcadores de ranura y solo cuando ocupan su propia línea.
+  it("deja intactos otros comentarios y un marcador en mitad de una línea", () => {
+    const texto = "texto <!-- ranura: rol --> sigue\n<!-- nota -->\n";
+
+    assert.equal(quitarMarcadores(texto), texto);
+  });
+});
+
+// Los archivos propios de la usuaria, escritos con el Bloc de notas, llegan en CRLF (§1.3).
+describe("finales de línea y marcadores en el prompt entregado", () => {
+  it("parsePhaseFile entrega el cuerpo en LF aunque el archivo venga en CRLF", () => {
+    const carpeta = promptsTemporales({ "fase-1-descubrimiento.md": FASE_1.replace(/\n/g, "\r\n") });
+
+    const { meta, cuerpo } = parsePhaseFile(path.join(carpeta, "fase-1-descubrimiento.md"));
+
+    assert.equal(meta.documento, "01 - Análisis Técnico.md");
+    assert.equal(cuerpo.includes("\r"), false);
+  });
+
+  it("un prompt propio escrito en CRLF se entrega en LF, con las reglas globales", () => {
+    const capa = promptsTemporales({
+      "global-rules.md": "# REGLAS\r\n\r\nUna regla.\r\n",
+      "fase-1-descubrimiento.md": FASE_1.replace(/\n/g, "\r\n"),
+    });
+
+    const prompt = loadPhasePrompt(1, [capa]);
+
+    assert.equal(prompt.includes("\r"), false);
+    assert.ok(prompt.includes("# REGLAS\n\nUna regla."));
+    assert.ok(prompt.includes("Cuerpo de la fase 1."));
+  });
+
+  it("los marcadores no llegan al prompt, ni de las reglas globales ni de la fase", () => {
+    const capa = promptsTemporales({
+      "global-rules.md": "## EVIDENCIA\n<!-- ranura: evidencia -->\nCita archivo:línea.\n<!-- /ranura -->\n",
+      "fase-1-descubrimiento.md": `${FASE_1}\n## ROL\n<!-- ranura: rol -->\r\nEres analista.\r\n<!-- /ranura -->\n`,
+    });
+
+    const prompt = loadPhasePrompt(1, [capa]);
+
+    assert.equal(prompt.includes("<!--"), false);
+    assert.ok(prompt.includes("## EVIDENCIA\nCita archivo:línea."));
+    assert.ok(prompt.includes("## ROL\nEres analista."));
+  });
+
+  // Hallazgo 15 de la auditoría de la Etapa 1: el Bloc de notas puede guardar con BOM, y con él
+  // delante el frontmatter no se reconocía y llegaba en crudo al modelo.
+  it("un prompt propio guardado con BOM conserva su frontmatter", () => {
+    const capa = promptsTemporales({ "global-rules.md": "﻿# REGLAS\n", "fase-4-ejecucion.md": `﻿${FASE_4}` });
+
+    const fases = discoverPhases([capa]);
+    const prompt = loadPhasePrompt(4, [capa]);
+
+    assert.equal(fases.get(4)?.documento, "04 - Ejecución.md");
+    assert.equal(fases.get(4)?.recibos, "04 - Ejecución");
+    assert.equal(prompt.includes("﻿"), false);
+    assert.equal(prompt.includes("documento:"), false);
+  });
+
+  // Hallazgo 7: un marcador solo se quita si ocupa su línea entera. Lo que parece un marcador y
+  // no se reconoce llega al modelo, así que queda en el log.
+  it("un marcador con texto detrás, o dos en una línea, no se quitan y se avisan", (t) => {
+    const log = t.mock.method(console, "error", () => {});
+    const lineas = ["<!-- ranura: rol --> Eres X.", "<!-- ranura: rol --><!-- /ranura -->", "<!-- ranura: verificación -->"];
+
+    for (const linea of lineas) {
+      assert.equal(quitarMarcadores(`${linea}\n`), `${linea}\n`, linea);
+    }
+
+    const capa = promptsTemporales({ "fase-1-descubrimiento.md": `${FASE_1}\n${lineas.join("\n")}\n` });
+    loadPhasePrompt(1, [capa]);
+
+    assert.equal(log.mock.callCount(), 1);
+    assert.match(String(log.mock.calls[0]?.arguments[0]), /marcador de ranura que no se reconoce/);
   });
 });

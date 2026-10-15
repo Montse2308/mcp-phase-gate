@@ -12,6 +12,353 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes
+
+**Decisión.** La entrada de la Fase 5 son los commits que registran los recibos de la Fase 4
+(el campo `commit` de cada recibo, o la tabla del índice). Si el usuario indica otro rango,
+manda el suyo, y la auditoría dice si no coincide con los recibos; si no hay ni recibos ni
+rango, se pregunta. Antes de mirar el diff, la auditoría lee el documento de la Fase 4 y sus
+recibos: todo lo que quedó en "Espera al usuario", en `## Validaciones pendientes` o en un lote
+`con pendientes`, `fallido` o `descartado` se nombra, y si toca lo auditado y no hay constancia
+de que el usuario lo comprobó, es **BLOQUEANTE**.
+
+La auditoría gana su propio `PROHIBIDO` y su `AUTOVERIFICACIÓN`, antes de SALIDA 2. Hasta ahora
+los dos existían solo dentro del contrato del PR, y nada de la auditoría se revisaba antes de
+entregar.
+
+**Amplía** la entrada del 2026-08-08 "La Fase 5 deja documento y `start_task` se niega a pisar
+una tarea": la fase sigue siendo de solo lectura y sigue dejando su documento.
+
+**Por qué.** Con los recibos, los commits de la tarea ya están escritos; pedírselos al usuario
+era trabajo repetido y una fuente de auditar un rango equivocado. Y un "LGTM" sobre un cambio
+cuya prueba manual nadie hizo se lee como aprobación de algo que no se comprobó: es justo el
+pendiente heredado (#39) que la regla global obliga a nombrar, llevado a la última compuerta
+antes del PR.
+
+**Ranuras de la Fase 5:** `rol`, `pr` (todo el cuerpo de SALIDA 2) y `ejemplos`. El contrato
+del PR no cambia; solo queda envuelto para que un preset de la Etapa 3 pueda sustituirlo.
+
+---
+
+## 2026-10-14 — La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario
+
+**Decisión.** La Fase 4 ejecuta el plan **un lote a la vez**, en el orden de la tabla de lotes
+de la Fase 3, con un ciclo fijo: implementar solo ese lote, verificarlo con su criterio de
+salida, escribir su recibo con `commit: pendiente`, mostrarle al usuario la lista exacta de
+archivos y el mensaje de commit, y con su OK hacer el commit y anotar el hash en el recibo. El
+corte de commit es la única parada prevista del lote. Las secciones NO SUBES NADA y EL DOCUMENTO del
+prompt se sustituyen por **LOTES Y RECIBOS** y **COMMITS**.
+
+- El recibo tiene frontmatter (`lote`, `de`, `repo`, `rama`, `estado`, `commit`, `fecha`) y
+  encabezados exactos. Con `lotes: 1` el recibo es el documento de la fase; con más lotes, cada
+  recibo va en `04 - Ejecución/L0x - <slug>.md` y el documento de la fase es un índice que se
+  escribe solo al cerrar el último.
+- El `git add` lleva la lista de archivos del lote, uno por uno; nunca `-A`, `.`, `-u`, una
+  carpeta entera ni `git commit -a`, y nunca `--amend`. Si falla un hook o se pide una
+  passphrase, el agente se detiene; nunca `--no-verify`.
+- Antes del primer commit, el agente comprueba la rama con `git branch --show-current`. Si no es
+  la del plan, o es la principal sin que el plan lo diga, se detiene y pregunta. Como no puede
+  cambiar de rama, sin esta comprobación una sesión abierta en la rama principal dejaba ahí los
+  commits (hallazgo de la auditoría de la Etapa 1).
+- Antes del primer lote se nombran los pendientes heredados del plan, y un lote que depende de
+  uno sin resolver no se ejecuta.
+
+**Reemplaza** la entrada del 2026-08-07 "La Fase 4 no sube nada". **Matiza** la del 2026-08-07
+"La Fase 4 hace; el documento es el recibo": el recibo sigue siendo corto y secundario, pero
+ahora hay uno por lote y se escribe al cerrar cada lote, no al final de la fase.
+
+**Por qué el commit sí y el push nunca.** El commit es local y reversible, y a partir de la
+Etapa 4 lo verifica el servidor contra Git. El push saca el trabajo del equipo, dispara el CI o
+un despliegue, y debe pasar antes por la auditoría de la Fase 5, que sigue siendo de solo
+lectura. Además, el servidor no puede impedir un push desde la terminal del agente: la frontera
+se expresa en el prompt y, si se quiere, se refuerza con los permisos del cliente. Por eso el
+push, crear o cambiar de rama y abrir el PR siguen siendo del usuario, y no es configurable.
+
+**Por qué con OK y no automático.** Es la política `agente-commitea-con-OK`, la de fábrica en
+la 2.1.0. El usuario ve qué entra en cada commit antes de que exista, y mientras revisa puede
+hacer las pruebas que el lote dejó esperando. Las otras políticas (`agente-propone`, `auto`,
+`ninguno`) llegan con el manifiesto de la Etapa 3, como variantes de la ranura `commits`.
+
+**Consecuencia aceptada.** Para quien usa la 2.x por `npx`, la Fase 4 pasa a hacer commits
+(riesgo E1-R2); siempre con OK explícito, y por eso la versión es menor y no de parche. Con
+`lotes: 1`, el documento de la fase existe desde que se escribe el recibo con
+`commit: pendiente`, así que durante esos minutos la fase aparece cerrada antes del commit; es
+una ventana aceptada que desaparece en la 3.0.0, cuando el servidor guarda el recibo en la
+subcarpeta hasta anclarlo.
+
+**La ventana no se extiende a un lote que falla.** Con `lotes: 1`, si el lote queda `fallido` o
+`descartado` en su verificación, su recibo va en la subcarpeta (`L01 - <slug>.md`) y el
+documento de la fase no se escribe. Si no, el recibo fallido se quedaba para siempre como
+documento de la fase y la tarea aparecía cerrada (cuestionamiento de la auditoría de la Etapa 1).
+Queda un resto: si el usuario rechaza el commit después de escrito el recibo, el documento ya
+existe y el modelo no puede moverlo; el recibo lo dice con su `estado`, y lo cierra la 3.0.0.
+
+**Ranuras de la Fase 4:** `rol`, `verificacion`, `pruebas`, `lotes`, `commits` y `ejemplos`.
+
+---
+
+## 2026-10-14 — Los lotes son estructurales en la Fase 3
+
+**Decisión.** Todo plan técnico se parte en **lotes**. El documento empieza con el frontmatter
+`lotes: N` y lleva, después de los pasos, una tabla con una fila por lote: repositorio,
+objetivo, pasos que incluye, criterio de salida, commit propuesto y si se revierte solo. Cada
+paso pertenece a exactamente un lote, cada lote toca un solo repositorio y deja la aplicación
+funcionando, y lo que arregla va antes que lo que solo mejora. Un plan chico tiene `lotes: 1`,
+y es válido.
+
+**Reemplaza** la sección condicional "Etapas con commits separados" del contrato de la Fase 3,
+que llegó con las decisiones del 2026-08-07 sin entrada propia. Su criterio sigue intacto
+dentro de las reglas de los lotes: lo que arregla va primero, y lo arriesgado al final, para
+poder descartarlo sin perder el arreglo.
+
+**Por qué.** Como sección condicional, partir el trabajo dependía de que el modelo decidiera
+que hacía falta, y la Fase 4 no tenía dónde apoyarse para ejecutar por partes. Con los lotes en
+el núcleo, la Fase 4 ejecuta un lote a la vez, con un commit y un recibo por lote, y cada lote
+llega con su criterio de salida ya escrito. El número `N` del frontmatter es lo que la Fase 4
+lee para saber cuántos recibos esperar.
+
+**Matiza** la entrada del 2026-08-07 "Sin suite de pruebas: la comparación contra la réplica
+ocupa ese lugar". La política de pruebas, que estaba repartida en tres sitios, se junta en
+**PRUEBAS Y PARIDAD**: si el proyecto no tiene suite, sigue prohibido inventarla; si ya tiene
+una, se corre, y el criterio de salida de cada lote dice qué comando y qué debe dar. La
+comparación contra la réplica se queda igual dentro de esa sección.
+
+**Ranuras de la Fase 3:** `rol`, `comprobaciones`, `lotes`, `pruebas` y `ejemplos`. Con
+`lotes: false` en un preset de la Etapa 3, la ranura `lotes` se reduce a "un solo lote".
+
+---
+
+## 2026-10-14 — Base de cada decisión y pendientes heredados viven en las reglas globales; Cero Rupturas se acota por fase
+
+**Decisión.** `prompts/global-rules.md` gana tres secciones y reescribe una:
+
+- **EVIDENCIA** (nueva): toda afirmación se ancla en un `archivo:línea` o en la salida real de
+  algo ejecutado, con qué se ejecutó y cuándo.
+- **BASE DE CADA DECISIÓN** (nueva, #40): toda `D<n>`, nazca en la fase que nazca, declara su
+  base: `medido` (con fuente y vigencia), `leído en código`, `documentado` o `inferido` (con qué
+  la confirmaría). Una medición contra una fuente no confirmada cuenta como `inferido`, y con
+  varias bases se declara la más débil.
+- **PENDIENTES HEREDADOS** (nueva, #39): cada fase revisa antes de empezar si la anterior dejó
+  lagunas y se las nombra al usuario; y toda fase que cierra con algo sin comprobar lo deja bajo
+  el encabezado exacto `## Validaciones pendientes` y lo dice en el mensaje de cierre.
+- **CERO RUPTURAS**, acotada por fase: fuera de la Fase 4 hay que preguntar antes de cambiar
+  código existente; en la Fase 4, el plan aprobado ya es esa autorización para lo que lista.
+
+Las dos reglas globales que un preset podrá cambiar, `cero-rupturas` y `evidencia`, quedan
+marcadas como ranuras. Base y Pendientes no son ranura: no dependen del dominio. Cada fase las
+ancla con referencias cortas (paso 0, PROHIBIDO, AUTOVERIFICACIÓN) en los lotes de prompts L05
+a L08.
+
+**Nueva** (#39 y #40). Esta es la parte común; las dos issues se cierran con el último lote de
+prompts, el de la Fase 5.
+
+**Por qué en las reglas globales.** Se anteponen a las cinco fases, así que es el único lugar
+donde Base y Pendientes se escriben una vez para todas. #40 nació en la Fase 1, pero una
+decisión puede nacer en cualquier fase y arrastra el mismo problema: sin base declarada, la fase
+siguiente no sabe qué reverificar. #39 tampoco es de una fase: cualquiera puede cerrar con
+lagunas, y la deducción de fase solo mira que el documento exista.
+
+**Por qué `medido` no basta solo.** En la tarea que originó #40, lo "medido" estaba medido
+contra una réplica vieja que nadie había comprobado. Una marca `medido` sin fuente ni vigencia
+habría sido activamente engañosa.
+
+**Por qué Cero Rupturas se acota.** Decía "SIEMPRE pregúntale al usuario primero" sin
+distinguir fases, y en la Fase 4 eso obligaba a pedir permiso por cada cambio que el plan ya
+aprobó. La regla sigue igual de estricta para lo que el plan no contempla.
+
+**Por qué no contradice el rechazo de #39 a un campo `Estado:`.** #39 descartó que la compuerta
+dependiera de un `Estado: cerrada | con pendientes` escrito por el modelo: sería una segunda copia
+de la verdad que el disco ya guarda. `## Validaciones pendientes` es un encabezado del
+documento, no un estado: la deducción de fase no lo lee. Lo mismo vale para el `estado` de los
+recibos de lote: en la 2.1.0 es informativo, y a partir de la Etapa 4 el servidor lo verifica
+contra Git en vez de creérselo.
+
+**Riesgo aceptado (E1-R1).** Un `global-rules.md` propio **sustituye** al de fábrica, no se
+suma, así que quien tenga el suyo pierde estas secciones. Se avisa en el README (L10), en la
+Etapa 2 `doctor` avisará si un override no tiene esos encabezados, y en la Etapa 3 se estudia
+que los overrides operen por ranuras para que nadie las pierda por accidente.
+
+---
+
+## 2026-10-14 — Un documento de fase se congela cuando existe el de una fase posterior
+
+**Decisión.** Sin `force: true`, `write_central_doc` rechaza escribir:
+
+- **El contexto inicial**, siempre: también para crearlo. Solo `start_task` lo escribe sin
+  `force`.
+- **Un documento de fase congelado**: el de una fase `n` cuando alguna fase posterior está
+  **presente**. Una fase está presente si existe su documento, o si declara `recibos` y su
+  subcarpeta tiene al menos un `.md`. Los recibos cuentan como de la Fase 4, así que la propia
+  Fase 4 no se congela con sus recibos: a ellos y a `04 - Ejecución.md` solo los congela una
+  Fase 5 presente.
+
+Crear un documento de fase que no existe nunca se rechaza, ni siquiera cuando rellena un hueco,
+porque no pisa nada. Un recibo nuevo sí: con la Fase 5 presente, la ejecución ya se auditó. Un
+archivo que no es de ninguna fase (`notas.md`) tampoco se rechaza. `force` se describe al
+modelo como "solo con confirmación explícita del usuario en el chat", el mensaje de rechazo dice
+cómo pedirla, y la respuesta avisa cuando un documento se sobrescribió, o se creó, con `force`. Lo decide
+`motivoDeProteccion`, con la tabla de verdad del plan maestro v3 en `test/tasks.test.ts`.
+
+**Amplía** la entrada del 2026-08-08 "La Fase 5 deja documento y `start_task` se niega a pisar
+una tarea": aquella protegía el contexto inicial de `start_task`; esta lo protege también de
+`write_central_doc`, y extiende la idea a los documentos de las fases ya superadas.
+
+**Por qué.** Cada fase trabaja sobre los documentos de las anteriores. Reescribir el análisis
+cuando ya existen las decisiones cambia la base de esas decisiones sin que nada lo avise, y el
+disco, que es el único registro, deja de contar lo que pasó. El prompt ya lo prohibía; ahora lo
+hace cumplir el servidor.
+
+**Por qué con `force` y no un rechazo sin salida.** Hay correcciones legítimas que nadie previó:
+una errata en `01` con `02` ya escrito. Cerrarlas del todo obligaría a editar a mano fuera del
+flujo, que es peor. Con `force`, la corrección pasa por el usuario.
+
+**Ni las mayúsculas ni Unicode lo esquivan.** En Windows y macOS, `01 - análisis técnico.md`
+abre el mismo archivo que `01 - Análisis Técnico.md`, y un nombre en Unicode NFD se ve igual que
+el documento. `rutaReal` devuelve el nombre que hay en disco, pero solo para lo que ya existe:
+crear `00 - contexto inicial.md`, o un recibo en `04 - ejecución/`, llegaba a la comprobación con
+el nombre tal cual y pasaba (hallazgo de la auditoría de la Etapa 1). Por eso
+`motivoDeProteccion` compara los nombres normalizados a NFC y sin distinguir mayúsculas, en todos
+los sistemas: en Linux, un nombre que solo difiere en mayúsculas de un documento protegido
+también pide `force`, y no hay un uso legítimo que lo necesite.
+
+**`force` admite `null`,** como todo opcional desde la Etapa 0: cuenta como ausente.
+
+---
+
+## 2026-10-14 — Ranuras en los prompts base: estructura fija, contenido sustituible
+
+**Decisión.** Un prompt base puede marcar el contenido de una sección como **ranura**:
+
+```md
+## VERIFICACIÓN
+<!-- ranura: verificacion -->
+contenido por defecto
+<!-- /ranura -->
+```
+
+El encabezado `##` queda fuera: la estructura del prompt no se sustituye; el contenido, sí. El
+servidor quita los marcadores antes de entregar el prompt (`quitarMarcadores`), así que el
+modelo nunca los ve y recibe el mismo texto que sin ellos. `test/prompts.test.ts` hace cumplir
+las reglas en los prompts publicados: toda ranura se cierra, no se anidan, el nombre es único en
+su archivo y pertenece al catálogo del plan maestro v3 (§3.2, 22 ranuras), y ningún marcador va
+dentro de un bloque de código.
+
+**Nueva.** Prepara las capas de la Etapa 3, donde un preset sustituye una ranura con un bloque
+cuyo identificador es `<archivo>/<ranura>` (`fase-3/pruebas`).
+
+**Por qué.** Hoy, para cambiar cómo verifica una fase hay que pisar la fase entera con un
+archivo propio, y esa copia deja de recibir las mejoras del resto del prompt. Lo que un preset
+necesita cambiar es poco y está localizado: el rol, los medios de verificación, la política de
+pruebas, los ejemplos. Solo es ranura lo que cambia el **comportamiento**; una ruta de ejemplo
+de una línea se generaliza en el texto y no se vuelve ranura.
+
+**Por qué un comentario HTML, en su propia línea.** No se ve al leer el `.md` renderizado, y
+quitarlo por línea entera no deja huecos en el texto. El precio es que `quitarMarcadores` no
+distingue un bloque de código: por eso un marcador dentro de uno es un error del test, y los
+ejemplos de frontmatter de los prompts nunca llevan marcadores.
+
+**En la 2.1.0 todavía no hay ranuras.** Las meten los lotes de prompts (L04 a L08 de la
+Etapa 1). Hasta entonces el test de buena formación pasa con cero.
+
+**Finales de línea, en el mismo cambio.** Las reglas globales y el archivo de cada fase se
+normalizan de `\r\n` a `\n` al leerlos. Un prompt propio escrito con el Bloc de notas llega en
+CRLF, y el prompt entregado mezclaba finales de línea: lo que se compara byte a byte fallaría
+solo en Windows.
+
+---
+
+## 2026-10-14 — Los recibos de lote viven en una subcarpeta que declara el prompt
+
+**Decisión.** La fase que ejecuta por lotes declara en su frontmatter la subcarpeta de sus
+recibos (`recibos: 04 - Ejecución`), igual que declara su documento. El servidor la lee y la
+anuncia al final del prompt: en esa fase, dónde va cada recibo
+(`04 - Ejecución/L01 - <slug>.md`); en las fases posteriores, junto al documento de esa fase.
+El valor tiene que ser un solo segmento de ruta portable (`validarSegmento`), porque acaba
+dentro de un `file_name`. Además no puede empezar por punto, porque `write_central_doc` no
+escribe en esos segmentos, ni llamarse como un documento de fase o como el contexto inicial
+(sin distinguir mayúsculas), porque la carpeta haría que ese documento "existiera" al primer
+recibo. Estas dos condiciones las añadió la auditoría de la Etapa 1. Un valor inválido no tumba
+la fase: se ignora y queda en el log.
+
+**Amplía** la entrada del 2026-08-12 sobre la traducción para quien pidió el ticket, que dejó
+escrito que el flujo **nunca** escribe un archivo que no sea el documento de su fase. Con lotes,
+sí escribe otros: los recibos, y solo ellos, en una subcarpeta con nombre declarado y con un
+nombre de archivo fijado. El argumento técnico que esa entrada dejó registrado sigue valiendo:
+la deducción de fase compara contra los nombres exactos, así que la subcarpeta no mueve la fase
+(lo fija un test de `test/tasks.test.ts`).
+
+**Por qué en el frontmatter.** Un solo lugar para cada dato: el nombre vive en el prompt que lo
+usa, se lee en vivo y llega al modelo por el servidor, como el del documento. Copiarlo en el
+texto de cada prompt que lo menciona es la forma de que un día dos prompts digan dos nombres.
+
+**Todavía no se ve.** Ningún prompt publicado declara `recibos` hasta que la Fase 4 pase a
+ejecutar por lotes (L07 de la Etapa 1). Hasta entonces el servidor no anuncia nada nuevo.
+
+**El servidor lista los recibos que ya existen.** Ninguna tool lista una carpeta, y los slugs son
+libres, así que al retomar la Fase 4 en otro chat, o al auditar en una Fase 5 sin índice, el
+modelo no tenía cómo descubrirlos. Cuando `get_phase_prompt` puede resolver la tarea (la indicada
+o la activa del proyecto), añade al final la lista de los `.md` de la subcarpeta, en la fase que
+declara los recibos y en las posteriores. Si no hay recibos, no añade nada. Lo pidió la auditoría
+de la Etapa 1; en la Etapa 4, `get_batch_status` da además el estado de cada uno.
+
+**Desvío E1-D2 (aprobado por la autora).** El plan pedía comprobar en este lote que la Fase 4
+declara `recibos`. Ese frontmatter llega con el prompt de la Fase 4, en L07, así que la
+comprobación se hace allí, en el test de los prompts publicados de `test/phases.test.ts`.
+
+---
+
+## 2026-10-14 — `write_central_doc` solo escribe dentro de carpetas de tarea, y las carpetas con punto no son proyecto ni tarea
+
+**Decisión.** `write_central_doc` solo escribe dentro de la carpeta de una tarea **que ya
+existe**: `<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/…`. Llegue la ruta por
+`project + task_name + file_name` o por `file_path`, lo comprueba `ubicarEnTarea`, sobre la ruta
+real y antes de crear ninguna carpeta. Las dos vías difieren en un caso, y las dos son seguras:
+con un enlace dentro de una tarea que lleva a otra tarea, la primera lo rechaza, porque la ruta
+debe quedar dentro de la tarea nombrada, y `file_path` escribe en la tarea de destino, que es una
+tarea válida. Dentro de la tarea ningún segmento puede empezar por `.`.
+Además, una carpeta cuyo nombre empieza por `.` no es proyecto (`discoverProjects`) ni tarea
+(`listarTareas`). `read_central_doc` no cambia: sigue leyendo cualquier archivo dentro de
+`DOCS`.
+
+**Nueva.** Prepara el manifiesto de la Etapa 3: `phase-gate.json` y `.phase-gate/` se editan solo
+por CLI o UI, nunca con esta tool (decisión SEG-M del plan maestro v3).
+
+**Por qué.** Con `file_path` se escribía en cualquier lugar de la Documentación, también en la
+raíz de un proyecto, donde vivirá su manifiesto: un modelo podía cambiar la configuración del
+flujo que lo gobierna. Y con una tarea mal escrita, el `mkdir` recursivo le creaba la carpeta, y
+la tarea aparecía en `list_tasks` sin contexto inicial. Por el otro lado, con la subcarpeta de
+tareas vacía, `.obsidian/` o `.git/` de la raíz contaban como proyectos, y el futuro
+`.phase-gate/` de un proyecto, como una tarea.
+
+**Por qué sobre la ruta real.** Igual que la contención: un enlace interno que lleva a una tarea
+sigue valiendo, porque lo que se escribe acaba dentro de ella. La subcarpeta de tareas se compara
+con la que hay en disco y no con el texto de la variable: en Windows y macOS pueden diferir en
+mayúsculas, y `discoverProjects` ya daba ese proyecto por bueno.
+
+**Desvío E1-D1 (aprobado por la autora).** Dos cambios que el plan no pedía en este lote:
+
+- `start_task` rechaza un `task_name` que empieza por punto, y un `project` que empieza por
+  punto cuando viene con `crear_proyecto`, con un error que nombra el campo. Si no, crearía una
+  carpeta que `list_tasks` no ve y en la que `write_central_doc` no escribe. La comprobación
+  (`validarNombreVisible`) va en `start_task` y no en `validarSegmento` ni en `taskFolderPath`,
+  porque los dos llegan también a `read_central_doc`, que no cambia en esta etapa.
+- La descripción de `file_path` en `write_central_doc` dice que la ruta tiene que caer dentro de
+  la carpeta de una tarea que ya existe.
+
+**Qué deja de funcionar, a propósito:**
+
+- Escribir con `file_path` fuera de una tarea: en la raíz de `DOCS`, en la raíz de un proyecto
+  o en una carpeta que no es proyecto (`Plantillas/`). Esos archivos se editan a mano.
+- Escribir en una tarea que no existe. Se crea antes con `start_task`, que guarda su contexto
+  inicial.
+- Escribir un archivo o una subcarpeta con punto dentro de una tarea (`.borrador.md`,
+  `.git/…`).
+- Ver como proyecto o como tarea una carpeta con punto que alguien ya usara así: se renombra la
+  carpeta.
+- Crear con `start_task` una tarea, o estrenar un proyecto, cuyo nombre empiece por punto.
+
+---
+
 ## 2026-10-14 — Dependabot agrupa lo menor e ignora las versiones mayores de TypeScript y de los tipos de Node
 
 **Decisión.** En npm, las versiones menores y los parches llegan en un solo PR semanal
@@ -727,6 +1074,9 @@ como issue abierto; entretanto su contenido está copiado en
 
 ## 2026-08-07 — La Fase 4 hace; el documento es el recibo
 
+> **Matizada** el 2026-10-14 por "La Fase 4 ejecuta lote por lote y hace el commit de cada uno
+> con el OK del usuario": hay un recibo corto por lote, escrito al cerrarlo.
+
 **Decisión.** El prompt de la Fase 4 pone casi todo su peso en cómo ejecutar y cómo
 verificar. El documento va al final, corto, y el prompt lo dice con esas palabras: si el
 modelo está redactando en vez de implementar o verificar, está gastando el turno en lo que
@@ -789,6 +1139,10 @@ supuesta.
 ---
 
 ## 2026-08-07 — La Fase 4 no sube nada
+
+> **Reemplazada** el 2026-10-14 por "La Fase 4 ejecuta lote por lote y hace el commit de cada
+> uno con el OK del usuario": el commit de cada lote lo hace el agente con el OK del usuario.
+> El push, las ramas y el PR siguen siendo del usuario.
 
 **Decisión.** Prohibido hacer commit, crear ramas, hacer push o abrir un PR. La fase termina
 con el código escrito, verificado y el documento cerrado.

@@ -15,7 +15,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MODULE_DIR, stateDir, stateFile } from "./config.js";
-import { findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
+import { claveDeNombre, findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
 import type { PhaseFile } from "./phases.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
@@ -150,6 +150,78 @@ export function estadoDeTarea(
   };
 }
 
+// ─── Documentos congelados ──────────────────────────────────────────────────
+// Un documento de fase se congela en cuanto una fase posterior está presente: reescribirlo
+// después cambiaría la base sobre la que esa fase ya trabajó, sin que nada lo avise. Se puede
+// reescribir con force, que el modelo solo usa con la confirmación explícita del usuario.
+//
+// Una fase está presente si existe su documento, o si declara recibos y su subcarpeta tiene al
+// menos un .md: con varios lotes, la Fase 4 está en curso mucho antes de escribir su documento.
+function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null {
+  if (datos.documento && fs.existsSync(path.join(carpetaTarea, datos.documento))) {
+    return `existe \`${datos.documento}\``;
+  }
+
+  if (datos.recibos) {
+    const subcarpeta = path.join(carpetaTarea, datos.recibos);
+    const entradas = fs.existsSync(subcarpeta) ? fs.readdirSync(subcarpeta, { withFileTypes: true }) : [];
+    if (entradas.some((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md"))) {
+      return `existen recibos en \`${datos.recibos}/\``;
+    }
+  }
+
+  return null;
+}
+
+// Los nombres protegidos se comparan por su clave (claveDeNombre) y no como texto exacto. Sin
+// ella un archivo nuevo esquivaba la protección: `00 - contexto inicial.md` o
+// `04 - ejecución/L01 - x.md` en Windows y macOS, donde abren lo mismo que el nombre protegido, y
+// en cualquier sistema un nombre en Unicode NFD, que se ve igual que el documento. En Linux, un
+// nombre que solo difiere en mayúsculas de un documento protegido también pide force; no hace
+// falta nunca.
+const clave = claveDeNombre;
+
+// Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
+// dentro de la tarea, con "/" como separador (la de ubicarEnTarea).
+export function motivoDeProteccion(
+  carpetaTarea: string,
+  relativo: string,
+  phases: Map<number, PhaseFile>,
+  contextoInicial: string
+): string | null {
+  const buscado = clave(relativo);
+
+  // Ni siquiera para crearlo: solo start_task lo escribe.
+  if (buscado === clave(contextoInicial)) {
+    return "El contexto inicial está siempre protegido: es el único documento que no se puede regenerar leyendo el código.";
+  }
+
+  const fases = [...phases.entries()].sort((a, b) => a[0] - b[0]);
+  const propia = fases.find(
+    ([, datos]) =>
+      (datos.documento && clave(datos.documento) === buscado) ||
+      (datos.recibos && buscado.startsWith(`${clave(datos.recibos)}/`))
+  );
+  if (!propia) return null; // no es un archivo de fase
+
+  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Se mira el nombre
+  // declarado y no el que llegó, que puede venir en otras mayúsculas. Un recibo nuevo sí se
+  // congela: con la Fase 5 presente, la ejecución ya se auditó.
+  const [numero, datos] = propia;
+  const esDocumento = datos.documento !== undefined && clave(datos.documento) === buscado;
+  if (esDocumento && !fs.existsSync(path.join(carpetaTarea, datos.documento!))) return null;
+
+  for (const [posterior, datosPosterior] of fases) {
+    if (posterior <= numero) continue;
+    const presencia = presenciaDeFase(carpetaTarea, datosPosterior);
+    if (presencia) {
+      return `\`${relativo}\` está congelado: la Fase ${posterior} ya está en curso o cerrada (${presencia}).`;
+    }
+  }
+
+  return null;
+}
+
 // Frase corta para el chat. Se le pasa el mapa de fases para poder nombrar la fase siguiente
 // con su título real en vez de un número suelto.
 export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFile>): string {
@@ -174,6 +246,8 @@ export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFil
 // ─── Listado ────────────────────────────────────────────────────────────────
 // Las tareas son las carpetas que hay bajo la subcarpeta de tareas del proyecto. Se listan
 // del disco, así que también aparecen las que alguien creó a mano sin pasar por start_task.
+// Las carpetas con punto no son tareas: con la subcarpeta vacía, .phase-gate/ o .git/ del
+// proyecto cuelgan del mismo sitio que ellas.
 export function listarTareas(
   carpetaProyecto: string,
   phases: Map<number, PhaseFile>
@@ -184,7 +258,7 @@ export function listarTareas(
 
   return fs
     .readdirSync(raiz, { withFileTypes: true })
-    .filter((entrada) => entrada.isDirectory())
+    .filter((entrada) => entrada.isDirectory() && !entrada.name.startsWith("."))
     .map((entrada) => estadoDeTarea(entrada.name, path.join(raiz, entrada.name), phases))
     .sort((a, b) => (b.ultimoCambio ?? 0) - (a.ultimoCambio ?? 0));
 }
@@ -269,27 +343,24 @@ export function detectarSalto(
 // `project` y `taskName` son solo anulación manual, para comprobar contra una tarea distinta de
 // la activa. Sin ellos se usa el puntero; y cuando de verdad no se puede saber se dice en voz
 // alta, en vez de callar como si todo estuviera en orden.
-export function avisoDeCompuerta(
-  fasePedida: number,
+export type OpcionesDeTarea = { project?: string; taskName?: string };
+
+// La tarea de la que habla una llamada a get_phase_prompt: la indicada, o la activa del proyecto.
+// Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa; con
+// varios, se devuelve "ambigua" para que quien llama lo diga en vez de callar.
+export function tareaDelPrompt(
   phases: Map<number, PhaseFile>,
-  opciones: { project?: string; taskName?: string } = {}
-): string | null {
+  opciones: OpcionesDeTarea = {}
+): EstadoTarea | "ambigua" | null {
   let carpetaProyecto: string;
 
   if (opciones.project) {
     carpetaProyecto = requireProjectFolder(opciones.project);
   } else {
-    // Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa.
     const conPuntero = Object.keys(leerPunteros());
 
     if (conPuntero.length === 0) return null; // Nada empezado: no hay nada que comprobar.
-
-    if (conPuntero.length > 1) {
-      return (
-        "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
-        "proyectos con tarea activa. Pasa `project` para que se compruebe."
-      );
-    }
+    if (conPuntero.length > 1) return "ambigua";
 
     const encontrada = findProjectFolder(conPuntero[0] as string);
     if (!encontrada) return null; // Puntero de un proyecto que ya no existe: se ignora.
@@ -300,10 +371,62 @@ export function avisoDeCompuerta(
     ? listarTareas(carpetaProyecto, phases).find((tarea) => tarea.taskName === opciones.taskName)
     : tareaActiva(carpetaProyecto, phases)?.estado;
 
-  if (!estado) return null; // Proyecto sin tareas, o un nombre de tarea que no existe.
+  return estado ?? null; // null: proyecto sin tareas, o un nombre de tarea que no existe.
+}
+
+export function avisoDeCompuerta(
+  fasePedida: number,
+  phases: Map<number, PhaseFile>,
+  opciones: OpcionesDeTarea = {}
+): string | null {
+  const estado = tareaDelPrompt(phases, opciones);
+
+  if (estado === "ambigua") {
+    return (
+      "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
+      "proyectos con tarea activa. Pasa `project` para que se compruebe."
+    );
+  }
+  if (!estado) return null;
 
   const salto = detectarSalto(fasePedida, estado, phases);
   return salto ? avisoDeSalto(salto, estado.taskName, phases) : null;
+}
+
+// ─── Recibos que ya existen ─────────────────────────────────────────────────
+// Ninguna tool lista una carpeta, así que al retomar la Fase 4 en otro chat, o al auditar en la
+// Fase 5 sin índice, el modelo no tenía cómo saber qué recibos hay ni cómo se llaman sus slugs.
+// Se los da el servidor al final del prompt de la fase que los declara y de las posteriores.
+export function bloqueDeRecibos(
+  fasePedida: number,
+  estado: EstadoTarea,
+  phases: Map<number, PhaseFile>
+): string | null {
+  const lineas: string[] = [];
+
+  for (const [numero, datos] of [...phases.entries()].sort((a, b) => a[0] - b[0])) {
+    if (!datos.recibos || numero > fasePedida) continue;
+
+    const subcarpeta = path.join(estado.folderPath, datos.recibos);
+    if (!fs.existsSync(subcarpeta)) continue;
+
+    const recibos = fs
+      .readdirSync(subcarpeta, { withFileTypes: true })
+      .filter((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md"))
+      .map((entrada) => entrada.name)
+      .sort();
+
+    for (const recibo of recibos) lineas.push(`- Fase ${numero}: \`${datos.recibos}/${recibo}\``);
+  }
+
+  if (lineas.length === 0) return null;
+
+  return [
+    `## RECIBOS QUE YA EXISTEN EN LA TAREA "${estado.taskName}"`,
+    "",
+    "Léelos con `read_central_doc` usando estas rutas tal cual:",
+    ...lineas,
+  ].join("\n");
 }
 
 export function avisoDeSalto(
