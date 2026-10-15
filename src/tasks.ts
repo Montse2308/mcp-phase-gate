@@ -15,7 +15,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MODULE_DIR, stateDir, stateFile } from "./config.js";
-import { findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
+import { claveDeNombre, findProjectFolder, requireProjectFolder, tasksRootPath } from "./paths.js";
 import type { PhaseFile } from "./phases.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
@@ -173,15 +173,13 @@ function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null 
   return null;
 }
 
-// Los nombres protegidos se comparan por esta clave y no como texto exacto. rutaReal solo corrige
-// las mayúsculas de lo que ya existe, así que sin ella un archivo nuevo las esquivaba:
-// `00 - contexto inicial.md` o `04 - ejecución/L01 - x.md` en Windows y macOS, donde abren lo
-// mismo que el nombre protegido, y en cualquier sistema un nombre en Unicode NFD, que se ve igual
-// que el documento. Sin distinguir mayúsculas en todos los sistemas: en Linux un nombre que solo
-// difiere en mayúsculas de un documento protegido también pide force, y no hace falta nunca.
-function clave(nombre: string): string {
-  return nombre.normalize("NFC").toLowerCase();
-}
+// Los nombres protegidos se comparan por su clave (claveDeNombre) y no como texto exacto. Sin
+// ella un archivo nuevo esquivaba la protección: `00 - contexto inicial.md` o
+// `04 - ejecución/L01 - x.md` en Windows y macOS, donde abren lo mismo que el nombre protegido, y
+// en cualquier sistema un nombre en Unicode NFD, que se ve igual que el documento. En Linux, un
+// nombre que solo difiere en mayúsculas de un documento protegido también pide force; no hace
+// falta nunca.
+const clave = claveDeNombre;
 
 // Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
 // dentro de la tarea, con "/" como separador (la de ubicarEnTarea).

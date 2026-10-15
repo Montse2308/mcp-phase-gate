@@ -311,6 +311,25 @@ describe("recibos en el frontmatter", () => {
     assert.ok(log.mock.callCount() >= 4, `se registraron ${log.mock.callCount()} avisos`);
     assert.match(String(log.mock.calls[0]?.arguments[0]), /recibos/);
   });
+
+  // Hallazgo 2 de la auditoría de la Etapa 1: un valor visible y portable puede igual romper el
+  // flujo. Con punto delante, write_central_doc no escribe ahí; con el nombre de un documento, la
+  // carpeta hace que ese documento "exista" al primer recibo.
+  it("se ignora un valor con punto delante o con el nombre de un documento de fase", (t) => {
+    const log = t.mock.method(console, "error", () => {});
+    const FASE_3 = "---\ndocumento: 03 - Plan Técnico.md\n---\n\n# Plan\n";
+
+    for (const valor of [".recibos", "04 - Ejecución.md", "04 - ejecución.MD", "00 - Contexto Inicial.md", "03 - Plan Técnico.md"]) {
+      const capa = promptsTemporales({
+        "fase-1-descubrimiento.md": FASE_1,
+        "fase-3-plan-tecnico.md": FASE_3,
+        "fase-4-ejecucion.md": `---\ndocumento: 04 - Ejecución.md\nrecibos: ${valor}\n---\n\n# Ejecución\n`,
+      });
+
+      assert.equal(discoverPhases([capa]).get(4)?.recibos, undefined, valor);
+    }
+    assert.equal(log.mock.callCount(), 5);
+  });
 });
 
 describe("quitarMarcadores", () => {
@@ -367,5 +386,36 @@ describe("finales de línea y marcadores en el prompt entregado", () => {
     assert.equal(prompt.includes("<!--"), false);
     assert.ok(prompt.includes("## EVIDENCIA\nCita archivo:línea."));
     assert.ok(prompt.includes("## ROL\nEres analista."));
+  });
+
+  // Hallazgo 15 de la auditoría de la Etapa 1: el Bloc de notas puede guardar con BOM, y con él
+  // delante el frontmatter no se reconocía y llegaba en crudo al modelo.
+  it("un prompt propio guardado con BOM conserva su frontmatter", () => {
+    const capa = promptsTemporales({ "global-rules.md": "﻿# REGLAS\n", "fase-4-ejecucion.md": `﻿${FASE_4}` });
+
+    const fases = discoverPhases([capa]);
+    const prompt = loadPhasePrompt(4, [capa]);
+
+    assert.equal(fases.get(4)?.documento, "04 - Ejecución.md");
+    assert.equal(fases.get(4)?.recibos, "04 - Ejecución");
+    assert.equal(prompt.includes("﻿"), false);
+    assert.equal(prompt.includes("documento:"), false);
+  });
+
+  // Hallazgo 7: un marcador solo se quita si ocupa su línea entera. Lo que parece un marcador y
+  // no se reconoce llega al modelo, así que queda en el log.
+  it("un marcador con texto detrás, o dos en una línea, no se quitan y se avisan", (t) => {
+    const log = t.mock.method(console, "error", () => {});
+    const lineas = ["<!-- ranura: rol --> Eres X.", "<!-- ranura: rol --><!-- /ranura -->", "<!-- ranura: verificación -->"];
+
+    for (const linea of lineas) {
+      assert.equal(quitarMarcadores(`${linea}\n`), `${linea}\n`, linea);
+    }
+
+    const capa = promptsTemporales({ "fase-1-descubrimiento.md": `${FASE_1}\n${lineas.join("\n")}\n` });
+    loadPhasePrompt(1, [capa]);
+
+    assert.equal(log.mock.callCount(), 1);
+    assert.match(String(log.mock.calls[0]?.arguments[0]), /marcador de ranura que no se reconoce/);
   });
 });

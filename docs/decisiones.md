@@ -261,7 +261,11 @@ recibos (`recibos: 04 - Ejecución`), igual que declara su documento. El servido
 anuncia al final del prompt: en esa fase, dónde va cada recibo
 (`04 - Ejecución/L01 - <slug>.md`); en las fases posteriores, junto al documento de esa fase.
 El valor tiene que ser un solo segmento de ruta portable (`validarSegmento`), porque acaba
-dentro de un `file_name`. Un valor inválido no tumba la fase: se ignora y queda en el log.
+dentro de un `file_name`. Además no puede empezar por punto, porque `write_central_doc` no
+escribe en esos segmentos, ni llamarse como un documento de fase o como el contexto inicial
+(sin distinguir mayúsculas), porque la carpeta haría que ese documento "existiera" al primer
+recibo. Estas dos condiciones las añadió la auditoría de la Etapa 1. Un valor inválido no tumba
+la fase: se ignora y queda en el log.
 
 **Amplía** la entrada del 2026-08-12 sobre la traducción para quien pidió el ticket, que dejó
 escrito que el flujo **nunca** escribe un archivo que no sea el documento de su fase. Con lotes,

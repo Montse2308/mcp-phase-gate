@@ -44,6 +44,14 @@ export function estaDentroReal(base: string, ruta: string): boolean {
   return estaDentro(rutaReal(base), rutaReal(ruta));
 }
 
+// Clave para comparar nombres de documento: dos nombres con la misma clave se ven iguales, y en
+// Windows y macOS abren el mismo archivo. rutaReal solo corrige las mayúsculas de lo que ya
+// existe, así que lo que todavía no existe se compara por aquí. Sin distinguir mayúsculas en
+// todos los sistemas, para que el comportamiento no dependa del equipo.
+export function claveDeNombre(nombre: string): string {
+  return nombre.normalize("NFC").toLowerCase();
+}
+
 // Un nombre de proyecto, tarea o repo es UN segmento de ruta, portable entre sistemas:
 // la Documentación viaja entre equipos con Windows, macOS y Linux. Lo que se rechaza es lo
 // que hoy ya era peligroso (separadores, "..") o lo que Windows no puede guardar y rompe la
