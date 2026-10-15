@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url";
 import { ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { diagnosticar, formatearDiagnostico, informeDeConfiguracion, procedenciaDeFase } from "../src/diagnostico.js";
+import { diagnosticar, diagnosticarSinBloquear, formatearDiagnostico, informeDeConfiguracion, procedenciaDeFase } from "../src/diagnostico.js";
+import { estadosConPlazo } from "../src/repos.js";
 import type { Diagnostico } from "../src/diagnostico.js";
 import { ejecutarEject } from "../src/eject.js";
 import { conectar, textoDe } from "./cliente.js";
@@ -219,6 +220,34 @@ describe("diagnosticar: bloques, repos, git y raíces", () => {
   });
 });
 
+// Hallazgo 2 de la auditoría de la Etapa 3: el servidor no puede llamar a git de forma síncrona.
+describe("diagnóstico sin bloquear", () => {
+  it("estadosConPlazo deja en null lo que no responde a tiempo, sin esperar a git", async () => {
+    const { repos } = instalacion();
+    repoGit(path.join(repos, "api"));
+    const repo = { id: "api", dir: "api", rol: null, ruta: path.join(repos, "api"), origenRuta: "PHASE_GATE_REPOS_PATH" as const, existe: true, error: null };
+
+    const inicio = Date.now();
+    assert.deepEqual(await estadosConPlazo([repo], 0), [null]);
+    assert.ok(Date.now() - inicio < 1000, "esperó a git");
+    assert.equal((await estadosConPlazo([repo]))[0]?.rama, "main");
+  });
+
+  it("con los estados calculados antes, diagnosticar no llama a git: un repo sin respuesta sale como GIT-LENTO", async () => {
+    const { docs, repos } = instalacion();
+    proyecto(docs, "PROYECTO-A", { version: 1, repos: [{ id: "api", dir: "api" }] });
+    repoGit(path.join(repos, "api"));
+
+    const lento = diagnosticar({ estadosDeRepos: new Map([["PROYECTO-A/api", null]]) });
+    assert.equal(hallazgo(lento, "GIT-LENTO")[0]?.severidad, "info");
+    assert.deepEqual(lento.proyectos[0]?.repos.map((r) => [r.esGit, r.rama]), [[false, null]]);
+
+    const completo = await diagnosticarSinBloquear();
+    assert.deepEqual(completo.proyectos[0]?.repos.map((r) => [r.esGit, r.rama]), [[true, "main"]]);
+    assert.deepEqual(hallazgo(completo, "GIT-LENTO"), []);
+  });
+});
+
 describe("doctor --fase N --proyecto P", () => {
   function salida(): Salida & { texto: () => string; errores: () => string } {
     const out: string[] = [];
@@ -271,7 +300,7 @@ describe("phase-gate://configuracion/{proyecto} y get_orchestrator_status", () =
 
       const leido = await cliente.readResource({ uri: "phase-gate://configuracion/PROYECTO-A" });
       const texto = (leido.contents[0] as { text: string }).text;
-      assert.equal(texto, informeDeConfiguracion("PROYECTO-A"));
+      assert.equal(texto, await informeDeConfiguracion("PROYECTO-A"));
       assert.match(texto, /\| Preset \| `software-tdd` \| del proyecto \|/);
       assert.match(texto, /\| Commits \| `auto` \| del proyecto \|/);
       assert.match(texto, /\| Lotes \| sí \| del preset \|/);

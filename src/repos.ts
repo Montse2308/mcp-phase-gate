@@ -170,6 +170,24 @@ function estadoBase(repo: RepoResuelto): EstadoDeRepo {
   };
 }
 
+// El estado de varios repos a la vez, sin bloquear al servidor: en paralelo y con un plazo común. Lo
+// que no responde a tiempo queda en null (el git sigue su curso, con su propio plazo de 10 s).
+export const PLAZO_DE_ESTADOS_MS = 3000;
+
+export async function estadosConPlazo(repos: readonly RepoResuelto[], plazoMs: number = PLAZO_DE_ESTADOS_MS): Promise<(EstadoDeRepo | null)[]> {
+  if (repos.length === 0) return [];
+  let temporizador: NodeJS.Timeout | undefined;
+  const vencido = new Promise<null>((resolver) => {
+    temporizador = setTimeout(() => resolver(null), plazoMs);
+    temporizador.unref();
+  });
+  try {
+    return await Promise.all(repos.map((repo) => Promise.race([estadoDeRepo(repo), vencido])));
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 // Para el chat: "`api`: rama feat/x · a1b2c3d · 2 adelante · árbol limpio".
 export function lineaDeEstado(e: EstadoDeRepo): string {
   const nombre = `\`${e.id}\``;

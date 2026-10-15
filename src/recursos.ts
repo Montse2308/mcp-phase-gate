@@ -21,7 +21,7 @@ import type { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js"
 import * as fs from "fs";
 import * as path from "path";
 
-import { diagnosticar, fasesConCapa, formatearDiagnostico, informeDeConfiguracion } from "./diagnostico.js";
+import { diagnosticarSinBloquear, fasesConCapa, formatearDiagnostico, informeDeConfiguracion } from "./diagnostico.js";
 import {
   discoverProjects,
   estaDentroReal,
@@ -331,7 +331,7 @@ export function registrarRecursos(mcp: McpServer): void {
       mimeType: MIME,
       annotations: { audience: AUDIENCIA },
     },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: formatearDiagnostico(diagnosticar(), "markdown") }] })
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: formatearDiagnostico(await diagnosticarSinBloquear(), "markdown") }] })
   );
 
   mcp.registerResource(
@@ -358,12 +358,14 @@ export function registrarRecursos(mcp: McpServer): void {
       description: "El manifiesto efectivo de un proyecto, de dónde sale cada valor (preset, reglas) y el estado de sus repos en este equipo.",
       mimeType: MIME,
     },
-    async (uri, variables) =>
-      conCodigo(() => {
+    async (uri, variables) => {
+      const carpeta = conCodigo(() => {
         const proyecto = variable(variables, "proyecto");
         validarSegmento(proyecto, "proyecto");
-        return { contents: [{ uri: uri.href, mimeType: MIME, text: informeDeConfiguracion(requireProjectFolder(proyecto)) }] };
-      })
+        return requireProjectFolder(proyecto);
+      });
+      return { contents: [{ uri: uri.href, mimeType: MIME, text: await informeDeConfiguracion(carpeta) }] };
+    }
   );
 
   // El de recibos va antes que el de documentos: los dos empiezan igual, y el SDK usa la primera

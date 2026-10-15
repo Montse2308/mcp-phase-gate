@@ -32,9 +32,10 @@ import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder, requireProjectFolder } from "./paths.js";
 import { SECCIONES_ESQUELETO, capasDe, configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, frontmatterDeTarea, revisarBloques, textoDeReinyeccion } from "./capas.js";
 import type { ConfiguracionProyecto, Procedencia } from "./capas.js";
-import { copiasEnConflicto, describirPresets, leerManifiesto, leerMaquina, presetsDisponibles, resolverRepos } from "./manifiesto.js";
-import type { LecturaMaquina, Preset } from "./manifiesto.js";
-import { estadoDeRepoSincrono } from "./repos.js";
+import { copiasEnConflicto, describirPresets, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
+import type { LecturaMaquina, Preset, RepoResuelto } from "./manifiesto.js";
+import { PLAZO_DE_ESTADOS_MS, estadoDeRepoSincrono, estadosConPlazo } from "./repos.js";
+import type { EstadoDeRepo } from "./repos.js";
 import { fuerzaPorProyecto, resolverPorRaices } from "./roots.js";
 import { GLOBAL_RULES_FILE, discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
@@ -182,8 +183,13 @@ type ContextoDeConfiguracion = {
   presets: Map<string, Preset>;
   presetPorDefecto: string | null;
   fuerzas: Map<string, "fuerte" | "debil"> | null;
-  estado: { gitAusente: boolean };
+  estado: { gitAusente: boolean; gitLento: boolean };
+  // Calculados antes, sin bloquear (el servidor); sin esto, git síncrono (doctor en la terminal).
+  estados: EstadosDeRepos | null;
 };
+
+// El estado de git de cada repo, por "<PROYECTO>/<id>". null: no respondió dentro del plazo.
+export type EstadosDeRepos = Map<string, EstadoDeRepo | null>;
 
 type ConfiguracionDiagnosticada = Pick<Diagnostico["proyectos"][number], "manifiesto" | "preset" | "reglas" | "repos" | "roots">;
 
@@ -255,7 +261,15 @@ function configuracionDelProyecto(
       if (repo.ruta && !repo.existe) {
         hallar("aviso", "REPO-NO-EXISTE", `El repo \`${repo.id}\` de ${nombre} apunta a "${repo.ruta}" (${repo.origenRuta}), que no existe en este equipo.`);
       } else if (repo.existe && !ctx.estado.gitAusente) {
-        const estado = estadoDeRepoSincrono(repo);
+        const estado = ctx.estados ? (ctx.estados.get(`${nombre}/${repo.id}`) ?? null) : estadoDeRepoSincrono(repo);
+        if (!estado) {
+          if (!ctx.estado.gitLento) {
+            ctx.estado.gitLento = true;
+            hallar("info", "GIT-LENTO", `git no respondió en ${PLAZO_DE_ESTADOS_MS / 1000} s en algún repo; su rama no se muestra. repo_status lo intenta sin ese plazo.`);
+          }
+          repos.push({ id: repo.id, ruta: repo.ruta, origen: repo.origenRuta, existe: repo.existe, esGit: false, rama: null });
+          continue;
+        }
         if (estado.error && /no está instalado/.test(estado.error)) {
           ctx.estado.gitAusente = true;
           hallar("aviso", "GIT-NO-INSTALADO", `${estado.error} repo_status y el estado de los repos no estarán disponibles.`);
@@ -276,9 +290,47 @@ function configuracionDelProyecto(
   };
 }
 
+// Los repos de todos los proyectos, resueltos como los resuelve el diagnóstico. Un manifiesto o un
+// machine.json roto no impide listar los demás: ya lo avisa el diagnóstico.
+function reposDeTodos(): { clave: string; repo: RepoResuelto }[] {
+  let maquina: LecturaMaquina | null = null;
+  try {
+    maquina = leerMaquina();
+    if (maquina.estado === "invalido") maquina = { ...maquina, repos: new Map() };
+  } catch {
+    maquina = null;
+  }
+  const lista: { clave: string; repo: RepoResuelto }[] = [];
+  try {
+    for (const proyecto of discoverProjects().values()) {
+      try {
+        const manifiesto = manifiestoDe(proyecto);
+        if (!manifiesto || !maquina) continue;
+        for (const repo of resolverRepos(proyecto, manifiesto.repos, maquina)) lista.push({ clave: `${proyecto}/${repo.id}`, repo });
+      } catch {
+        // manifiesto inválido: ya avisado
+      }
+    }
+  } catch {
+    // sin Documentación no hay repos
+  }
+  return lista;
+}
+
+// El diagnóstico para el servidor: el estado de git de los repos se pide antes, en paralelo y con plazo,
+// para no bloquear el resto de mensajes del protocolo (hallazgo 2 de la auditoría de la Etapa 3). doctor,
+// en la terminal, sigue usando diagnosticar(), síncrono.
+export async function diagnosticarSinBloquear(opciones: Omit<OpcionesDeDiagnostico, "estadosDeRepos"> = {}): Promise<Diagnostico> {
+  const repos = reposDeTodos();
+  const estados = await estadosConPlazo(repos.map((r) => r.repo));
+  return diagnosticar({ ...opciones, estadosDeRepos: new Map(repos.map((r, i) => [r.clave, estados[i] ?? null])) });
+}
+
 // ─── El diagnóstico ─────────────────────────────────────────────────────────
 // `raices`: las de la sesión MCP (la tool las conoce; doctor, en la terminal, no).
-export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"]; raices?: string[] } = {}): Diagnostico {
+export type OpcionesDeDiagnostico = { cliente?: Diagnostico["cliente"]; raices?: string[]; estadosDeRepos?: EstadosDeRepos };
+
+export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico {
   const hallazgos: Hallazgo[] = [];
   const hallar = (severidad: Severidad, codigo: string, texto: string): void => {
     hallazgos.push({ severidad, codigo, texto });
@@ -463,7 +515,7 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"]; raice
         }
       }
 
-      const estado = { gitAusente: false };
+      const estado = { gitAusente: false, gitLento: false };
       for (const nombre of [...discoverProjects().values()].sort()) {
         // Con las fases de SU proyecto. Un manifiesto inválido no tumba el listado: se avisa, y sus
         // tareas se cuentan con las fases sin proyecto.
@@ -476,7 +528,7 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"]; raice
           activa: activa
             ? { tarea: activa.estado.taskName, origen: activa.origen, fase: describeEstado(activa.estado, delProyecto) }
             : null,
-          ...configuracionDelProyecto(nombre, tareas, { maquina, presets, presetPorDefecto, fuerzas, estado }, hallar),
+          ...configuracionDelProyecto(nombre, tareas, { maquina, presets, presetPorDefecto, fuerzas, estado, estados: opciones.estadosDeRepos ?? null }, hallar),
         });
       }
 
@@ -814,8 +866,21 @@ export function formatearProcedencia(informe: InformeDeProcedencia): string {
 }
 
 // ─── El informe de configuración de un proyecto (phase-gate://configuracion/{proyecto}) ───
-// El manifiesto efectivo, de dónde sale cada valor y el estado de sus repos en este equipo.
-export function informeDeConfiguracion(carpetaProyecto: string): string {
+// El manifiesto efectivo, de dónde sale cada valor y el estado de sus repos en este equipo. El estado
+// de git se pide antes, sin bloquear, con el mismo plazo que el diagnóstico.
+export async function informeDeConfiguracion(carpetaProyecto: string): Promise<string> {
+  let repos: RepoResuelto[] = [];
+  try {
+    const m = manifiestoDe(carpetaProyecto);
+    if (m?.repos.length) repos = resolverRepos(carpetaProyecto, m.repos);
+  } catch {
+    repos = []; // el error lo enseña el propio informe
+  }
+  const estados = await estadosConPlazo(repos);
+  return textoDeConfiguracion(carpetaProyecto, new Map(repos.map((repo, i) => [repo.id, estados[i] ?? null])));
+}
+
+function textoDeConfiguracion(carpetaProyecto: string, estados: Map<string, EstadoDeRepo | null>): string {
   const lectura = leerManifiesto(carpetaProyecto);
   const lineas = [`### Configuración de ${carpetaProyecto}`, ""];
   const estadoManifiesto = lectura.estado === "valido" ? "válido" : lectura.estado === "ausente" ? "no existe" : `inválido: ${celda(lectura.error)}`;
@@ -849,8 +914,16 @@ export function informeDeConfiguracion(carpetaProyecto: string): string {
   if (m?.repos.length) {
     lineas.push("", "#### Repos", "");
     const filas = resolverRepos(carpetaProyecto, m.repos).map((repo) => {
-      const estado = estadoDeRepoSincrono(repo);
-      const git = !repo.existe ? "—" : estado.error ? celda(estado.error) : estado.esGit ? `${estado.separado ? "separado" : estado.rama} · ${estado.limpio ? "limpio" : "con cambios"}` : "sin git";
+      const estado = estados.get(repo.id) ?? null;
+      const git = !repo.existe
+        ? "—"
+        : !estado
+          ? `sin respuesta en ${PLAZO_DE_ESTADOS_MS / 1000} s`
+          : estado.error
+            ? celda(estado.error)
+            : estado.esGit
+              ? `${estado.separado ? "separado" : estado.rama} · ${estado.limpio ? "limpio" : "con cambios"}`
+              : "sin git";
       return [codigo(repo.id), celda(repo.rol ?? ""), repo.ruta ? codigo(repo.ruta) : celda(repo.error ?? ""), repo.origenRuta ?? "—", repo.existe ? "sí" : "no", git];
     });
     lineas.push(...tabla(["Id", "Rol", "Ruta en este equipo", "Origen de la ruta", "Existe", "Git"], filas));

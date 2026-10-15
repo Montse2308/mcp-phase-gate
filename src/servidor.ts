@@ -15,7 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { DOCS, SERVER_NAME, SERVER_VERSION, requireBasePath, stateFile } from "./config.js";
-import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
+import { diagnosticarSinBloquear, formatearDiagnostico } from "./diagnostico.js";
 import { pedirConfirmacion } from "./confirmacion.js";
 import { conectarLog, log } from "./log.js";
 import {
@@ -37,7 +37,7 @@ import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerf
 import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
-import { columnaDeConfiguracion, estadoDeRepo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
+import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
 import { errorSinProyecto, iniciarRoots, lineaDeDeduccion, proyectoPorRaices, raicesActuales } from "./roots.js";
@@ -649,7 +649,7 @@ function registrarTools(mcp: McpServer): void {
 
       // Las raíces de la sesión dicen con qué proyecto coincide la carpeta abierta.
       const raices = capacidades?.roots ? await raicesActuales(mcp) : undefined;
-      const diagnostico = diagnosticar({ ...(cliente ? { cliente } : {}), ...(raices ? { raices } : {}) });
+      const diagnostico = await diagnosticarSinBloquear({ ...(cliente ? { cliente } : {}), ...(raices ? { raices } : {}) });
       return {
         content: [{ type: "text", text: formatearDiagnostico(diagnostico, "markdown") }],
         structuredContent: diagnostico,
@@ -740,18 +740,13 @@ async function columnasDeGit(carpetaProyecto: string, carpetaTarea: string | nul
   } catch {
     return new Map(); // el error de configuración lo da ensamblarFase
   }
-  if (repos.length === 0) return new Map();
-
-  let temporizador: NodeJS.Timeout | undefined;
-  const plazo = new Promise<null>((resolver) => {
-    temporizador = setTimeout(() => resolver(null), ESPERA_DE_ESTADO_MS);
-    temporizador.unref();
-  });
-  const todas = Promise.all(repos.map(async (repo) => [repo.id, columnaDeConfiguracion(await estadoDeRepo(repo))] as const));
-  try {
-    const resultado = await Promise.race([todas, plazo]);
-    return new Map((resultado ?? []).flatMap(([id, columna]) => (columna ? [[id, columna] as [string, string]] : [])));
-  } finally {
-    clearTimeout(temporizador);
-  }
+  // Un repo que no responde a tiempo pierde su columna; los demás la conservan.
+  const estados = await estadosConPlazo(repos, ESPERA_DE_ESTADO_MS);
+  return new Map(
+    repos.flatMap((repo, i) => {
+      const estado = estados[i];
+      const columna = estado ? columnaDeConfiguracion(estado) : null;
+      return columna ? [[repo.id, columna] as [string, string]] : [];
+    })
+  );
 }
