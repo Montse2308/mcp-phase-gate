@@ -19,9 +19,12 @@ servidor)` justo después del aviso de la compuerta, si lo hay, cuando:
 
 - el documento de la **fase anterior** (la de mayor número, por debajo de la pedida, cuyo
   documento existe) tiene una línea `## Validaciones pendientes` y la sección **no está vacía**.
-  La sección es el texto hasta el siguiente `## ` o el final. Cuenta como vacía si, recortada,
-  sin punto final y en minúsculas, no queda nada o queda `ninguna`, `nada`, `sin pendientes` o
-  `fase cerrada sin pendientes`;
+  La sección es el texto hasta el siguiente `## ` o el final, y el encabezado se reconoce sin
+  distinguir mayúsculas. Cuenta como vacía si, sin viñetas ni numeración, sin énfasis de Markdown,
+  sin puntos suspensivos ni punto final y en minúsculas, no queda nada o queda `ninguna`,
+  `ninguno`, `ninguna pendiente`, `nada`, `sin pendientes`, `no hay pendientes`,
+  `fase cerrada sin pendientes`, `n/a` o `no aplica` (la lista y la normalización se ampliaron
+  tras la auditoría de la etapa, que encontró falsos positivos con "- Ninguna." o "_Ninguna._");
 - o, en las fases posteriores a la que declara recibos (con los prompts de fábrica, la Fase 5),
   algún recibo tiene en su frontmatter `estado` `con pendientes`, `fallido` o `descartado`. Con
   un solo lote, el recibo es el documento de la Fase 4 y se mira también.

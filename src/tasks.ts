@@ -442,7 +442,34 @@ export function bloqueDeRecibos(
 const ENCABEZADO_PENDIENTES = "## Validaciones pendientes";
 
 // Lo que se escribe por costumbre en una sección que no tiene nada: no es un pendiente.
-const SECCION_VACIA = new Set(["", "ninguna", "nada", "sin pendientes", "fase cerrada sin pendientes"]);
+const SECCION_VACIA = new Set([
+  "",
+  "ninguna",
+  "ninguno",
+  "ninguna pendiente",
+  "nada",
+  "sin pendientes",
+  "no hay pendientes",
+  "fase cerrada sin pendientes",
+  "n/a",
+  "no aplica",
+]);
+
+// La sección reducida a su texto: sin viñetas ni numeración, sin énfasis de Markdown (_ * `),
+// sin puntos suspensivos ni punto final, en una línea y en minúsculas. Así "- Ninguna.",
+// "_Ninguna._" o "Ninguna..." cuentan igual que "Ninguna".
+function textoDeSeccion(seccion: string): string {
+  return seccion
+    .split("\n")
+    .map((linea) => linea.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ""))
+    .join(" ")
+    .replace(/[_*`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(?:\.+|…)$/, "")
+    .trim()
+    .toLowerCase();
+}
 
 const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
 
@@ -450,14 +477,16 @@ const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
 // existe y tiene algo que no sea una forma de decir "ninguna".
 export function tieneValidacionesPendientes(texto: string): boolean {
   const lineas = separarFrontmatter(texto).cuerpo.split("\n");
-  const inicio = lineas.findIndex((linea) => linea.trimEnd() === ENCABEZADO_PENDIENTES);
+  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale.
+  const buscado = ENCABEZADO_PENDIENTES.toLowerCase();
+  const inicio = lineas.findIndex((linea) => linea.trimEnd().normalize("NFC").toLowerCase() === buscado);
   if (inicio === -1) return false;
 
   const resto = lineas.slice(inicio + 1);
   const fin = resto.findIndex((linea) => linea.startsWith("## "));
   const seccion = (fin === -1 ? resto : resto.slice(0, fin)).join("\n");
 
-  return !SECCION_VACIA.has(seccion.trim().replace(/\.$/, "").trim().toLowerCase());
+  return !SECCION_VACIA.has(textoDeSeccion(seccion));
 }
 
 function leerSinFallar(ruta: string): string | null {

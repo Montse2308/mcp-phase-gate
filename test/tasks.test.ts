@@ -18,6 +18,7 @@ import {
   listarTareas,
   motivoDeProteccion,
   tareaActiva,
+  tieneValidacionesPendientes,
 } from "../src/tasks.js";
 import type { EstadoTarea } from "../src/tasks.js";
 import { stateFile } from "../src/config.js";
@@ -718,5 +719,25 @@ describe("avisoDePendientes", () => {
     const estado = tareaCon({ "04 - Ejecución/L01 - x.md": "---\nestado: fallido\n---\n" });
 
     assert.equal(avisoDePendientes(4, estado, CON_RECIBOS), null);
+  });
+});
+
+// Ajustes de la auditoría de la Etapa 2: la heurística de "sección vacía".
+describe("tieneValidacionesPendientes", () => {
+  const conSeccion = (cuerpo: string, encabezado = "## Validaciones pendientes") =>
+    `# Plan\n\n${encabezado}\n\n${cuerpo}\n\n## Lotes\n`;
+
+  for (const vacia of ["- Ninguna.", "Ninguna pendiente.", "N/A", "_Ninguna._", "Ninguna...", "* Nada", "1. Ninguno", "**No aplica.**", "Ninguna…"]) {
+    it(`cuenta como vacía ${JSON.stringify(vacia)}`, () => {
+      assert.equal(tieneValidacionesPendientes(conSeccion(vacia)), false);
+    });
+  }
+
+  it("una sección con un pendiente real sí cuenta, aunque empiece por \"Ninguna\"", () => {
+    assert.equal(tieneValidacionesPendientes(conSeccion("- Ninguna de las pruebas de staging se corrió.")), true);
+  });
+
+  it("reconoce el encabezado en otras mayúsculas", () => {
+    assert.equal(tieneValidacionesPendientes(conSeccion("- probar en staging", "## Validaciones Pendientes")), true);
   });
 });
