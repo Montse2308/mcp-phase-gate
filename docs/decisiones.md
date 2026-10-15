@@ -920,6 +920,9 @@ releases de GitHub salen de los tags, y el *por qué* ya vive en este archivo.
 
 ## 2026-08-10 — Un solo nombre: `mcp-phase-gate` en el repo, el paquete y el servidor
 
+> **Reemplazada en parte** el 2026-10-15 por "Las variables se llaman `PHASE_GATE_*` y
+> `ORQUESTADOR_*` queda como alias": el punto "Qué NO se renombró" ya no vale. El resto sigue.
+
 **Decisión.** El paquete de npm pasa a llamarse `mcp-phase-gate`, `SERVER_NAME` deja de ser
 `phase-gate` para ser también `mcp-phase-gate`, y el repo se renombra igual. De paso, el
 `package.json` se prepara para publicarse: `files`, `engines`, `keywords` y `prepublishOnly`.
@@ -1315,6 +1318,10 @@ mayúsculas y deja intacto el de la carpeta hermana, que es el que importa.
 ---
 
 ## 2026-08-07 — La configuración por dispositivo no vive en el repo
+
+> **Matizada** el 2026-10-15 por "Los comandos de fase se sirven como MCP Prompts desde
+> `prompts/comandos/`": lo que esta entrada dejaba sin resolver —los comandos vivían solo en la
+> carpeta del usuario— queda resuelto; llegan con el paquete. El resto sigue.
 
 **Decisión.** El `.cursor/mcp.json` sale del repositorio y queda gitignoreado. La
 configuración que cambia de un equipo a otro vive en la carpeta del usuario
