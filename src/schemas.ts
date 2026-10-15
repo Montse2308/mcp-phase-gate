@@ -266,8 +266,33 @@ export const diagnosticoShape = {
       activa: z
         .object({ tarea: z.string(), origen: z.enum(["puntero", "deducida"]), fase: z.string() })
         .nullable(),
+      manifiesto: z.string(),
+      preset: z.object({ nombre: z.string(), origen: z.string() }).nullable(),
+      reglas: z.object({ lotes: z.boolean(), commits: z.string() }).nullable(),
+      repos: z.array(
+        z.object({
+          id: z.string(),
+          ruta: z.string().nullable(),
+          origen: z.string().nullable(),
+          existe: z.boolean(),
+          esGit: z.boolean(),
+          rama: z.string().nullable(),
+        })
+      ),
+      roots: z.object({ fuerza: z.enum(["fuerte", "debil"]).nullable() }).nullable(),
     })
   ),
+  configuracion: z.object({
+    configDir: z.string(),
+    maquina: z.object({
+      archivo: z.string(),
+      existe: z.boolean(),
+      valido: z.boolean(),
+      overrides: z.number().int(),
+      presetPorDefecto: z.string().nullable(),
+    }),
+    presets: z.array(z.object({ nombre: z.string(), origen: z.string(), ruta: z.string().nullable() })),
+  }),
   cliente: z
     .object({
       nombre: z.string(),

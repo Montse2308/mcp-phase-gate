@@ -40,7 +40,7 @@ import type { RepoResuelto } from "./manifiesto.js";
 import { columnaDeConfiguracion, estadoDeRepo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
-import { errorSinProyecto, iniciarRoots, lineaDeDeduccion, proyectoPorRaices } from "./roots.js";
+import { errorSinProyecto, iniciarRoots, lineaDeDeduccion, proyectoPorRaices, raicesActuales } from "./roots.js";
 import type { PhaseFile } from "./phases.js";
 import {
   diagnosticoShape,
@@ -630,8 +630,8 @@ function registrarTools(mcp: McpServer): void {
       title: "Estado de la instalación",
       description:
         "Radiografía de la instalación: versión y ruta del paquete, variables y de dónde salió cada una, qué " +
-        "archivo de prompt gana en cada fase, proyectos y tarea activa, y avisos. Úsala cuando algo no se " +
-        "comporte como esperas.",
+        "archivo de prompt gana en cada fase, configuración (machine.json y presets), proyectos con su tarea activa, " +
+        "manifiesto, preset, reglas y repos, y avisos. Úsala cuando algo no se comporte como esperas.",
       inputSchema: getOrchestratorStatusShape,
       outputSchema: diagnosticoShape,
       annotations: anotaciones("Estado de la instalación", true, false, true),
@@ -647,7 +647,9 @@ function registrarTools(mcp: McpServer): void {
           }
         : undefined;
 
-      const diagnostico = diagnosticar(cliente ? { cliente } : {});
+      // Las raíces de la sesión dicen con qué proyecto coincide la carpeta abierta.
+      const raices = capacidades?.roots ? await raicesActuales(mcp) : undefined;
+      const diagnostico = diagnosticar({ ...(cliente ? { cliente } : {}), ...(raices ? { raices } : {}) });
       return {
         content: [{ type: "text", text: formatearDiagnostico(diagnostico, "markdown") }],
         structuredContent: diagnostico,

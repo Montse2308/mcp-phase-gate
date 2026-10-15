@@ -128,6 +128,15 @@ function coincidencias(raices: string[]): Coincidencia[] {
   return encontradas;
 }
 
+// La coincidencia más fuerte de cada proyecto con estas raíces: lo que enseña el diagnóstico.
+export function fuerzaPorProyecto(raices: string[]): Map<string, "fuerte" | "debil"> {
+  const fuerzas = new Map<string, "fuerte" | "debil">();
+  for (const { proyecto, fuerza } of coincidencias(raices)) {
+    if (fuerza === "fuerte" || !fuerzas.has(proyecto)) fuerzas.set(proyecto, fuerza);
+  }
+  return fuerzas;
+}
+
 // El cruce de las raíces con los proyectos:
 //   - la raíz es un repo del proyecto o está dentro de él: fuerte;
 //   - la raíz está dentro de <DOCS>/<PROYECTO>: fuerte;

@@ -6,7 +6,7 @@
 
 import * as path from "path";
 
-import { git } from "./git.js";
+import { git, gitSincrono } from "./git.js";
 import { manifiestoDe, resolverRepos } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
 import { estaDentroReal, leerTextoAcotado, rutaReal, validarSegmento } from "./paths.js";
@@ -122,8 +122,38 @@ export function parsearStatus(salida: string): Pick<EstadoDeRepo, "rama" | "sepa
   return { rama, separado, head, adelante, atras, limpio: cambios === 0 && sinSeguimiento === 0, cambios, sinSeguimiento };
 }
 
+const ARGUMENTOS_DE_STATUS = ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"];
+
+function conResultado(base: EstadoDeRepo, salida: string | null, error: unknown): EstadoDeRepo {
+  if (salida !== null) return { ...base, esGit: true, ...parsearStatus(salida) };
+  const motivo = (error as { motivo?: string }).motivo;
+  if (motivo === "no-es-repo") return base;
+  return { ...base, error: error instanceof Error ? error.message : String(error) };
+}
+
+// La versión síncrona, para el diagnóstico. Misma puerta, mismas banderas.
+export function estadoDeRepoSincrono(repo: RepoResuelto): EstadoDeRepo {
+  const base = estadoBase(repo);
+  if (!repo.ruta || !repo.existe) return base;
+  try {
+    return conResultado(base, gitSincrono(repo.ruta, ARGUMENTOS_DE_STATUS), null);
+  } catch (error) {
+    return conResultado(base, null, error);
+  }
+}
+
 export async function estadoDeRepo(repo: RepoResuelto): Promise<EstadoDeRepo> {
-  const base: EstadoDeRepo = {
+  const base = estadoBase(repo);
+  if (!repo.ruta || !repo.existe) return base;
+  try {
+    return conResultado(base, await git(repo.ruta, ARGUMENTOS_DE_STATUS), null);
+  } catch (error) {
+    return conResultado(base, null, error);
+  }
+}
+
+function estadoBase(repo: RepoResuelto): EstadoDeRepo {
+  return {
     id: repo.id,
     ruta: repo.ruta,
     existe: repo.existe,
@@ -138,16 +168,6 @@ export async function estadoDeRepo(repo: RepoResuelto): Promise<EstadoDeRepo> {
     sinSeguimiento: 0,
     error: repo.ruta ? null : repo.error,
   };
-  if (!repo.ruta || !repo.existe) return base;
-
-  try {
-    const salida = await git(repo.ruta, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]);
-    return { ...base, esGit: true, ...parsearStatus(salida) };
-  } catch (error) {
-    const motivo = (error as { motivo?: string }).motivo;
-    if (motivo === "no-es-repo") return base;
-    return { ...base, error: error instanceof Error ? error.message : String(error) };
-  }
 }
 
 // Para el chat: "`api`: rama feat/x · a1b2c3d · 2 adelante · árbol limpio".

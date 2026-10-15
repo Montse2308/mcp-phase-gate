@@ -12,7 +12,7 @@
 //   - execFile, sin shell, con argumentos que son constantes del código: ningún texto que venga del
 //     modelo llega a la línea de comandos de git.
 
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
 
 export const ESPERA_DE_GIT_MS = 10_000;
@@ -46,28 +46,45 @@ export function traducirError(error: FalloDeEjecucion, stderr: string, dir: stri
   return new ErrorDeGit(`git falló en ${dir}: ${stderr.trim() || error.message}`, "otro");
 }
 
+// Las mismas opciones para las dos variantes: es lo que hace de esto una sola puerta.
+function opcionesDe(dir: string) {
+  return {
+    cwd: dir,
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+    timeout: ESPERA_DE_GIT_MS,
+    maxBuffer: SALIDA_MAXIMA,
+    windowsHide: true,
+    encoding: "utf8" as const,
+  };
+}
+
+const ARGUMENTOS_FIJOS = ["-c", "core.fsmonitor=false"];
+
+// Con un cwd que no existe, execFile da ENOENT y se confundiría con "git no está instalado".
+function siNoEsCarpeta(dir: string): ErrorDeGit | null {
+  return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? null : new ErrorDeGit(`${dir} no existe o no es una carpeta.`, "otro");
+}
+
 export function git(dir: string, args: readonly string[]): Promise<string> {
-  // Con un cwd que no existe, execFile da ENOENT y se confundiría con "git no está instalado".
-  if (!fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) {
-    return Promise.reject(new ErrorDeGit(`${dir} no existe o no es una carpeta.`, "otro"));
-  }
+  const noEs = siNoEsCarpeta(dir);
+  if (noEs) return Promise.reject(noEs);
 
   return new Promise((resolve, reject) => {
-    execFile(
-      "git",
-      ["-c", "core.fsmonitor=false", ...args],
-      {
-        cwd: dir,
-        env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
-        timeout: ESPERA_DE_GIT_MS,
-        maxBuffer: SALIDA_MAXIMA,
-        windowsHide: true,
-        encoding: "utf8",
-      },
-      (error, stdout, stderr) => {
-        if (error) reject(traducirError(error, stderr, dir));
-        else resolve(stdout);
-      }
-    );
+    execFile("git", [...ARGUMENTOS_FIJOS, ...args], opcionesDe(dir), (error, stdout, stderr) => {
+      if (error) reject(traducirError(error, stderr, dir));
+      else resolve(stdout);
+    });
   });
+}
+
+// La misma puerta, síncrona: para el diagnóstico, que doctor ejecuta de una vez en la terminal.
+export function gitSincrono(dir: string, args: readonly string[]): string {
+  const noEs = siNoEsCarpeta(dir);
+  if (noEs) throw noEs;
+  try {
+    return execFileSync("git", [...ARGUMENTOS_FIJOS, ...args], { ...opcionesDe(dir), stdio: ["ignore", "pipe", "pipe"] });
+  } catch (error) {
+    const fallo = error as { code?: string; signal?: string; message: string; stderr?: string };
+    throw traducirError({ code: fallo.code, killed: fallo.signal === "SIGTERM", message: fallo.message }, String(fallo.stderr ?? ""), dir);
+  }
 }

@@ -7,6 +7,7 @@
 //   phase-gate://fases                                      las fases, con su documento y su capa
 //   phase-gate://tareas/{proyecto}/{tarea}/{documento}      un archivo de la carpeta de una tarea
 //   phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo} un recibo de lote de la Fase 4
+//   phase-gate://configuracion/{proyecto}                   la configuración efectiva de un proyecto
 //
 // Solo lectura, y con las mismas defensas que read_central_doc: cada variable se decodifica y se
 // valida como un segmento portable antes de armar ninguna ruta, la ruta final tiene que quedar
@@ -20,7 +21,7 @@ import type { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js"
 import * as fs from "fs";
 import * as path from "path";
 
-import { diagnosticar, fasesConCapa, formatearDiagnostico } from "./diagnostico.js";
+import { diagnosticar, fasesConCapa, formatearDiagnostico, informeDeConfiguracion } from "./diagnostico.js";
 import {
   discoverProjects,
   estaDentroReal,
@@ -222,6 +223,24 @@ function listarRecibos(): Resource[] {
   return lista;
 }
 
+export function uriDeConfiguracion(proyecto: string): string {
+  return `phase-gate://configuracion/${encodeURIComponent(proyecto)}`;
+}
+
+function listarConfiguraciones(): Resource[] {
+  try {
+    return [...discoverProjects().values()].sort().map((proyecto) => ({
+      uri: uriDeConfiguracion(proyecto),
+      name: `configuracion/${proyecto}`,
+      title: `Configuración de ${proyecto}`,
+      mimeType: MIME,
+      annotations: { audience: AUDIENCIA },
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ─── Autocompletado ─────────────────────────────────────────────────────────
 // Lo que ya se escribió filtra la lista, sin distinguir mayúsculas. Un fallo (Documentación sin
 // configurar, proyecto que no existe) devuelve una lista vacía: autocompletar no es el sitio
@@ -325,6 +344,26 @@ export function registrarRecursos(mcp: McpServer): void {
       annotations: { audience: AUDIENCIA },
     },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: tablaDeFases() }] })
+  );
+
+  // La configuración efectiva de cada proyecto (Etapa 3): manifiesto, preset, reglas y repos.
+  mcp.registerResource(
+    "configuracion",
+    new ResourceTemplate("phase-gate://configuracion/{proyecto}", {
+      list: async () => ({ resources: listarConfiguraciones() }),
+      complete: { proyecto: completarProyecto },
+    }),
+    {
+      title: "Configuración de un proyecto",
+      description: "El manifiesto efectivo de un proyecto, de dónde sale cada valor (preset, reglas) y el estado de sus repos en este equipo.",
+      mimeType: MIME,
+    },
+    async (uri, variables) =>
+      conCodigo(() => {
+        const proyecto = variable(variables, "proyecto");
+        validarSegmento(proyecto, "proyecto");
+        return { contents: [{ uri: uri.href, mimeType: MIME, text: informeDeConfiguracion(requireProjectFolder(proyecto)) }] };
+      })
   );
 
   // El de recibos va antes que el de documentos: los dos empiezan igual, y el SDK usa la primera

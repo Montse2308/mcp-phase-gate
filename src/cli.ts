@@ -9,7 +9,7 @@
 import { parseArgs } from "util";
 
 import { SERVER_NAME, SERVER_VERSION } from "./config.js";
-import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
+import { diagnosticar, formatearDiagnostico, formatearProcedencia, procedenciaDeFase } from "./diagnostico.js";
 import { ejecutarEject } from "./eject.js";
 import { CLAVE_VALIDA, CLIENTES } from "./init.js";
 import type { Cliente, OpcionesInit } from "./init.js";
@@ -26,6 +26,8 @@ Uso:
   ${SERVER_NAME}                 Arranca el servidor MCP por stdio (lo hace tu cliente).
   ${SERVER_NAME} doctor          Revisa la instalación: variables, prompts, proyectos y avisos.
   ${SERVER_NAME} doctor --json   Lo mismo, como JSON.
+  ${SERVER_NAME} doctor --fase N [--proyecto P]
+                                De dónde sale cada ranura del prompt de esa fase (capa y archivo:línea).
   ${SERVER_NAME} init            Registra el servidor en tus clientes (Claude Code, Cursor, VS Code).
   ${SERVER_NAME} eject <objetivo> --a global|proyecto:<NOMBRE>
                                 Copia un prompt, una ranura, un comando o un preset para editarlo.
@@ -100,7 +102,7 @@ function invalido(salida: Salida, motivo?: string): ResultadoCli {
 
 // Qué banderas acepta cada subcomando: una bandera de init pasada a doctor es un error, no se ignora.
 const BANDERAS_DE: Record<string, string[]> = {
-  doctor: ["json"],
+  doctor: ["json", "fase", "proyecto"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
 };
@@ -121,6 +123,8 @@ type Valores = {
   yes?: boolean;
   a?: string;
   fuerza?: boolean;
+  fase?: string;
+  proyecto?: string;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -183,6 +187,8 @@ export function ejecutarCli(
         "dry-run": { type: "boolean" },
         yes: { type: "boolean", short: "y" },
         a: { type: "string" },
+        fase: { type: "string" },
+        proyecto: { type: "string" },
         fuerza: { type: "boolean" },
       },
     }));
@@ -203,6 +209,20 @@ export function ejecutarCli(
   if (valores.version) {
     salida.out(SERVER_VERSION);
     return { accion: "salir", codigo: 0 };
+  }
+
+  // doctor --fase N [--proyecto P]: la procedencia de cada ranura de esa fase.
+  if (posicionales.length === 1 && subcomando === "doctor" && (valores.fase !== undefined || valores.proyecto !== undefined)) {
+    const fase = Number(valores.fase);
+    if (valores.fase === undefined || !Number.isInteger(fase) || fase < 1) return invalido(salida, "doctor --proyecto necesita --fase N, con N un número de fase (ej. --fase 3).");
+    try {
+      const informe = procedenciaDeFase(fase, valores.proyecto ?? null);
+      salida.out(valores.json ? JSON.stringify(informe, null, 2) : formatearProcedencia(informe));
+      return { accion: "salir", codigo: 0 };
+    } catch (error) {
+      salida.err(error instanceof Error ? error.message : String(error));
+      return { accion: "salir", codigo: 1 };
+    }
   }
 
   if (posicionales.length === 1 && subcomando === "doctor") {
