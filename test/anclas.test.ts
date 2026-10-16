@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { anclarArtefacto, anclarCommit, compararArchivos, reverificar, sha256DeArchivo, TOPE_DE_ARTEFACTO } from "../src/anclas.js";
-import { SHA, archivosDeCommit, datosDeCommit, esAncestroDeHead, ramaActual, ramasQueContienen, resolverCommit, tieneGit } from "../src/git.js";
+import { SHA, archivosDeCommit, clasificarRevParse, datosDeCommit, esAncestroDeHead, ramaActual, ramasQueContienen, resolverCommit, tieneGit } from "../src/git.js";
 import type { Recibo } from "../src/recibos.js";
 import { carpetaTemporal, crearProyecto, crearSymlink, docsTemporales, limpiarEntorno } from "./helpers.js";
 
@@ -83,6 +83,40 @@ describe("resolverCommit y las consultas de git de los lotes", () => {
     assert.deepEqual(await resolverCommit(repo, "0".repeat(40)), { ok: false, motivo: "no-existe" });
     const blob = g(repo, "rev-parse", "HEAD:a.txt");
     assert.deepEqual(await resolverCommit(repo, blob), { ok: false, motivo: "no-existe" });
+  });
+
+  // Hallazgo 3 de la auditoría de la Etapa 4: con --quiet, un hash ambiguo salía como inexistente. Para
+  // tener uno de verdad hacen falta miles de commits: fast-import los crea en menos de un segundo, y con
+  // fecha y autor fijos los SHA son siempre los mismos, así que la colisión de 7 caracteres también.
+  it("un prefijo de 7 que comparten dos commits es ambiguo, y anclarCommit lo dice", async () => {
+    const { repo } = instalacion();
+    let flujo = "";
+    for (let i = 1; i <= 30000; i++) {
+      flujo += `commit refs/heads/muchos\nmark :${i}\ncommitter Prueba <p@e.com> 1700000000 +0000\ndata ${String(i).length + 1}\nc${i}\n${i > 1 ? `from :${i - 1}\n` : ""}\n`;
+    }
+    execFileSync("git", ["fast-import", "--quiet"], { cwd: repo, input: flujo, stdio: ["pipe", "ignore", "pipe"] });
+    const vistos = new Map<string, string>();
+    let prefijo: string | null = null;
+    const todos = execFileSync("git", ["rev-list", "muchos"], { cwd: repo, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    for (const sha of todos.trim().split("\n")) {
+      const p = sha.slice(0, 7);
+      if (vistos.has(p)) {
+        prefijo = p;
+        break;
+      }
+      vistos.set(p, sha);
+    }
+    assert.ok(prefijo, "con 30 000 commits fijos tiene que haber una colisión de 7");
+    assert.deepEqual(await resolverCommit(repo, prefijo), { ok: false, motivo: "ambiguo" });
+    await assert.rejects(anclarCommit("P", "api", prefijo, []), new RegExp(`El hash \`${prefijo}\` es ambiguo en \`api\`; usa más caracteres\\.`));
+    assert.equal((await resolverCommit(repo, vistos.get(prefijo)!)).ok, true, "con los 40 caracteres, no");
+  });
+
+  it("clasificarRevParse: ambiguo, inexistente y no es un repo", () => {
+    assert.deepEqual(clasificarRevParse("r", 128, "", "error: short object ID 6de81f4 is ambiguous\nhint: …"), { ok: false, motivo: "ambiguo" });
+    assert.deepEqual(clasificarRevParse("r", 128, "", "fatal: Needed a single revision"), { ok: false, motivo: "no-existe" });
+    assert.deepEqual(clasificarRevParse("r", 128, "", "error: x^{commit}: expected commit type, but the object dereferences to tree type"), { ok: false, motivo: "no-existe" });
+    assert.throws(() => clasificarRevParse("r", 128, "", "fatal: not a git repository (or any of the parent directories): .git"), /no es un repositorio de git/);
   });
 
   it("merge-base distingue la rama actual de otra, y las ramas que contienen un commit", async () => {

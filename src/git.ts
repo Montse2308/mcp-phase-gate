@@ -149,20 +149,22 @@ const SHA_COMPLETO = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/; // SHA-1, o SHA-256 en u
 
 export type CommitResuelto = { ok: true; sha: string } | { ok: false; motivo: "formato" | "no-existe" | "ambiguo" };
 
+// Sin --quiet: con él, git calla el "short object ID … is ambiguous" y un hash ambiguo salía con 1, igual
+// que uno que no existe (hallazgo 3 de la auditoría de la Etapa 4). Medido en git 2.51: ambiguo, 128 con
+// "is ambiguous"; inexistente, 128 con "Needed a single revision"; un árbol o un blob, 128 con "expected
+// commit type". Lo que no es una respuesta sobre el hash (no es un repo, propiedad dudosa) es un error.
+export function clasificarRevParse(dir: string, codigo: number, stdout: string, stderr: string): CommitResuelto {
+  const completo = stdout.trim().toLowerCase();
+  if (codigo === 0 && SHA_COMPLETO.test(completo)) return { ok: true, sha: completo };
+  if (/is ambiguous/i.test(stderr)) return { ok: false, motivo: "ambiguo" };
+  if (/not a git repository|dubious ownership/i.test(stderr)) throw traducirError({ code: codigo, message: stderr.trim() }, stderr, dir);
+  return { ok: false, motivo: "no-existe" };
+}
+
 export async function resolverCommit(dir: string, sha: string): Promise<CommitResuelto> {
   if (!SHA.test(sha)) return { ok: false, motivo: "formato" };
-  let respuesta: { stdout: string; stderr: string; codigo: number };
-  try {
-    respuesta = await conFiltrosAnulados(dir, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${sha}^{commit}`], [1]);
-  } catch (error) {
-    if (error instanceof ErrorDeGit && /is ambiguous/i.test(error.message)) return { ok: false, motivo: "ambiguo" };
-    throw error;
-  }
-  const completo = respuesta.stdout.trim().toLowerCase();
-  if (respuesta.codigo === 0 && SHA_COMPLETO.test(completo)) return { ok: true, sha: completo };
-  if (/is ambiguous/i.test(respuesta.stderr)) return { ok: false, motivo: "ambiguo" };
-  // Un 1 es "no hay un commit con ese nombre": no existe, o es un árbol o un blob.
-  return { ok: false, motivo: "no-existe" };
+  const { codigo, stdout, stderr } = await conFiltrosAnulados(dir, ["rev-parse", "--verify", "--end-of-options", `${sha}^{commit}`], [1, 128]);
+  return clasificarRevParse(dir, codigo, stdout, stderr);
 }
 
 // merge-base --is-ancestor contesta con el código de salida: 0 sí, 1 no, y otro (128) si no pudo.

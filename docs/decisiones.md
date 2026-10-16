@@ -219,9 +219,11 @@ comprueba al registrarla:
 
 - **Commit** (`anclarCommit`), cuando el lote tiene git. El hash se valida con `/^[0-9a-f]{7,40}$/i`
   **antes de llamar a git**: así no entran `HEAD`, un nombre de rama, una opción como `--help` ni un
-  prefijo corto (git resuelve desde 4 caracteres). Después, `git rev-parse --verify --quiet
-  --end-of-options <sha>^{commit}` da el SHA completo, que es el único que usan las consultas
-  siguientes; `git merge-base --is-ancestor <sha> HEAD` exige que esté en la rama actual (si está en
+  prefijo corto (git resuelve desde 4 caracteres). Después, `git rev-parse --verify --end-of-options
+  <sha>^{commit}` da el SHA completo, que es el único que usan las consultas siguientes. Va **sin
+  `--quiet`** (como pedía §6.3): con él, git calla el aviso de un prefijo ambiguo y el error decía que
+  el commit no existía (hallazgo 3 de la auditoría de la Etapa 4; probado con una colisión real de 7
+  caracteres); `git merge-base --is-ancestor <sha> HEAD` exige que esté en la rama actual (si está en
   otra, el error dice en cuáles, con `git branch --contains`); y `git diff-tree --root` da los archivos
   que toca, para compararlos con la tabla Archivos del recibo. Si no coinciden, es un **aviso** que
   queda escrito en "Verificación del commit" (H5), no un bloqueo. Un mismo commit no puede anclar dos
