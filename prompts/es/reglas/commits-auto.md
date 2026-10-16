@@ -16,11 +16,19 @@ de rama.
    de la columna "Commit propuesto".
 3. Si un hook falla o se pide una passphrase, detente y díselo. Nunca uses `--no-verify` ni
    `--amend`.
-4. Anuncia el commit en una línea al abrir el siguiente lote. La parada del lote desaparece: si
+4. Después del commit, ancla el lote con `record_batch` (`lote` y `commit`).
+5. Anuncia el commit en una línea al abrir el siguiente lote. La parada del lote desaparece: si
    hay pruebas que esperan al usuario, se acumulan en los recibos y en el índice.
 
-Con esta política, lo que este prompt dice en PROHIBIDO y en AUTOVERIFICACIÓN sobre el OK del
-usuario para cada commit no aplica: el OK es la verificación del lote. Todo lo demás sí.
-
 Nunca hagas `push`, no crees ni cambies de rama y no abras un PR.
+<!-- /bloque -->
+
+<!-- bloque: fase-4/prohibido-commits -->
+- Hacer el commit de un lote que no quedó `verificado`; con `git add -A`, `git add .`, `git add -u`, una carpeta entera o `git commit -a`; o con `--amend`.
+- Hacer el primer commit sin haber comprobado la rama, o en la rama principal sin que el plan o el usuario lo digan.
+<!-- /bloque -->
+
+<!-- bloque: fase-4/autoverificacion-commits -->
+14. ¿Cada commit fue de un lote verificado, llevó solo los archivos de su lote y no hubo ningún push?
+15. ¿Comprobé la rama antes del primer commit, y coincidía con la del plan?
 <!-- /bloque -->

@@ -236,7 +236,9 @@ compilar, el linter, un script, una salida observable. Dilo en una línea y sigu
 - Rediscutir una decisión ya cerrada sin haber encontrado algo en el código que la invalide.
 - Rellenar secciones condicionales que no aplican, con tal de que el documento se vea completo.
 - Planear algo que no puedas señalar en un patrón existente del proyecto.
+<!-- ranura: prohibido-lotes -->
 - Escribir el plan sin la tabla de lotes, o sin el frontmatter `lotes: N`.
+<!-- /ranura -->
 - Un lote que toca más de un repositorio, o que deja la aplicación sin funcionar hasta un lote posterior.
 - Escribir el primer paso sin haber nombrado los pendientes heredados de la Fase 2.
 - Un desvío o una micro-decisión `D<n>` sin **Base**.
@@ -303,7 +305,9 @@ Así se ve un plan que sirve. Son ejemplos reales de documentos aprobados.
 9. ¿Los desvíos respecto a la Fase 2 continúan la numeración `D<n>`?
 10. ¿Cada sección condicional cumple su disparador? Si no, bórrala.
 11. ¿El orden de aplicación está justificado, o solo enumerado?
+<!-- ranura: autoverificacion-lotes -->
 12. ¿El documento empieza con el frontmatter `lotes: N`, y N coincide con las filas de la tabla de lotes?
+<!-- /ranura -->
 13. ¿Cada paso pertenece a exactamente un lote, cada lote toca un solo repositorio y su criterio de salida es ejecutable cuando se puede ejecutar?
 14. ¿Nombré los pendientes heredados antes del primer paso, y los pasos que dependen de ellos van como Propuesta?
 15. ¿Los desvíos y las micro-decisiones `D<n>` tienen su **Base**?

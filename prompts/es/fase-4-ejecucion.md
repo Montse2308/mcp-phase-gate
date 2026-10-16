@@ -150,114 +150,38 @@ demuéstralo**. Un método cambiado sin justificar parece un atajo.
 ## LOTES Y RECIBOS
 <!-- ranura: lotes -->
 El plan declara cuántos lotes hay (`lotes: N` en su frontmatter) y los lista en su tabla. Se
-ejecutan **uno a la vez, en su orden**, con este ciclo. No abras el siguiente lote sin cerrar
-el anterior.
+ejecutan **uno a la vez, en su orden**, con este ciclo. Los recibos los escribe el servidor:
+**nunca escribas recibos ni el documento de esta fase con `write_central_doc`** (el servidor
+los rechaza).
 
-1. **Implementa solo ese lote.** Nada de lotes posteriores, aunque estés en el mismo archivo.
-2. **Verifícalo** con su criterio de salida, ejecutando (ver VERIFICAR).
-3. **Escribe su recibo ANTES del commit**, con `commit: pendiente`. Si el chat se corta aquí,
-   el recibo ya dice qué se hizo y qué se comprobó.
-4. **Corte de commit** (ver COMMITS). Este es el único punto de parada previsto del lote:
-   mientras el usuario revisa los archivos y el mensaje, también puede hacer las pruebas que le
-   esperan.
-5. **Actualiza el recibo** con el hash del commit.
-6. **Sigue con el siguiente lote**, anunciándolo en una línea ("L02 de 4 cerrado: <hash>.
-   Abro L03.").
+1. **Mira dónde vas:** `get_batch_status` te dice qué lote toca y si alguno espera su commit.
+2. **Implementa solo ese lote.** Nada de lotes posteriores, aunque estés en el mismo archivo.
+3. **Verifícalo** con su criterio de salida, ejecutando (ver VERIFICAR).
+4. **Regístralo ANTES del commit:** `record_batch` con `lote`, `titulo` (el objetivo del lote),
+   `repo`, `estado`, `que_se_hizo`, `archivos`, `verificacion`, `espera_al_usuario`, `desvios`
+   y `decisiones` (las `D<n>` nuevas, con su Base). Sin `commit`: queda pendiente. Si el chat
+   se corta aquí, el recibo ya dice qué se hizo y qué se comprobó.
+5. **Corte de commit** (ver COMMITS).
+6. **Ancla el lote:** `record_batch` con `lote` y `commit` (el hash). El servidor comprueba
+   que el commit exista, que esté en la rama actual y qué archivos toca; si algo no cuadra, te
+   lo dice y lo deja escrito.
+7. **Sigue con el siguiente lote**, anunciándolo en una línea. Al anclar el último, el servidor
+   genera el documento de la fase y la cierra.
 
-Si un lote no pasa su criterio de salida, no hagas su commit: su recibo queda con
-`estado: fallido` y lo que pasó, y te detienes a preguntar. Un lote que se descarta a
-propósito queda con `estado: descartado` y su porqué.
+Si aplica alguna sección condicional del recibo (Lo que sigue igual, Reversión, Aviso a alguien
+más o Deuda anotada), pásala en `condicionales` en el paso 4.
 
-### Dónde va cada recibo
+Si un lote no pasa su criterio de salida, regístralo con `estado: fallido` y lo que pasó, no
+hagas commit, y detente a preguntar. Para cerrar la fase sin hacer los lotes que faltan, el
+usuario tiene que decidirlo: `record_batch` con `cerrar_fase: true` y `motivo_descarte`.
 
-- **Con `lotes: 1`**, el recibo ES el documento de la fase: se escribe directo con el nombre
-  exacto que se indica al final de este prompt, con la plantilla de abajo, y no se crea
-  subcarpeta. **Salvo si ese único lote queda `fallido` o `descartado`:** entonces su recibo va
-  en la subcarpeta de recibos, como `L01 - <slug>.md`, y el documento de la fase no se escribe,
-  porque su existencia daría la fase por cerrada.
-- **Con más de un lote**, cada recibo va en la subcarpeta de recibos que se indica al final de
-  este prompt, con el nombre `L0x - <slug>.md`, donde `<slug>` es el objetivo del lote en pocas
-  palabras: solo letras, números, espacios y guiones; sin `:` `/` `\` `<` `>` `"` `|` `?` `*`
-  ni punto al final. No copies el mensaje de commit: `fix(rutas): …` lleva dos puntos.
-  **El documento de la fase no se escribe hasta cerrar el último lote**: su existencia es lo
-  que marca la fase como terminada, así que escribirlo antes la daría por cerrada. Al cerrar
-  el último lote, el documento de la fase es el índice de abajo, no una redacción nueva.
+Si un rebase o un squash cambia el hash de un lote ya anclado, `get_batch_status` con
+`reverificar` lo detecta; con el OK del usuario, `record_batch` con `lote`, `reanclar: true` y el
+`commit` nuevo.
 
-### Plantilla del recibo (frontmatter y encabezados exactos, en este orden)
-
-```markdown
----
-lote: L02
-de: 4
-repo: <repo>
-rama: <rama>
-estado: verificado | con pendientes | fallido | descartado
-commit: pendiente | <hash corto> | no aplica
-fecha: <AAAA-MM-DD>
----
-
-# L02 — <objetivo del lote>
-
-## Qué se hizo
-Una o dos frases, con el número que importe.
-
-## Archivos
-| Archivo | Qué cambió |
-|---|---|
-
-Sin copiar código: para eso está el diff. La excepción es el fragmento que quedó distinto de
-lo que decía el plan.
-
-## Verificación ejecutada
-Lo que corriste, con su resultado en números. Si no corriste nada, dilo.
-
-## Espera al usuario
-| Prueba | Resultado esperado |
-|---|---|
-
-"Ninguna." si no hay. Nunca las des por hechas.
-
-## Desvíos del plan
-Lo que no salió como decía el plan, en sus tres formas (método que no servía, decisión nueva,
-número equivocado). "Ninguno." si no hubo.
-
-## Decisiones
-Las `D<n>` nuevas de este lote, con su **Base**. "Ninguna." si no hubo.
-```
-
-Secciones condicionales del recibo, solo si se cumple su disparador:
-
-| Sección | Se activa si… |
-|---|---|
-| Lo que sigue igual | el lote pasa cerca de consumidores que no debían moverse y conviene dejar constancia de que no se movieron |
-| Reversión | hay migración, el lote escribe datos, o el despliegue va en más de un paso |
-| Aviso a alguien más | el resultado cambia una cifra que otra persona usa para tomar decisiones |
-| Deuda anotada | encontraste algo real que se decidió no atender ahora |
-
-### Índice de cierre (solo con más de un lote)
-
-```markdown
----
-lotes: 4
----
-
-# Ejecución — <tarea>
-
-- **Plan:** `<documento de la Fase 3>` · **Rama:** <rama> · **Cierre:** <AAAA-MM-DD>
-- **Estado:** Fase cerrada sin pendientes | Fase cerrada con pendientes (ver abajo)
-
-## Lotes
-| Lote | Objetivo | Estado | Commit | Recibo |
-|---|---|---|---|---|
-| L01 | … | verificado | `a1b2c3d` | `<subcarpeta de recibos>/L01 - <slug>.md` |
-
-## Espera al usuario
-Las filas de "Espera al usuario" de cada recibo, copiadas sin reescribir. "Nada." si no hay.
-
-## Validaciones pendientes
-(Esta sección existe solo si quedó algo abierto. Si no quedó nada, ni el encabezado se
-escribe: el cierre limpio lo dice la línea Estado de arriba.)
-```
+Sin repositorio git, o con la política de commits `ninguno`, el paso 6 desaparece: en el paso 4
+pasa `artifact_path` (el archivo que cambió, para que el servidor lo selle con su sha256) o
+`verification_note`.
 <!-- /ranura -->
 
 ---
@@ -299,10 +223,12 @@ Nunca hagas `push`, no crees ni cambies de rama y no abras un PR. Eso es del usu
 - Emojis, en cualquier sección.
 - Cerrar la fase con una compuerta del plan rota sin decirlo.
 - Gastar el turno redactando en vez de implementar y verificar.
+<!-- ranura: prohibido-commits -->
 - Hacer un commit sin el OK del usuario; con `git add -A`, `git add .`, `git add -u`, una carpeta entera o `git commit -a`; o con `--amend`.
 - Hacer el primer commit sin haber comprobado la rama, o en la rama principal sin que el plan o el usuario lo digan.
-- Abrir un lote sin haber cerrado el anterior (recibo escrito y commit hecho o descartado).
-- Escribir el documento de la fase antes de cerrar el último lote, cuando hay más de uno.
+<!-- /ranura -->
+- Abrir un lote sin haber cerrado el anterior (registrado y anclado con `record_batch`, o descartado).
+- Escribir recibos o el documento de esta fase con `write_central_doc`: los escribe `record_batch`.
 - Ejecutar un lote que depende de un pendiente heredado sin resolver.
 - Una decisión nueva sin **Base**.
 
@@ -361,9 +287,11 @@ Así se ve una ejecución que sirve. Son ejemplos reales de documentos aprobados
 7. ¿Quedó alguna compuerta del plan rota sin decirlo?
 8. ¿Copié al documento código que ya está en el diff?
 9. ¿Dejé algún script desechable sin borrar?
-10. ¿Cada commit tuvo el OK del usuario, llevó solo los archivos de su lote y no hubo ningún push?
-11. ¿Cada lote cerrado tiene su recibo con `estado` y `commit` en el frontmatter?
-12. Con más de un lote, ¿escribí el documento de la fase solo al cerrar el último? Con un solo lote fallido o descartado, ¿su recibo quedó en la subcarpeta y no como documento de la fase?
-13. ¿Nombré los pendientes heredados antes del primer lote, y no ejecuté ningún lote que dependiera de uno sin resolver?
-14. ¿Las decisiones nuevas tienen su **Base**?
+10. ¿Registré cada lote con `record_batch` (antes de su commit, si lo hay) y quedó anclado?
+11. ¿Dejé que el servidor escribiera los recibos y el documento de la fase, sin usar `write_central_doc` para ellos?
+12. ¿Nombré los pendientes heredados antes del primer lote, y no ejecuté ningún lote que dependiera de uno sin resolver?
+13. ¿Las decisiones nuevas tienen su **Base**?
+<!-- ranura: autoverificacion-commits -->
+14. ¿Cada commit tuvo el OK del usuario, llevó solo los archivos de su lote y no hubo ningún push?
 15. ¿Comprobé la rama antes del primer commit, y coincidía con la del plan?
+<!-- /ranura -->

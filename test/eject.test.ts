@@ -133,7 +133,7 @@ describe("eject", () => {
     assert.equal(eject("fase-3/pruebas", null).codigo, 2);
     const ranura = eject("fase-3/prueba", "global");
     assert.equal(ranura.codigo, 2);
-    assert.match(ranura.salida.errores(), /fase-3 no tiene la ranura "prueba"\. Las que tiene: rol, comprobaciones, lotes, pruebas, ejemplos\./);
+    assert.match(ranura.salida.errores(), /fase-3 no tiene la ranura "prueba"\. Las que tiene: rol, comprobaciones, lotes, pruebas, prohibido-lotes, ejemplos, autoverificacion-lotes\./);
     assert.match(eject("fase-3", "proyecto:NO-EXISTE").salida.errores(), /No existe el proyecto "NO-EXISTE"/);
     assert.equal(eject("global-rules", "global").codigo, 2);
   });

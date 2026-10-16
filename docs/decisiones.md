@@ -12,6 +12,33 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras
+
+**Decisión.** Cuatro ranuras nuevas (el catálogo pasa de 23 a 27): `fase-3/prohibido-lotes` y
+`fase-3/autoverificacion-lotes` (las líneas del plan sin tabla de lotes o sin `lotes: N`), y
+`fase-4/prohibido-commits` y `fase-4/autoverificacion-commits` (las del commit sin el OK del usuario y
+la rama sin comprobar; en la AUTOVERIFICACIÓN de la Fase 4 pasan a ser los puntos 14 y 15, juntos). Cada
+variante de regla pone las suyas: `sin-lotes` pide solo el frontmatter `lotes: 1`; `agente-propone`
+prohíbe ejecutar `git add` o `git commit`; `auto`, commitear un lote que no quedó verificado; `ninguno`,
+cualquier comando de git que escriba. Las variantes ya no dicen "lo que este prompt dice en PROHIBIDO y
+en AUTOVERIFICACIÓN… no aplica".
+
+Con el texto de fábrica no cambia nada de lo que llega al modelo: el oro de las Fases 1 a 3 sigue siendo
+byte a byte el de la `2.2.0`.
+
+A la vez, la ranura `fase-4/lotes` pasa a ser el ciclo con `get_batch_status` y `record_batch` (§6.9 del
+plan), sin plantilla de recibo ni de índice, y `sin-lotes` le añade una línea **después** (modo
+`despues`) en vez de sustituirla.
+
+**Reemplaza en parte** "Las fases, los prompts y la deducción se resuelven por proyecto…" (2026-10-15),
+que dejó esto como deuda para la Etapa 4 (E3-D5), y **amplía** la lista de ranuras de "La Fase 4
+ejecuta lote por lote…" (2026-10-14).
+
+**Qué se descartó.** Hacer ranura toda la sección PROHIBIDO: un preset la sustituiría entera y perdería
+las prohibiciones que no dependen de ninguna regla (el push, reescribir fases anteriores).
+
+---
+
 ## 2026-10-16 — El auditor recibe los commits ya verificados
 
 **Decisión.** Al entregar el prompt de la Fase 5 (la siguiente a la que declara recibos), el servidor
@@ -489,6 +516,11 @@ completa.
 ---
 
 ## 2026-10-15 — Las fases, los prompts y la deducción se resuelven por proyecto; la política de commits es configurable y el push queda fuera de cualquier variante
+
+> **Reemplazada en parte** el 2026-10-16 por "Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen
+> de una regla son ranuras": el punto "Las partes fijas que contradirían una variante" ya no vale (cada
+> variante pone sus propias líneas). Y desde "`04 - Ejecución.md` lo genera el servidor…" (2026-10-16),
+> `ninguno` ancla el lote a un artefacto o a una nota, y `sin-lotes` ya no copia la plantilla del recibo.
 
 **Decisión.** Lo que hasta ahora era global pasa a resolverse con el proyecto:
 

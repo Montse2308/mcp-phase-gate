@@ -5,10 +5,15 @@ no llega al modelo.
 <!-- bloque: fase-4/commits -->
 Política: **sin commits por lote.** El usuario decide cuándo y cómo se versiona.
 
-Al cerrar un lote, su recibo queda con `commit: no aplica` y una línea en "Qué se hizo" que
-diga qué archivos cambió. Detente al cerrar cada lote, igual que si hubiera commit, para que
-el usuario revise y pruebe antes del siguiente. No ejecutes ningún comando de git que escriba.
+Al registrar el lote, pasa `artifact_path` o `verification_note`; no hay commit que anclar.
+Detente al cerrar cada lote, igual que si hubiera commit, para que el usuario revise y pruebe
+antes del siguiente. No ejecutes ningún comando de git que escriba.
+<!-- /bloque -->
 
-Con esta política, lo que este prompt dice en PROHIBIDO y en AUTOVERIFICACIÓN sobre el commit de
-cada lote no aplica: no hay commits. El corte de cada lote es esa parada.
+<!-- bloque: fase-4/prohibido-commits -->
+- Ejecutar comandos de git que escriben (`git add`, `git commit`, `git push`…): con esta política no hay commits por lote.
+<!-- /bloque -->
+
+<!-- bloque: fase-4/autoverificacion-commits -->
+14. ¿Me detuve al cerrar cada lote para que el usuario revisara, sin ejecutar ningún comando de git que escriba?
 <!-- /bloque -->

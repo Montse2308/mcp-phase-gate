@@ -8,12 +8,15 @@
 // lo quitaría también de ahí.
 
 import { strict as assert } from "node:assert";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { defaultPromptsPath } from "../src/config.js";
+import { ensamblarFase } from "../src/capas.js";
+import { defaultPromptsPath, fijarRaizDelPaquete } from "../src/config.js";
+import { POLITICAS_COMMIT } from "../src/manifiesto.js";
 import { PHASE_FILE_PATTERN, describePhaseFiles, discoverPhases, loadPhasePrompt } from "../src/phases.js";
+import { crearProyecto, docsTemporales, limpiarEntorno } from "./helpers.js";
 
 // Como en test/phases.test.ts: la capa de fábrica no se resuelve al repo desde build-test/.
 const PROMPTS = path.join(process.cwd(), "prompts", "es");
@@ -23,8 +26,10 @@ const CATALOGO: Record<string, string[]> = {
   global: ["cero-rupturas", "evidencia", "extra"],
   "fase-1": ["rol", "verificacion", "ejemplos"],
   "fase-2": ["rol", "verificacion", "ejemplos"],
-  "fase-3": ["rol", "comprobaciones", "lotes", "pruebas", "ejemplos"],
-  "fase-4": ["rol", "verificacion", "pruebas", "lotes", "commits", "ejemplos"],
+  // La Etapa 4 (L08) suma las ranuras de las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de
+  // una regla (deuda E3-D5): las variantes las sustituyen en vez de decir que "no aplican".
+  "fase-3": ["rol", "comprobaciones", "lotes", "pruebas", "ejemplos", "prohibido-lotes", "autoverificacion-lotes"],
+  "fase-4": ["rol", "verificacion", "pruebas", "lotes", "commits", "ejemplos", "prohibido-commits", "autoverificacion-commits"],
   "fase-5": ["rol", "pr", "ejemplos"],
 };
 
@@ -195,8 +200,9 @@ describe("prompts publicados", () => {
   }
 
   // Hallazgo 8: comprobar solo que cada ranura fuera del catálogo dejaba pasar que se borrara una.
-  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 23 de §3.2 y §5.3.5 (la Etapa 3 suma `global/extra`).
-  it("cada prompt tiene exactamente las ranuras de su catálogo, 23 en total", () => {
+  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 23 de §3.2 y §5.3.5 (la Etapa 3 suma `global/extra`)
+  // más las 4 de la Etapa 4.
+  it("cada prompt tiene exactamente las ranuras de su catálogo, 27 en total", () => {
     let total = 0;
     for (const archivo of archivos) {
       const id = identificador(archivo) ?? "";
@@ -205,7 +211,7 @@ describe("prompts publicados", () => {
       assert.deepEqual(encontradas, [...(CATALOGO[id] ?? [])].sort(), archivo);
       total += encontradas.length;
     }
-    assert.equal(total, 23);
+    assert.equal(total, 27);
   });
 
   for (const fase of [1, 2, 3, 4, 5]) {
@@ -257,7 +263,7 @@ describe("prompts publicados", () => {
     const texto = leer("fase-3-plan-tecnico.md");
     const prompt = loadPhasePrompt(3, [PROMPTS]);
 
-    assert.deepEqual(ranurasEn(texto), ["comprobaciones", "ejemplos", "lotes", "pruebas", "rol"]);
+    assert.deepEqual(ranurasEn(texto), ["autoverificacion-lotes", "comprobaciones", "ejemplos", "lotes", "prohibido-lotes", "pruebas", "rol"]);
     assert.equal(/etapas con commits separados/i.test(prompt), false, "sigue la sección condicional de etapas");
     assert.equal(prompt.includes("No hay suite de pruebas automatizadas en el proyecto"), false, "sigue afirmando que no hay suite");
     for (const fragmento of [
@@ -274,15 +280,26 @@ describe("prompts publicados", () => {
     }
   });
 
-  // L07: la Fase 4 ejecuta lote por lote, con un recibo y un commit con OK por lote. NO SUBES
-  // NADA y EL DOCUMENTO se sustituyen por LOTES Y RECIBOS y COMMITS.
-  it("la Fase 4 ejecuta por lotes, con recibo y commit con el OK del usuario", () => {
+  // L07 de la Etapa 1: la Fase 4 ejecuta lote por lote, con un recibo y un commit con OK por lote.
+  // L08 de la Etapa 4: los recibos y el documento de la fase los escribe record_batch; el prompt ya
+  // no trae la plantilla del recibo ni la del índice, y el ciclo se apoya en get_batch_status.
+  it("la Fase 4 ejecuta por lotes con record_batch, y el commit con el OK del usuario", () => {
     const texto = leer("fase-4-ejecucion.md");
     const fases = discoverPhases([PROMPTS]);
     const prompt = `${loadPhasePrompt(4, [PROMPTS])}\n\n${describePhaseFiles(fases, 4)}`;
 
-    assert.deepEqual(ranurasEn(texto), ["commits", "ejemplos", "lotes", "pruebas", "rol", "verificacion"]);
-    for (const quitado of ["## NO SUBES NADA", "## EL DOCUMENTO\n", "El proyecto no tiene suite.", "¿Hice commit o subí algo? No debí."]) {
+    assert.deepEqual(ranurasEn(texto), ["autoverificacion-commits", "commits", "ejemplos", "lotes", "prohibido-commits", "pruebas", "rol", "verificacion"]);
+    for (const quitado of [
+      "## NO SUBES NADA",
+      "## EL DOCUMENTO\n",
+      "El proyecto no tiene suite.",
+      "¿Hice commit o subí algo? No debí.",
+      "commit: pendiente | <hash corto> | no aplica",
+      "### Plantilla del recibo",
+      "### Índice de cierre",
+      "Con un solo lote no hay subcarpeta",
+      "Guárdalo con `write_central_doc`",
+    ]) {
       assert.equal(prompt.includes(quitado), false, `sigue: ${quitado.trim()}`);
     }
     for (const fragmento of [
@@ -290,42 +307,46 @@ describe("prompts publicados", () => {
       "\n## LOTES Y RECIBOS\n",
       "\n## COMMITS\n",
       "\n### Pruebas\n",
+      "**nunca escribas recibos ni el documento de esta fase con `write_central_doc`**",
+      "1. **Mira dónde vas:** `get_batch_status` te dice qué lote toca",
+      "4. **Regístralo ANTES del commit:** `record_batch` con `lote`, `titulo`",
+      "6. **Ancla el lote:** `record_batch` con `lote` y `commit` (el hash).",
+      "`record_batch` con `cerrar_fase: true` y `motivo_descarte`",
+      "`reanclar: true`",
       "Los recibos de lote van en la subcarpeta `04 - Ejecución/`, uno por lote",
-      "commit: pendiente | <hash corto> | no aplica",
+      "Lo genera `record_batch` al cerrar el último lote: no lo escribas con `write_central_doc`.",
       "`git add -A`, `git add .`, `git add -u`, una carpeta entera ni `git commit -a`",
       "no uses `--amend`",
       "**Antes del primer commit de la fase**, comprueba en qué rama estás (`git branch --show-current`)",
-      "**Salvo si ese único lote queda `fallido` o `descartado`:** entonces su recibo va",
-      "- **Plan:** `<documento de la Fase 3>`",
-      "`<subcarpeta de recibos>/L01 - <slug>.md`",
       "15. ¿Comprobé la rama antes del primer commit, y coincidía con la del plan?",
       "Nunca hagas `push`, no crees ni cambies de rama y no abras un PR.",
       "- Hacer push, crear o cambiar de rama, o abrir un PR.",
-      "- Escribir el documento de la fase antes de cerrar el último lote, cuando hay más de uno.",
-      "10. ¿Cada commit tuvo el OK del usuario, llevó solo los archivos de su lote y no hubo ningún push?",
-      "14. ¿Las decisiones nuevas tienen su **Base**?",
+      "- Escribir recibos o el documento de esta fase con `write_central_doc`: los escribe `record_batch`.",
+      "14. ¿Cada commit tuvo el OK del usuario, llevó solo los archivos de su lote y no hubo ningún push?",
+      "13. ¿Las decisiones nuevas tienen su **Base**?",
     ]) {
       assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
     }
   });
 
-  // L08: la Fase 5 toma los commits de los recibos y trata los pendientes sin comprobar como
-  // bloqueantes. La auditoría gana su propio PROHIBIDO y su AUTOVERIFICACIÓN; el contrato del
-  // PR solo se envuelve en una ranura.
-  it("la Fase 5 audita desde los recibos y bloquea con pendientes sin comprobar", () => {
+  // L08 de la Etapa 1: la Fase 5 trata los pendientes sin comprobar como bloqueantes, con su propio
+  // PROHIBIDO y su AUTOVERIFICACIÓN. L08 de la Etapa 4: la entrada son los commits que lista el
+  // servidor al final del prompt (COMMITS DE LA FASE 4), no los que el modelo saque de los recibos.
+  it("la Fase 5 audita los commits que lista el servidor y bloquea con pendientes sin comprobar", () => {
     const texto = leer("fase-5-auditoria-pr.md");
     const prompt = loadPhasePrompt(5, [PROMPTS]);
 
     assert.deepEqual(ranurasEn(texto), ["ejemplos", "pr", "rol"]);
     assert.equal(prompt.includes("el usuario te indicará los commits o el rango"), false, "la entrada sigue siendo solo la del usuario");
+    assert.equal(prompt.includes("los commits que registran los recibos"), false, "la entrada sigue saliendo de los recibos");
     for (const fragmento of [
-      "1. ENTRADA: los commits que registran los recibos de la Fase 4",
+      '1. ENTRADA: los commits que lista el servidor al final de este prompt, en "COMMITS DE LA FASE 4". Si el usuario indica otro rango, manda el suyo, y dilo si no coincide.',
       "\n## ANTES DE AUDITAR: PENDIENTES HEREDADOS\n",
       "y no hay constancia de que el usuario lo comprobó, es **BLOQUEANTE**.",
       "\n### PROHIBIDO (auditoría)\n",
-      "- Auditar commits distintos de los de los recibos sin decirlo.",
+      '- Auditar commits distintos de los que lista el servidor en "COMMITS DE LA FASE 4" sin decirlo.',
       "\n### AUTOVERIFICACIÓN (auditoría)\n",
-      "3. ¿Los commits auditados coinciden con los de los recibos? Si no, ¿lo dije?",
+      "3. ¿Los commits auditados coinciden con los que lista el servidor? Si no, ¿lo dije?",
     ]) {
       assert.ok(prompt.includes(fragmento), `falta: ${fragmento.trim()}`);
     }
@@ -343,4 +364,75 @@ describe("prompts publicados", () => {
       }
     });
   }
+});
+
+// L08 de la Etapa 4, sobre los prompts ensamblados de verdad: con cada preset del paquete y cada
+// combinación de reglas (las cuatro políticas de commits, con y sin lotes).
+describe("prompts de la Fase 4 ensamblados con cada preset y cada regla", () => {
+  const RAIZ = process.cwd();
+  const PRESETS = ["software", ...fs.readdirSync(path.join(RAIZ, "presets", "es")).filter((a) => a.endsWith(".md")).map((a) => a.slice(0, -3))];
+  afterEach(() => {
+    limpiarEntorno();
+    fijarRaizDelPaquete(null);
+  });
+
+  function ensamblar(fase: number, preset: string, commits: string, lotes: boolean): string {
+    fijarRaizDelPaquete(RAIZ);
+    const docs = docsTemporales();
+    crearProyecto(docs, "P");
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, preset, reglas: { commits, lotes } }), "utf-8");
+    return ensamblarFase(fase, "P", null, { incluirConfigProyecto: false }).texto;
+  }
+
+  const combinaciones = PRESETS.flatMap((preset) => POLITICAS_COMMIT.flatMap((commits) => [true, false].map((lotes) => ({ preset, commits, lotes }))));
+
+  it("hay presets y combinaciones que comprobar", () => {
+    assert.ok(PRESETS.length >= 6 && combinaciones.length >= 48, `${PRESETS.length} presets, ${combinaciones.length} combinaciones`);
+  });
+
+  // Toda mención de write_central_doc en la Fase 4 es para decir que NO se use con los recibos ni con el
+  // documento de la fase: el servidor los rechaza (L05), así que pedirlo sería mandar al modelo contra un muro.
+  it("ningún prompt de la Fase 4 pide escribir recibos o el documento de la fase con write_central_doc", () => {
+    const NEGATIVA = /nunca escribas|no lo escribas|sin usar `write_central_doc`|^- Escribir recibos o el documento de esta fase con `write_central_doc`: los escribe `record_batch`\.$/;
+    for (const { preset, commits, lotes } of combinaciones) {
+      const texto = ensamblar(4, preset, commits, lotes);
+      const caso = `${preset}, commits ${commits}, lotes ${lotes}`;
+      const menciones = texto.split("\n").filter((linea) => linea.includes("write_central_doc"));
+      assert.ok(menciones.length >= 3, `${caso}: deberían quedar las tres negativas`);
+      for (const linea of menciones) assert.match(linea, NEGATIVA, `${caso}: ${linea}`);
+      for (const resto of ["commit: pendiente | <hash corto>", "Escribe su recibo", "Actualiza el recibo con el hash", "lo que este prompt dice en PROHIBIDO"]) {
+        assert.equal(texto.includes(resto), false, `${caso}: sigue «${resto}»`);
+      }
+      assert.ok(texto.includes("record_batch") && texto.includes("get_batch_status"), caso);
+    }
+  });
+
+  // Deuda E3-D5 (b): las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras, y
+  // cada variante pone las suyas en vez de avisar de que "no aplican".
+  it("cada política pone sus propias líneas de PROHIBIDO y AUTOVERIFICACIÓN sobre los commits", () => {
+    const esperado: Record<string, [string, string]> = {
+      "agente-commitea-con-OK": ["- Hacer un commit sin el OK del usuario", "14. ¿Cada commit tuvo el OK del usuario"],
+      "agente-propone": ["- Ejecutar `git add`, `git commit` o `git push`: con esta política el commit lo hace el usuario", "14. ¿Propuse cada commit con la lista exacta de archivos"],
+      auto: ["- Hacer el commit de un lote que no quedó `verificado`", "14. ¿Cada commit fue de un lote verificado"],
+      ninguno: ["- Ejecutar comandos de git que escriben", "14. ¿Me detuve al cerrar cada lote"],
+    };
+    for (const [commits, [prohibido, autoverificacion]] of Object.entries(esperado)) {
+      const texto = ensamblar(4, "software", commits, true);
+      const prohibidos = texto.slice(texto.indexOf("## PROHIBIDO"), texto.indexOf("## MARCAS DE CALIDAD"));
+      assert.ok(prohibidos.includes(prohibido), `${commits}: falta «${prohibido}»`);
+      assert.ok(texto.slice(texto.indexOf("## AUTOVERIFICACIÓN")).includes(autoverificacion), `${commits}: falta «${autoverificacion}»`);
+      if (commits !== "agente-commitea-con-OK") assert.equal(prohibidos.includes("Hacer un commit sin el OK del usuario"), false, commits);
+    }
+  });
+
+  it("sin lotes, la Fase 3 pide solo el frontmatter `lotes: 1` y la Fase 4 añade su ciclo de un lote", () => {
+    const fase3 = ensamblar(3, "software", "agente-commitea-con-OK", false);
+    assert.ok(fase3.includes("- Escribir el plan sin el frontmatter `lotes: 1`."));
+    assert.ok(fase3.includes("12. ¿El documento empieza con el frontmatter `lotes: 1`?"));
+    assert.equal(fase3.includes("Escribir el plan sin la tabla de lotes"), false);
+
+    const fase4 = ensamblar(4, "software", "agente-commitea-con-OK", false);
+    assert.ok(fase4.includes("1. **Mira dónde vas:** `get_batch_status`"), "el bloque de sin-lotes va después del ciclo, no en su lugar");
+    assert.ok(fase4.includes("El plan tiene un solo lote (`lotes: 1`). Sigue el mismo ciclo una sola vez"));
+  });
 });

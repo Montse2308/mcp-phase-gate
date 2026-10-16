@@ -279,19 +279,25 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
   }
 
   if (propio) {
-    lineas.push(
-      "",
-      `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
-        "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
-    );
-
+    // En la fase de los lotes, el documento y los recibos los escribe record_batch (Etapa 4): el
+    // servidor rechaza escribirlos con write_central_doc, así que decir aquí lo contrario sería mandar
+    // al modelo contra un muro.
     const recibos = available.get(phase)?.recibos;
     if (recibos) {
       lineas.push(
         "",
+        `El documento de esta fase se llama exactamente \`${propio}\`. Lo genera \`record_batch\` al ` +
+          "cerrar el último lote: no lo escribas con `write_central_doc`.",
+        "",
         `Los recibos de lote van en la subcarpeta \`${recibos}/\`, uno por lote: ` +
-          `\`${recibos}/L01 - <slug>.md\`. Con un solo lote no hay subcarpeta: el recibo es el ` +
-          "documento de esta fase."
+          `\`${recibos}/L01 - <slug>.md\`. Los escribe \`record_batch\`, también con un solo lote ` +
+          "mientras está abierto."
+      );
+    } else {
+      lineas.push(
+        "",
+        `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
+          "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
       );
     }
   } else {

@@ -209,7 +209,9 @@ describe("capasDe con preset y reglas", () => {
     ["auto", "Política: **el agente hace el commit en cuanto el lote pasa su verificación**, sin esperar OK."],
     ["ninguno", "Política: **sin commits por lote.**"],
   ] as const) {
-    it(`commits: ${politica} cambia la sección COMMITS de la Fase 4 y nada más`, () => {
+    // Desde la Etapa 4 (deuda E3-D5), la variante cambia también sus líneas de PROHIBIDO y de
+    // AUTOVERIFICACIÓN sobre los commits, que son ranuras. Todo lo demás que sigue a COMMITS, igual.
+    it(`commits: ${politica} cambia COMMITS y sus líneas de PROHIBIDO y AUTOVERIFICACIÓN de la Fase 4, y nada más`, () => {
       instalacion({ version: 1, reglas: { commits: politica } });
       const base = ensamblarFase(4, null).texto;
       const { texto, avisos } = ensamblarFase(4, "PROYECTO-A", null, { incluirConfigProyecto: false });
@@ -218,8 +220,13 @@ describe("capasDe con preset y reglas", () => {
       assert.ok(texto.includes(fragmento));
       assert.equal(texto.includes("Política: **el agente hace el commit con el OK del usuario.**"), false);
       assert.equal(texto.includes("<!--"), false);
-      const despuesDeCommits = (t: string) => t.slice(t.indexOf("\n## PROHIBIDO"));
-      assert.equal(despuesDeCommits(texto), despuesDeCommits(base), "lo que sigue a COMMITS no cambia");
+      const despuesDeCommits = (t: string) =>
+        t
+          .slice(t.indexOf("\n## PROHIBIDO"))
+          .split("\n")
+          .filter((linea) => !/commit|git |rama/i.test(linea));
+      assert.deepEqual(despuesDeCommits(texto), despuesDeCommits(base), "lo que sigue a COMMITS, salvo las líneas de commits, no cambia");
+      assert.notEqual(texto.slice(texto.indexOf("\n## PROHIBIDO")), base.slice(base.indexOf("\n## PROHIBIDO")), "las líneas de commits sí cambian");
     });
   }
 
@@ -229,8 +236,12 @@ describe("capasDe con preset y reglas", () => {
     const fase3 = ensamblarFase(3, "PROYECTO-A").texto;
     const fase4 = ensamblarFase(4, "PROYECTO-A").texto;
     assert.ok(fase3.includes("## LOTES\nEste proyecto no trabaja por lotes."));
+    assert.ok(fase3.includes("- Escribir el plan sin el frontmatter `lotes: 1`."));
+    // Desde la Etapa 4 el recibo lo escribe record_batch: sin-lotes ya no trae su plantilla, añade una
+    // línea después del ciclo.
     assert.ok(fase4.includes("El plan tiene un solo lote (`lotes: 1`)"));
-    assert.ok(fase4.includes("lote: L01\nde: 1\n"));
+    assert.ok(fase4.includes("1. **Mira dónde vas:** `get_batch_status`"));
+    assert.equal(fase4.includes("lote: L01\nde: 1\n"), false);
     assert.ok(fase4.includes("- Lotes: no · Commits: agente-commitea-con-OK"));
   });
 });
