@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Iteración | **18** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13), puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7), con la ejecución de la Etapa 2 y su auditoría externa (iteraciones 16 y 17, §9.8), y con la ejecución de la Etapa 3 (iteración 18, §9.9) |
+| Iteración | **19** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13), puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7), con la ejecución de la Etapa 2 y su auditoría externa (iteraciones 16 y 17, §9.8), y con la ejecución de la Etapa 3 y su auditoría externa (iteraciones 18 y 19, §9.9) |
 | Base del análisis | commit `d7594ea`, árbol limpio |
 | Versión publicada | `2.2.0` (comprobado con `npm view` el 2026-10-15: `latest` = `2.2.0`) |
-| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapas 0, 1 y 2 ejecutadas** (§9.6 a §9.8), en `master` y publicadas (`2.0.1`, `2.1.0` y `2.2.0`); de la Etapa 2 queda la matriz de clientes de L10. **Etapa 3 ejecutada** (L01 a L13, §9.9) en la rama `etapa-3/configuracion`; faltan su auditoría externa, el PR, el tag `v3.0.0-beta.0` y la publicación, que hace la autora |
+| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapas 0, 1 y 2 ejecutadas** (§9.6 a §9.8), en `master` y publicadas (`2.0.1`, `2.1.0` y `2.2.0`); de la Etapa 2 queda la matriz de clientes de L10. **Etapa 3 ejecutada** (L01 a L13, §9.9) en la rama `etapa-3/configuracion`; auditada y con sus ajustes (A1 a A8); faltan el PR, el tag `v3.0.0-beta.0` y la publicación, que hace la autora |
 | Ejecución | La hace el agente local de la autora, lote por lote, con la política `agente-commitea-con-OK` |
 | Fuente | Desde E0 L09, esta copia en `docs/plan-maestro-v3.md` es la fuente del plan (§9.2) |
 
@@ -2547,7 +2547,7 @@ mcp-phase-gate eject <objetivo> --a global|proyecto:<NOMBRE> [--dry-run] [--fuer
 | **L12** | README y guía de migración a v3 | `README.md`, `README.es.md` | Ambos explican manifiesto, presets, bloques, capas, Roots, tools multi-repo, `init`, `eject` y la migración en 3 pasos | `docs(readme): configuración por proyecto, presets y migración a la 3.0` |
 | **L13** | Prerelease `3.0.0-beta.0` publicada con la etiqueta `beta` | `package.json`, `package-lock.json`, `.github/workflows/publish.yml` | El workflow publica con `--tag beta` si la versión contiene `-`, comprobado con un *dry run* local de la expresión; base verde. El tag `v3.0.0-beta.0` lo pone la autora | `chore(release): 3.0.0-beta.0 publicada con la etiqueta beta` |
 
-> **Estado de ejecución:** de L01 a L13 hechos, en la rama `etapa-3/configuracion`. Commits, desvíos (E3-D1 a E3-D14) y lo que queda por comprobar fuera de este equipo en §9.9.
+> **Estado de ejecución:** de L01 a L13 hechos, en la rama `etapa-3/configuracion`, y auditados (ajustes A1 a A8). Commits, desvíos (E3-D1 a E3-D14), la auditoría y lo que queda por comprobar fuera de este equipo en §9.9.
 
 **Por qué este orden.**
 - Mover los prompts (L01) primero, porque todo lo demás los busca en su sitio nuevo.
@@ -4404,11 +4404,67 @@ En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_
 
 **Pendiente de comprobar fuera de este equipo:**
 
-1. **La auditoría externa** de la etapa, a ciegas, antes del PR.
-2. **La CI del PR**: todos los tests corrieron solo en Windows (Node 24). Su primera ejecución en Linux y en Node 22 será la CI. Los que más dependen del sistema: la trampa de `core.fsmonitor` (L08), `GIT-NO-INSTALADO` con un `PATH` vacío (L11) y las rutas de `configDir` en Linux y macOS.
+1. **La auditoría externa** de la etapa, a ciegas, antes del PR. *Hecha: ver abajo.*
+2. **La CI del PR**: todos los tests corrieron solo en Windows (Node 24). Su primera ejecución en Linux y en Node 22 será la CI. Los que más dependen del sistema: la trampa de `core.fsmonitor` (L08), los filtros de `.gitattributes` (A1), `GIT-NO-INSTALADO` con un `PATH` vacío (L11) y las rutas de `configDir` en Linux y macOS.
 3. **Roots en clientes reales**: los tests usan un cliente del SDK en memoria. Falta ver qué raíces anuncia cada cliente (Claude Code, Cursor, VS Code) y si la deducción acierta con ellas; cabe en la matriz de clientes pendiente de la Etapa 2.
 4. **`init` de verdad**: solo se ejecutó con `--dry-run` contra la configuración real. Lo que escribe se probó sobre carpetas temporales.
 5. **La publicación con `--tag beta`**: el workflow solo se ejercita al poner el tag `v3.0.0-beta.0`. Después, `npm view mcp-phase-gate dist-tags` debe dar `latest: 2.2.0` y `beta: 3.0.0-beta.0`.
+
+**Auditoría externa (antes del PR).** Un segundo agente auditó la etapa a ciegas: midió sus propias cifras antes de leer esta sección y tuvo permiso para cuestionar las ADRs. Veredicto: **apto con observaciones**. Los 13 commits compilan y pasan los tests cada uno por su cuenta, con las mismas cifras de la tabla; el último da lo mismo en tres corridas. Midió además lo que la suite no cubre: el prompt sigue siendo byte a byte el de la `2.2.0`, el oro y los esquemas regenerados salen iguales, 540 ensamblados de presets con reglas no dan ningún aviso, `read_repo_file` rechaza los intentos de leer `.git` (mayúsculas, `GIT~1`, `::$DATA`, junctions; un hardlink sí pasa, pero exige poder escribir en el repo), y **los E2E de las Etapas 0 a 2 pasan 40/40 con `presetPorDefecto: software-replica`**, la verificación de L04 que faltaba (hallazgo 10). Encontró 1 hallazgo alto, 8 medios y 20 bajos. Los de más peso se resolvieron con commits nuevos encima de L13, sin reescribir la historia; el resto queda abajo, con su estado:
+
+| Ajuste | Commit | Resuelve | Tests al cerrar |
+|---|---|---|---|
+| A1 | `3a51490` | 1 | 608 |
+| A2 | `5c0fe6b` | 5, 6, 11, 18 (en parte), 26 | 612 |
+| A3 | `465e651` | 2 | 614 |
+| A4 | `2c4ac76` | 3, 4 | 617 |
+| A5 | `e70dc5b` | 7, 17 | 619 |
+| A6 | `89c9a13` | 8, 15 | 621 |
+| A7 | `b044714` | 9 | 622 |
+| A8 | El commit de documentación de la auditoría | 10, 19, 29 y esta sección | 622 |
+
+| # | Sev. | Lote | Hallazgo | Resolución |
+|---|---|---|---|---|
+| 1 | Alta | L08 | La puerta de git solo anulaba `core.fsmonitor`: un filtro `clean` o `process` de `.git/config` se ejecutaba en cada `repo_status`, `get_orchestrator_status` y `get_phase_prompt` | Antes de cada consulta, la puerta lee los drivers con `git config --get-regexp '^filter\.'` y anula cada uno con `-c filter.<n>.clean=` (y `smudge`, `process`, `required=false`); un nombre que no se puede anular hace fallar la consulta. Comprobado con control positivo en git 2.51, y con su test (asíncrona y síncrona). ADR de L08 ampliada |
+| 2 | Media | L11 | `get_orchestrator_status` y `phase-gate://configuracion/…` llamaban a git de forma síncrona y bloqueaban el servidor | El servidor pide el estado de los repos antes, en paralelo y con plazo de 3 s (`estadosConPlazo`, `diagnosticarSinBloquear`); lo que no responde sale como `GIT-LENTO` (info). La variante síncrona queda solo para `doctor` |
+| 3 | Media | L07 | Con la raíz de un disco o el HOME abiertos, un proyecto con repos quedaba deducido y se escribía en él sin `project` | Esas raíces no dan coincidencia débil, y una débil solo vale para leer: `start_task`, `switch_task` y `write_central_doc` piden `project`. ADR de L07 ampliada |
+| 4 | Media | L07 | Una respuesta vieja de `roots/list` pisaba a la nueva | Solo cuenta la respuesta de la última petición |
+| 5 | Media | L09 | `init` tomaba por suyo cualquier `build/index.js` o cualquier nombre que contuviera `mcp-phase-gate` | Solo el paquete exacto (`mcp-phase-gate`, `mcp-phase-gate@…`), su binario, o un `build/index.js` cuyo `package.json` se llama `mcp-phase-gate`; también en `claude mcp list`. Tests negativos |
+| 6 | Media | L09 | Las comas finales se quitaban también dentro de las cadenas | Se quitan en el mismo recorrido que respeta las cadenas (`limpiarJsonc`), que además detecta los comentarios sin falsos positivos |
+| 7 | Media | L03/L04 | Un `machine.json` roto tumbaba `get_phase_prompt` en todos los proyectos | Se lee solo cuando hace falta: para resolver repos y para el `presetPorDefecto` de un proyecto sin manifiesto. ADR de L03 ampliada |
+| 8 | Media | L07/L04 | La descripción de `project` en `get_phase_prompt` prometía un error que no llega | Texto propio, y una nota al principio del prompt cuando sale sin proyecto, con el preset que se usó. ADR de L04 matizada |
+| 9 | Media | anterior | `read_cross_repo` leía `.git/config` | La misma regla de `.git` que `read_repo_file`, también sobre la ruta resuelta |
+| 10 | Baja | L04 | La verificación de L04 no estaba hecha | La hizo la auditoría: 40/40. Registrado aquí |
+| 11 | Baja | L09 | El respaldo por `cmd.exe` expandía `%` y una comilla rompía la cita | Un argumento con `%` o `"` no se pasa por `cmd.exe`: se pide hacerlo a mano |
+| 12 | Baja | L04 | `start_task` no valida el frontmatter que llega dentro de `initial_context` | **Pendiente** (pulido) |
+| 13 | Baja | L02 | La reinyección no tiene en cuenta las vallas de código | **Pendiente** (pulido) |
+| 14 | Baja | L04/L06 | `sin-lotes` se lleva sin aviso el bloque `despues` de `multi-repo-feature` | **Pendiente**: es el diseño de capas; queda documentarlo o avisar |
+| 15 | Baja | L07 | Un `project` vacío ya no se rechazaba | Se rechaza en `start_task` y `switch_task` ("omítelo para deducirlo") |
+| 16 | Baja | L03/L09 | El `$schema` `…@3/…` no resuelve durante la beta | **Pendiente**: resuelve solo con la `3.0.0`; queda avisarlo o fijar la versión |
+| 17 | Baja | L03 | Una ruta relativa en `machine.json` dependía del cwd del cliente | Tiene que ser absoluta |
+| 18 | Baja | L09 | Casos raros de `init` | Hechos: sección o `env` que no son un objeto (no se tocan), el código de salida de `claude mcp list`, un `fN.md` que es una carpeta, el aviso falso de comentarios. **Pendiente**: el diff O(n·m) con entradas enormes |
+| 19 | Baja | L09 | `--dry-run` sale con 1 si una acción no se podría hacer, y §5.8.1 decía 0 | Se acepta: el código dice lo que pasaría sin `--dry-run`, que es útil en un script. Registrado aquí |
+| 20 | Baja | L10 | `eject` sigue junctions en el destino y no deja `.bak` al añadir un bloque | **Pendiente** (pulido) |
+| 21 | Baja | L02 | El parser no salta las vallas de código, y una mención en línea invalida el archivo | **Pendiente** (pulido) |
+| 22 | Baja | L02/L11 | Huecos del doctor (capa proyecto, fase inexistente, catch compartidos) | **Pendiente** (pulido) |
+| 23 | Baja | L02–L08 | Sin límite de tamaño en presets, bloques y cuerpos | **Pendiente** (pulido) |
+| 24 | Baja | L07/L08 | Plazos de roots, una URI no `file://` y `GIT_CEILING_DIRECTORIES` | **Pendiente** (pulido) |
+| 25 | Baja | L12/L11 | Textos desactualizados en README, ayuda y descripciones | **Pendiente** (pulido); `repo_status` y `read_cross_repo` ya dicen lo que neutralizan |
+| 26 | Baja | L09 | Un test usaba como ejemplo el nombre de un servidor real | Cambiado por `otro-servidor` |
+| 27 | Baja | L11 | Códigos sin test (PROMPTS-ILEGIBLES, PRESETS-ILEGIBLES, DOCS-ILEGIBLE…) | **Pendiente** (pulido) |
+| 28 | Baja | docs | Varias ADR sin "Qué se descartó" explícito | **Pendiente** (pulido) |
+| 29 | Baja | L04/L02 | Alcance sin registrar: L04 listaba `src/phases.ts` y no lo tocó; L02 tocó `test/diagnostico.test.ts`; `sin-lotes.md` dice `<objetivo>`; los 4 archivos de `reglas/` llevan cabecera fuera de los bloques | Registrado aquí, como parte de E3-D2, E3-D4, E3-D5 y E3-D7 |
+
+| ADR cuestionada | Resolución |
+|---|---|
+| L02: ignorar entero un archivo mal formado es duro con un preset que documenta la sintaxis | Se mantiene; saltar las vallas y las menciones en línea queda en el pulido (21) |
+| L03: F2 aplicado a `machine.json` apaga todos los proyectos | Aceptado (7): el error queda donde se usa |
+| L04: el preset puede colarse por el frontmatter de `initial_context`; sin proyecto, todo es silencioso | La nota sin proyecto, aceptada (8); la validación del frontmatter, pendiente (12) |
+| L07: la coincidencia débil no es segura para escribir | Aceptado (3) |
+| L08: la puerta "no ejecuta nada" y solo cubría fsmonitor; falta decir lo del git síncrono | Aceptado (1 y 2) |
+| L09: la detección de "ya registrado" modificaba servidores ajenos | Aceptado (5) |
+
+**Pendiente antes del merge y del tag `v3.0.0-beta.0`:** la CI del PR (nunca ha corrido en Linux ni en Node 22) y los hallazgos marcados como pendientes, si la autora quiere cerrarlos antes de la beta.
 
 ---
 
@@ -4457,3 +4513,4 @@ En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_
 | 16 | 2026-10-15 | Etapa 2 ejecutada (L01 a L11) en la rama `etapa-2/protocolo-mcp`, con un OK general de la autora para los commits. Nueva §9.8 con los commits, la repetición de §4.1 sobre el SDK 1.32.1 y los desvíos E2-D1 a E2-D11. Los de más peso: los mensajes de validación en español pasan a cada campo de los shapes (zod v4) para que los E2E sobrevivan a la migración sin cambios, el log se muda a `src/log.ts`, y la matriz de clientes de L10 queda por rellenar con lo observado |
 | 17 | 2026-10-15 | Auditoría externa de la Etapa 2, a ciegas y con permiso para cuestionar las ADRs: apto con observaciones (1 hallazgo alto, 3 medios y 14 bajos). Se resolvieron con los ajustes A1 a A8 en commits nuevos (§9.8), salvo la matriz de clientes de L10, que rellena la autora. Los de más peso: el diagnóstico ya no lanza con una capa de prompts que no es carpeta; el entorno del cliente gana al `.env` también entre nombres distintos; la confirmación se cancela con la llamada, y el segundo plazo vencido seguido falla cerrado en esa misma llamada |
 | 18 | 2026-10-15 | Etapa 3 ejecutada (L01 a L13) en la rama `etapa-3/configuracion`, con un OK general de la autora para los commits. Nueva §9.9 con los commits, lo comprobado fuera de la suite y los desvíos E3-D1 a E3-D14. Los de más peso: sin bloques, el prompt es byte a byte el de la `2.2.0` (comprobado contra su build); las variantes de regla conservan las salvaguardas que añadió la auditoría de la Etapa 1 y dicen qué partes fijas no aplican (deuda para la Etapa 4); `read_repo_file` deja leer `.github`; en Claude Code, `init` no modifica un registro existente |
+| 19 | 2026-10-16 | Auditoría externa de la Etapa 3, a ciegas y con permiso para cuestionar las ADRs: apto con observaciones (1 hallazgo alto, 8 medios y 20 bajos). Se resolvieron con los ajustes A1 a A8 en commits nuevos (§9.9) el alto, los medios y algunos bajos; el resto queda como pendiente de pulido. Los de más peso: la puerta de git anula también los filtros de `.gitattributes`; el servidor pide el estado de git sin bloquearse; una coincidencia débil de Roots ya no basta para escribir; `init` solo reconoce el paquete exacto y no toca las cadenas de otros servidores; un `machine.json` roto solo afecta a quien lo usa; `read_cross_repo` tampoco lee `.git` |
