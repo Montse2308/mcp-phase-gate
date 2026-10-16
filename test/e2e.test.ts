@@ -354,19 +354,38 @@ describe("e2e: documentos congelados (R4)", () => {
     });
   });
 
-  it("escribe un recibo en la subcarpeta, y el recibo congela el plan", async () => {
+  // Desde la Etapa 4 (§6.5, H4) los recibos los escribe record_batch: write_central_doc los rechaza, y
+  // la escotilla (force, sin elicitation) queda para reparar a mano. El recibo escrito así congela el plan
+  // igual que antes.
+  it("rechaza escribir un recibo sin force; con force lo escribe a mano, y el recibo congela el plan", async () => {
     const e = escenario();
     conFases(e, [D01, D02, D03]);
+    const destino = { project: "PROYECTO-A", task_name: "tarea-a", file_name: "04 - Ejecución/L01 - rutas.md", content: "recibo" };
 
     await conServidor(e.env, async (llamar) => {
-      const recibo = await llamar("write_central_doc", { project: "PROYECTO-A", task_name: "tarea-a", file_name: "04 - Ejecución/L01 - rutas.md", content: "recibo" });
+      const rechazo = await llamar("write_central_doc", destino);
+      assert.equal(rechazo.isError, true, rechazo.texto);
+      assert.match(rechazo.texto, /Los recibos los escribe `record_batch`\. Usa record_batch\..*force: true/s);
+      assert.equal(fs.existsSync(path.join(e.tareaA, "04 - Ejecución")), false);
+
+      const recibo = await llamar("write_central_doc", { ...destino, force: true });
       assert.equal(recibo.isError, false, recibo.texto);
+      assert.match(recibo.texto, /\(creado con force\)\nEscrito a mano con confirmación; get_batch_status lo marcará como manual\./);
       assert.equal(fs.readFileSync(path.join(e.tareaA, "04 - Ejecución", "L01 - rutas.md"), "utf-8"), "recibo");
 
       const plan = await llamar("write_central_doc", { project: "PROYECTO-A", task_name: "tarea-a", file_name: D03, content: "otro plan" });
       assert.equal(plan.isError, true, plan.texto);
       assert.match(plan.texto, /congelado: la Fase 4/);
     });
+  });
+
+  it("el documento de la Fase 4 no se escribe con write_central_doc, ni para crearlo", async () => {
+    await debeRechazar(
+      "write_central_doc",
+      () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: "04 - Ejecución.md", content: "índice a mano" }),
+      /Este documento lo genera `record_batch` al cerrar el último lote/,
+      (e) => conFases(e, [D01, D02, D03])
+    );
   });
 
   // En Windows y macOS otro uso de mayúsculas abre el mismo archivo: no puede esquivar R4.

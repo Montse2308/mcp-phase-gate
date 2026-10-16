@@ -336,6 +336,15 @@ function anclaDe(meta: Record<string, string>, repo: string | null, rama: string
   return { tipo: "pendiente" };
 }
 
+// Lo que hace falta para saber cómo va un lote, leyendo solo el frontmatter: para el progreso de una
+// tarea (tasks.ts), que se calcula en cada listado.
+export function cabeceraDeRecibo(contenido: string, nombre: string = ""): { lote: number; estado: EstadoLote; ancla: Ancla["tipo"] } {
+  const { meta } = frontmatterDeRecibo(contenido);
+  const deMeta = Number((meta.lote ?? "").replace(/^L/i, ""));
+  const lote = Number.isInteger(deMeta) && deMeta > 0 ? deMeta : (loteDelNombre(nombre) ?? 0);
+  return { lote, estado: estadoDe(meta.estado), ancla: anclaDe(meta, nulo(meta.repo), nulo(meta.rama), "").tipo };
+}
+
 // Un recibo a partir de su texto. `nombre` es el del archivo: da el lote y el título cuando el
 // frontmatter o el encabezado no los traen.
 export function parsearRecibo(contenido: string, nombre: string = ""): Recibo {

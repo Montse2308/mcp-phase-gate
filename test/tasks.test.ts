@@ -174,17 +174,24 @@ describe("motivoDeProteccion", () => {
   const RECIBO_L02 = "04 - Ejecución/L02 - x.md";
 
   // [existen, se escribe, motivo esperado (null = permitido)]
+  // Desde la Etapa 4 (§6.5), los recibos y el documento de la Fase 4 los escribe record_batch: con
+  // write_central_doc se rechazan siempre, antes que cualquier otra regla. Las filas que cambiaron con
+  // eso lo dicen al final.
+  const RECORD_RECIBO = /Los recibos los escribe `record_batch`/;
+  const RECORD_DOCUMENTO = /Este documento lo genera `record_batch` al cerrar el último lote/;
   const tabla: Array<[string[], string, RegExp | null]> = [
     [[C00, D01], CONTEXTO, /contexto inicial está siempre protegido/],
     [[C00, D01, D02], D01, /01 - Análisis Técnico\.md` está congelado: la Fase 2 .*02 - Decisiones\.md/],
     [[C00, D01, D02], D02, null],
     [[C00, D01, D02], D03, null],
     [TODOS, D05, null],
-    [TODOS, D04, /congelado: la Fase 5 .*05 - Auditoría\.md/],
+    [TODOS, D04, RECORD_DOCUMENTO], // antes: congelado por la Fase 5
     [[C00, D01, D02, D03, RECIBO_L01], D03, /congelado: la Fase 4 .*04 - Ejecución\//],
-    [[C00, D01, D02, D03, RECIBO_L01], D04, null],
-    [[C00, D01, D02, D03, RECIBO_L01], RECIBO_L02, null],
-    [[...TODOS, RECIBO_L01], RECIBO_L02, /congelado: la Fase 5/],
+    [[C00, D01, D02, D03, RECIBO_L01], D04, RECORD_DOCUMENTO], // antes: permitido (el cierre)
+    [[C00, D01, D02, D03, RECIBO_L01], RECIBO_L02, RECORD_RECIBO], // antes: permitido
+    [[...TODOS, RECIBO_L01], RECIBO_L02, RECORD_RECIBO], // antes: congelado por la Fase 5
+    [[C00, D01, D02, D03], D04, RECORD_DOCUMENTO], // nueva (§6.5)
+    [[C00, D01, D02, D03], RECIBO_L01, RECORD_RECIBO],
     [[C00, D01, D03], D02, null],
     [[C00, D01, D03], D01, /congelado: la Fase 3/],
     [TODOS, "notas.md", null],
@@ -193,7 +200,8 @@ describe("motivoDeProteccion", () => {
     [[D01], "00 - contexto inicial.md", /contexto inicial está siempre protegido/],
     [[C00, D01, D02], "01 - análisis técnico.md", /congelado: la Fase 2/],
     [[C00, D01, D02], D01.normalize("NFD"), /congelado: la Fase 2/],
-    [TODOS, "04 - ejecución/L01 - x.md", /congelado: la Fase 5/],
+    [TODOS, "04 - ejecución/L01 - x.md", RECORD_RECIBO], // antes: congelado por la Fase 5
+    [[C00, D01, D02, D03], "04 - EJECUCIÓN.md".normalize("NFD"), RECORD_DOCUMENTO],
     [[C00, D01, D02, D03, RECIBO_L01], "03 - plan técnico.md", /congelado: la Fase 4/],
     [[C00, D01], "02 - decisiones.md", null],
   ];
@@ -739,5 +747,69 @@ describe("tieneValidacionesPendientes", () => {
 
   it("reconoce el encabezado en otras mayúsculas", () => {
     assert.equal(tieneValidacionesPendientes(conSeccion("- probar en staging", "## Validaciones Pendientes")), true);
+  });
+});
+
+// §6.7 del plan maestro v3: dentro de la Fase 4, la deducción sabe por qué lote va, leyendo solo el
+// frontmatter del plan y de los recibos. La fase sigue saliendo de qué documentos existen.
+describe("progreso por lote en la Fase 4", () => {
+  const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
+  CON_RECIBOS.set(4, { ...(FASES.get(4) as PhaseFile), recibos: "04 - Ejecución" });
+
+  function enFase4(plan: string, recibos: Record<string, string> = {}): string {
+    const docs = docsTemporales();
+    crearProyecto(docs, "PROYECTO-A");
+    const carpeta = crearTarea(docs, "PROYECTO-A", "login-sso", TODOS.slice(0, 3));
+    fs.writeFileSync(path.join(carpeta, "03 - Plan Técnico.md"), plan, "utf-8");
+    fs.mkdirSync(path.join(carpeta, "04 - Ejecución"));
+    for (const [nombre, texto] of Object.entries(recibos)) fs.writeFileSync(path.join(carpeta, "04 - Ejecución", nombre), texto, "utf-8");
+    return carpeta;
+  }
+  const recibo = (lote: string, commit: string, estado = "verificado") => `---\nlote: ${lote}\nde: 4\nestado: ${estado}\ncommit: ${commit}\n---\n# ${lote} — x\n`;
+
+  it("sin recibos: lote 1 de 4", () => {
+    const estado = estadoDeTarea("login-sso", enFase4("---\nlotes: 4\n---\n# Plan\n"), CON_RECIBOS);
+    assert.deepEqual(estado.lotes, { total: 4, cerrados: 0, actual: 1, pendienteDeCommit: null });
+    assert.equal(describeEstado(estado, CON_RECIBOS), "va en Fase 4 (Ejecución, lote 1 de 4); hechas: 1, 2, 3");
+  });
+
+  it("con el lote 2 esperando su commit: lote 2 de 4, commit pendiente", () => {
+    const carpeta = enFase4("---\nlotes: 4\n---\n", { "L01 - a.md": recibo("L01", "a1b2c3d"), "L02 - b.md": recibo("L02", "pendiente") });
+    const estado = estadoDeTarea("login-sso", carpeta, CON_RECIBOS);
+    assert.deepEqual(estado.lotes, { total: 4, cerrados: 1, actual: 2, pendienteDeCommit: 2 });
+    assert.equal(describeEstado(estado, CON_RECIBOS), "va en Fase 4 (Ejecución, lote 2 de 4, commit pendiente); hechas: 1, 2, 3");
+  });
+
+  it("un plan sin `lotes`: el plan no declara lotes", () => {
+    const estado = estadoDeTarea("login-sso", enFase4("# Plan sin frontmatter\n"), CON_RECIBOS);
+    assert.equal(estado.lotes?.total, null);
+    assert.equal(describeEstado(estado, CON_RECIBOS), "va en Fase 4 (Ejecución; el plan no declara lotes); hechas: 1, 2, 3");
+  });
+
+  it("un fallido no cuenta como cerrado; una nota sí", () => {
+    const carpeta = enFase4("---\nlotes: 3\n---\n", { "L01 - a.md": recibo("L01", "no aplica"), "L02 - b.md": recibo("L02", "no aplica", "fallido") });
+    assert.deepEqual(estadoDeTarea("login-sso", carpeta, CON_RECIBOS).lotes, { total: 3, cerrados: 1, actual: 2, pendienteDeCommit: null });
+  });
+
+  it("solo se calcula cuando la fase siguiente es la de los recibos; la fase sigue saliendo de los documentos", () => {
+    const carpeta = enFase4("---\nlotes: 2\n---\n", { "L01 - a.md": recibo("L01", "a1b2c3d"), "L02 - b.md": recibo("L02", "e4f5a6b") });
+    const enCuatro = estadoDeTarea("login-sso", carpeta, CON_RECIBOS);
+    assert.equal(enCuatro.siguienteFase, 4, "todos los recibos cerrados no cierran la fase: la cierra su documento");
+    assert.equal(describeEstado(enCuatro, CON_RECIBOS), "va en Fase 4 (Ejecución, 2 de 2 lotes cerrados); hechas: 1, 2, 3");
+    fs.writeFileSync(path.join(carpeta, "04 - Ejecución.md"), "índice", "utf-8");
+    assert.equal(estadoDeTarea("login-sso", carpeta, CON_RECIBOS).lotes, null);
+    assert.equal(estadoDeTarea("login-sso", carpeta, FASES).lotes, null, "sin fase con recibos, no hay progreso");
+  });
+
+  it("ultimoCambio sube con un recibo nuevo", () => {
+    const viejo = new Date("2026-01-01T00:00:00Z");
+    const carpeta = enFase4("---\nlotes: 2\n---\n");
+    for (const documento of [...TODOS.slice(0, 4)]) fs.utimesSync(path.join(carpeta, documento), viejo, viejo);
+    const antes = estadoDeTarea("login-sso", carpeta, CON_RECIBOS).ultimoCambio!;
+    assert.equal(antes, viejo.getTime());
+
+    fs.writeFileSync(path.join(carpeta, "04 - Ejecución", "L01 - a.md"), recibo("L01", "pendiente"), "utf-8");
+    const despues = estadoDeTarea("login-sso", carpeta, CON_RECIBOS).ultimoCambio!;
+    assert.ok(despues > antes, `${despues} > ${antes}`);
   });
 });

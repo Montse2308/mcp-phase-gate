@@ -66,6 +66,7 @@ import {
   avisoDePendientes,
   bloqueDeRecibos,
   describeEstado,
+  esMotivoDeLotes,
   guardarPuntero,
   listarTareas,
   motivoDeProteccion,
@@ -608,10 +609,12 @@ function registrarTools(mcp: McpServer): void {
       let sufijo = "";
       if (motivo) {
         const archivo = ubicacion.relativo;
+        // Un recibo o el documento de la Fase 4: la escotilla es para reparar a mano un archivo dañado.
+        const deLotes = esMotivoDeLotes(motivo);
         const { estado, nota } = await pedirConfirmacion(mcp, extra, {
-          mensaje:
-            `\`${archivo}\` de la tarea «${ubicacion.taskName}» está protegido: ${motivo.replace(/\.$/, "")}. ` +
-            (existia ? "¿Reescribirlo?" : "¿Crearlo?"),
+          mensaje: deLotes
+            ? `\`${archivo}\` de la tarea «${ubicacion.taskName}» lo escribe record_batch. ¿${existia ? "Reescribirlo" : "Crearlo"} a mano de todos modos, para reparar un archivo dañado?`
+            : `\`${archivo}\` de la tarea «${ubicacion.taskName}» está protegido: ${motivo.replace(/\.$/, "")}. ` + (existia ? "¿Reescribirlo?" : "¿Crearlo?"),
           etiqueta: `${existia ? "Reescribir" : "Crear"} ${archivo}`,
         });
         const conNota = nota ? ` ${nota}` : "";
@@ -622,8 +625,11 @@ function registrarTools(mcp: McpServer): void {
         }
         if (estado === "no-disponible" && args.force !== true) {
           throw new Error(
-            `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
-              `y vuelve a llamar con force: true.${conNota}`
+            deLotes
+              ? `${motivo} Usa record_batch. Solo para reparar a mano un archivo dañado, pídele al usuario confirmación ` +
+                  `explícita y vuelve a llamar con force: true.${conNota}`
+              : `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
+                  `y vuelve a llamar con force: true.${conNota}`
           );
         }
 
@@ -636,6 +642,7 @@ function registrarTools(mcp: McpServer): void {
             : existia
               ? " (sobrescrito con force)"
               : " (creado con force)";
+        if (deLotes) sufijo += "\nEscrito a mano con confirmación; get_batch_status lo marcará como manual.";
         if (nota) sufijo += `\n${nota}`;
       }
 

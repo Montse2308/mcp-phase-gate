@@ -311,6 +311,13 @@ export const recordBatchShape = {
     .max(500, "`motivo_descarte` no puede pasar de 500 caracteres.")
     .nullish()
     .describe("Con `cerrar_fase`: por qué se descartan los lotes que faltan, dicho por el usuario."),
+  // El sellado.
+  reanclar: booleano("reanclar")
+    .nullish()
+    .describe(
+      "Solo para cambiar el ancla de un recibo sellado, por ejemplo cuando un rebase o un squash cambió el SHA: con `lote` " +
+        "y el `commit` nuevo (o `artifact_path`). El contenido del lote no cambia. Pide confirmación al usuario."
+    ),
   force: booleano("force")
     .nullish()
     .describe(

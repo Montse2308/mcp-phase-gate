@@ -12,6 +12,66 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — La Fase 4 tiene granularidad de lote
+
+**Decisión.** `EstadoTarea` gana `lotes` (`total`, `cerrados`, `actual` y `pendienteDeCommit`), que
+se calcula solo cuando la fase siguiente es la que declara recibos, leyendo **solo frontmatter**: el
+`lotes` del plan y la cabecera de cada recibo. `describeEstado` lo dice, y con él `get_active_task`,
+`list_tasks` y `doctor`:
+
+- `va en Fase 4 (Ejecución, lote 1 de 4); hechas: 1, 2, 3`
+- `va en Fase 4 (Ejecución, lote 2 de 4, commit pendiente); hechas: 1, 2, 3`
+- `va en Fase 4 (Ejecución; el plan no declara lotes); hechas: 1, 2, 3`
+
+Un lote fallido no cuenta como cerrado. `ultimoCambio` toma también el recibo más reciente: durante la
+Fase 4 es lo único que cambia en días, y una tarea en plena ejecución se ordenaba como si estuviera
+parada.
+
+**La fase sigue saliendo de los documentos.** Lo nuevo es el progreso **dentro** de la Fase 4, y se
+deduce de archivos que escribe el servidor (`record_batch`), así que no depende de que el modelo se
+acuerde de reportar nada. Con todos los recibos cerrados, la tarea sigue en la Fase 4 hasta que existe
+su documento.
+
+**Reemplaza** el límite de "La fase de cada tarea se deduce de sus documentos, no se guarda"
+(2026-08-08): "la granularidad es fases terminadas, no a media fase".
+
+**Qué se descartó.** Guardar el lote actual en el archivo de estado: sería otra copia de la verdad, y el
+argumento de aquella entrada sigue valiendo.
+
+---
+
+## 2026-10-16 — Los recibos con ancla quedan sellados y la Fase 4 solo la escribe el servidor
+
+**Decisión.** Dos reglas:
+
+- **Sellado.** Un recibo con ancla `commit` o `sha256` (también uno manual de la 2.x con un hash) no se
+  reescribe con `record_batch`. Para cambiar su ancla, el caso típico de un rebase o un squash que cambió
+  el SHA, `record_batch` con `reanclar: true` y el ancla nueva: pasa por `pedirConfirmacion` ("El recibo
+  L02 está sellado con el commit `a1b2c3d`. ¿Reemplazar su ancla por `e4f5a6b`?"), o por `force` sin
+  elicitation. Solo cambia el ancla; "Verificación del commit" dice la comparación del commit nuevo y
+  guarda, línea a línea, el historial ("Reanclado el AAAA-MM-DD: `viejo` → `nuevo`"). Con la fase ya
+  cerrada también vale: con un solo lote, el recibo es el documento de la fase; con varios, se rehace el
+  índice si lo generó el servidor.
+- **Solo el servidor escribe la Fase 4** (H4). `motivoDeProteccion` gana dos reglas que se evalúan antes
+  que las de siempre: un archivo de la subcarpeta de recibos ("Los recibos los escribe `record_batch`.") y
+  el documento de la fase que declara los recibos ("Este documento lo genera `record_batch` al cerrar el
+  último lote.") se rechazan **siempre** con `write_central_doc`, también para crearlos. Las dos aceptan la
+  escotilla de confirmación de siempre (elicitation, o `force` sin ella) para reparar a mano un archivo
+  dañado, y la respuesta lo dice: "Escrito a mano con confirmación; get_batch_status lo marcará como
+  manual". Cierra E1-R3 (el modelo escribía el índice antes de tiempo, o un recibo con otro nombre).
+
+`start_task` y `record_batch` no pasan por `write_central_doc`. Una tarea de la 2.x a medio camino sigue:
+`record_batch` lee sus recibos manuales (tolerante) y continúa desde el siguiente lote.
+
+**Amplía** "Un documento de fase se congela cuando existe el de una fase posterior" (2026-10-14): la tabla
+de verdad de §3.7.3 gana tres filas, y cambian las que permitían escribir un recibo o el índice.
+
+**Qué se descartó.** Bloquear sin escotilla: un recibo dañado a mano (o por un cliente que corta la
+escritura) dejaría la tarea sin salida. Reescribir un índice que alguien escribió a mano: se avisa con
+`doctor`, no se pisa.
+
+---
+
 ## 2026-10-16 — `04 - Ejecución.md` lo genera el servidor; con un solo lote, el recibo se mueve
 
 **Decisión.** El documento de la Fase 4 ya no lo redacta el modelo: lo escribe `record_batch` cuando
@@ -1725,6 +1785,10 @@ el modelo tiene sin preguntar, porque la ventana está abierta en ese repositori
 ---
 
 ## 2026-08-08 — La fase de cada tarea se deduce de sus documentos, no se guarda
+
+> **Reemplazada en parte** el 2026-10-16 por "La Fase 4 tiene granularidad de lote": el límite "la
+> granularidad es fases terminadas, no a media fase" ya no vale para la Fase 4. La fase se sigue
+> deduciendo de qué documentos existen.
 
 **Decisión.** No hay ningún registro que diga en qué fase va cada tarea. El servidor mira qué
 documentos existen en la carpeta y lo deduce: la fase siguiente es la primera cuyo documento

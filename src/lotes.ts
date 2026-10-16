@@ -21,7 +21,7 @@ import { ramaActual, tieneGit } from "./git.js";
 import { estaDentroReal, leerTextoAcotado, taskFolderPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
-import { GENERADO_POR, celda, escribirRecibo, etiquetaDeLote, leerRecibo, loteDelNombre, nombreDeRecibo } from "./recibos.js";
+import { GENERADO_POR, celda, escribirRecibo, etiquetaDeLote, leerRecibo, loteDelNombre, nombreDeRecibo, parsearRecibo } from "./recibos.js";
 import type { Ancla, EstadoLote, Recibo, TituloCondicional } from "./recibos.js";
 import { resolverRepo } from "./repos.js";
 
@@ -253,6 +253,7 @@ export type EntradaDeLote = {
   verification_note?: string | undefined;
   cerrar_fase?: boolean | undefined;
   motivo_descarte?: string | undefined;
+  reanclar?: boolean | undefined;
   force?: boolean | undefined;
 };
 
@@ -319,7 +320,10 @@ function modoDe(entrada: EntradaDeLote, existente: ReciboEnDisco | null, anclas:
   const { ancla } = existente.recibo;
   if (ancla.tipo === "commit" || ancla.tipo === "sha256") {
     const con = ancla.tipo === "commit" ? `el commit \`${ancla.corto}\`` : `el sha256 \`${ancla.sha256.slice(0, 12)}…\``;
-    throw new Error(`El recibo ${etiqueta} está sellado con ${con} y no se reescribe.`);
+    throw new Error(
+      `El recibo ${etiqueta} está sellado con ${con} y no se reescribe. Si su ancla cambió (por ejemplo, un rebase o un squash ` +
+        "cambió el SHA), llama con `reanclar: true` y el ancla nueva."
+    );
   }
   if (ancla.tipo === "pendiente") {
     if (traeContenido) return exigirContenido("reemplazar");
@@ -559,11 +563,15 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   const etiqueta = etiquetaDeLote(entrada.lote);
 
   if (entrada.motivo_descarte !== undefined && entrada.cerrar_fase !== true) throw new Error("`motivo_descarte` solo va con `cerrar_fase: true`.");
+  if (entrada.reanclar === true) return reanclarLote(carpetaProyecto, fase, entrada, contexto, ahora);
 
   // Con el documento de la fase escrito, la fase está cerrada; con una fase posterior, también.
   for (const [numero, datos] of [...fase.phases.entries()].sort((a, b) => a[0] - b[0])) {
     if (numero >= fase.numero && datos.documento && fs.existsSync(path.join(fase.carpetaTarea, datos.documento))) {
-      throw new Error(`La Fase ${fase.numero} ya está cerrada (existe \`${datos.documento}\`): no se registran más lotes.`);
+      throw new Error(
+        `La Fase ${fase.numero} ya está cerrada (existe \`${datos.documento}\`): no se registran más lotes. Para cambiar el ancla de un ` +
+          "lote (tras un rebase o un squash), usa `reanclar: true`."
+      );
     }
   }
 
@@ -732,6 +740,137 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
       documentoDeFase,
     },
     archivoNuevo,
+  };
+}
+
+// ─── Reanclar un recibo sellado (§6.5) ──────────────────────────────────────
+// El caso típico: un rebase o un squash cambió el SHA y el recibo apunta a un commit que ya no está en la
+// rama. Solo cambia el ancla; el contenido del lote no se toca. Con la fase ya cerrada también vale: con
+// un solo lote el recibo es el documento de la fase, y con varios se rehace el índice que generó el
+// servidor.
+const etiquetaDeAncla = (ancla: Ancla): string =>
+  ancla.tipo === "commit" ? ancla.corto : ancla.tipo === "sha256" ? `sha256 ${ancla.sha256.slice(0, 12)}…` : ancla.tipo;
+
+async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada: EntradaDeLote, contexto: ContextoDeLote, ahora: () => Date): Promise<ResultadoDeLote> {
+  const etiqueta = etiquetaDeLote(entrada.lote);
+  if (CAMPOS_DE_CONTENIDO.some((campo) => entrada[campo] !== undefined)) {
+    throw new Error("`reanclar` solo cambia el ancla: no pases contenido (titulo, estado, que_se_hizo…).");
+  }
+  if (entrada.cerrar_fase === true) throw new Error("`reanclar` y `cerrar_fase` no van en la misma llamada.");
+  if (entrada.verification_note !== undefined || ANCLAS.filter((campo) => entrada[campo] !== undefined).length !== 1) {
+    throw new Error("Para reanclar, pasa el ancla nueva: `commit` (el SHA de después del rebase o del squash) o `artifact_path`.");
+  }
+
+  const total = lotesDelPlan(fase);
+  if (entrada.lote > total) throw new Error(`El plan declara ${plural(total, "lote", "lotes")}; ${etiqueta} no existe.`);
+
+  // El recibo está en la subcarpeta, o (con un solo lote y la fase cerrada) es el documento de la fase.
+  const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
+  const hayDocumento = documento !== null && fs.existsSync(documento);
+  const porLote = recibosDeLaTarea(fase);
+  let existente = unicoDe(porLote, entrada.lote, fase);
+  let esElDocumento = false;
+  if (!existente && total === 1 && hayDocumento) {
+    existente = { recibo: { ...parsearRecibo(leerTextoAcotado(documento), fase.documento!), lote: 1 }, nombre: fase.documento!, ruta: documento, mtimeMs: fs.statSync(documento).mtimeMs };
+    esElDocumento = true;
+  }
+  if (!existente) throw new Error(`No hay recibo de ${etiqueta}: no hay ningún ancla que cambiar.`);
+  const viejo = existente.recibo.ancla;
+  if (viejo.tipo !== "commit" && viejo.tipo !== "sha256") {
+    throw new Error(`El recibo ${etiqueta} no está sellado (${resumenDeAncla(viejo, existente.recibo.repo)}): no hace falta reanclar; regístralo con record_batch como siempre.`);
+  }
+  if (entrada.repo && existente.recibo.repo && entrada.repo !== existente.recibo.repo) {
+    throw new Error(`El recibo de ${etiqueta} es del repo \`${existente.recibo.repo}\`, no de \`${entrada.repo}\`.`);
+  }
+  const repo = entrada.repo ?? existente.recibo.repo ?? (viejo.tipo === "commit" ? viejo.repo || null : null);
+
+  let nueva: Ancla;
+  let comparacion: string | null = null;
+  const avisos: string[] = [];
+  if (entrada.commit !== undefined) {
+    if (!repo) throw new Error("Este lote no tiene repositorio: no hay commit que anclar. Pasa `artifact_path`.");
+    const otros = [...porLote.entries()].flatMap(([lote, recibos]) =>
+      lote === entrada.lote ? [] : recibos.flatMap((r) => (r.recibo.ancla.tipo === "commit" ? [{ lote, sha: r.recibo.ancla.sha }] : []))
+    );
+    const anclado = await anclarCommit(carpetaProyecto, repo, entrada.commit, existente.recibo.archivos.map((fila) => fila.archivo), otros, ahora);
+    nueva = anclado.ancla;
+    comparacion = anclado.verificacionDelCommit;
+    if (!anclado.coinciden) avisos.push(anclado.verificacionDelCommit);
+  } else {
+    nueva = await anclarArtefacto(carpetaProyecto, repo, entrada.artifact_path!, ahora);
+  }
+  const igual =
+    (viejo.tipo === "commit" && nueva.tipo === "commit" && viejo.sha === nueva.sha) ||
+    (viejo.tipo === "sha256" && nueva.tipo === "sha256" && viejo.sha256 === nueva.sha256 && viejo.ruta === nueva.ruta);
+  if (igual) throw new Error(`El recibo ${etiqueta} ya está anclado a \`${etiquetaDeAncla(nueva)}\`: no hay nada que cambiar.`);
+
+  // La persona confirma; sin elicitation, decide force (Etapa 1).
+  const comoEra = viejo.tipo === "commit" ? `el commit \`${viejo.corto}\`` : `el sha256 \`${viejo.sha256.slice(0, 12)}…\``;
+  const comoQueda = nueva.tipo === "commit" ? `\`${nueva.corto}\`` : `el sha256 \`${(nueva as Extract<Ancla, { tipo: "sha256" }>).sha256.slice(0, 12)}…\``;
+  const confirmacion = contexto.confirmar
+    ? await contexto.confirmar({ mensaje: `El recibo ${etiqueta} está sellado con ${comoEra}. ¿Reemplazar su ancla por ${comoQueda}?`, etiqueta: `Reanclar ${etiqueta}` })
+    : { estado: "no-disponible" as const };
+  const nota = confirmacion.nota ? ` ${confirmacion.nota}` : "";
+  if (confirmacion.estado === "rechazada") throw new Error(`El usuario no confirmó el cambio de ancla de ${etiqueta}. No se escribió nada.${nota}`);
+  if (confirmacion.estado === "no-disponible" && entrada.force !== true) {
+    throw new Error(
+      `Cambiar el ancla de un recibo sellado lo decide el usuario: pídele confirmación explícita en el chat y vuelve a llamar con ` +
+        `\`reanclar: true\` y force: true.${nota}`
+    );
+  }
+
+  // Solo el ancla cambia; "Verificación del commit" dice la comparación del commit nuevo y guarda el
+  // historial de reanclajes, con una línea más.
+  const momento = ahora();
+  const linea = `Reanclado el ${fechaLocal(momento)}: \`${etiquetaDeAncla(viejo)}\` → \`${etiquetaDeAncla(nueva)}\``;
+  const historial = (existente.recibo.verificacionDelCommit ?? "").split("\n").filter((l) => l.startsWith("Reanclado el "));
+  const recibo: Recibo = {
+    ...existente.recibo,
+    repo,
+    rama: nueva.tipo === "commit" ? nueva.rama || null : existente.recibo.rama,
+    ancla: nueva,
+    fecha: fechaLocal(momento),
+    registrado: momento.toISOString(),
+    origen: "servidor",
+    verificacionDelCommit: nueva.tipo === "commit" ? [comparacion, ...historial, linea].join("\n") : null,
+  };
+
+  comprobarDentro(fase, existente.ruta);
+  contexto.antesDeEscribir?.();
+  if (fs.statSync(existente.ruta, { throwIfNoEntry: false })?.mtimeMs !== existente.mtimeMs) throw new Error(OTRO_PROCESO);
+  escribirAtomico(existente.ruta, escribirRecibo(recibo, { comoDocumento: esElDocumento }));
+
+  // Con la fase cerrada y varios lotes, el índice que generó el servidor se rehace con el ancla nueva. Uno
+  // escrito a mano (una tarea de la 2.x) no se toca: doctor lo marcará como desincronizado.
+  let indiceRehecho = false;
+  if (!esElDocumento && hayDocumento && total > 1 && separarFrontmatter(leerTextoAcotado(documento)).meta.generado_por === GENERADO_POR) {
+    const conNombre = new Map<number, ReciboConNombre>();
+    for (const [lote, recibos] of recibosDeLaTarea(fase)) if (lote <= total && recibos.length === 1) conNombre.set(lote, recibos[0]!);
+    comprobarDentro(fase, documento);
+    escribirAtomico(documento, textoDelIndice(fase, total, conNombre));
+    indiceRehecho = true;
+  }
+
+  const donde = nueva.tipo === "commit" ? ` en \`${nueva.repo}\`${nueva.rama ? ` (${nueva.rama})` : ""}` : ` de \`${(nueva as Extract<Ancla, { tipo: "sha256" }>).ruta}\``;
+  let texto = `${etiqueta} reanclado: \`${etiquetaDeAncla(viejo)}\` → \`${etiquetaDeAncla(nueva)}\`${donde}.${indiceRehecho ? ` Se actualizó \`${fase.documento}\`.` : ""}`;
+  if (avisos.length) texto += `\nAviso: el commit no toca los archivos que declara el recibo (queda escrito en "Verificación del commit"):\n${avisos.join("\n")}`;
+  return {
+    texto,
+    salida: {
+      recibo: esElDocumento ? fase.documento! : `${fase.recibos}/${existente.nombre}`,
+      lote: etiqueta,
+      de: total,
+      estado: recibo.estado,
+      ancla: { tipo: nueva.tipo, resumen: resumenDeAncla(nueva, repo) },
+      avisos,
+      siguiente: hayDocumento ? null : (() => {
+        const n = siguienteLote(recibosDeLaTarea(fase), total);
+        return n ? etiquetaDeLote(n) : null;
+      })(),
+      faseCerrada: hayDocumento,
+      documentoDeFase: hayDocumento ? fase.documento : null,
+    },
+    archivoNuevo: false,
   };
 }
 

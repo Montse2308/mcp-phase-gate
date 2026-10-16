@@ -8,6 +8,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
 import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import type { ResultadoConfirmacion } from "../src/confirmacion.js";
@@ -647,5 +649,164 @@ describe("record_batch: cerrar_fase", () => {
     const preguntas: string[] = [];
     const r = await registrarLote("P", "t", { ...contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }), cerrar_fase: true }, conRespuesta("rechazada", preguntas));
     assert.deepEqual([preguntas, r.salida.faseCerrada], [[], true]);
+  });
+});
+
+// ─── L05: el sellado y reanclar ─────────────────────────────────────────────
+describe("record_batch: reanclar", () => {
+  const con = (estado: ResultadoConfirmacion["estado"], preguntas: string[] = []) => ({
+    ahora: AHORA,
+    confirmar: async (pregunta: { mensaje: string }) => {
+      preguntas.push(pregunta.mensaje);
+      return { estado };
+    },
+  });
+
+  // L01 anclado a un commit que después se reescribe con --amend (lo mismo que un rebase o un squash).
+  async function anclarYReescribir(lotes = "2") {
+    const inst = instalacion({ lotes });
+    const viejo = commitEn(inst.dirs.api!, ["src/l1.ts"]);
+    await registrar(contenido(1, { titulo: "corregir cálculo", commit: viejo }));
+    g(inst.dirs.api!, "commit", "-q", "--amend", "-m", "feat(x): lote, reescrito");
+    return { ...inst, viejo, nuevo: g(inst.dirs.api!, "rev-parse", "HEAD") };
+  }
+
+  it("con la confirmación, cambia solo el ancla y deja el historial en Verificación del commit", async () => {
+    const { recibos, viejo, nuevo } = await anclarYReescribir();
+    const archivo = path.join(recibos, "L01 - corregir cálculo.md");
+    const antes = leerRecibo(archivo);
+    const preguntas: string[] = [];
+
+    const r = await registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo }, con("confirmada", preguntas));
+    assert.deepEqual(preguntas, [`El recibo L01 está sellado con el commit \`${viejo.slice(0, 7)}\`. ¿Reemplazar su ancla por \`${nuevo.slice(0, 7)}\`?`]);
+    assert.equal(r.texto, `L01 reanclado: \`${viejo.slice(0, 7)}\` → \`${nuevo.slice(0, 7)}\` en \`api\` (main).`);
+
+    const despues = leerRecibo(archivo);
+    assert.equal(despues.ancla.tipo === "commit" && despues.ancla.sha, nuevo);
+    assert.deepEqual({ ...despues, ancla: antes.ancla, verificacionDelCommit: antes.verificacionDelCommit }, antes, "el contenido del lote no cambia");
+    assert.equal(despues.verificacionDelCommit, `El commit toca exactamente el archivo declarado.\nReanclado el 2026-11-03: \`${viejo.slice(0, 7)}\` → \`${nuevo.slice(0, 7)}\``);
+  });
+
+  it("sin elicitation hace falta force; si el usuario no confirma, no se escribe nada", async () => {
+    const { recibos, nuevo } = await anclarYReescribir();
+    const archivo = path.join(recibos, "L01 - corregir cálculo.md");
+    const antes = fs.readFileSync(archivo, "utf-8");
+    const pedido = { lote: 1, reanclar: true, commit: nuevo };
+
+    await assert.rejects(registrarLote("P", "t", pedido, con("rechazada")), /El usuario no confirmó el cambio de ancla de L01\. No se escribió nada\./);
+    await assert.rejects(registrarLote("P", "t", pedido, con("no-disponible")), /lo decide el usuario: pídele confirmación explícita en el chat y vuelve a llamar con `reanclar: true` y force: true/);
+    assert.equal(fs.readFileSync(archivo, "utf-8"), antes);
+
+    const r = await registrarLote("P", "t", { ...pedido, force: true }, con("no-disponible"));
+    assert.match(r.texto, /L01 reanclado/);
+  });
+
+  it("solo se reancla un recibo sellado, solo el ancla, y a un ancla distinta", async () => {
+    const { nuevo, viejo } = await anclarYReescribir("3");
+    await assert.rejects(registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo, titulo: "otro" }, con("confirmada")), /`reanclar` solo cambia el ancla/);
+    await assert.rejects(registrarLote("P", "t", { lote: 1, reanclar: true, verification_note: "x" }, con("confirmada")), /pasa el ancla nueva: `commit`/);
+    await assert.rejects(registrarLote("P", "t", { lote: 2, reanclar: true, commit: nuevo }, con("confirmada")), /No hay recibo de L02/);
+    await registrar(contenido(2));
+    await assert.rejects(registrarLote("P", "t", { lote: 2, reanclar: true, commit: nuevo }, con("confirmada")), /El recibo L02 no está sellado .*no hace falta reanclar/);
+    // El viejo ya no está en la rama: no se puede volver a anclar a él.
+    await assert.rejects(registrarLote("P", "t", { lote: 1, reanclar: true, commit: viejo }, con("confirmada")), /existe pero no está en la rama actual/);
+    await registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo }, con("confirmada"));
+    await assert.rejects(registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo }, con("confirmada")), /ya está anclado a `[0-9a-f]{7}`: no hay nada que cambiar/);
+  });
+
+  it("si otra ventana cambia el recibo mientras se pregunta, no se escribe", async () => {
+    const { recibos, nuevo } = await anclarYReescribir();
+    const archivo = path.join(recibos, "L01 - corregir cálculo.md");
+    await assert.rejects(
+      registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo }, {
+        ...con("confirmada"),
+        antesDeEscribir: () => {
+          const futuro = new Date(Date.now() + 5000);
+          fs.utimesSync(archivo, futuro, futuro);
+        },
+      }),
+      /Otro proceso modificó este recibo; vuelve a llamar\./
+    );
+    assert.notEqual((leerRecibo(archivo).ancla as { sha: string }).sha, nuevo);
+  });
+
+  it("el rechazo de un recibo sellado sugiere reanclar", async () => {
+    const { nuevo } = await anclarYReescribir();
+    await assert.rejects(registrar(contenido(1, { commit: nuevo })), /está sellado con el commit .* llama con `reanclar: true` y el ancla nueva/);
+  });
+
+  it("con la fase cerrada y varios lotes, rehace el índice que generó el servidor", async () => {
+    const { tarea, dirs, nuevo, viejo } = await anclarYReescribir("2");
+    // El amend se llevó el commit de L01; L02 va encima del nuevo.
+    await registrar(contenido(2, { commit: commitEn(dirs.api!, ["src/l2.ts"]) }));
+    const documento = path.join(tarea, "04 - Ejecución.md");
+    assert.match(fs.readFileSync(documento, "utf-8"), new RegExp(`commit \`${viejo.slice(0, 7)}\``));
+
+    const r = await registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo }, con("confirmada"));
+    assert.match(r.texto, /Se actualizó `04 - Ejecución\.md`\./);
+    assert.equal(fs.readFileSync(documento, "utf-8"), ensamblarIndice(tarea, fasesDe("P")));
+    assert.match(fs.readFileSync(documento, "utf-8"), new RegExp(`commit \`${nuevo.slice(0, 7)}\``));
+  });
+
+  it("con lotes: 1 y la fase cerrada, el recibo es el documento de la fase y se reancla ahí", async () => {
+    const { tarea, nuevo } = await anclarYReescribir("1");
+    const documento = path.join(tarea, "04 - Ejecución.md");
+    assert.ok(fs.existsSync(documento));
+    const r = await registrarLote("P", "t", { lote: 1, reanclar: true, commit: nuevo }, con("confirmada"));
+    assert.equal(r.salida.recibo, "04 - Ejecución.md");
+    const texto = fs.readFileSync(documento, "utf-8");
+    assert.match(texto, /^---\nlotes: 1\ngenerado_por: mcp-phase-gate\nlote: L01\n/);
+    assert.equal(parsearRecibo(texto).ancla.tipo === "commit" && (parsearRecibo(texto).ancla as { sha: string }).sha, nuevo);
+  });
+});
+
+describe("record_batch por MCP: reanclar con y sin elicitation", () => {
+  async function preparado() {
+    const inst = instalacion({ lotes: "2" });
+    const viejo = commitEn(inst.dirs.api!, ["src/l1.ts"]);
+    await registrar(contenido(1, { commit: viejo }));
+    g(inst.dirs.api!, "commit", "-q", "--amend", "-m", "reescrito");
+    return { ...inst, nuevo: g(inst.dirs.api!, "rev-parse", "HEAD") };
+  }
+
+  it("con elicitation, la persona confirma en su cliente y force no basta para saltarla", async () => {
+    const { nuevo } = await preparado();
+    const preguntas: string[] = [];
+    let responder: "accept" | "decline" = "decline";
+    const { cliente, cerrar } = await conectar({ elicitation: {} }, (c) => {
+      c.setRequestHandler(ElicitRequestSchema, async (peticion) => {
+        preguntas.push(String(peticion.params.message));
+        return responder === "accept" ? { action: "accept", content: { confirmar: true } } : { action: "decline" };
+      });
+    });
+    try {
+      const pedido = { project: "P", task_name: "t", lote: 1, reanclar: true, commit: nuevo, force: true };
+      const rechazado = await cliente.callTool({ name: "record_batch", arguments: pedido });
+      assert.equal(rechazado.isError, true);
+      assert.match(textoDe(rechazado), /El usuario no confirmó el cambio de ancla de L01/);
+
+      responder = "accept";
+      const hecho = await cliente.callTool({ name: "record_batch", arguments: pedido });
+      assert.equal(hecho.isError, undefined, textoDe(hecho));
+      assert.match(textoDe(hecho), /L01 reanclado/);
+      assert.equal(preguntas.length, 2);
+      assert.match(preguntas[0]!, /^El recibo L01 está sellado con el commit `[0-9a-f]{7}`\. ¿Reemplazar su ancla por `[0-9a-f]{7}`\?$/);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("sin elicitation, pide force; con force, reancla", async () => {
+    const { nuevo } = await preparado();
+    const { cliente, cerrar } = await conectar();
+    try {
+      const pedido = { project: "P", task_name: "t", lote: 1, reanclar: true, commit: nuevo };
+      const sinForce = await cliente.callTool({ name: "record_batch", arguments: pedido });
+      assert.match(textoDe(sinForce), /vuelve a llamar con `reanclar: true` y force: true/);
+      const conForce = await cliente.callTool({ name: "record_batch", arguments: { ...pedido, force: true } });
+      assert.match(textoDe(conForce), /L01 reanclado/);
+    } finally {
+      await cerrar();
+    }
   });
 });
