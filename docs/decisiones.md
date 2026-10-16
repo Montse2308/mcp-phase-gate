@@ -52,8 +52,10 @@ con su vigencia, o nota) y los que no entran en la auditoría (descartados, fall
 recibo). Si un ancla ya no corresponde a la rama, su fila dice por qué y el bloque termina con "Hay anclas
 que ya no corresponden a la rama: díselo al usuario antes de auditar."
 
-El bloque tiene un plazo de 15 s: si git no responde, el prompt se entrega igual con una línea que manda a
-`get_batch_status` con `reverificar`.
+El bloque tiene un plazo de 15 s: si git no responde, el prompt se entrega igual, con el mismo encabezado y
+una línea que manda a `get_batch_status` con `reverificar`. Las anclas se verifican de seis en seis y cada
+commit se resuelve una sola vez (con 40 lotes, uno detrás de otro, el bloque tardaba 9,5 s; así, 2,1 s,
+medido). Si no se pueden leer los recibos, el bloque lo dice en vez de desaparecer.
 
 **Amplía** "La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como
 bloqueantes" (2026-10-14): la entrada de la auditoría ya no se reconstruye leyendo recibos, la da el
@@ -246,7 +248,9 @@ comprueba al registrarla:
 no está en la rama (un `--amend`, un rebase, un squash) deja de estar vigente; un sha256 que no coincide
 se recalcula con los finales de línea cambiados, en las dos direcciones, y si así coincide se informa
 "idéntico salvo finales de línea" (E4-R2: con `core.autocrlf`, un archivo de texto tiene otros bytes en
-Windows que en Linux).
+Windows que en Linux). Solo en texto: un archivo con un byte NUL en sus primeros 8000 (la heurística de
+git) es binario, y en un binario quitar un `0x0D` es un cambio de verdad (hallazgo 8 de la auditoría de
+la Etapa 4).
 
 **Amplía** "Git se consulta por una sola puerta, de solo lectura y sin efectos" (2026-10-15): todas
 estas consultas pasan por ella, y el texto del modelo que llega a git es solo un hash ya validado.

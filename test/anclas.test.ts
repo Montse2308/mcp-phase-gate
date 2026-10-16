@@ -361,6 +361,29 @@ describe("reverificar", () => {
     }
   });
 
+  // Hallazgo 8 de la auditoría de la Etapa 4: en un binario, quitar un 0x0D es un cambio de verdad.
+  it("en un binario, un cambio de finales de línea no cuenta como vigente", async () => {
+    const { repo } = instalacion();
+    const ruta = path.join(repo, "bin.dat");
+    fs.writeFileSync(ruta, Buffer.from([0x00, 0x01, 0x0d, 0x0a, 0x02, 0x03]));
+    const ancla = await anclarArtefacto("P", "api", "bin.dat");
+    fs.writeFileSync(ruta, Buffer.from([0x00, 0x01, 0x0a, 0x02, 0x03]));
+    const r = await reverificar("P", reciboCon(ancla));
+    assert.equal(r.vigente, false);
+    assert.match(r.texto, /cambió desde que se selló/);
+  });
+
+  it("la conversión de finales de línea es exacta aunque un \\r\\n caiga entre dos trozos del stream", async () => {
+    const carpeta = carpetaTemporal("trozos");
+    const ruta = path.join(carpeta, "x.txt");
+    // El stream lee de 64 KiB en 64 KiB: el \r queda al final de un trozo y el \n al principio del siguiente.
+    const texto = `${"a".repeat(65535)}\r\n${"b\r\nc\n".repeat(30000)}\r`;
+    fs.writeFileSync(ruta, texto, "latin1");
+    const hash = (s: string) => crypto.createHash("sha256").update(Buffer.from(s, "latin1")).digest("hex");
+    assert.equal((await sha256DeArchivo(ruta, "crlf-a-lf")).sha256, hash(texto.replace(/\r\n/g, "\n")));
+    assert.equal((await sha256DeArchivo(ruta, "lf-a-crlf")).sha256, hash(texto.replace(/\r?\n/g, "\r\n")));
+  });
+
   it("un artefacto que ya no existe, o un commit sin repo, no están vigentes; una nota no tiene nada que comprobar", async () => {
     const { repo } = instalacion();
     fs.writeFileSync(path.join(repo, "x.md"), "x", "utf-8");

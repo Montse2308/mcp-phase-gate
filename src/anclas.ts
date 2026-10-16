@@ -130,40 +130,64 @@ export function rutaDeArtefacto(base: string, relativa: string): { ruta: string;
 type Conversion = "ninguna" | "crlf-a-lf" | "lf-a-crlf";
 
 // Convierte los finales de línea de un trozo, con el estado del trozo anterior (un \r al final de un
-// trozo puede ir seguido de un \n al principio del siguiente).
+// trozo puede ir seguido de un \n al principio del siguiente). Sobre Buffer, buscando con indexOf: byte a
+// byte en JavaScript, 128 MB costaban más de 2 s por conversión (hallazgo 8 de la auditoría de la Etapa 4).
+const CR = Buffer.from([0x0d]);
+const CRLF = Buffer.from([0x0d, 0x0a]);
+const VACIO = Buffer.alloc(0);
+
 function convertidor(conversion: Conversion): { trozo: (b: Buffer) => Buffer; fin: () => Buffer } {
-  if (conversion === "ninguna") return { trozo: (b) => b, fin: () => Buffer.alloc(0) };
-  let anterior = -1;
+  if (conversion === "ninguna") return { trozo: (b) => b, fin: () => VACIO };
   if (conversion === "crlf-a-lf") {
     let crPendiente = false;
     return {
       trozo: (b) => {
-        const salida: number[] = [];
-        for (const byte of b) {
-          if (crPendiente) {
-            crPendiente = false;
-            if (byte !== 0x0a) salida.push(0x0d);
-          }
-          if (byte === 0x0d) crPendiente = true;
-          else salida.push(byte);
+        let entrada = crPendiente ? Buffer.concat([CR, b]) : b;
+        crPendiente = entrada.length > 0 && entrada[entrada.length - 1] === 0x0d;
+        if (crPendiente) entrada = entrada.subarray(0, entrada.length - 1);
+        const partes: Buffer[] = [];
+        let desde = 0;
+        for (let i = entrada.indexOf(CRLF, desde); i !== -1; i = entrada.indexOf(CRLF, desde)) {
+          partes.push(entrada.subarray(desde, i));
+          desde = i + 1; // se salta el \r y se queda el \n
         }
-        return Buffer.from(salida);
+        partes.push(entrada.subarray(desde));
+        return Buffer.concat(partes);
       },
-      fin: () => (crPendiente ? Buffer.from([0x0d]) : Buffer.alloc(0)),
+      fin: () => (crPendiente ? CR : VACIO),
     };
   }
+  let anterior = -1;
   return {
     trozo: (b) => {
-      const salida: number[] = [];
-      for (const byte of b) {
-        if (byte === 0x0a && anterior !== 0x0d) salida.push(0x0d);
-        salida.push(byte);
-        anterior = byte;
+      const partes: Buffer[] = [];
+      let desde = 0;
+      for (let i = b.indexOf(0x0a, 0); i !== -1; i = b.indexOf(0x0a, i + 1)) {
+        const previo = i > 0 ? b[i - 1] : anterior;
+        if (previo !== 0x0d) {
+          partes.push(b.subarray(desde, i), CR);
+          desde = i;
+        }
       }
-      return Buffer.from(salida);
+      partes.push(b.subarray(desde));
+      if (b.length) anterior = b[b.length - 1]!;
+      return Buffer.concat(partes);
     },
-    fin: () => Buffer.alloc(0),
+    fin: () => VACIO,
   };
+}
+
+// La misma heurística que git (y que leerTextoAcotado): un byte NUL en los primeros 8000 es binario. Los
+// finales de línea solo se normalizan en texto: en un binario, quitar un 0x0D es un cambio de verdad.
+async function pareceTexto(ruta: string): Promise<boolean> {
+  const descriptor = fs.openSync(ruta, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    const muestra = Buffer.alloc(8000);
+    const leidos = fs.readSync(descriptor, muestra, 0, muestra.length, 0);
+    return !muestra.subarray(0, leidos).includes(0);
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }
 
 // El sha256 en streaming, del mismo descriptor que se comprobó: tipo y tamaño salen del archivo abierto,
@@ -228,7 +252,9 @@ export function partirRutaDeArtefacto(guardada: string): { repo: string | null; 
 
 // ─── Reverificar ────────────────────────────────────────────────────────────
 // Para get_batch_status y la Fase 5: ¿el ancla sigue valiendo hoy?
-export async function reverificar(proyecto: string, recibo: Recibo): Promise<{ vigente: boolean; texto: string }> {
+// `sha`: el commit completo, cuando el ancla es un commit y sigue vigente (el bloque de la Fase 5 lo usa
+// sin volver a preguntárselo a git).
+export async function reverificar(proyecto: string, recibo: Recibo): Promise<{ vigente: boolean; texto: string; sha?: string }> {
   const ancla = recibo.ancla;
   try {
     if (ancla.tipo === "commit") return await reverificarCommit(proyecto, recibo, ancla);
@@ -239,7 +265,7 @@ export async function reverificar(proyecto: string, recibo: Recibo): Promise<{ v
   return { vigente: true, texto: "Sin nada que comprobar." };
 }
 
-async function reverificarCommit(proyecto: string, recibo: Recibo, ancla: AnclaCommit): Promise<{ vigente: boolean; texto: string }> {
+async function reverificarCommit(proyecto: string, recibo: Recibo, ancla: AnclaCommit): Promise<{ vigente: boolean; texto: string; sha?: string }> {
   const repoId = ancla.repo || recibo.repo;
   if (!repoId) return { vigente: false, texto: "El recibo no dice en qué repo está su commit." };
   const dir = resolverRepo(proyecto, repoId).ruta!;
@@ -250,7 +276,7 @@ async function reverificarCommit(proyecto: string, recibo: Recibo, ancla: AnclaC
 
   const rama = await ramaActual(dir);
   const ancestro = await esAncestroDeHead(dir, resuelto.sha);
-  if (ancestro.resultado === "si") return { vigente: true, texto: `El commit \`${corto}\` sigue en la rama actual (\`${rama ?? "HEAD separado"}\`).` };
+  if (ancestro.resultado === "si") return { vigente: true, texto: `El commit \`${corto}\` sigue en la rama actual (\`${rama ?? "HEAD separado"}\`).`, sha: resuelto.sha };
   if (ancestro.resultado === "error") return { vigente: false, texto: `No se pudo comprobar \`${corto}\`: ${ancestro.salida}` };
   return {
     vigente: false,
@@ -267,7 +293,10 @@ async function reverificarArtefacto(proyecto: string, ancla: AnclaSha256): Promi
   if (actual.sha256 === ancla.sha256) return { vigente: true, texto: `El artefacto \`${ancla.ruta}\` no cambió.` };
 
   // El hash es de los bytes, y un archivo de texto en un repo con core.autocrlf tiene otros bytes en
-  // Windows que en Linux o macOS (§6.1). Se prueba en las dos direcciones.
+  // Windows que en Linux o macOS (§6.1). Se prueba en las dos direcciones, y solo con texto.
+  if (!(await pareceTexto(ruta))) {
+    return { vigente: false, texto: `El artefacto \`${ancla.ruta}\` cambió desde que se selló (sha256 \`${ancla.sha256.slice(0, 12)}…\`, ahora \`${actual.sha256.slice(0, 12)}…\`).` };
+  }
   for (const conversion of ["crlf-a-lf", "lf-a-crlf"] as const) {
     if ((await sha256DeArchivo(ruta, conversion)).sha256 === ancla.sha256) {
       return { vigente: true, texto: `El artefacto \`${ancla.ruta}\` es idéntico salvo finales de línea.` };

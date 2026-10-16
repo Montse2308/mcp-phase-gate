@@ -13,7 +13,7 @@ import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import type { ResultadoConfirmacion } from "../src/confirmacion.js";
-import { bloqueDeCommits, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote, traducirEscritura } from "../src/lotes.js";
+import { bloqueDeCommits, bloqueDeCommitsConPlazo, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote, traducirEscritura } from "../src/lotes.js";
 import type { EntradaDeLote } from "../src/lotes.js";
 import { escribirRecibo, leerRecibo, nombreDeRecibo, parsearRecibo } from "../src/recibos.js";
 import type { Recibo } from "../src/recibos.js";
@@ -1165,6 +1165,13 @@ describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () =
     fs.writeFileSync(path.join(recibos, "L01 - binario.md"), Buffer.from([0, 1, 2, 0, 3]));
     const texto = (await bloqueDeCommits("P", tarea, fasesDe("P")))!;
     assert.match(texto, /^## COMMITS DE LA FASE 4\n\nNo se pudieron leer los recibos: No se pudo leer el recibo `04 - Ejecución\/L01 - binario\.md`/);
+  });
+
+  it("si vence el plazo, el bloque de la Fase 5 lleva el mismo encabezado y lo dice (hallazgo 7)", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "1" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    const texto = await bloqueDeCommitsConPlazo("P", tarea, fasesDe("P"), 1);
+    assert.match(texto!, /^## COMMITS DE LA FASE 4\n\nNo se pudieron verificar a tiempo/);
   });
 
   it("un artefacto que no existe se nombra por su ruta relativa, no por la del equipo (hallazgo 9)", async () => {

@@ -940,6 +940,23 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
   };
 }
 
+// Hasta `limite` tareas a la vez, conservando el orden de los resultados. Cada consulta de git lanza dos
+// procesos (la de los filtros y la de verdad): sin tope, 99 lotes serían cientos de procesos juntos.
+export const VERIFICACIONES_A_LA_VEZ = 6;
+
+export async function enParalelo<T, R>(elementos: readonly T[], limite: number, tarea: (elemento: T) => Promise<R>): Promise<R[]> {
+  const resultados = new Array<R>(elementos.length);
+  let siguiente = 0;
+  const trabajador = async (): Promise<void> => {
+    while (siguiente < elementos.length) {
+      const i = siguiente++;
+      resultados[i] = await tarea(elementos[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limite, elementos.length) }, trabajador));
+  return resultados;
+}
+
 // ─── get_batch_status (§6.8) ────────────────────────────────────────────────
 // Solo lee: cruza el plan (su frontmatter y su tabla) con los recibos y dice qué toca. Con `reverificar`,
 // repite la verificación de cada ancla contra git y el disco.
@@ -993,19 +1010,22 @@ export async function estadoDeLotes(carpetaProyecto: string, taskName: string, o
   }
   const relativo = (r: ReciboEnDisco): string => (r.ruta === documento ? fase.documento! : `${fase.recibos}/${r.nombre}`);
 
+  const numerosDeLote = [...Array(total).keys()].map((i) => i + 1);
+  const comprobaciones = comprobar
+    ? await enParalelo(numerosDeLote, VERIFICACIONES_A_LA_VEZ, async (lote) => {
+        const r = (porLote.get(lote) ?? [])[0];
+        return r ? reverificar(carpetaProyecto, r.recibo) : null;
+      })
+    : [];
   const filas: FilaDeEstado[] = [];
   for (let lote = 1; lote <= total; lote++) {
     const delPlan = tabla?.get(lote);
     const recibos = porLote.get(lote) ?? [];
     if (recibos.length > 1) avisos.push(`Hay ${recibos.length} recibos de ${etiquetaDeLote(lote)}: ${recibos.map((r) => `\`${relativo(r)}\``).join(", ")}. Deja uno solo.`);
     const r = recibos[0];
-    let vigente: boolean | null = null;
-    let problema: string | null = null;
-    if (r && comprobar) {
-      const resultado = await reverificar(carpetaProyecto, r.recibo);
-      vigente = resultado.vigente;
-      problema = resultado.vigente ? null : resultado.texto;
-    }
+    const resultado = comprobaciones[lote - 1] ?? null;
+    const vigente: boolean | null = resultado ? resultado.vigente : null;
+    const problema: string | null = resultado && !resultado.vigente ? resultado.texto : null;
     filas.push({
       lote: etiquetaDeLote(lote),
       repo: delPlan?.repo || null,
@@ -1141,26 +1161,27 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
     } catch {
       dir = null;
     }
-    const filas: string[] = [];
-    const vigentes: string[] = [];
-    for (const recibo of recibos) {
+    // Varios a la vez, con tope: con 40 lotes, uno detrás de otro se comía casi todo el plazo (hallazgo 7
+    // de la auditoría de la Etapa 4). reverificar ya devuelve el SHA completo: no se resuelve dos veces.
+    const resultados = await enParalelo(recibos, VERIFICACIONES_A_LA_VEZ, async (recibo) => {
       const ancla = recibo.ancla as Extract<Ancla, { tipo: "commit" }>;
       const comprobacion = await reverificar(carpetaProyecto, recibo);
-      if (!comprobacion.vigente) hayNoVigentes = true;
-      else if (dir) {
-        const resuelto = await resolverCommit(dir, ancla.sha);
-        if (resuelto.ok) vigentes.push(resuelto.sha);
-      }
       let asunto = ancla.asunto;
       if (!asunto && dir && comprobacion.vigente) {
         try {
-          asunto = (await datosDeCommit(dir, ancla.sha)).asunto; // un recibo manual de la 2.x no lo guarda
+          asunto = (await datosDeCommit(dir, comprobacion.sha ?? ancla.sha)).asunto; // un recibo manual de la 2.x no lo guarda
         } catch {
           asunto = "";
         }
       }
-      filas.push(`| ${etiquetaDeLote(recibo.lote)} | \`${ancla.corto || ancla.sha.slice(0, 7)}\` | ${celda(asunto) || "—"} | ${comprobacion.vigente ? "sí" : `no: ${celda(comprobacion.texto)}`} |`);
-    }
+      return { recibo, ancla, comprobacion, asunto };
+    });
+    const vigentes = resultados.flatMap(({ comprobacion }) => (comprobacion.vigente && comprobacion.sha ? [comprobacion.sha] : []));
+    if (resultados.some(({ comprobacion }) => !comprobacion.vigente)) hayNoVigentes = true;
+    const filas = resultados.map(
+      ({ recibo, ancla, comprobacion, asunto }) =>
+        `| ${etiquetaDeLote(recibo.lote)} | \`${ancla.corto || ancla.sha.slice(0, 7)}\` | ${celda(asunto) || "—"} | ${comprobacion.vigente ? "sí" : `no: ${celda(comprobacion.texto)}`} |`
+    );
 
     const lineas = [`### Repo \`${repo}\`${rama ? ` (rama ${rama})` : ""}`, "| Lote | Commit | Asunto | Vigente |", "|---|---|---|---|", ...filas, ""];
     const cortos = recibos.map((r) => (r.ancla as Extract<Ancla, { tipo: "commit" }>).corto);
@@ -1184,17 +1205,15 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
   }
 
   if (sinCommit.length) {
-    const filas: string[] = [];
-    for (const recibo of sinCommit) {
+    const filas = await enParalelo(sinCommit, VERIFICACIONES_A_LA_VEZ, async (recibo) => {
       const ancla = recibo.ancla;
       if (ancla.tipo === "sha256") {
         const comprobacion = await reverificar(carpetaProyecto, recibo);
         if (!comprobacion.vigente) hayNoVigentes = true;
-        filas.push(`| ${etiquetaDeLote(recibo.lote)} | sha256 \`${ancla.sha256.slice(0, 8)}…\` de \`${ancla.ruta}\` | ${comprobacion.vigente ? "sí" : `no: ${celda(comprobacion.texto)}`} |`);
-      } else if (ancla.tipo === "nota") {
-        filas.push(`| ${etiquetaDeLote(recibo.lote)} | nota: ${celda(ancla.texto)} | no aplica |`);
+        return `| ${etiquetaDeLote(recibo.lote)} | sha256 \`${ancla.sha256.slice(0, 8)}…\` de \`${ancla.ruta}\` | ${comprobacion.vigente ? "sí" : `no: ${celda(comprobacion.texto)}`} |`;
       }
-    }
+      return `| ${etiquetaDeLote(recibo.lote)} | nota: ${ancla.tipo === "nota" ? celda(ancla.texto) : ""} | no aplica |`;
+    });
     secciones.push(["### Sin commit", "| Lote | Ancla | Vigente |", "|---|---|---|", ...filas].join("\n"));
   }
   if (fuera.length) secciones.push(["### Lotes que no entran en la auditoría", ...fuera].join("\n"));
@@ -1203,12 +1222,18 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
   return [`## COMMITS DE LA FASE ${fase.numero} (verificados por el servidor al entregar este prompt)`, ...secciones].join("\n\n");
 }
 
-// El bloque con un plazo: si git no responde, el prompt se entrega igual y lo dice.
+// El bloque con un plazo: si git no responde, el prompt se entrega igual y lo dice, con el mismo encabezado.
 export async function bloqueDeCommitsConPlazo(carpetaProyecto: string, carpetaTarea: string, phases: Map<number, PhaseFile>, plazoMs = PLAZO_DE_COMMITS_MS): Promise<string | null> {
+  let numero: number | string = "anterior";
+  try {
+    numero = faseEnCarpeta(carpetaTarea, phases).numero;
+  } catch {
+    // sin fase de lotes, bloqueDeCommits devuelve null enseguida
+  }
   let temporizador: NodeJS.Timeout | undefined;
   const vencido = new Promise<string>((resolver) => {
     temporizador = setTimeout(
-      () => resolver(`## COMMITS DE LA FASE ANTERIOR\n\nNo se pudieron verificar a tiempo (${plazoMs / 1000} s). Usa \`get_batch_status\` con \`reverificar\` antes de auditar.`),
+      () => resolver(`## COMMITS DE LA FASE ${numero}\n\nNo se pudieron verificar a tiempo (${plazoMs / 1000} s). Usa \`get_batch_status\` con \`reverificar\` antes de auditar.`),
       plazoMs
     );
     temporizador.unref();
