@@ -202,6 +202,24 @@ export async function ramaActual(dir: string): Promise<string | null> {
   return (await git(dir, ["branch", "--show-current"])).trim() || null;
 }
 
+// ¿El commit tiene padre? El primero del repo no, y `<sha>^` no existe (rev-parse sale con 1).
+export async function tienePadre(dir: string, sha: string): Promise<boolean> {
+  const { codigo } = await conFiltrosAnulados(dir, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${sha}^`], [1]);
+  return codigo === 0;
+}
+
+// ¿Los commits de los lotes son, en orden, exactamente los de `<primero>^..<último>`? Si el primero es
+// el commit raíz, `<primero>^` no existe: entonces se listan todos los ancestros del último (medido: la
+// forma con ^ falla con 128). Los SHA llegan completos, de resolverCommit.
+export async function sonConsecutivos(dir: string, shas: string[]): Promise<boolean> {
+  if (shas.length === 0) return false;
+  const primero = shas[0]!;
+  const ultimo = shas[shas.length - 1]!;
+  const rango = (await tienePadre(dir, primero)) ? [`${primero}^..${ultimo}`] : [ultimo];
+  const lista = (await git(dir, ["rev-list", "--reverse", ...rango])).split(/\r?\n/).map((linea) => linea.trim()).filter(Boolean);
+  return lista.length === shas.length && lista.every((sha, i) => sha === shas[i]!.toLowerCase());
+}
+
 // ¿La carpeta está dentro de un repositorio de git? Cualquier otro fallo (git no instalado, propiedad
 // dudosa) se lanza: no es lo mismo que "no tiene git".
 export async function tieneGit(dir: string): Promise<boolean> {

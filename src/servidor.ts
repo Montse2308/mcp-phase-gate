@@ -37,7 +37,7 @@ import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerf
 import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
-import { estadoDeLotes, registrarLote } from "./lotes.js";
+import { bloqueDeCommitsConPlazo, estadoDeLotes, registrarLote } from "./lotes.js";
 import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
@@ -376,6 +376,7 @@ function registrarTools(mcp: McpServer): void {
       let aviso: string | null = null;
       let pendientes: string | null = null;
       let recibos: string | null = null;
+      let commits: string | null = null;
       let carpetaTarea: string | null = null;
       try {
         aviso = avisoDeCompuerta(phase, fasesDe, opciones);
@@ -386,6 +387,9 @@ function registrarTools(mcp: McpServer): void {
           recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases);
           // La tarea aporta su preset si declara uno en su contexto inicial.
           if (carpetaProyecto && resuelta.carpetaProyecto === carpetaProyecto) carpetaTarea = resuelta.estado.folderPath;
+          // En la fase siguiente a la de los lotes (la 5), los commits ya verificados para el auditor.
+          const deLotes = [...resuelta.phases.entries()].find(([, datos]) => datos.recibos);
+          if (deLotes && phase === deLotes[0] + 1) commits = await bloqueDeCommitsConPlazo(resuelta.carpetaProyecto, resuelta.estado.folderPath, resuelta.phases);
         }
       } catch (error) {
         log("warning", `No se pudo comprobar la compuerta: ${mensajeDe(error)}`);
@@ -402,7 +406,7 @@ function registrarTools(mcp: McpServer): void {
       if (!carpetaProyecto) notas.unshift(notaSinProyecto(project));
 
       // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
-      return responder([deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos].filter(Boolean).join("\n\n"));
+      return responder([deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos, commits].filter(Boolean).join("\n\n"));
     })
   );
 

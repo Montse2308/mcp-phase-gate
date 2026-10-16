@@ -13,7 +13,7 @@ import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import type { ResultadoConfirmacion } from "../src/confirmacion.js";
-import { ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote } from "../src/lotes.js";
+import { bloqueDeCommits, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote } from "../src/lotes.js";
 import type { EntradaDeLote } from "../src/lotes.js";
 import { escribirRecibo, leerRecibo, nombreDeRecibo, parsearRecibo } from "../src/recibos.js";
 import type { Recibo } from "../src/recibos.js";
@@ -919,6 +919,108 @@ describe("get_batch_status", () => {
       assert.equal((r.structuredContent as { siguiente: string }).siguiente, "Implementa L01.");
     } finally {
       await otra.cerrar();
+    }
+  });
+});
+
+// ─── L07: los commits verificados para la Fase 5 ────────────────────────────
+describe("bloqueDeCommits (COMMITS DE LA FASE 4)", () => {
+  const corto = (sha: string) => sha.slice(0, 7);
+  const bloque = (tarea: string) => bloqueDeCommits("P", tarea, fasesDe("P"));
+
+  it("consecutivos en la rama: el rango para auditar", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "2" });
+    const a = commitEn(dirs.api!, ["src/l1.ts"], "fix(calculo): total");
+    await registrar(contenido(1, { commit: a }));
+    const b = commitEn(dirs.api!, ["src/l2.ts"], "feat(filtros): categoría");
+    await registrar(contenido(2, { commit: b }));
+
+    const texto = (await bloque(tarea))!;
+    assert.equal(
+      texto,
+      [
+        "## COMMITS DE LA FASE 4 (verificados por el servidor al entregar este prompt)",
+        "",
+        "### Repo `api` (rama main)",
+        "| Lote | Commit | Asunto | Vigente |",
+        "|---|---|---|---|",
+        `| L01 | \`${corto(a)}\` | fix(calculo): total | sí |`,
+        `| L02 | \`${corto(b)}\` | feat(filtros): categoría | sí |`,
+        "",
+        `Son consecutivos en la rama. Rango para auditar: \`git log --oneline ${corto(a)}^..${corto(b)}\` y \`git diff ${corto(a)}^ ${corto(b)}\`.`,
+      ].join("\n")
+    );
+  });
+
+  it("no consecutivos: un commit en medio que no es de ningún lote", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    commitEn(dirs.api!, ["otro.txt"], "chore: algo suelto");
+    await registrar(contenido(2, { commit: commitEn(dirs.api!, ["src/l2.ts"]) }));
+    assert.match((await bloque(tarea))!, /No son consecutivos: audita cada commit con `git show <sha>` \(`[0-9a-f]{7}`, `[0-9a-f]{7}`\)\./);
+  });
+
+  it("desde el primer commit del repo (sin padre)", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "2", sinGit: ["api"] });
+    g(dirs.api!, "init", "-q");
+    const a = commitEn(dirs.api!, ["src/l1.ts"]);
+    await registrar(contenido(1, { commit: a }));
+    const b = commitEn(dirs.api!, ["src/l2.ts"]);
+    await registrar(contenido(2, { commit: b }));
+    assert.match((await bloque(tarea))!, new RegExp(`desde el primer commit del repo\\. Rango para auditar: \`git log --oneline ${corto(b)}\``));
+  });
+
+  it("dos repos, cada uno con su sección, y los artefactos sellados aparte", async () => {
+    const { tarea, dirs, docs } = instalacion({ lotes: "3", repos: [{ id: "api", dir: "api" }, { id: "web", dir: "web" }], commits: "agente-commitea-con-OK" });
+    await registrar(contenido(1, { repo: "api", commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    await registrar(contenido(2, { repo: "web", commit: commitEn(dirs.web!, ["src/l2.ts"]) }));
+    // El lote 3 es de un proyecto con un archivo sellado: un repo sin git.
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, repos: [{ id: "api", dir: "api" }, { id: "web", dir: "web" }, { id: "docs", dir: "docs-sin-git" }] }), "utf-8");
+    fs.mkdirSync(path.join(process.env.PHASE_GATE_REPOS_PATH!, "docs-sin-git"));
+    fs.writeFileSync(path.join(process.env.PHASE_GATE_REPOS_PATH!, "docs-sin-git", "guia.md"), "guía\n", "utf-8");
+    await registrar(contenido(3, { repo: "docs", artifact_path: "guia.md" }));
+
+    const texto = (await bloque(tarea))!;
+    assert.match(texto, /### Repo `api` \(rama main\)\n[\s\S]*Rango para auditar: `git show [0-9a-f]{7}`\./);
+    assert.match(texto, /### Repo `web` \(rama main\)/);
+    assert.match(texto, /### Sin commit\n\| Lote \| Ancla \| Vigente \|\n\|---\|---\|---\|\n\| L03 \| sha256 `[0-9a-f]{8}…` de `repo:docs\/guia\.md` \| sí \|/);
+    assert.doesNotMatch(texto, /Hay anclas que ya no corresponden/);
+  });
+
+  it("un ancla que ya no está en la rama dice por qué, y el bloque acaba avisando", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "1" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    g(dirs.api!, "commit", "-q", "--amend", "-m", "reescrito");
+    const texto = (await bloque(tarea))!;
+    assert.match(texto, /\| L01 \| `[0-9a-f]{7}` \| feat\(x\): lote \| no: El commit `[0-9a-f]{7}` ya no está en la rama actual/);
+    assert.match(texto, /Audita cada commit vigente con `git show <sha>`\./);
+    assert.ok(texto.endsWith("Hay anclas que ya no corresponden a la rama: díselo al usuario antes de auditar."));
+  });
+
+  it("los lotes descartados, fallidos o sin recibo se listan aparte", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "3" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    await registrar(contenido(2, { estado: "fallido", verification_note: "la suite no pasa" }));
+    const texto = (await bloque(tarea))!;
+    assert.match(texto, /### Lotes que no entran en la auditoría\n- L02: fallido \(«la suite no pasa»\)\.\n- L03: sin recibo\./);
+  });
+
+  it("sin recibos no hay bloque", async () => {
+    const { tarea } = instalacion();
+    assert.equal(await bloque(tarea), null);
+  });
+
+  it("get_phase_prompt(5) lo añade al final, y la 4 no", async () => {
+    const { dirs } = instalacion({ lotes: "1" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    const { cliente, cerrar } = await conectar();
+    try {
+      const fase5 = textoDe(await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 5, project: "P", task_name: "t" } }));
+      assert.match(fase5, /\n## COMMITS DE LA FASE 4 \(verificados por el servidor al entregar este prompt\)\n\n### Repo `api` \(rama main\)/);
+      const fase4 = textoDe(await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 4, project: "P", task_name: "t" } }));
+      assert.doesNotMatch(fase4, /COMMITS DE LA FASE/);
+    } finally {
+      await cerrar();
     }
   });
 });

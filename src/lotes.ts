@@ -17,7 +17,7 @@ import { anclarArtefacto, anclarCommit, reverificar } from "./anclas.js";
 import { configuracionDe, fasesDe, reposDeLaTarea } from "./capas.js";
 import { DOCS, requireBasePath } from "./config.js";
 import type { ResultadoConfirmacion } from "./confirmacion.js";
-import { ramaActual, tieneGit } from "./git.js";
+import { datosDeCommit, ramaActual, resolverCommit, sonConsecutivos, tieneGit, tienePadre } from "./git.js";
 import { estaDentroReal, leerTextoAcotado, taskFolderPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
@@ -1017,6 +1017,135 @@ function textoDeEstado(e: EstadoDeLotes, comprobar: boolean): string {
   }
   if (e.avisos.length) lineas.push("", "Avisos:", ...e.avisos.map((a) => `- ${a}`));
   return lineas.join("\n");
+}
+
+// ─── Los commits de la Fase 4, para el auditor de la Fase 5 (§6.8) ──────────
+// Al entregar el prompt de la fase siguiente a la de los lotes, el servidor verifica cada ancla y le da
+// al auditor los commits por repo, si son consecutivos y el rango exacto para auditarlos. El auditor ya
+// no los reconstruye de los recibos.
+export const PLAZO_DE_COMMITS_MS = 15_000;
+
+export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: string, phases: Map<number, PhaseFile>): Promise<string | null> {
+  let fase: FaseDeLotes;
+  let total: number;
+  try {
+    fase = faseEnCarpeta(carpetaTarea, phases);
+    total = lotesDelPlan(fase);
+  } catch {
+    return null; // sin fase de lotes o sin plan con lotes no hay nada que listar
+  }
+  const porLote = recibosDeLaTarea(fase);
+  const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
+  if (total === 1 && documento && fs.existsSync(documento) && !(porLote.get(1) ?? []).length) {
+    porLote.set(1, [{ recibo: { ...parsearRecibo(leerTextoAcotado(documento), fase.documento!), lote: 1 }, nombre: fase.documento!, ruta: documento, mtimeMs: 0 }]);
+  }
+  if (porLote.size === 0) return null;
+
+  const fuera: string[] = [];
+  const porRepo = new Map<string, Recibo[]>();
+  const sinCommit: Recibo[] = [];
+  for (let lote = 1; lote <= total; lote++) {
+    const recibo = (porLote.get(lote) ?? [])[0]?.recibo;
+    const etiqueta = etiquetaDeLote(lote);
+    if (!recibo) fuera.push(`- ${etiqueta}: sin recibo.`);
+    else if (recibo.estado === "descartado" || recibo.estado === "fallido") {
+      const motivo = recibo.ancla.tipo === "nota" ? ` («${recibo.ancla.texto.replace(/\s+/g, " ").trim()}»)` : "";
+      fuera.push(`- ${etiqueta}: ${recibo.estado}${motivo}.`);
+    } else if (recibo.ancla.tipo === "pendiente") fuera.push(`- ${etiqueta}: el commit sigue pendiente.`);
+    else if (recibo.ancla.tipo === "commit") {
+      const repo = recibo.ancla.repo || recibo.repo || "";
+      porRepo.set(repo, [...(porRepo.get(repo) ?? []), recibo]);
+    } else sinCommit.push(recibo);
+  }
+
+  const secciones: string[] = [];
+  let hayNoVigentes = false;
+  for (const [repo, recibos] of porRepo) {
+    let dir: string | null = null;
+    let rama: string | null = null;
+    try {
+      dir = resolverRepo(carpetaProyecto, repo).ruta!;
+      rama = await ramaActual(dir);
+    } catch {
+      dir = null;
+    }
+    const filas: string[] = [];
+    const vigentes: string[] = [];
+    for (const recibo of recibos) {
+      const ancla = recibo.ancla as Extract<Ancla, { tipo: "commit" }>;
+      const comprobacion = await reverificar(carpetaProyecto, recibo);
+      if (!comprobacion.vigente) hayNoVigentes = true;
+      else if (dir) {
+        const resuelto = await resolverCommit(dir, ancla.sha);
+        if (resuelto.ok) vigentes.push(resuelto.sha);
+      }
+      let asunto = ancla.asunto;
+      if (!asunto && dir && comprobacion.vigente) {
+        try {
+          asunto = (await datosDeCommit(dir, ancla.sha)).asunto; // un recibo manual de la 2.x no lo guarda
+        } catch {
+          asunto = "";
+        }
+      }
+      filas.push(`| ${etiquetaDeLote(recibo.lote)} | \`${ancla.corto || ancla.sha.slice(0, 7)}\` | ${celda(asunto) || "—"} | ${comprobacion.vigente ? "sí" : `no: ${celda(comprobacion.texto)}`} |`);
+    }
+
+    const lineas = [`### Repo \`${repo}\`${rama ? ` (rama ${rama})` : ""}`, "| Lote | Commit | Asunto | Vigente |", "|---|---|---|---|", ...filas, ""];
+    const cortos = recibos.map((r) => (r.ancla as Extract<Ancla, { tipo: "commit" }>).corto);
+    if (dir && vigentes.length === recibos.length) {
+      const primero = cortos[0]!;
+      const ultimo = cortos[cortos.length - 1]!;
+      if (recibos.length === 1) lineas.push(`Rango para auditar: \`git show ${primero}\`.`);
+      else if (await sonConsecutivos(dir, vigentes)) {
+        lineas.push(
+          (await tienePadre(dir, vigentes[0]!))
+            ? `Son consecutivos en la rama. Rango para auditar: \`git log --oneline ${primero}^..${ultimo}\` y \`git diff ${primero}^ ${ultimo}\`.`
+            : `Son consecutivos en la rama, desde el primer commit del repo. Rango para auditar: \`git log --oneline ${ultimo}\` y \`git log -p --reverse ${ultimo}\`.`
+        );
+      } else {
+        lineas.push(`No son consecutivos: audita cada commit con \`git show <sha>\` (${cortos.map((c) => `\`${c}\``).join(", ")}).`);
+      }
+    } else {
+      lineas.push("Audita cada commit vigente con `git show <sha>`.");
+    }
+    secciones.push(lineas.join("\n"));
+  }
+
+  if (sinCommit.length) {
+    const filas: string[] = [];
+    for (const recibo of sinCommit) {
+      const ancla = recibo.ancla;
+      if (ancla.tipo === "sha256") {
+        const comprobacion = await reverificar(carpetaProyecto, recibo);
+        if (!comprobacion.vigente) hayNoVigentes = true;
+        filas.push(`| ${etiquetaDeLote(recibo.lote)} | sha256 \`${ancla.sha256.slice(0, 8)}…\` de \`${ancla.ruta}\` | ${comprobacion.vigente ? "sí" : `no: ${celda(comprobacion.texto)}`} |`);
+      } else if (ancla.tipo === "nota") {
+        filas.push(`| ${etiquetaDeLote(recibo.lote)} | nota: ${celda(ancla.texto)} | no aplica |`);
+      }
+    }
+    secciones.push(["### Sin commit", "| Lote | Ancla | Vigente |", "|---|---|---|", ...filas].join("\n"));
+  }
+  if (fuera.length) secciones.push(["### Lotes que no entran en la auditoría", ...fuera].join("\n"));
+  if (hayNoVigentes) secciones.push("Hay anclas que ya no corresponden a la rama: díselo al usuario antes de auditar.");
+
+  return [`## COMMITS DE LA FASE ${fase.numero} (verificados por el servidor al entregar este prompt)`, ...secciones].join("\n\n");
+}
+
+// El bloque con un plazo: si git no responde, el prompt se entrega igual y lo dice.
+export async function bloqueDeCommitsConPlazo(carpetaProyecto: string, carpetaTarea: string, phases: Map<number, PhaseFile>, plazoMs = PLAZO_DE_COMMITS_MS): Promise<string | null> {
+  let temporizador: NodeJS.Timeout | undefined;
+  const vencido = new Promise<string>((resolver) => {
+    temporizador = setTimeout(
+      () => resolver(`## COMMITS DE LA FASE ANTERIOR\n\nNo se pudieron verificar a tiempo (${plazoMs / 1000} s). Usa \`get_batch_status\` con \`reverificar\` antes de auditar.`),
+      plazoMs
+    );
+    temporizador.unref();
+  });
+  try {
+    return await Promise.race([bloqueDeCommits(carpetaProyecto, carpetaTarea, phases), vencido]);
+  } finally {
+    clearTimeout(temporizador);
+  }
 }
 
 // El primer lote sin recibo cerrado (ancla distinta de pendiente), o null si no queda ninguno.

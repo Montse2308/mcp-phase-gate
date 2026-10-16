@@ -12,6 +12,33 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — El auditor recibe los commits ya verificados
+
+**Decisión.** Al entregar el prompt de la Fase 5 (la siguiente a la que declara recibos), el servidor
+añade al final un bloque **"COMMITS DE LA FASE 4 (verificados por el servidor al entregar este
+prompt)"**: por cada repo, una tabla `Lote | Commit | Asunto | Vigente`, con la vigencia comprobada en ese
+momento (`reverificar`: el commit sigue en la rama actual); si son consecutivos en la rama
+(`sonConsecutivos`: `git rev-list --reverse <primero>^..<último>`, o todos los ancestros si el primero es
+el commit raíz), el rango exacto para auditarlos (`git log --oneline a1b2c3d^..e4f5a6b` y `git diff
+a1b2c3d^ e4f5a6b`); si no, que se audite cada uno con `git show`. Aparte, los lotes sin commit (sha256,
+con su vigencia, o nota) y los que no entran en la auditoría (descartados, fallidos, pendientes, sin
+recibo). Si un ancla ya no corresponde a la rama, su fila dice por qué y el bloque termina con "Hay anclas
+que ya no corresponden a la rama: díselo al usuario antes de auditar."
+
+El bloque tiene un plazo de 15 s: si git no responde, el prompt se entrega igual con una línea que manda a
+`get_batch_status` con `reverificar`.
+
+**Amplía** "La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como
+bloqueantes" (2026-10-14): la entrada de la auditoría ya no se reconstruye leyendo recibos, la da el
+servidor verificada. Si el usuario indica otro rango, sigue mandando el suyo (el texto de la regla 1
+cambia en los prompts de la Fase 5).
+
+**Qué se descartó.** Dar solo el rango: si un rebase cambió los SHA, el auditor revisaría commits que ya no
+son los del lote sin saberlo. Bloquear el prompt si algo no es vigente: el auditor tiene que poder
+decírselo al usuario, y el resto de la auditoría sigue valiendo.
+
+---
+
 ## 2026-10-16 — La Fase 4 tiene granularidad de lote
 
 **Decisión.** `EstadoTarea` gana `lotes` (`total`, `cerrados`, `actual` y `pendienteDeCommit`), que
