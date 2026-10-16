@@ -685,13 +685,11 @@ function registrarTools(mcp: McpServer): void {
         taskName = activa.estado.taskName;
       }
 
-      const { lote, titulo, repo, estado, que_se_hizo, archivos, verificacion, espera_al_usuario, desvios, decisiones, condicionales, commit, artifact_path, verification_note } = args;
-      const resultado = await registrarLote(
-        carpetaProyecto,
-        taskName,
-        { lote, titulo, repo, estado, que_se_hizo, archivos, verificacion, espera_al_usuario, desvios, decisiones, condicionales, commit, artifact_path, verification_note },
-        { antesDeEscribir: () => siCancelada(extra) }
-      );
+      const { project: _proyecto, task_name: _tarea, ...delLote } = args;
+      const resultado = await registrarLote(carpetaProyecto, taskName, delLote, {
+        antesDeEscribir: () => siCancelada(extra),
+        confirmar: (pregunta) => pedirConfirmacion(mcp, extra, pregunta),
+      });
       // Un recibo nuevo (o renombrado) cambia la lista de recursos.
       if (resultado.archivoNuevo) mcp.sendResourceListChanged();
 

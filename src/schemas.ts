@@ -299,6 +299,24 @@ export const recordBatchShape = {
     .max(2000, "`verification_note` no puede pasar de 2000 caracteres.")
     .nullish()
     .describe("Sin git y sin archivo que sellar, o en un lote fallido o descartado: qué se comprobó o qué pasó."),
+  // El cierre de la fase.
+  cerrar_fase: booleano("cerrar_fase")
+    .nullish()
+    .describe(
+      "Solo si el usuario decidió cerrar la Fase 4 sin hacer los lotes que faltan, o con lotes fallidos. Los que no tienen " +
+        "recibo quedan descartados con `motivo_descarte`. Pide confirmación al usuario. Al anclar el último lote, la fase se " +
+        "cierra sola: no hace falta."
+    ),
+  motivo_descarte: textoNoVacio("motivo_descarte")
+    .max(500, "`motivo_descarte` no puede pasar de 500 caracteres.")
+    .nullish()
+    .describe("Con `cerrar_fase`: por qué se descartan los lotes que faltan, dicho por el usuario."),
+  force: booleano("force")
+    .nullish()
+    .describe(
+      "Solo si tu cliente no puede pedirle la confirmación al usuario directamente y el usuario la dio en el chat. " +
+        "Nunca lo pongas sin esa confirmación."
+    ),
 };
 
 export const recordBatchSalidaShape = {

@@ -137,8 +137,8 @@ function deUnaLinea(valor: string): string {
   return valor.replace(/\\(\\|n)/g, (_, c: string) => (c === "n" ? "\n" : "\\"));
 }
 
-// Una celda de tabla: `|` como `\|` y los saltos de línea como <br>.
-function celda(texto: string): string {
+// Una celda de tabla: `|` como `\|` y los saltos de línea como <br>. La usa también el índice.
+export function celda(texto: string): string {
   return sinCR(texto).trim().replace(/\|/g, "\\|").replace(/\n/g, "<br>");
 }
 

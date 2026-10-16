@@ -8,10 +8,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { registrarLote } from "../src/lotes.js";
+import type { ResultadoConfirmacion } from "../src/confirmacion.js";
+import { ensamblarIndice, leerTablaDeLotes, registrarLote } from "../src/lotes.js";
 import type { EntradaDeLote } from "../src/lotes.js";
-import { leerRecibo } from "../src/recibos.js";
+import { escribirRecibo, leerRecibo, nombreDeRecibo, parsearRecibo } from "../src/recibos.js";
+import type { Recibo } from "../src/recibos.js";
 import { conectar, textoDe } from "./cliente.js";
 import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
@@ -411,5 +414,238 @@ describe("record_batch por MCP", () => {
     } finally {
       await cerrar();
     }
+  });
+});
+
+// ─── L04: el documento de la fase ───────────────────────────────────────────
+// Los índices de oro (test/oro/indice-*.md) se escribieron con ensamblarIndice sobre estos escenarios y
+// se revisaron a mano. Si un cambio toca a propósito el formato, se regeneran con ORO_REGENERAR=1 y se
+// vuelven a revisar antes del commit.
+const ORO = path.join(RAIZ, "test", "oro");
+
+function reciboDe(lote: number, de: number, cambios: Partial<Recibo>): Recibo {
+  return {
+    lote, de, titulo: `lote ${lote}`, repo: "api", rama: "feat/filtro", estado: "verificado",
+    ancla: { tipo: "commit", repo: "api", sha: `${String(lote).repeat(7)}${"0".repeat(33)}`, corto: String(lote).repeat(7), asunto: `feat(x): lote ${lote}`, rama: "feat/filtro", verificado: `2026-11-0${lote}T10:00:00.000Z` },
+    fecha: `2026-11-0${lote}`, registrado: `2026-11-0${lote}T10:00:00.000Z`, origen: "servidor",
+    queSeHizo: `Lote ${lote} hecho.`, archivos: [{ archivo: `src/l${lote}.ts`, cambio: "nuevo" }],
+    verificacion: `npm test: ${40 + lote} pasan, 0 fallan.\nSegunda línea que no va al índice.`,
+    esperaAlUsuario: [], desvios: "", decisiones: "", condicionales: [], verificacionDelCommit: "El commit toca exactamente el archivo declarado.",
+    ...cambios,
+  };
+}
+
+const ESCENARIOS: Record<string, { repos: { id: string; dir: string }[]; recibos: Recibo[] }> = {
+  "sin-pendientes": {
+    repos: [{ id: "api", dir: "api" }],
+    recibos: [
+      reciboDe(1, 3, { titulo: "corregir cálculo" }),
+      reciboDe(2, 3, { titulo: "filtro por categoría" }),
+      reciboDe(3, 3, { titulo: "fix(rutas): C:/datos" }),
+    ],
+  },
+  "con-pendientes": {
+    repos: [{ id: "api", dir: "api" }],
+    recibos: [
+      reciboDe(1, 3, { titulo: "corregir cálculo", esperaAlUsuario: [{ prueba: "Abrir el reporte", esperado: "el total cuadra" }] }),
+      reciboDe(2, 3, {
+        titulo: "filtro por categoría",
+        estado: "con pendientes",
+        verificacion: "Falta la prueba con datos reales.",
+        esperaAlUsuario: [{ prueba: "Filtrar | sin categoría", esperado: "12 filas\nen orden" }],
+      }),
+      reciboDe(3, 3, { titulo: "exportar CSV", estado: "fallido", ancla: { tipo: "nota", texto: "La suite no pasa." }, verificacion: "npm test: 3 fallan.", verificacionDelCommit: null }),
+    ],
+  },
+  "multi-repo": {
+    repos: [{ id: "api", dir: "api" }, { id: "web", dir: "web" }],
+    recibos: [
+      reciboDe(1, 2, { titulo: "endpoint nuevo" }),
+      reciboDe(2, 2, {
+        titulo: "pantalla nueva",
+        repo: "web",
+        rama: "feat/pantalla",
+        ancla: { tipo: "commit", repo: "web", sha: `e4f5a6b${"0".repeat(33)}`, corto: "e4f5a6b", asunto: "feat(web): pantalla", rama: "feat/pantalla", verificado: "2026-11-02T10:00:00.000Z" },
+      }),
+    ],
+  },
+  "con-sha256": {
+    repos: [],
+    recibos: [
+      reciboDe(1, 2, {
+        titulo: "ajuste de prompt",
+        repo: null,
+        rama: null,
+        ancla: { tipo: "sha256", ruta: "proyecto:ASISTENTE/prompt-sistema.md", sha256: `9c1e${"ab".repeat(30)}`, bytes: 2048, verificado: "2026-11-01T10:00:00.000Z" },
+        verificacionDelCommit: null,
+      }),
+      reciboDe(2, 2, { titulo: "revisar respuestas", repo: null, rama: null, ancla: { tipo: "nota", texto: "Revisadas 20 respuestas a mano." }, verificacionDelCommit: null }),
+    ],
+  },
+  "con-descartados": {
+    repos: [{ id: "api", dir: "api" }, { id: "web", dir: "web" }],
+    recibos: [
+      reciboDe(1, 3, { titulo: "corregir cálculo" }),
+      reciboDe(2, 3, { titulo: "refactor del menú", repo: "web", rama: null, estado: "descartado", ancla: { tipo: "nota", texto: "lo pidió el usuario" }, verificacion: "", verificacionDelCommit: null }),
+      reciboDe(3, 3, { titulo: "Lote 3", repo: null, rama: null, estado: "descartado", ancla: { tipo: "nota", texto: "lo pidió el usuario" }, verificacion: "", verificacionDelCommit: null }),
+    ],
+  },
+};
+
+function tareaConRecibos(nombre: string) {
+  const escenario = ESCENARIOS[nombre]!;
+  const { tarea, recibos } = instalacion({ lotes: String(escenario.recibos[0]!.de), repos: escenario.repos });
+  fs.mkdirSync(recibos, { recursive: true });
+  for (const recibo of escenario.recibos) fs.writeFileSync(path.join(recibos, nombreDeRecibo(recibo.lote, recibo.titulo)), escribirRecibo(recibo), "utf-8");
+  return tarea;
+}
+
+describe("ensamblarIndice", () => {
+  for (const nombre of Object.keys(ESCENARIOS)) {
+    it(`índice de oro: ${nombre}, byte a byte`, () => {
+      const tarea = tareaConRecibos(nombre);
+      const texto = ensamblarIndice(tarea, fasesDe("P"));
+      const archivo = path.join(ORO, `indice-${nombre}.md`);
+      if (process.env.ORO_REGENERAR === "1") fs.writeFileSync(archivo, texto, "utf-8");
+      assert.equal(texto, fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n"));
+    });
+  }
+
+  it("es determinista: el mismo índice ensamblado dos veces es idéntico, y no depende de la hora", () => {
+    const tarea = tareaConRecibos("con-pendientes");
+    const primero = ensamblarIndice(tarea, fasesDe("P"));
+    assert.equal(ensamblarIndice(tarea, fasesDe("P")), primero);
+    assert.ok(primero.endsWith("\n") && !primero.endsWith("\n\n") && !primero.includes("\r"));
+  });
+
+  it("la tabla de lotes del plan: repo, objetivo y commit propuesto; null si no la hay", () => {
+    const plan = [
+      "---", "lotes: 2", "---", "", "# Plan", "",
+      "| Lote | Repo | Objetivo | Pasos | Criterio de salida | Commit propuesto | Revierte solo |",
+      "|---|---|---|---|---|---|---|",
+      "| L01 | `api` | corregir cálculo | M1 | npm test | `fix(calculo): total` | sí |",
+      "| **L02** | web | filtro \\| categoría | M2 | ver | `feat(web): x` | sí |",
+      "",
+    ].join("\n");
+    assert.deepEqual([...leerTablaDeLotes(plan)!], [
+      [1, { repo: "api", objetivo: "corregir cálculo", commitPropuesto: "fix(calculo): total" }],
+      [2, { repo: "web", objetivo: "filtro | categoría", commitPropuesto: "feat(web): x" }],
+    ]);
+    assert.equal(leerTablaDeLotes("# Plan sin tabla\n"), null);
+  });
+});
+
+describe("record_batch: cierre de la fase", () => {
+  it("al anclar el último lote se genera el índice, y la fase queda cerrada", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    await registrar(contenido(2));
+    const r = await registrar({ lote: 2, commit: commitEn(dirs.api!, ["src/l2.ts"]) });
+    assert.match(r.texto, /L02 de 2 registrado: verificado · commit [0-9a-f]{7} en `api` \(main\)\. Fase 4 cerrada: se generó `04 - Ejecución\.md`\./);
+    assert.deepEqual([r.salida.faseCerrada, r.salida.documentoDeFase, r.salida.siguiente], [true, "04 - Ejecución.md", null]);
+    const indice = fs.readFileSync(path.join(tarea, "04 - Ejecución.md"), "utf-8");
+    assert.equal(indice, ensamblarIndice(tarea, fasesDe("P")));
+    assert.match(indice, /^---\nlotes: 2\ngenerado_por: mcp-phase-gate\n---\n\n# Ejecución — t\n/);
+    await assert.rejects(registrar(contenido(1)), /ya está cerrada/);
+  });
+
+  it("un lote fallido no cierra la fase solo", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    const r = await registrar(contenido(2, { estado: "fallido" }));
+    assert.equal(r.salida.faseCerrada, false);
+    assert.match(r.texto, /con `cerrar_fase` y `motivo_descarte`/);
+    assert.equal(fs.existsSync(path.join(tarea, "04 - Ejecución.md")), false);
+  });
+
+  it("con lotes: 1, el recibo vive en la subcarpeta mientras está abierto y al anclarlo pasa a ser el documento (H2)", async () => {
+    const { tarea, recibos, dirs } = instalacion({ lotes: "1" });
+    await registrar(contenido(1, { titulo: "único cálculo" }));
+    assert.equal(fs.existsSync(path.join(tarea, "04 - Ejecución.md")), false, "con el commit pendiente la fase no está cerrada");
+    assert.deepEqual(recibosEn(recibos), ["L01 - único cálculo.md"]);
+
+    const r = await registrar({ lote: 1, commit: commitEn(dirs.api!, ["src/l1.ts"]) });
+    assert.match(r.texto, /Fase 4 cerrada: el recibo pasó a ser `04 - Ejecución\.md`\./);
+    assert.equal(r.salida.recibo, "04 - Ejecución.md");
+    assert.equal(fs.existsSync(recibos), false, "la subcarpeta vacía se borra");
+    const documento = fs.readFileSync(path.join(tarea, "04 - Ejecución.md"), "utf-8");
+    assert.match(documento, /^---\nlotes: 1\ngenerado_por: mcp-phase-gate\nlote: L01\nde: 1\n/);
+    assert.equal(parsearRecibo(documento).ancla.tipo, "commit");
+    assert.deepEqual(fs.readdirSync(tarea).sort(), [...PREVIOS, "03 - Plan Técnico.md", "04 - Ejecución.md"].sort(), "un solo archivo, sin temporales");
+  });
+
+  it("con lotes: 1 y el lote fallido, el recibo se queda en la subcarpeta", async () => {
+    const { tarea, recibos } = instalacion({ lotes: "1" });
+    await registrar(contenido(1, { estado: "fallido" }));
+    assert.equal(fs.existsSync(path.join(tarea, "04 - Ejecución.md")), false);
+    assert.equal(recibosEn(recibos).length, 1);
+  });
+});
+
+describe("record_batch: cerrar_fase", () => {
+  const conRespuesta = (estado: ResultadoConfirmacion["estado"], preguntas: string[] = []) => ({
+    ahora: AHORA,
+    confirmar: async (pregunta: { mensaje: string }) => {
+      preguntas.push(pregunta.mensaje);
+      return { estado };
+    },
+  });
+
+  it("descarta los lotes sin recibo con el motivo, tras la confirmación, y cierra la fase", async () => {
+    const { tarea, recibos, dirs } = instalacion({ lotes: "4" });
+    fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "---\nlotes: 4\n---\n\n| Lote | Repo | Objetivo | Commit propuesto |\n|---|---|---|---|\n| L03 | api | exportar CSV | x |\n", "utf-8");
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    await registrar(contenido(2, { commit: commitEn(dirs.api!, ["src/l2.ts"]) }));
+
+    const preguntas: string[] = [];
+    const r = await registrarLote("P", "t", { lote: 3, cerrar_fase: true, motivo_descarte: "ya no hace falta" }, conRespuesta("confirmada", preguntas));
+    assert.deepEqual(preguntas, ["Cerrar la Fase 4 con L03 y L04 descartados («ya no hace falta»). ¿Confirmas?"]);
+    assert.equal(r.texto, "L03 y L04 registrados como descartados. Fase 4 cerrada: se generó `04 - Ejecución.md`.");
+    assert.deepEqual(recibosEn(recibos), ["L01 - lote 1.md", "L02 - lote 2.md", "L03 - exportar CSV.md", "L04 - Lote 4.md"]);
+    const l03 = leerRecibo(path.join(recibos, "L03 - exportar CSV.md"));
+    assert.deepEqual([l03.estado, l03.ancla, l03.repo], ["descartado", { tipo: "nota", texto: "ya no hace falta" }, "api"]);
+    const indice = fs.readFileSync(path.join(tarea, "04 - Ejecución.md"), "utf-8");
+    assert.match(indice, /- \*\*Estado:\*\* Fase cerrada sin pendientes · 2 lotes descartados\n/);
+  });
+
+  it("si el usuario no confirma, no se escribe nada; sin elicitation hace falta force", async () => {
+    const { tarea, recibos, dirs } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    const cerrar = { lote: 2, cerrar_fase: true, motivo_descarte: "no da tiempo" };
+
+    await assert.rejects(registrarLote("P", "t", cerrar, conRespuesta("rechazada")), /El usuario no confirmó el cierre de la Fase 4\. No se escribió nada\./);
+    await assert.rejects(registrarLote("P", "t", cerrar, conRespuesta("no-disponible")), /lo decide el usuario: pídele confirmación explícita en el chat y vuelve a llamar con force: true/);
+    await assert.rejects(registrarLote("P", "t", cerrar, { ahora: AHORA }), /force: true/, "sin función de confirmación, igual que sin elicitation");
+    assert.deepEqual(recibosEn(recibos), ["L01 - lote 1.md"]);
+    assert.equal(fs.existsSync(path.join(tarea, "04 - Ejecución.md")), false);
+
+    const r = await registrarLote("P", "t", { ...cerrar, force: true }, conRespuesta("no-disponible"));
+    assert.equal(r.salida.faseCerrada, true);
+  });
+
+  it("los fallidos se quedan como están y van a Validaciones pendientes; también se confirma", async () => {
+    const { tarea, dirs } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    const preguntas: string[] = [];
+    const r = await registrarLote("P", "t", { ...contenido(2, { estado: "fallido", verificacion: "npm test: 2 fallan." }), cerrar_fase: true }, conRespuesta("confirmada", preguntas));
+    assert.deepEqual(preguntas, ["Cerrar la Fase 4 con L02 fallido. ¿Confirmas?"]);
+    assert.equal(r.salida.faseCerrada, true);
+    assert.match(fs.readFileSync(path.join(tarea, "04 - Ejecución.md"), "utf-8"), /## Validaciones pendientes\n- L02 \(fallido\): npm test: 2 fallan\.\n$/);
+  });
+
+  it("con lotes que faltan y sin motivo, o con un lote con el commit pendiente, es un error", async () => {
+    instalacion({ lotes: "3" });
+    await registrar(contenido(1));
+    await assert.rejects(registrarLote("P", "t", { lote: 2, cerrar_fase: true, motivo_descarte: "x" }, conRespuesta("confirmada")), /No se puede cerrar la Fase 4 con L01 abierto con el commit pendiente/);
+    await registrar(contenido(1, { estado: "descartado" }));
+    await assert.rejects(registrarLote("P", "t", { lote: 2, cerrar_fase: true }, conRespuesta("confirmada")), /Faltan L02 y L03: para cerrar la fase sin ellos, pasa `motivo_descarte`/);
+    await assert.rejects(registrarLote("P", "t", { lote: 2, motivo_descarte: "x" }, conRespuesta("confirmada")), /`motivo_descarte` solo va con `cerrar_fase: true`/);
+  });
+
+  it("con todo cerrado, cerrar_fase no pregunta nada", async () => {
+    const { dirs } = instalacion({ lotes: "1" });
+    const preguntas: string[] = [];
+    const r = await registrarLote("P", "t", { ...contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }), cerrar_fase: true }, conRespuesta("rechazada", preguntas));
+    assert.deepEqual([preguntas, r.salida.faseCerrada], [[], true]);
   });
 });

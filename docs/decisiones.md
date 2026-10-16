@@ -12,6 +12,41 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — `04 - Ejecución.md` lo genera el servidor; con un solo lote, el recibo se mueve
+
+**Decisión.** El documento de la Fase 4 ya no lo redacta el modelo: lo escribe `record_batch` cuando
+la fase se cierra, y su existencia es lo que la cierra.
+
+- **Cuándo:** al terminar una llamada en la que **todos** los lotes `1…N` tienen recibo con ancla y
+  ninguno está fallido; o con `cerrar_fase: true`, que lo decide el usuario. Con `cerrar_fase`, los
+  lotes sin recibo se registran como `descartado` con `motivo_descarte` (obligatorio si falta alguno;
+  el título sale de la tabla de lotes del plan si se puede leer), los fallidos se quedan como están, y
+  hace falta la confirmación de la persona (elicitation, o `force` sin ella) **antes de escribir nada**:
+  "Cerrar la Fase 4 con L03 y L04 descartados («motivo»). ¿Confirmas?". Un lote abierto con el commit
+  pendiente lo impide.
+- **Con más de un lote: un índice** (`ensamblarIndice`), determinista. Frontmatter `lotes` y
+  `generado_por: mcp-phase-gate`; la rama común a los commits (o "varias (ver lotes)"); la fecha de
+  cierre del recibo escrito más tarde, no la hora del ensamblado; la línea Estado ("sin pendientes"
+  solo si todo está verificado o descartado y nada espera al usuario, más los descartados); la tabla
+  de lotes (con columna Repo solo si algún lote tiene repo); "Espera al usuario" con las filas de los
+  recibos, sin reescribir; y "Validaciones pendientes" solo si hay lotes con pendientes o fallidos (B1).
+  Los cinco formatos tienen su índice de oro en `test/oro/indice-*.md`, comparado byte a byte.
+- **Con un solo lote (H2):** mientras el lote está abierto, su recibo vive en la subcarpeta, como los
+  demás; al cerrarse, el servidor lo **mueve** a `04 - Ejecución.md` (con `lotes: 1` y `generado_por`
+  en su frontmatter) y borra la subcarpeta si queda vacía. Queda un solo archivo, como pedía R2, y la
+  fase no aparece cerrada con el commit pendiente.
+
+**Amplía** R2 (§1.2 del plan) y "Los recibos de lote viven en una subcarpeta que declara el prompt"
+(2026-10-14). **Cierra** la ventana aceptada de "La Fase 4 ejecuta lote por lote…" (2026-10-14): con
+`lotes: 1`, el documento ya no existe antes del commit, y un lote que el usuario rechaza se queda en la
+subcarpeta.
+
+**Qué se descartó.** Contar las filas de la tabla del plan para saber cuántos lotes hay (H3): solo la usa
+este lote para el objetivo de un lote descartado. Regenerar el índice en cada llamada: el documento de
+la fase existe si y solo si la fase está cerrada (§1.1), así que se escribe una vez, al cerrar.
+
+---
+
 ## 2026-10-16 — `record_batch` registra cada lote en dos tiempos: antes y después del commit
 
 **Decisión.** Una tool nueva, `record_batch`, escribe el recibo de cada lote de la Fase 4 en
