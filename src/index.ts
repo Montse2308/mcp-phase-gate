@@ -8,7 +8,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { DOCS, NOMBRES_LOGICOS, REPOS, SERVER_NAME, errorDeEnv, leerVariable, requireBasePath } from "./config.js";
-import { SALIDA_DE_PROCESO, ejecutarCli } from "./cli.js";
+import { SALIDA_DE_PROCESO, doctorReverificando, ejecutarCli } from "./cli.js";
 import { ejecutarInit, entornoDelProceso } from "./init.js";
 import { log } from "./log.js";
 import { crearServidor } from "./servidor.js";
@@ -48,6 +48,10 @@ async function main() {
   }
   if (resultado.accion === "init") {
     process.exitCode = await ejecutarInit(resultado.opciones, entornoDelProceso(SALIDA_DE_PROCESO));
+    return;
+  }
+  if (resultado.accion === "doctor-reverificar") {
+    process.exitCode = await doctorReverificando(resultado.json, SALIDA_DE_PROCESO);
     return;
   }
 

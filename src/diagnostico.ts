@@ -29,7 +29,7 @@ import {
   stateFile,
 } from "./config.js";
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
-import { discoverProjects, estaDentro, findProjectFolder, requireProjectFolder } from "./paths.js";
+import { discoverProjects, estaDentro, findProjectFolder, leerTextoAcotado, requireProjectFolder } from "./paths.js";
 import { SECCIONES_ESQUELETO, capasDe, configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, frontmatterDeTarea, revisarBloques, textoDeReinyeccion } from "./capas.js";
 import type { ConfiguracionProyecto, Procedencia } from "./capas.js";
 import { copiasEnConflicto, describirPresets, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
@@ -41,6 +41,10 @@ import { GLOBAL_RULES_FILE, discoverPhases, esCarpeta, leerPromptNormalizado, re
 import type { PhaseFile } from "./phases.js";
 import { describeEstado, leerPunteros, listarTareas, tareaActiva } from "./tasks.js";
 import type { EstadoTarea } from "./tasks.js";
+import { reverificar } from "./anclas.js";
+import { ensamblarIndice, faseEnCarpeta, lotesDelPlan, recibosDeLaTarea } from "./lotes.js";
+import type { FaseDeLotes, ReciboEnDisco } from "./lotes.js";
+import { GENERADO_POR, etiquetaDeLote, frontmatterDeRecibo } from "./recibos.js";
 
 export type Severidad = "error" | "aviso" | "info";
 export type Hallazgo = { severidad: Severidad; codigo: string; texto: string };
@@ -326,9 +330,153 @@ export async function diagnosticarSinBloquear(opciones: Omit<OpcionesDeDiagnosti
   return diagnosticar({ ...opciones, estadosDeRepos: new Map(repos.map((r, i) => [r.clave, estados[i] ?? null])) });
 }
 
+// ─── Los recibos de la Fase 4 (Etapa 4) ─────────────────────────────────────
+// Lo que se puede revisar sin git: recibos de lotes que el plan no declara, recibos escritos a mano y un
+// índice que ya no es el que el servidor ensamblaría con los recibos de hoy.
+type Hallar = (severidad: Severidad, codigo: string, texto: string) => void;
+
+function enumerar(elementos: string[]): string {
+  return elementos.length <= 1 ? elementos.join("") : `${elementos.slice(0, -1).join(", ")} y ${elementos[elementos.length - 1]}`;
+}
+
+function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<number, PhaseFile>, hallar: Hallar): void {
+  for (const tarea of tareas) {
+    let fase: FaseDeLotes;
+    try {
+      fase = faseEnCarpeta(tarea.folderPath, phases);
+    } catch {
+      return; // ninguna fase del proyecto declara recibos
+    }
+    const quien = `${nombre}/${tarea.taskName}`;
+
+    let porLote: Map<number, ReciboEnDisco[]>;
+    try {
+      porLote = recibosDeLaTarea(fase);
+    } catch (error) {
+      hallar("aviso", "RECIBO-ILEGIBLE", `${quien}: ${mensajeDe(error)}`);
+      continue;
+    }
+    let total: number | null = null;
+    try {
+      total = lotesDelPlan(fase);
+    } catch {
+      total = null; // sin plan, o sin `lotes`: no hay contra qué comparar
+    }
+
+    if (total !== null) {
+      for (const [lote, recibos] of [...porLote.entries()].sort((a, b) => a[0] - b[0])) {
+        if (lote <= total) continue;
+        for (const r of recibos) {
+          hallar("aviso", "RECIBO-FUERA-DE-PLAN", `${quien}: \`${fase.recibos}/${r.nombre}\` es de un lote que el plan no declara (declara ${total}).`);
+        }
+      }
+    }
+
+    const manuales = [...porLote.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .filter(([, recibos]) => recibos.some((r) => r.recibo.origen === "manual"))
+      .map(([lote]) => etiquetaDeLote(lote));
+    if (manuales.length) {
+      hallar(
+        "info",
+        "RECIBO-MANUAL",
+        `${quien}: ${manuales.length === 1 ? `el recibo de ${manuales[0]} se escribió` : `los recibos de ${enumerar(manuales)} se escribieron`} a mano ` +
+          "(sin `origen: servidor`). record_batch los lee igual y get_batch_status los marca como manuales."
+      );
+    }
+
+    // Solo un índice que generó el servidor: uno escrito a mano con la 2.x nunca va a coincidir.
+    if (fase.documento && total !== null && total > 1) {
+      const documento = path.join(tarea.folderPath, fase.documento);
+      try {
+        const texto = leerTextoAcotado(documento).replace(/\r\n/g, "\n");
+        if (frontmatterDeRecibo(texto).meta.generado_por === GENERADO_POR && texto !== ensamblarIndice(tarea.folderPath, phases)) {
+          hallar(
+            "aviso",
+            "INDICE-DESINCRONIZADO",
+            `${quien}: \`${fase.documento}\` no coincide con lo que el servidor ensamblaría hoy con sus recibos (¿se tocó un recibo o el índice a mano después del cierre?).`
+          );
+        }
+      } catch {
+        // sin documento todavía, o ilegible: no hay índice que comparar
+      }
+    }
+  }
+}
+
+// ─── Rutas largas (validación V7) ───────────────────────────────────────────
+// Con una Documentación en una carpeta sincronizada de ruta larga, cerca de 255 o 260 caracteres
+// OneDrive y muchas herramientas de Windows dejan de poder abrir un archivo. Se avisa antes.
+export const LARGO_DE_RUTA = 240;
+const TOPE_DE_ENTRADAS = 50_000;
+
+export function rutasLargas(base: string, largo: number = LARGO_DE_RUTA): { cuenta: number; mas_larga: string | null; recortado: boolean } {
+  let cuenta = 0;
+  let masLarga: string | null = null;
+  let vistas = 0;
+  const pendientes = [base];
+  while (pendientes.length) {
+    const carpeta = pendientes.pop()!;
+    let entradas: fs.Dirent[];
+    try {
+      entradas = fs.readdirSync(carpeta, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entrada of entradas) {
+      if (++vistas > TOPE_DE_ENTRADAS) return { cuenta, mas_larga: masLarga, recortado: true };
+      const ruta = path.join(carpeta, entrada.name);
+      if (ruta.length > largo) {
+        cuenta++;
+        if (!masLarga || ruta.length > masLarga.length) masLarga = ruta;
+      }
+      // Sin seguir enlaces ni entrar en .git: lo que importa son los documentos.
+      if (entrada.isDirectory() && !entrada.isSymbolicLink() && entrada.name.toLowerCase() !== ".git") pendientes.push(ruta);
+    }
+  }
+  return { cuenta, mas_larga: masLarga, recortado: false };
+}
+
+// ─── Anclas que ya no valen (doctor --reverificar) ──────────────────────────
+// Necesita git, que es asíncrono: se calcula antes y llega al diagnóstico como hallazgos hechos.
+export async function anclasNoVigentes(): Promise<Hallazgo[]> {
+  const hallazgos: Hallazgo[] = [];
+  let proyectos: string[];
+  try {
+    proyectos = [...discoverProjects().values()].sort();
+  } catch {
+    return hallazgos; // sin Documentación ya hay un VAR-FALTA
+  }
+  for (const nombre of proyectos) {
+    let phases: Map<number, PhaseFile>;
+    try {
+      phases = fasesDe(nombre);
+    } catch {
+      continue; // el manifiesto inválido ya sale como hallazgo
+    }
+    for (const tarea of listarTareas(nombre, phases)) {
+      let porLote: Map<number, ReciboEnDisco[]>;
+      try {
+        porLote = recibosDeLaTarea(faseEnCarpeta(tarea.folderPath, phases));
+      } catch {
+        continue;
+      }
+      for (const [lote, recibos] of [...porLote.entries()].sort((a, b) => a[0] - b[0])) {
+        for (const { recibo } of recibos) {
+          if (recibo.ancla.tipo !== "commit" && recibo.ancla.tipo !== "sha256") continue;
+          const { vigente, texto } = await reverificar(nombre, recibo);
+          if (!vigente) hallazgos.push({ severidad: "aviso", codigo: "ANCLA-NO-VIGENTE", texto: `${nombre}/${tarea.taskName}, ${etiquetaDeLote(lote)}: ${texto}` });
+        }
+      }
+    }
+  }
+  return hallazgos;
+}
+
 // ─── El diagnóstico ─────────────────────────────────────────────────────────
-// `raices`: las de la sesión MCP (la tool las conoce; doctor, en la terminal, no).
-export type OpcionesDeDiagnostico = { cliente?: Diagnostico["cliente"]; raices?: string[]; estadosDeRepos?: EstadosDeRepos };
+// `raices`: las de la sesión MCP (la tool las conoce; doctor, en la terminal, no). `hallazgosExtra`: los
+// que se calcularon antes porque necesitan git asíncrono (doctor --reverificar).
+export type OpcionesDeDiagnostico = { cliente?: Diagnostico["cliente"]; raices?: string[]; estadosDeRepos?: EstadosDeRepos; hallazgosExtra?: Hallazgo[] };
 
 export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico {
   const hallazgos: Hallazgo[] = [];
@@ -530,6 +678,19 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
             : null,
           ...configuracionDelProyecto(nombre, tareas, { maquina, presets, presetPorDefecto, fuerzas, estado, estados: opciones.estadosDeRepos ?? null }, hallar),
         });
+        revisarRecibos(nombre, tareas, delProyecto, hallar);
+      }
+
+      const largas = rutasLargas(requireBasePath(DOCS));
+      if (largas.cuenta) {
+        hallar(
+          "aviso",
+          "RUTA-LARGA",
+          `${largas.cuenta} ${largas.cuenta === 1 ? "ruta" : "rutas"} de la Documentación ${largas.cuenta === 1 ? "pasa" : "pasan"} de ${LARGO_DE_RUTA} caracteres; ` +
+            `la más larga (${largas.mas_larga!.length}): \`${largas.mas_larga}\`. Cerca de 255 o 260, OneDrive y muchas herramientas de Windows ` +
+            `dejan de abrir el archivo: acorta el nombre del proyecto, de la tarea o de la carpeta de la Documentación.` +
+            (largas.recortado ? ` (Se revisaron las primeras ${TOPE_DE_ENTRADAS} entradas.)` : "")
+        );
       }
 
       for (const [clave, tarea] of Object.entries(punteros)) {
@@ -549,8 +710,10 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
     }
   }
 
+  for (const h of opciones.hallazgosExtra ?? []) hallazgos.push(h);
+
   // El mismo aviso puede salir de varios proyectos (un bloques.md global mal formado, por ejemplo).
-  const unicos = hallazgos.filter((h, i) => hallazgos.findIndex((otro) => otro.codigo === h.codigo && otro.texto === h.texto) === i);
+  const unicos =hallazgos.filter((h, i) => hallazgos.findIndex((otro) => otro.codigo === h.codigo && otro.texto === h.texto) === i);
   unicos.sort((a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad]);
   hallazgos.splice(0, hallazgos.length, ...unicos);
 

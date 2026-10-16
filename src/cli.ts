@@ -9,7 +9,8 @@
 import { parseArgs } from "util";
 
 import { SERVER_NAME, SERVER_VERSION } from "./config.js";
-import { diagnosticar, formatearDiagnostico, formatearProcedencia, procedenciaDeFase } from "./diagnostico.js";
+import { anclasNoVigentes, diagnosticar, formatearDiagnostico, formatearProcedencia, procedenciaDeFase } from "./diagnostico.js";
+import type { Diagnostico } from "./diagnostico.js";
 import { ejecutarEject } from "./eject.js";
 import { CLAVE_VALIDA, CLIENTES } from "./init.js";
 import type { Cliente, OpcionesInit } from "./init.js";
@@ -26,6 +27,9 @@ Uso:
   ${SERVER_NAME}                 Arranca el servidor MCP por stdio (lo hace tu cliente).
   ${SERVER_NAME} doctor          Revisa la instalación: variables, prompts, proyectos y avisos.
   ${SERVER_NAME} doctor --json   Lo mismo, como JSON.
+  ${SERVER_NAME} doctor --reverificar
+                                Además, comprueba que el commit de cada recibo siga en su rama y que
+                                cada artefacto sellado no haya cambiado (llama a git).
   ${SERVER_NAME} doctor --fase N [--proyecto P]
                                 De dónde sale cada ranura del prompt de esa fase (capa y archivo:línea).
   ${SERVER_NAME} init            Registra el servidor en tus clientes (Claude Code, Cursor, VS Code).
@@ -92,7 +96,23 @@ export const SALIDA_DE_PROCESO: Salida = {
 
 // "servidor": quien llama arranca el servidor MCP. "salir": el código de salida del comando.
 // "init": las opciones ya validadas; init es asíncrono (pregunta, ejecuta `claude`) y lo lanza index.ts.
-export type ResultadoCli = { accion: "servidor" } | { accion: "salir"; codigo: number } | { accion: "init"; opciones: OpcionesInit };
+// "doctor-reverificar": doctor con las anclas comprobadas contra git, que es asíncrono; también lo lanza
+// index.ts, con doctorReverificando.
+export type ResultadoCli =
+  | { accion: "servidor" }
+  | { accion: "salir"; codigo: number }
+  | { accion: "init"; opciones: OpcionesInit }
+  | { accion: "doctor-reverificar"; json: boolean };
+
+// El diagnóstico impreso, y el código de salida: 1 si hay algún error.
+function escribirDiagnostico(diagnostico: Diagnostico, json: boolean, salida: Salida): number {
+  salida.out(json ? JSON.stringify(diagnostico, null, 2) : formatearDiagnostico(diagnostico, "texto"));
+  return diagnostico.hallazgos.some((h) => h.severidad === "error") ? 1 : 0;
+}
+
+export async function doctorReverificando(json: boolean, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
+  return escribirDiagnostico(diagnosticar({ hallazgosExtra: await anclasNoVigentes() }), json, salida);
+}
 
 function invalido(salida: Salida, motivo?: string): ResultadoCli {
   if (motivo) salida.err(`${motivo}\n`);
@@ -102,7 +122,7 @@ function invalido(salida: Salida, motivo?: string): ResultadoCli {
 
 // Qué banderas acepta cada subcomando: una bandera de init pasada a doctor es un error, no se ignora.
 const BANDERAS_DE: Record<string, string[]> = {
-  doctor: ["json", "fase", "proyecto"],
+  doctor: ["json", "fase", "proyecto", "reverificar"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
 };
@@ -125,6 +145,7 @@ type Valores = {
   fuerza?: boolean;
   fase?: string;
   proyecto?: string;
+  reverificar?: boolean;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -190,6 +211,7 @@ export function ejecutarCli(
         fase: { type: "string" },
         proyecto: { type: "string" },
         fuerza: { type: "boolean" },
+        reverificar: { type: "boolean" },
       },
     }));
   } catch (error) {
@@ -211,6 +233,12 @@ export function ejecutarCli(
     return { accion: "salir", codigo: 0 };
   }
 
+  // doctor --reverificar necesita git, que es asíncrono: lo ejecuta index.ts (doctorReverificando).
+  if (posicionales.length === 1 && subcomando === "doctor" && valores.reverificar) {
+    if (valores.fase !== undefined || valores.proyecto !== undefined) return invalido(salida, "--reverificar no va con --fase ni con --proyecto.");
+    return { accion: "doctor-reverificar", json: Boolean(valores.json) };
+  }
+
   // doctor --fase N [--proyecto P]: la procedencia de cada ranura de esa fase.
   if (posicionales.length === 1 && subcomando === "doctor" && (valores.fase !== undefined || valores.proyecto !== undefined)) {
     const fase = Number(valores.fase);
@@ -226,9 +254,7 @@ export function ejecutarCli(
   }
 
   if (posicionales.length === 1 && subcomando === "doctor") {
-    const diagnostico = diagnosticar();
-    salida.out(valores.json ? JSON.stringify(diagnostico, null, 2) : formatearDiagnostico(diagnostico, "texto"));
-    return { accion: "salir", codigo: diagnostico.hallazgos.some((h) => h.severidad === "error") ? 1 : 0 };
+    return { accion: "salir", codigo: escribirDiagnostico(diagnosticar(), Boolean(valores.json), salida) };
   }
 
   if (posicionales.length === 2 && subcomando === "eject") {
