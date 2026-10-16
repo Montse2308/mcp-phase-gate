@@ -427,6 +427,16 @@ describe("diagnosticar: los recibos de la Fase 4", () => {
     assert.match(h!.texto, /^P\/t: `04 - Ejecución\.md` no coincide con lo que el servidor ensamblaría hoy/);
   });
 
+  // Hallazgo 12 de la auditoría de la Etapa 4: el código existía y no tenía test.
+  it("un recibo que no se puede leer (binario) es RECIBO-ILEGIBLE", () => {
+    const { tarea } = enFase4(2);
+    fs.mkdirSync(path.join(tarea, "04 - Ejecución"));
+    fs.writeFileSync(path.join(tarea, "04 - Ejecución", "L01 - roto.md"), Buffer.from([0, 1, 2, 0]));
+    const h = diagnosticar().hallazgos.find((x) => x.codigo === "RECIBO-ILEGIBLE");
+    assert.equal(h?.severidad, "aviso");
+    assert.match(h!.texto, /^P\/t: No se pudo leer el recibo `04 - Ejecución\/L01 - roto\.md`: .*parece binario/);
+  });
+
   it("un índice escrito a mano (de la 2.x) no se compara", async () => {
     const { tarea } = enFase4(2);
     fs.writeFileSync(path.join(tarea, "04 - Ejecución.md"), "---\nlotes: 2\n---\n# Ejecución a mano\n", "utf-8");

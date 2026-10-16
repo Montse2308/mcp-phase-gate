@@ -404,6 +404,8 @@ describe("prompts de la Fase 4 ensamblados con cada preset y cada regla", () => 
         assert.equal(texto.includes(resto), false, `${caso}: sigue «${resto}»`);
       }
       assert.ok(texto.includes("record_batch") && texto.includes("get_batch_status"), caso);
+      // P1: el push no es configurable. Ninguna variante puede llevarse esa prohibición con sus ranuras.
+      assert.ok(texto.includes("- Hacer push, crear o cambiar de rama, o abrir un PR."), `${caso}: falta la prohibición del push`);
     }
   });
 

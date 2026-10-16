@@ -220,13 +220,20 @@ describe("capasDe con preset y reglas", () => {
       assert.ok(texto.includes(fragmento));
       assert.equal(texto.includes("Política: **el agente hace el commit con el OK del usuario.**"), false);
       assert.equal(texto.includes("<!--"), false);
-      const despuesDeCommits = (t: string) =>
-        t
-          .slice(t.indexOf("\n## PROHIBIDO"))
-          .split("\n")
-          .filter((linea) => !/commit|git |rama/i.test(linea));
-      assert.deepEqual(despuesDeCommits(texto), despuesDeCommits(base), "lo que sigue a COMMITS, salvo las líneas de commits, no cambia");
-      assert.notEqual(texto.slice(texto.indexOf("\n## PROHIBIDO")), base.slice(base.indexOf("\n## PROHIBIDO")), "las líneas de commits sí cambian");
+      // Lo esperado es lo de fábrica con el contenido exacto de esas dos ranuras sustituido por el de los
+      // bloques de la variante: cualquier otra diferencia es un error (hallazgo 13 de la auditoría).
+      const despuesDeCommits = (t: string) => t.slice(t.indexOf("\n## PROHIBIDO"));
+      const fabrica = fs.readFileSync(path.join(RAIZ, "prompts", "es", "fase-4-ejecucion.md"), "utf-8").replace(/\r\n/g, "\n");
+      const variante = fs.readFileSync(path.join(RAIZ, "prompts", "es", "reglas", `commits-${politica}.md`), "utf-8").replace(/\r\n/g, "\n");
+      const ranura = (nombre: string) => fabrica.match(new RegExp(`<!-- ranura: ${nombre} -->\\n([\\s\\S]*?)\\n<!-- /ranura -->`))![1]!;
+      const bloque = (nombre: string) => variante.match(new RegExp(`<!-- bloque: fase-4/${nombre} -->\\n([\\s\\S]*?)\\n<!-- /bloque -->`))![1]!;
+      let esperado = despuesDeCommits(base);
+      for (const nombre of ["prohibido-commits", "autoverificacion-commits"]) {
+        assert.ok(esperado.includes(ranura(nombre)), nombre);
+        esperado = esperado.replace(ranura(nombre), bloque(nombre));
+      }
+      assert.equal(despuesDeCommits(texto), esperado, "lo que sigue a COMMITS solo cambia en las dos ranuras de commits");
+      assert.notEqual(despuesDeCommits(texto), despuesDeCommits(base), "las líneas de commits sí cambian");
     });
   }
 

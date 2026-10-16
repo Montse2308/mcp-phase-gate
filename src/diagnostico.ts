@@ -394,7 +394,8 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
           hallar(
             "aviso",
             "INDICE-DESINCRONIZADO",
-            `${quien}: \`${fase.documento}\` no coincide con lo que el servidor ensamblaría hoy con sus recibos (¿se tocó un recibo o el índice a mano después del cierre?).`
+            `${quien}: \`${fase.documento}\` no coincide con lo que el servidor ensamblaría hoy con sus recibos (¿se cambió a mano, después del cierre, ` +
+              "el título, el estado, el ancla o lo que espera al usuario de algún recibo, o el propio índice?)."
           );
         }
       } catch {
