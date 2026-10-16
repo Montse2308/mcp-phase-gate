@@ -13,7 +13,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
-import { anclarArtefacto, anclarCommit } from "./anclas.js";
+import { anclarArtefacto, anclarCommit, reverificar } from "./anclas.js";
 import { configuracionDe, fasesDe, reposDeLaTarea } from "./capas.js";
 import { DOCS, requireBasePath } from "./config.js";
 import type { ResultadoConfirmacion } from "./confirmacion.js";
@@ -872,6 +872,151 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
     },
     archivoNuevo: false,
   };
+}
+
+// ─── get_batch_status (§6.8) ────────────────────────────────────────────────
+// Solo lee: cruza el plan (su frontmatter y su tabla) con los recibos y dice qué toca. Con `reverificar`,
+// repite la verificación de cada ancla contra git y el disco.
+export type FilaDeEstado = {
+  lote: string;
+  repo: string | null; // del plan
+  objetivo: string | null; // del plan
+  commitPropuesto: string | null; // del plan
+  recibo: string | null;
+  estado: string | null;
+  ancla: { tipo: string; resumen: string } | null;
+  origen: "servidor" | "manual" | null;
+  vigente: boolean | null; // solo con reverificar
+  problema: string | null;
+};
+
+export type EstadoDeLotes = {
+  tarea: string;
+  plan: string;
+  declarados: number;
+  cerrados: number;
+  siguiente: string;
+  faseCerrada: boolean;
+  lotes: FilaDeEstado[];
+  fueraDePlan: { codigo: "RECIBO-FUERA-DE-PLAN"; recibo: string }[];
+  avisos: string[];
+};
+
+export const NO_PUDE_LEER_LA_TABLA = "No pude leer la tabla de lotes del plan.";
+
+export async function estadoDeLotes(carpetaProyecto: string, taskName: string, opciones: { reverificar?: boolean } = {}): Promise<{ texto: string; salida: EstadoDeLotes }> {
+  const { reverificar: comprobar = false } = opciones;
+  const fase = faseDeLotes(carpetaProyecto, taskName);
+  const total = lotesDelPlan(fase);
+  const avisos: string[] = [];
+
+  let tabla: Map<number, FilaDelPlan> | null = null;
+  try {
+    tabla = leerTablaDeLotes(textoDelPlan(fase));
+  } catch {
+    tabla = null;
+  }
+  if (!tabla) avisos.push(NO_PUDE_LEER_LA_TABLA);
+
+  // Con un solo lote y la fase cerrada, el recibo es el documento de la fase.
+  const porLote = recibosDeLaTarea(fase);
+  const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
+  const faseCerrada = documento !== null && fs.existsSync(documento);
+  if (total === 1 && faseCerrada && !(porLote.get(1) ?? []).length) {
+    porLote.set(1, [{ recibo: { ...parsearRecibo(leerTextoAcotado(documento!), fase.documento!), lote: 1 }, nombre: fase.documento!, ruta: documento!, mtimeMs: 0 }]);
+  }
+  const relativo = (r: ReciboEnDisco): string => (r.ruta === documento ? fase.documento! : `${fase.recibos}/${r.nombre}`);
+
+  const filas: FilaDeEstado[] = [];
+  for (let lote = 1; lote <= total; lote++) {
+    const delPlan = tabla?.get(lote);
+    const recibos = porLote.get(lote) ?? [];
+    if (recibos.length > 1) avisos.push(`Hay ${recibos.length} recibos de ${etiquetaDeLote(lote)}: ${recibos.map((r) => `\`${relativo(r)}\``).join(", ")}. Deja uno solo.`);
+    const r = recibos[0];
+    let vigente: boolean | null = null;
+    let problema: string | null = null;
+    if (r && comprobar) {
+      const resultado = await reverificar(carpetaProyecto, r.recibo);
+      vigente = resultado.vigente;
+      problema = resultado.vigente ? null : resultado.texto;
+    }
+    filas.push({
+      lote: etiquetaDeLote(lote),
+      repo: delPlan?.repo || null,
+      objetivo: delPlan?.objetivo || null,
+      commitPropuesto: delPlan?.commitPropuesto || null,
+      recibo: r ? relativo(r) : null,
+      estado: r ? r.recibo.estado : null,
+      ancla: r ? { tipo: r.recibo.ancla.tipo, resumen: resumenDeAncla(r.recibo.ancla, r.recibo.repo) } : null,
+      origen: r ? r.recibo.origen : null,
+      vigente,
+      problema,
+    });
+  }
+
+  // Un recibo de un lote que el plan no declara (§6.8): se dice, no se usa.
+  const fueraDePlan = [...porLote.entries()]
+    .filter(([lote]) => lote > total)
+    .sort((a, b) => a[0] - b[0])
+    .flatMap(([, recibos]) => recibos.map((r) => ({ codigo: "RECIBO-FUERA-DE-PLAN" as const, recibo: relativo(r) })));
+
+  const cerradosLotes = filas.filter((f) => f.ancla && f.ancla.tipo !== "pendiente" && f.estado !== "fallido");
+  const pendiente = filas.find((f) => f.ancla?.tipo === "pendiente");
+  const fallido = filas.find((f) => f.estado === "fallido");
+  const sinRecibo = filas.find((f) => !f.recibo);
+  const siguiente = pendiente
+    ? `Ancla ${pendiente.lote}: falta registrar su commit.`
+    : fallido && !faseCerrada
+      ? `${fallido.lote} falló: reintenta o descártalo con \`cerrar_fase\`.`
+      : sinRecibo && !faseCerrada
+        ? `Implementa ${sinRecibo.lote}.`
+        : faseCerrada
+          ? `Todos los lotes cerrados: la Fase ${fase.numero} está cerrada.`
+          : `Todos los lotes tienen recibo, pero falta \`${fase.documento}\`: llama a \`record_batch\` con \`cerrar_fase: true\` para generarlo.`;
+
+  const salida: EstadoDeLotes = {
+    tarea: fase.taskName,
+    plan: fase.plan,
+    declarados: total,
+    cerrados: cerradosLotes.length,
+    siguiente,
+    faseCerrada,
+    lotes: filas,
+    fueraDePlan,
+    avisos,
+  };
+  return { texto: textoDeEstado(salida, comprobar), salida };
+}
+
+function textoDeEstado(e: EstadoDeLotes, comprobar: boolean): string {
+  const cabecera = ["Lote", "Repo", "Objetivo", "Commit propuesto", "Recibo", "Estado", "Ancla", "Origen", ...(comprobar ? ["Vigente"] : [])];
+  const raya = (v: string | null): string => (v ? celda(v) : "—");
+  const filas = e.lotes.map((f) =>
+    [
+      f.lote,
+      raya(f.repo),
+      raya(f.objetivo),
+      f.commitPropuesto ? `\`${celda(f.commitPropuesto)}\`` : "—",
+      f.recibo ? `\`${f.recibo}\`` : "—",
+      raya(f.estado),
+      f.ancla ? celda(f.ancla.resumen) : "—",
+      raya(f.origen),
+      ...(comprobar ? [f.vigente === null ? "—" : f.vigente ? "sí" : `no: ${celda(f.problema ?? "")}`] : []),
+    ].join(" | ")
+  );
+  const lineas = [
+    `Tarea «${e.tarea}» · plan \`${e.plan}\` · ${plural(e.declarados, "lote declarado", "lotes declarados")}, ${e.cerrados} ${e.cerrados === 1 ? "cerrado" : "cerrados"}.`,
+    `Siguiente: ${e.siguiente}`,
+    "",
+    `| ${cabecera.join(" | ")} |`,
+    `|${cabecera.map(() => "---").join("|")}|`,
+    ...filas.map((f) => `| ${f} |`),
+  ];
+  if (e.fueraDePlan.length) {
+    lineas.push("", "Recibos fuera del plan:", ...e.fueraDePlan.map((f) => `- ${f.codigo}: \`${f.recibo}\` (el plan declara ${plural(e.declarados, "lote", "lotes")}).`));
+  }
+  if (e.avisos.length) lineas.push("", "Avisos:", ...e.avisos.map((a) => `- ${a}`));
+  return lineas.join("\n");
 }
 
 // El primer lote sin recibo cerrado (ancla distinta de pendiente), o null si no queda ninguno.

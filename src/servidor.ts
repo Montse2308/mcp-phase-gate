@@ -37,7 +37,7 @@ import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerf
 import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
-import { registrarLote } from "./lotes.js";
+import { estadoDeLotes, registrarLote } from "./lotes.js";
 import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
@@ -46,6 +46,8 @@ import type { PhaseFile } from "./phases.js";
 import {
   diagnosticoShape,
   getActiveTaskShape,
+  getBatchStatusSalidaShape,
+  getBatchStatusShape,
   getOrchestratorStatusShape,
   getPhasePromptShape,
   listTasksShape,
@@ -703,6 +705,40 @@ function registrarTools(mcp: McpServer): void {
       return {
         content: [{ type: "text", text: `${resultado.texto}${deducido ? `\n${deducido}` : ""}` }],
         structuredContent: resultado.salida,
+      };
+    })
+  );
+
+  mcp.registerTool(
+    "get_batch_status",
+    {
+      title: "Estado de los lotes",
+      description:
+        "Cruza el plan de la Fase 3 con los recibos de la Fase 4: qué lote toca, cuál espera su commit, qué ancla tiene " +
+        "cada uno y de dónde salió el recibo (servidor o a mano). Con `reverificar`, comprueba que cada commit siga en la " +
+        "rama actual y que cada artefacto sellado no haya cambiado. Solo lee.",
+      inputSchema: getBatchStatusShape,
+      outputSchema: getBatchStatusSalidaShape,
+      annotations: anotaciones("Estado de los lotes", true, false, true),
+    },
+    sincronizandoTras(async (entrada) => {
+      const args = sinNulos(entrada);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "lee");
+      const carpetaProyecto = requireProjectFolder(nombre);
+
+      let taskName = args.task_name;
+      let nota: string | null = null;
+      if (!taskName) {
+        const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
+        if (!activa) throw new Error(`${carpetaProyecto} no tiene tareas todavía.`);
+        taskName = activa.estado.taskName;
+        if (activa.origen === "deducida") nota = `(Tarea «${taskName}» deducida por ser la más reciente: no había tarea activa guardada.)`;
+      }
+
+      const { texto, salida } = await estadoDeLotes(carpetaProyecto, taskName, { reverificar: args.reverificar === true });
+      return {
+        content: [{ type: "text", text: [texto, nota, deducido].filter(Boolean).join("\n\n") }],
+        structuredContent: salida,
       };
     })
   );

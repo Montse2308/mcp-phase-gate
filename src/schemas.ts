@@ -326,6 +326,39 @@ export const recordBatchShape = {
     ),
 };
 
+export const getBatchStatusShape = {
+  project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+  task_name: texto("task_name").nullish().describe("Nombre de la carpeta de la tarea. Si lo omites, la tarea activa del proyecto."),
+  reverificar: booleano("reverificar")
+    .nullish()
+    .describe("Repite la verificación de cada ancla: que su commit siga en la rama actual (tras un rebase o un squash) y que el sha256 de cada artefacto siga igual."),
+};
+
+const FILA_DE_ESTADO = z.object({
+  lote: z.string(),
+  repo: z.string().nullable(),
+  objetivo: z.string().nullable(),
+  commitPropuesto: z.string().nullable(),
+  recibo: z.string().nullable(),
+  estado: z.string().nullable(),
+  ancla: z.object({ tipo: z.string(), resumen: z.string() }).nullable(),
+  origen: z.enum(["servidor", "manual"]).nullable(),
+  vigente: z.boolean().nullable(),
+  problema: z.string().nullable(),
+});
+
+export const getBatchStatusSalidaShape = {
+  tarea: z.string(),
+  plan: z.string(),
+  declarados: z.number().int(),
+  cerrados: z.number().int(),
+  siguiente: z.string(),
+  faseCerrada: z.boolean(),
+  lotes: z.array(FILA_DE_ESTADO),
+  fueraDePlan: z.array(z.object({ codigo: z.literal("RECIBO-FUERA-DE-PLAN"), recibo: z.string() })),
+  avisos: z.array(z.string()),
+};
+
 export const recordBatchSalidaShape = {
   recibo: z.string(),
   lote: z.string(),

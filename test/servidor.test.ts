@@ -22,9 +22,10 @@ import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntor
 afterEach(limpiarEntorno);
 
 // Las 8 de siempre, get_orchestrator_status (Etapa 2), read_repo_file y repo_status (Etapa 3), y
-// record_batch (Etapa 4).
+// record_batch y get_batch_status (Etapa 4).
 const TOOLS = [
   "get_active_task",
+  "get_batch_status",
   "get_orchestrator_status",
   "get_phase_prompt",
   "list_tasks",
@@ -39,7 +40,7 @@ const TOOLS = [
 ];
 
 describe("tools/list", () => {
-  it("devuelve las 8 tools de siempre, get_orchestrator_status, read_repo_file, repo_status y record_batch, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
+  it("devuelve las 8 tools de siempre, get_orchestrator_status, read_repo_file, repo_status, record_batch y get_batch_status, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
     const { cliente, cerrar } = await conectar();
     try {
       const { tools } = await cliente.listTools();
@@ -69,7 +70,7 @@ describe("tools/list", () => {
         tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name),
         ["write_central_doc"]
       );
-      for (const nombre of ["get_phase_prompt", "get_active_task", "list_tasks", "read_central_doc", "read_cross_repo", "get_orchestrator_status", "read_repo_file", "repo_status"]) {
+      for (const nombre of ["get_phase_prompt", "get_active_task", "list_tasks", "read_central_doc", "read_cross_repo", "get_orchestrator_status", "read_repo_file", "repo_status", "get_batch_status"]) {
         assert.equal(porNombre.get(nombre)?.idempotentHint, true, nombre);
         assert.equal(porNombre.get(nombre)?.readOnlyHint, true, nombre);
       }

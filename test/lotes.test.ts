@@ -13,7 +13,7 @@ import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import type { ResultadoConfirmacion } from "../src/confirmacion.js";
-import { ensamblarIndice, leerTablaDeLotes, registrarLote } from "../src/lotes.js";
+import { ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote } from "../src/lotes.js";
 import type { EntradaDeLote } from "../src/lotes.js";
 import { escribirRecibo, leerRecibo, nombreDeRecibo, parsearRecibo } from "../src/recibos.js";
 import type { Recibo } from "../src/recibos.js";
@@ -807,6 +807,118 @@ describe("record_batch por MCP: reanclar con y sin elicitation", () => {
       assert.match(textoDe(conForce), /L01 reanclado/);
     } finally {
       await cerrar();
+    }
+  });
+});
+
+// ─── L06: get_batch_status ──────────────────────────────────────────────────
+describe("get_batch_status", () => {
+  const PLAN_CON_TABLA = [
+    "---", "lotes: 3", "---", "", "# Plan", "",
+    "| Lote | Repo | Objetivo | Pasos | Criterio de salida | Commit propuesto | Revierte solo |",
+    "|---|---|---|---|---|---|---|",
+    "| L01 | api | corregir cálculo | M1 | npm test | `fix(calculo): total` | sí |",
+    "| L02 | api | filtro por categoría | M2 | npm test | `feat(filtros): categoría` | sí |",
+    "| L03 | api | exportar CSV | M3 | ver | `feat(csv): exportar` | sí |",
+    "",
+  ].join("\n");
+
+  it("cruza el plan con los recibos: columnas del plan, recibo, estado, ancla, origen y la siguiente acción", async () => {
+    const { tarea, dirs } = instalacion();
+    fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), PLAN_CON_TABLA, "utf-8");
+    await registrar(contenido(1, { titulo: "corregir cálculo", commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    await registrar(contenido(2, { titulo: "filtro por categoría" }));
+
+    const { texto, salida } = await estadoDeLotes("P", "t");
+    assert.deepEqual([salida.declarados, salida.cerrados, salida.siguiente, salida.avisos, salida.fueraDePlan], [3, 1, "Ancla L02: falta registrar su commit.", [], []]);
+    assert.deepEqual(salida.lotes[0], {
+      lote: "L01",
+      repo: "api",
+      objetivo: "corregir cálculo",
+      commitPropuesto: "fix(calculo): total",
+      recibo: "04 - Ejecución/L01 - corregir cálculo.md",
+      estado: "verificado",
+      ancla: { tipo: "commit", resumen: salida.lotes[0]!.ancla!.resumen },
+      origen: "servidor",
+      vigente: null,
+      problema: null,
+    });
+    assert.deepEqual([salida.lotes[1]!.ancla, salida.lotes[2]!.recibo, salida.lotes[2]!.objetivo], [{ tipo: "pendiente", resumen: "commit pendiente" }, null, "exportar CSV"]);
+    assert.match(texto, /^Tarea «t» · plan `03 - Plan Técnico\.md` · 3 lotes declarados, 1 cerrado\.\nSiguiente: Ancla L02: falta registrar su commit\.\n/);
+    assert.match(texto, /\| L03 \| api \| exportar CSV \| `feat\(csv\): exportar` \| — \| — \| — \| — \|/);
+  });
+
+  it("la siguiente acción, en orden: anclar, el fallido, implementar, y la fase cerrada", async () => {
+    const { dirs } = instalacion({ lotes: "2" });
+    assert.equal((await estadoDeLotes("P", "t")).salida.siguiente, "Implementa L01.");
+    await registrar(contenido(1, { estado: "fallido" }));
+    assert.equal((await estadoDeLotes("P", "t")).salida.siguiente, "L01 falló: reintenta o descártalo con `cerrar_fase`.");
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    assert.equal((await estadoDeLotes("P", "t")).salida.siguiente, "Implementa L02.");
+    await registrar(contenido(2, { commit: commitEn(dirs.api!, ["src/l2.ts"]) }));
+    const cerrada = await estadoDeLotes("P", "t");
+    assert.deepEqual([cerrada.salida.siguiente, cerrada.salida.faseCerrada, cerrada.salida.cerrados], ["Todos los lotes cerrados: la Fase 4 está cerrada.", true, 2]);
+  });
+
+  it("un recibo de un lote mayor que N es RECIBO-FUERA-DE-PLAN, y uno escrito a mano sale como manual", async () => {
+    const { recibos } = instalacion({ lotes: "2" });
+    fs.mkdirSync(recibos, { recursive: true });
+    fs.writeFileSync(path.join(recibos, "L01 - a mano.md"), "---\nlote: L01\nestado: verificado\ncommit: a1b2c3d\n---\n# L01 — a mano\n", "utf-8");
+    fs.writeFileSync(path.join(recibos, "L05 - sobrante.md"), "---\nlote: L05\ncommit: pendiente\n---\n", "utf-8");
+    const { texto, salida } = await estadoDeLotes("P", "t");
+    assert.deepEqual(salida.fueraDePlan, [{ codigo: "RECIBO-FUERA-DE-PLAN", recibo: "04 - Ejecución/L05 - sobrante.md" }]);
+    assert.equal(salida.lotes[0]!.origen, "manual");
+    assert.match(texto, /- RECIBO-FUERA-DE-PLAN: `04 - Ejecución\/L05 - sobrante\.md` \(el plan declara 2 lotes\)\./);
+  });
+
+  it("si la tabla del plan no se puede leer, las columnas del plan quedan vacías y lo avisa; el número sale del frontmatter", async () => {
+    const { tarea } = instalacion({ lotes: "2" });
+    fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "---\nlotes: 2\n---\n\n| Paso | Qué |\n|---|---|\n| L01 | x |\n", "utf-8");
+    const { salida } = await estadoDeLotes("P", "t");
+    assert.equal(salida.declarados, 2);
+    assert.deepEqual(salida.avisos, ["No pude leer la tabla de lotes del plan."]);
+    assert.deepEqual(salida.lotes.map((f) => [f.repo, f.objetivo, f.commitPropuesto]), [[null, null, null], [null, null, null]]);
+  });
+
+  it("reverificar tras un git commit --amend marca el ancla como no vigente", async () => {
+    const { dirs } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    assert.equal((await estadoDeLotes("P", "t", { reverificar: true })).salida.lotes[0]!.vigente, true);
+    assert.equal((await estadoDeLotes("P", "t")).salida.lotes[0]!.vigente, null, "sin reverificar no se comprueba");
+
+    g(dirs.api!, "commit", "-q", "--amend", "-m", "reescrito");
+    const { texto, salida } = await estadoDeLotes("P", "t", { reverificar: true });
+    assert.equal(salida.lotes[0]!.vigente, false);
+    assert.match(salida.lotes[0]!.problema!, /ya no está en la rama actual \(`main`\)\. ¿Rebase o squash\?/);
+    assert.match(texto, /\| no: El commit `[0-9a-f]{7}` ya no está en la rama actual/);
+  });
+
+  it("con lotes: 1 y la fase cerrada, lee el recibo del documento de la fase", async () => {
+    const { dirs } = instalacion({ lotes: "1" });
+    await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
+    const { salida } = await estadoDeLotes("P", "t", { reverificar: true });
+    assert.deepEqual([salida.lotes[0]!.recibo, salida.lotes[0]!.vigente, salida.faseCerrada], ["04 - Ejecución.md", true, true]);
+  });
+
+  it("por MCP: solo lectura, con structuredContent; sin plan con lotes, el error de H3", async () => {
+    instalacion({ lotes: null });
+    const { cliente, cerrar } = await conectar();
+    try {
+      await cliente.callTool({ name: "switch_task", arguments: { project: "P", task_name: "t" } });
+      const sinLotes = await cliente.callTool({ name: "get_batch_status", arguments: { project: "P" } });
+      assert.match(textoDe(sinLotes), /El plan no declara `lotes: N`/);
+    } finally {
+      await cerrar();
+    }
+
+    instalacion({ lotes: "2" });
+    const otra = await conectar();
+    try {
+      const r = await otra.cliente.callTool({ name: "get_batch_status", arguments: { project: "P", task_name: "t" } });
+      assert.equal(r.isError, undefined, textoDe(r));
+      assert.equal((r.structuredContent as { siguiente: string }).siguiente, "Implementa L01.");
+    } finally {
+      await otra.cerrar();
     }
   });
 });
