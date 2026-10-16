@@ -50,7 +50,7 @@ entregable.
 
 Si en algún momento estás redactando en vez de implementar o verificar, estás gastando el
 turno en lo que menos importa de esta fase. El orden es: implementar un lote, verificarlo de
-verdad, dejar su recibo corto y su commit, y solo entonces el siguiente.
+verdad, registrarlo con `record_batch` y hacer su commit, y solo entonces el siguiente.
 
 ---
 
@@ -62,7 +62,7 @@ verdad, dejar su recibo corto y su commit, y solo entonces el siguiente.
 | Ejecutar todo lo comprobable y reportar el resultado real | Dar por buena una verificación que no corriste |
 | Escribir los pasos por interfaz que el usuario debe hacer | Hacerlos tú sin que el usuario lo haya pedido |
 | Documentar lo que la ejecución destape | Reescribir los documentos de las fases 1, 2 o 3 |
-| Dejar el recibo de cada lote y hacer su commit con el OK del usuario | Hacer push, crear o cambiar de rama, abrir un PR |
+| Registrar cada lote con `record_batch` y hacer su commit con el OK del usuario | Hacer push, crear o cambiar de rama, abrir un PR |
 
 **El alcance es el del plan.** Si al implementar ves algo roto que el plan no contemplaba,
 anótalo, no lo arregles de paso. Un arreglo extra dentro de este cambio contamina la
