@@ -12,6 +12,50 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — Los recibos son datos con un formato determinista que escribe el servidor
+
+**Decisión.** Un recibo de lote es un dato (`Recibo`, en `src/recibos.ts`) y `src/recibos.ts` es el
+único lugar que lo lee y lo escribe. `escribirRecibo` produce la plantilla de la Etapa 1 con claves
+nuevas en el frontmatter, siempre en este orden: `lote`, `de`, `repo`, `rama`, `estado`, `commit`,
+`fecha` (las de la 2.x, en su sitio), `ancla` (`commit`, `sha256`, `nota` o `pendiente`), los datos de
+esa ancla (`commit_completo` y `asunto`; `artefacto`, `sha256` y `bytes`; o `nota`), `registrado` (la
+hora ISO de la escritura) y `origen` (`servidor` o `manual`). Debajo, los encabezados de siempre, en su
+orden, las secciones condicionales que traigan texto (en el orden de la plantilla) y, solo con ancla
+`commit`, "Verificación del commit".
+
+- **Determinista:** el mismo recibo da los mismos bytes, en LF y con un salto final, y escribir lo que
+  se leyó de un recibo escrito aquí vuelve a dar los mismos bytes (lo fija una prueba de ida y vuelta
+  con las cuatro anclas).
+- **Sin encabezados vacíos:** una sección sin texto dice "Nada.", "Ninguno." o "Ninguna."; al leer,
+  esas formas cuentan como vacías.
+- **Tablas:** `|` va como `\|` y un salto de línea dentro de una celda, como `<br>`.
+- **Una línea:** los valores del frontmatter son de una línea; los saltos de una nota o de una ruta van
+  escapados (`\n`, `\\`). Un repo o una rama que no hay se escriben `—`. Una línea del texto que empieza
+  como un encabezado (`# `, `## `) se sangra un espacio, para que al leer no parta la sección.
+- **Lectura tolerante:** un recibo escrito a mano con la 2.x se lee sin lanzar. Sin `ancla`, se deduce
+  de `commit` (un hash es un commit sin verificar; `pendiente`; `no aplica` es una nota); sin `origen`,
+  es `manual`; una sección que falta se lee vacía, y un `## ` que no es de la plantilla se queda dentro
+  de la sección donde aparece. Un estado que no se reconoce queda como `con pendientes`: nunca se da por
+  bueno. Se normalizan el BOM y `\r\n` antes de leer (§1.3), con un lector de frontmatter propio que no
+  quita comillas (un asunto de commit puede empezar por una).
+
+**El nombre del archivo lo hace el servidor** (`nombreDeRecibo`): `L` y el número con dos dígitos,
+`" - "` y un slug del título en NFC, en el que todo lo que no es letra, número, espacio o guion pasa a
+espacio, cortado a 40 caracteres sin partir palabras (validación V7) y sin punto ni espacio al final;
+vacío, es `lote`. El resultado pasa `validarSegmento`. El ajuste A3 de la Etapa 1 pedía al modelo que
+no usara `:` `/` `\`…; ahora lo hace cumplir el código.
+
+**Amplía** "Los recibos de lote viven en una subcarpeta que declara el prompt" (2026-10-14): la
+subcarpeta y el nombre siguen siendo los mismos, pero el contenido ya no lo redacta el modelo con una
+plantilla sino el servidor con campos.
+
+**Qué se descartó.** YAML de verdad en el frontmatter: el resto del proyecto lee `clave: valor` con
+`separarFrontmatter`, y un recibo de la 3.0 tiene que seguir siendo legible por las reglas de la 2.x
+(por ejemplo, el aviso de pendientes heredados, que mira `estado`). Guardar la hora de verificación del
+ancla aparte: el servidor verifica el ancla en la misma escritura, así que es `registrado`.
+
+---
+
 ## 2026-10-15 — `init` escribe la configuración del cliente con copia, diff y confirmación
 
 **Decisión.** `npx mcp-phase-gate init` registra el servidor en los clientes de este equipo:
