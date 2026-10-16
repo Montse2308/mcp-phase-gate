@@ -200,7 +200,14 @@ el ancla; el servidor arma el recibo (`escribirRecibo`) y verifica el ancla (`an
   llamar; un candado de más de 30 s se da por abandonado.
 - **Proyecto y tarea:** el proyecto como en las demás tools que escriben (una coincidencia débil de
   Roots no basta); la tarea, la indicada o la activa **guardada**: una deducida por fecha no vale para
-  escribir.
+  escribir. Para leer (`get_batch_status`) sí vale una deducida, y la respuesta lo dice: equivocarse de
+  tarea al leer no pisa nada.
+- **Un commit que no llega.** Si el usuario decide no hacer el commit de un lote pendiente, ese lote
+  bloquearía a los siguientes: se cierra con `record_batch` y solo `lote`, `estado: descartado` (o
+  `fallido`) y, si se quiere, `verification_note`; el contenido que ya tenía se conserva. Si dos lotes
+  acabaron en un mismo commit, uno se ancla a él y el otro se descarta con una nota que lo diga ("un
+  commit, un lote" no deja anclar el mismo commit dos veces). Las dos salidas las pidió la auditoría de
+  la Etapa 4.
 
 **Reemplaza en parte** "La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del
 usuario" (2026-10-14): el recibo ya no lo redacta el modelo con `write_central_doc`.

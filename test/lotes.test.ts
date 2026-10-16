@@ -13,7 +13,7 @@ import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import type { ResultadoConfirmacion } from "../src/confirmacion.js";
-import { bloqueDeCommits, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote } from "../src/lotes.js";
+import { bloqueDeCommits, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote, traducirEscritura } from "../src/lotes.js";
 import type { EntradaDeLote } from "../src/lotes.js";
 import { escribirRecibo, leerRecibo, nombreDeRecibo, parsearRecibo } from "../src/recibos.js";
 import type { Recibo } from "../src/recibos.js";
@@ -1123,5 +1123,52 @@ describe("bloqueDeCommits (COMMITS DE LA FASE 4)", () => {
     } finally {
       await cerrar();
     }
+  });
+});
+
+// ─── Ajustes de la auditoría de la Etapa 4 (pulido) ─────────────────────────
+describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () => {
+  it("al anclar un recibo de la 2.x sin repo, vale el único repo de la tarea (hallazgo 5)", async () => {
+    const { recibos, dirs } = instalacion({ lotes: "2" });
+    fs.mkdirSync(recibos, { recursive: true });
+    fs.writeFileSync(path.join(recibos, "L01 - a mano.md"), "---\nlote: L01\nestado: verificado\ncommit: pendiente\n---\n# L01 — a mano\n", "utf-8");
+    const r = await registrar({ lote: 1, commit: commitEn(dirs.api!, ["src/l1.ts"]) });
+    assert.equal(r.salida.ancla.tipo, "commit");
+    assert.match(r.salida.ancla.resumen, / en `api` \(main\)$/);
+  });
+
+  it("un lote con el commit pendiente se descarta con su estado y una nota, sin repetir el contenido (cuestionamiento de H1)", async () => {
+    const { recibos } = instalacion({ lotes: "2" });
+    await registrar(contenido(1, { que_se_hizo: "lo que se hizo" }));
+    const r = await registrar({ lote: 1, estado: "descartado", verification_note: "el usuario no hará el commit" });
+    assert.deepEqual([r.salida.estado, r.salida.ancla.resumen], ["descartado", "nota: el usuario no hará el commit"]);
+    const recibo = leerRecibo(path.join(recibos, recibosEn(recibos)[0]!));
+    assert.deepEqual([recibo.estado, recibo.queSeHizo], ["descartado", "lo que se hizo"]);
+    assert.equal((await registrar(contenido(2))).salida.lote, "L02", "el siguiente ya no está bloqueado");
+  });
+
+  it("un plan sin `lotes` propone el número de filas de su tabla (cuestionamiento de H3)", async () => {
+    const { tarea } = instalacion({ lotes: null });
+    fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "# Plan\n\n| Lote | Repo | Objetivo |\n|---|---|---|\n| L01 | api | a |\n| L02 | api | b |\n| L03 | api | c |\n", "utf-8");
+    await assert.rejects(registrar(contenido(1)), /Su tabla de lotes tiene 3 filas: ¿es `lotes: 3`\?/);
+  });
+
+  it("un error de escritura sale legible y sin el temporal (hallazgo 9)", () => {
+    const error = traducirEscritura(Object.assign(new Error("EPERM: operation not permitted, rename 'x.tmp' -> 'y'"), { code: "EPERM" }), "L01 - lote 1.md");
+    assert.equal(error.message, "No se pudo escribir `L01 - lote 1.md`: es de solo lectura o lo tiene abierto otro programa (EPERM). Quita la protección o ciérralo, y vuelve a llamar.");
+    assert.doesNotMatch(error.message, /\.tmp/);
+  });
+
+  it("si no se pueden leer los recibos, el bloque de la Fase 5 lo dice en vez de desaparecer (hallazgo 11)", async () => {
+    const { tarea, recibos } = instalacion({ lotes: "1" });
+    fs.mkdirSync(recibos, { recursive: true });
+    fs.writeFileSync(path.join(recibos, "L01 - binario.md"), Buffer.from([0, 1, 2, 0, 3]));
+    const texto = (await bloqueDeCommits("P", tarea, fasesDe("P")))!;
+    assert.match(texto, /^## COMMITS DE LA FASE 4\n\nNo se pudieron leer los recibos: No se pudo leer el recibo `04 - Ejecución\/L01 - binario\.md`/);
+  });
+
+  it("un artefacto que no existe se nombra por su ruta relativa, no por la del equipo (hallazgo 9)", async () => {
+    instalacion({ sinGit: ["api"] });
+    await assert.rejects(registrar(contenido(1, { artifact_path: "no-esta.md" })), (e: Error) => e.message === "El artefacto `repo:api/no-esta.md` no existe.");
   });
 });

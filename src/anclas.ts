@@ -168,20 +168,22 @@ function convertidor(conversion: Conversion): { trozo: (b: Buffer) => Buffer; fi
 
 // El sha256 en streaming, del mismo descriptor que se comprobó: tipo y tamaño salen del archivo abierto,
 // no de un stat aparte. Un archivo que crece mientras se lee y pasa del tope se rechaza igual.
-export async function sha256DeArchivo(ruta: string, conversion: Conversion = "ninguna"): Promise<{ sha256: string; bytes: number }> {
+// `mostrar` es como se nombra en los mensajes (repo:api/docs/x.md): la ruta absoluta no le dice nada al
+// modelo y enseña la del equipo.
+export async function sha256DeArchivo(ruta: string, conversion: Conversion = "ninguna", mostrar: string = ruta): Promise<{ sha256: string; bytes: number }> {
   let descriptor: number;
   try {
     descriptor = fs.openSync(ruta, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
   } catch (error: any) {
-    if (error?.code === "ENOENT") throw new Error(`El artefacto \`${ruta}\` no existe.`);
-    if (error?.code === "EISDIR") throw new Error(`\`${ruta}\` es una carpeta: solo se sellan archivos.`);
+    if (error?.code === "ENOENT") throw new Error(`El artefacto \`${mostrar}\` no existe.`);
+    if (error?.code === "EISDIR") throw new Error(`\`${mostrar}\` es una carpeta: solo se sellan archivos.`);
     throw error;
   }
 
   const stream = fs.createReadStream(ruta, { fd: descriptor, autoClose: true });
   try {
     const info = fs.fstatSync(descriptor);
-    if (!info.isFile()) throw new Error(`\`${ruta}\` no es un archivo normal: solo se sellan archivos.`);
+    if (!info.isFile()) throw new Error(`\`${mostrar}\` no es un archivo normal: solo se sellan archivos.`);
     if (info.size > TOPE_DE_ARTEFACTO) throw new Error(textoDeTope(info.size));
 
     const hash = crypto.createHash("sha256");
@@ -210,9 +212,10 @@ function baseDeArtefacto(proyecto: string, repoId: string | null): string {
 
 export async function anclarArtefacto(proyecto: string, repoId: string | null, ruta: string, ahora: () => Date = () => new Date()): Promise<AnclaSha256> {
   const { ruta: absoluta, segmentos } = rutaDeArtefacto(baseDeArtefacto(proyecto, repoId), ruta);
-  const { sha256, bytes } = await sha256DeArchivo(absoluta);
   const relativa = segmentos.join("/");
-  return { tipo: "sha256", ruta: repoId ? `repo:${repoId}/${relativa}` : `proyecto:${relativa}`, sha256, bytes, verificado: ahora().toISOString() };
+  const guardada = repoId ? `repo:${repoId}/${relativa}` : `proyecto:${relativa}`;
+  const { sha256, bytes } = await sha256DeArchivo(absoluta, "ninguna", guardada);
+  return { tipo: "sha256", ruta: guardada, sha256, bytes, verificado: ahora().toISOString() };
 }
 
 // "repo:api/docs/x.md" -> { repo: "api", relativa: "docs/x.md" }; "proyecto:ASISTENTE/p.md" -> { repo: null, … }
@@ -260,7 +263,7 @@ async function reverificarArtefacto(proyecto: string, ancla: AnclaSha256): Promi
   if (!partes) return { vigente: false, texto: `No se entiende la ruta del artefacto («${ancla.ruta}»).` };
   const { ruta } = rutaDeArtefacto(baseDeArtefacto(proyecto, partes.repo), partes.relativa);
 
-  const actual = await sha256DeArchivo(ruta);
+  const actual = await sha256DeArchivo(ruta, "ninguna", ancla.ruta);
   if (actual.sha256 === ancla.sha256) return { vigente: true, texto: `El artefacto \`${ancla.ruta}\` no cambió.` };
 
   // El hash es de los bytes, y un archivo de texto en un repo con core.autocrlf tiene otros bytes en

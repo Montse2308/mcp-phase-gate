@@ -63,9 +63,13 @@ function textoDelPlan(fase: FaseDeLotes): string {
 
 // H3: el número de lotes sale SOLO del frontmatter del plan, nunca de su tabla.
 export function lotesDelPlan(fase: FaseDeLotes): number {
-  const valor = separarFrontmatter(textoDelPlan(fase)).meta.lotes;
+  const texto = textoDelPlan(fase);
+  const valor = separarFrontmatter(texto).meta.lotes;
   if (valor === undefined || valor.trim() === "") {
-    throw new Error(`El plan no declara \`lotes: N\` en su frontmatter. Añádelo a \`${fase.plan}\` antes del primer recibo.`);
+    // La tabla no decide el número (H3), pero sí sirve para proponérselo a la persona.
+    const filas = leerTablaDeLotes(texto)?.size ?? 0;
+    const sugerencia = filas ? ` Su tabla de lotes tiene ${filas} ${filas === 1 ? "fila" : "filas"}: ¿es \`lotes: ${filas}\`?` : "";
+    throw new Error(`El plan no declara \`lotes: N\` en su frontmatter. Añádelo a \`${fase.plan}\` antes del primer recibo.${sugerencia}`);
   }
   const n = Number(valor.trim());
   if (!/^\d+$/.test(valor.trim()) || n < 1 || n > 99) {
@@ -328,6 +332,10 @@ function modoDe(entrada: EntradaDeLote, existente: ReciboEnDisco | null, anclas:
     );
   }
   if (ancla.tipo === "pendiente") {
+    // Un lote cuyo commit no va a llegar (el usuario no lo hace, o el lote se descarta) se cierra con solo
+    // su estado nuevo y, si se quiere, una nota: el contenido que ya tiene se conserva.
+    const soloEstado = CAMPOS_DE_CONTENIDO.every((campo) => campo === "estado" || entrada[campo] === undefined);
+    if (soloEstado && (entrada.estado === "descartado" || entrada.estado === "fallido")) return "anclar";
     if (traeContenido) return exigirContenido("reemplazar");
     if (anclas.length === 1) return "anclar";
     throw new Error(
@@ -347,7 +355,9 @@ function repoDelLote(entrada: EntradaDeLote, existente: ReciboEnDisco | null, mo
     if (entrada.repo && delRecibo && entrada.repo !== delRecibo) {
       throw new Error(`El recibo de ${etiquetaDeLote(entrada.lote)} es del repo \`${delRecibo}\`, no de \`${entrada.repo}\`.`);
     }
-    return entrada.repo ?? delRecibo;
+    // Un recibo de la 2.x puede no decir su repo: entonces vale la regla de siempre (el indicado, o el
+    // único de la tarea), en vez de tomarlo por un lote sin repositorio.
+    if (delRecibo) return delRecibo;
   }
   if (entrada.repo) {
     if (!ids.includes(entrada.repo)) {
@@ -367,13 +377,23 @@ function repoDelLote(entrada: EntradaDeLote, existente: ReciboEnDisco | null, mo
 // no acaba en .md, así que nadie lo toma por un recibo ni por un documento.
 export function escribirAtomico(ruta: string, contenido: string): void {
   const temporal = path.join(path.dirname(ruta), `.${path.basename(ruta)}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`);
-  fs.writeFileSync(temporal, contenido, "utf-8");
   try {
+    fs.writeFileSync(temporal, contenido, "utf-8");
     fs.renameSync(temporal, ruta);
   } catch (error) {
     borrarArchivo(temporal);
-    throw error;
+    throw traducirEscritura(error, path.basename(ruta));
   }
+}
+
+// Un fallo de escritura dicho para una persona: el archivo y qué hacer, sin la ruta del temporal.
+export function traducirEscritura(error: unknown, nombre: string): Error {
+  const codigo = (error as { code?: string })?.code;
+  if (codigo === "EPERM" || codigo === "EACCES" || codigo === "EBUSY") {
+    return new Error(`No se pudo escribir \`${nombre}\`: es de solo lectura o lo tiene abierto otro programa (${codigo}). Quita la protección o ciérralo, y vuelve a llamar.`);
+  }
+  if (codigo === "ENOSPC") return new Error(`No se pudo escribir \`${nombre}\`: no queda espacio en el disco.`);
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 // unlinkSync y no rmSync: en Node 24.11 para Windows, rmSync no borra un archivo con un nombre que no
@@ -557,6 +577,7 @@ async function prepararLote(
     de: total,
     repo,
     rama,
+    estado,
     ancla,
     fecha: fechaLocal(momento),
     registrado: momento.toISOString(),
@@ -1079,7 +1100,13 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
   } catch {
     return null; // sin fase de lotes o sin plan con lotes no hay nada que listar
   }
-  const porLote = recibosDeLaTarea(fase);
+  let porLote: Map<number, ReciboEnDisco[]>;
+  try {
+    porLote = recibosDeLaTarea(fase);
+  } catch (error) {
+    // Sin el bloque, la regla 1 de la Fase 5 manda a preguntar: que se sepa por qué.
+    return `## COMMITS DE LA FASE ${fase.numero}\n\nNo se pudieron leer los recibos: ${error instanceof Error ? error.message : String(error)} Arréglalo (o usa \`get_batch_status\`) antes de auditar.`;
+  }
   const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
   if (total === 1 && documento && fs.existsSync(documento) && !(porLote.get(1) ?? []).length) {
     porLote.set(1, [{ recibo: { ...parsearRecibo(leerTextoAcotado(documento), fase.documento!), lote: 1 }, nombre: fase.documento!, ruta: documento, mtimeMs: 0 }]);

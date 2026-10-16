@@ -140,7 +140,10 @@ export function progresoDeLotes(folderPath: string, plan: string | null, recibos
   }
 
   const cerradoEl = (lote: number) => (porLote.get(lote) ?? []).some(esLoteCerrado);
-  const pendiente = [...porLote.entries()].sort((a, b) => a[0] - b[0]).find(([, cabeceras]) => cabeceras.some((c) => c.ancla === "pendiente"));
+  // Un recibo de un lote que el plan no declara no es el lote "actual" (doctor lo marca fuera de plan).
+  const pendiente = [...porLote.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .find(([lote, cabeceras]) => (total === null || lote <= total) && cabeceras.some((c) => c.ancla === "pendiente"));
   let actual: number | null = null;
   if (total !== null) {
     for (let lote = 1; lote <= total; lote++) {

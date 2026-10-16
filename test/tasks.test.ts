@@ -812,4 +812,13 @@ describe("progreso por lote en la Fase 4", () => {
     const despues = estadoDeTarea("login-sso", carpeta, CON_RECIBOS).ultimoCambio!;
     assert.ok(despues > antes, `${despues} > ${antes}`);
   });
+
+  // Hallazgo 4 de la auditoría de la Etapa 4: un recibo de un lote que el plan no declara, con el commit
+  // pendiente, hacía decir "lote 5 de 2".
+  it("un recibo fuera de plan no es el lote actual", () => {
+    const carpeta = enFase4("---\nlotes: 2\n---\n", { "L05 - fuera.md": recibo("L05", "pendiente") });
+    const estado = estadoDeTarea("login-sso", carpeta, CON_RECIBOS);
+    assert.equal(estado.lotes?.pendienteDeCommit, null);
+    assert.equal(describeEstado(estado, CON_RECIBOS), "va en Fase 4 (Ejecución, lote 1 de 2); hechas: 1, 2, 3");
+  });
 });
