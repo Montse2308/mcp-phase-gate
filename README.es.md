@@ -32,7 +32,7 @@ flowchart TD
 
 Y entre una fase y otra hay una **compuerta**, que es lo que le da el nombre al servidor: si pides una fase saltándote la anterior, el servidor lo detecta y avisa ([ver abajo](#-la-compuerta-saltarse-una-fase-deja-de-ser-invisible)).
 
-En la Fase 4 la IA hace el commit de cada lote solo con tu OK (es la política por defecto; un proyecto puede elegir otra, [ver abajo](#-configuración-por-proyecto)); nunca hace push ni abre el PR, en ninguna política. En la Fase 5 solo lee.
+En la Fase 4 la IA hace el commit de cada lote solo con tu OK (es la política por defecto; un proyecto puede elegir otra, [ver abajo](#-configuración-por-proyecto)); nunca hace push ni abre el PR, en ninguna política. El recibo de cada lote lo escribe el servidor, que comprueba contra git que su commit existe y está en la rama ([ver abajo](#-la-fase-4-con-el-servidor-record_batch)). En la Fase 5 solo lee.
 
 Desde la 3.0 el flujo se adapta al tipo de trabajo con **presets**: código con o sin suite de pruebas, un requerimiento que cruza varios repositorios, el mantenimiento de un agente de IA o una investigación cuyo entregable es un informe. Las cinco fases y su compuerta son las mismas; cambian las secciones que tienen que cambiar.
 
@@ -59,10 +59,10 @@ DOCUMENTACIÓN/
 │           ├── 01 - Análisis Técnico.md   ← Fase 1
 │           ├── 02 - Decisiones.md         ← Fase 2
 │           ├── 03 - Plan Técnico.md       ← Fase 3
-│           ├── 04 - Ejecución/            ← Fase 4, con más de un lote: un recibo por lote
+│           ├── 04 - Ejecución/            ← Fase 4: un recibo por lote (los escribe el servidor)
 │           │   ├── L01 - <slug>.md
 │           │   └── L02 - <slug>.md
-│           ├── 04 - Ejecución.md          ← Fase 4: el recibo, o el índice de los recibos
+│           ├── 04 - Ejecución.md          ← Fase 4: lo genera el servidor al cerrar el último lote
 │           └── 05 - Auditoría.md          ← Fase 5
 ├── PROYECTO-B/
 │   └── Proyectos/
@@ -74,7 +74,7 @@ DOCUMENTACIÓN/
 
 `PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `PHASE_GATE_TASKS_SUBDIR` más abajo.
 
-**Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez y cierra cada lote con un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) y un commit. Con un solo lote, el recibo es directamente `04 - Ejecución.md` y no hay subcarpeta, salvo que ese lote falle o se descarte: entonces su recibo va a `04 - Ejecución/` y la fase no se da por cerrada. Con varios, los recibos van en `04 - Ejecución/` y `04 - Ejecución.md` es el índice que se escribe al cerrar el último: hasta entonces la fase no aparece como terminada. Al pedir la Fase 4 o la 5, el servidor añade al prompt la lista de recibos que ya existen, para retomar en otro chat sin adivinar sus nombres.
+**Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez, y de cada lote quedan un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) en `04 - Ejecución/`, que escribe el servidor con `record_batch`, y un commit. Al cerrar el último lote, el servidor genera `04 - Ejecución.md`: con varios lotes es el índice de los recibos; con uno solo, el propio recibo, que se mueve ahí. Hasta entonces la fase no aparece como terminada ([cómo funciona](#-la-fase-4-con-el-servidor-record_batch)). Al pedir la Fase 4 o la 5, el servidor añade al prompt la lista de recibos que ya existen, para retomar en otro chat sin adivinar sus nombres.
 
 > El servidor arma esta ruta **automáticamente**. Tú (o el LLM) solo indican `project`, `task_name` y `file_name`; no hay que escribir la ruta completa a mano.
 
@@ -221,7 +221,7 @@ En **Claude Code**, un `.mcp.json` en la raíz de este repo puede usar ruta **re
 
 ### ✅ Verificar que funciona
 1. Reinicia el cliente, o desactiva y vuelve a activar el servidor en su panel de MCP.
-2. Debe aparecer activo con sus 11 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
+2. Debe aparecer activo con sus 13 tools listadas. En **Cursor** está en Settings → MCP; en **VS Code**, en la vista de extensiones/MCP; en **Claude Code**, con `/mcp`.
 3. Pruébalo pidiendo en el chat: *"Usa la tool `get_orchestrator_status` del mcp-phase-gate"* — te devuelve la radiografía de la instalación: qué variables ve, qué prompts usa y qué proyectos encuentra.
 
 ### 🔍 Revisar la instalación: `doctor`
@@ -233,6 +233,8 @@ npx mcp-phase-gate doctor
 ```
 
 Te dice qué versión corre y desde dónde (`npx`, global, una dependencia o un clon), qué valor tiene cada variable y de dónde salió (el entorno o el `.env`, y si usaste el nombre nuevo o el alias), tu configuración local (`machine.json` y los presets disponibles), qué archivo de prompt gana en cada fase, y qué proyectos hay con su tarea activa, su manifiesto, su preset (y de dónde sale), sus reglas y sus repos con su rama. Termina con una lista de hallazgos: una variable obligatoria que falta, un `.env` en UTF-16, un manifiesto mal escrito, una copia en conflicto que dejó OneDrive, un preset que no existe, un proyecto sin manifiesto que usa el preset por defecto sin que lo sepas, un bloque que no encaja en ninguna ranura, un repo que no está en este equipo… Sale con código `1` si hay algún error, así que sirve también en un script. `doctor --json` da lo mismo como JSON.
+
+En la Fase 4 revisa además los recibos: uno de un lote que el plan no declara (`RECIBO-FUERA-DE-PLAN`), los escritos a mano (`RECIBO-MANUAL`), un `04 - Ejecución.md` que ya no es el que el servidor ensamblaría con sus recibos (`INDICE-DESINCRONIZADO`) y las rutas de la Documentación de más de 240 caracteres (`RUTA-LARGA`). **`doctor --reverificar`** comprueba también contra git que el commit de cada recibo siga en su rama, y que cada artefacto sellado no haya cambiado (`ANCLA-NO-VIGENTE`): úsalo después de un rebase.
 
 **¿De dónde sale este texto?** `doctor --fase 3 --proyecto PROYECTO-A` enseña, ranura por ranura, qué capa y qué `archivo:línea` gana en el prompt de esa fase y qué se le sumó encima. Es la respuesta a "cambié un preset y no sé si se nota".
 
@@ -327,15 +329,15 @@ Lo que hace cada uno:
 | `/f1` | `start_task` + `get_phase_prompt(1)` | El de la Fase 1 |
 | `/f2` | `get_phase_prompt(2)`, lee el de la Fase 1 | El de la Fase 2, después de que respondas las preguntas |
 | `/f3` | `get_phase_prompt(3)`, lee los anteriores | El de la Fase 3 |
-| `/f4` | `get_phase_prompt(4)`, lee el plan | Un recibo por lote; el documento de la fase al cerrar |
+| `/f4` | `get_phase_prompt(4)`, lee el plan y `get_batch_status` | Cada lote con `record_batch`; el servidor genera el documento de la fase al anclar el último |
 | `/f5` | `get_phase_prompt(5)` | El de la Fase 5: la auditoría y la descripción del PR, que además van en el chat |
 
 Ningún comando nombra un archivo: el nombre lo declara la cabecera del prompt de cada fase
 y `get_phase_prompt` se lo entrega al modelo.
 
 `/f1` necesita project, task_name y el requerimiento completo. `/f5` acepta un rango de
-commits; si no le das ninguno, audita los que registran los recibos de la Fase 4, y solo si no
-hay recibos te pregunta. Los demás arrancan de `get_active_task`.
+commits; si no le das ninguno, audita los que lista el servidor al final del prompt de la fase
+(COMMITS DE LA FASE 4). Los demás arrancan de `get_active_task`.
 
 **Llegan solos, como MCP Prompts.** Desde la 2.2.0 el servidor ofrece cada comando como un
 prompt MCP (`f1`…`f5`), con su texto en [`prompts/es/comandos/`](prompts/es/comandos). No hay que
@@ -391,14 +393,46 @@ Tres cosas que **no** hace, a propósito:
 
 ---
 
+## 🧾 La Fase 4 con el servidor: `record_batch`
+
+Desde la 3.0 la IA ya no redacta los recibos ni el documento de la Fase 4: le pasa al servidor los datos de cada lote, y el servidor escribe el recibo, comprueba el commit contra git y cierra la fase al anclar el último lote.
+
+**Cada lote, en dos tiempos** (con la política por defecto):
+
+1. `get_batch_status` dice qué lote toca y si alguno espera su commit.
+2. La IA implementa el lote y lo verifica ejecutando.
+3. **Antes del commit**, `record_batch` con el contenido del lote: título, estado, qué se hizo, archivos, verificación, lo que espera por ti, desvíos y decisiones. El recibo queda con el commit pendiente; si el chat se corta aquí, ya dice qué se hizo y qué se comprobó.
+4. Te enseña los archivos y el mensaje, y con tu OK hace el commit.
+5. **Después del commit**, `record_batch` con `lote` y `commit`. El servidor comprueba que el commit existe, que está en la rama actual y qué archivos toca. Si no son los que declara el recibo, lo deja escrito en el recibo (es un aviso, no un bloqueo).
+6. Al anclar el último lote, el servidor genera `04 - Ejecución.md` y la fase queda cerrada.
+
+**Las anclas**, lo que demuestra que un lote se hizo:
+
+| Ancla | Cuándo | Qué comprueba el servidor |
+|-------|--------|---------------------------|
+| `commit` | El lote tiene git y la política no es `ninguno` | Que el hash (de 7 a 40 caracteres hexadecimales, validado antes de llamar a git) es un commit de la rama actual, y qué archivos toca |
+| sha256 (`artifact_path`) | Sin git, o con la política `ninguno`: el archivo que cambió | Su sha256, dentro del repo o de la carpeta del proyecto, nunca en `.git`, hasta 256 MB |
+| nota (`verification_note`) | Sin nada que sellar, o en un lote fallido o descartado | Nada: queda escrita |
+
+**Recibos sellados y `reanclar`.** Un recibo con ancla `commit` o sha256 queda **sellado**: `record_batch` no lo reescribe. Si un rebase o un squash cambió los SHA, `get_batch_status` con `reverificar: true` (o `doctor --reverificar`) marca el ancla como no vigente, y la IA la cambia con `record_batch` (`lote`, `reanclar: true` y el `commit` nuevo). El servidor **te pregunta** "El recibo L02 está sellado con el commit `a1b2c3d`. ¿Reemplazar su ancla por `e4f5a6b`?" (sin confirmaciones directas, la IA necesita tu OK en el chat y `force`). Solo cambia el ancla: el contenido del lote no se toca, y "Verificación del commit" guarda el historial. Con la fase ya cerrada también se puede, y el índice se rehace.
+
+**Con un solo lote**, su recibo vive en `04 - Ejecución/` mientras está abierto, así que la fase no aparece cerrada con el commit pendiente; al anclarlo, el servidor lo mueve a `04 - Ejecución.md` y queda un solo archivo. **Para cerrar sin hacer todos los lotes**, si tú lo decides: `record_batch` con `cerrar_fase: true` y `motivo_descarte`. Los lotes sin recibo quedan descartados, los fallidos se quedan como están, y el servidor te pide confirmación antes de escribir nada.
+
+**La Fase 5 recibe los commits ya verificados.** Al pedir la Fase 5, el prompt termina con "COMMITS DE LA FASE 4": por cada repo, sus commits con su asunto, si siguen en la rama, y el rango exacto para auditarlos si son consecutivos. Si un ancla ya no corresponde a la rama, lo dice, para que la IA te avise antes de auditar.
+
+**Tareas de la 2.x a medio camino.** Siguen funcionando: `record_batch` lee los recibos que la IA escribió a mano (los marca como `manual`) y continúa desde el siguiente lote, y un recibo manual con un hash cuenta como sellado. Si el plan no declara `lotes: N` en su frontmatter, `record_batch` te lo pide antes del primer recibo (si ya hay recibos, el plan está congelado y añadirlo pide tu confirmación). Lo que ya no se puede es escribir recibos ni `04 - Ejecución.md` con `write_central_doc` ([ver abajo](#-documentos-protegidos)).
+
+---
+
 ## 🔒 Documentos protegidos
 
 Cada fase trabaja sobre los documentos de las anteriores, así que reescribir uno ya superado cambia en silencio la base de lo que vino después. Por eso `write_central_doc` se niega, **sin `force: true`**, a escribir:
 
 - **El contexto inicial** (`00 - Contexto Inicial.md`), siempre, incluso para crearlo. Solo `start_task` lo escribe sin `force`.
-- **El documento de una fase congelada.** Una fase se congela en cuanto existe el documento de una fase posterior, o en cuanto la Fase 4 tiene algún recibo en `04 - Ejecución/`. Los recibos cuentan como de la Fase 4: a ellos y a `04 - Ejecución.md` solo los congela la Fase 5.
+- **Los recibos y el documento de la Fase 4**, siempre, incluso para crearlos: los escribe `record_batch`. La confirmación queda para reparar a mano un archivo dañado, y `get_batch_status` lo marcará como manual.
+- **El documento de una fase congelada.** Una fase se congela en cuanto existe el documento de una fase posterior, o en cuanto la Fase 4 tiene algún recibo en `04 - Ejecución/`.
 
-Crear un documento de fase que todavía no existe nunca se rechaza; un recibo nuevo sí, cuando la Fase 5 ya está presente. Los nombres se comparan sin distinguir mayúsculas y en la misma forma Unicode, así que escribirlos de otra manera no esquiva la protección.
+Crear un documento de fase que todavía no existe nunca se rechaza, salvo los de la Fase 4. Los nombres se comparan sin distinguir mayúsculas y en la misma forma Unicode, así que escribirlos de otra manera no esquiva la protección.
 
 **Si hace falta una corrección legítima** —una errata en el análisis con las decisiones ya escritas—, depende de tu cliente:
 
@@ -427,9 +461,11 @@ Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea qu
 | `read_repo_file` | Lee un archivo de un repo del proyecto **por su id** (`api`, `web`…), esté donde esté en este equipo. Nunca lee nada de `.git` ([ver abajo](#varios-repositorios-read_repo_file-y-repo_status)). |
 | `repo_status` | Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo o de todos los de la tarea. Solo lee: no toma locks ni ejecuta comandos que traiga el repo (`core.fsmonitor`, filtros de `.gitattributes`). |
 | `read_cross_repo` | Lee un archivo de cualquier carpeta de tu carpeta de repositorios, por nombre (ej. desde `repo-a` consultar cómo `repo-b` maneja un endpoint) sin cambiar de ventana. Tampoco lee nada de `.git`. Si el proyecto declara sus repos, usa `read_repo_file`. |
+| `record_batch` | Registra un lote de la Fase 4 en su recibo, que escribe el servidor: antes del commit, con el contenido (queda con el commit pendiente), y después, con el `commit`, que comprueba contra git. Sin git, con `artifact_path` (sha256) o `verification_note`. Con `reanclar` cambia el ancla de un recibo sellado y con `cerrar_fase` cierra la fase sin los lotes que faltan, las dos con tu confirmación. Al anclar el último lote genera `04 - Ejecución.md` ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)). |
+| `get_batch_status` | Cruza el plan con los recibos: qué lote toca, cuál espera su commit, el ancla y el origen de cada recibo (servidor o a mano). Con `reverificar`, comprueba que cada commit siga en la rama y que cada artefacto sellado no haya cambiado. Solo lee. |
 | `get_orchestrator_status` | La radiografía de la instalación, igual que [`doctor`](#-revisar-la-instalación-doctor): versión y ruta del paquete, variables y de dónde salió cada una, configuración, qué prompt gana en cada fase, proyectos con su tarea activa, preset, reglas y repos, y avisos. Además, el cliente conectado, sus capacidades y con qué proyecto coincide la carpeta abierta. Úsala cuando algo no se comporte como esperas. |
 
-En `start_task`, `switch_task`, `read_central_doc`, `write_central_doc`, `read_repo_file` y `repo_status`, **`project` es opcional** si tu cliente anuncia la carpeta abierta.
+En `start_task`, `switch_task`, `read_central_doc`, `write_central_doc`, `read_repo_file`, `repo_status`, `record_batch` y `get_batch_status`, **`project` es opcional** si tu cliente anuncia la carpeta abierta.
 
 Todas declaran sus anotaciones MCP (solo lectura, destructiva, idempotente), así que un cliente cauto puede dejar pasar sin preguntar las de lectura. Solo `write_central_doc` es destructiva.
 
@@ -489,7 +525,7 @@ Vive en la carpeta del proyecto, `<DOCS>/<PROYECTO>/phase-gate.json`, así que v
 | `preset` | El preset del proyecto ([ver la tabla](#presets)). Por defecto, `software`. |
 | `idioma` | `es` (el inglés llega en una versión posterior). |
 | `repos` | Los repositorios del proyecto: un `id` corto, su `dir` **relativo a `PHASE_GATE_REPOS_PATH`** (nunca absoluto ni con `..`: el manifiesto viaja entre equipos) y un `rol` opcional. |
-| `reglas.lotes` | `false` si el proyecto no trabaja por lotes: un solo lote, cuyo recibo es el documento de la Fase 4. Si falta, decide el preset. |
+| `reglas.lotes` | `false` si el proyecto no trabaja por lotes: un solo lote, cuyo recibo pasa a ser el documento de la Fase 4 al anclarlo. Si falta, decide el preset. |
 | `reglas.commits` | La política de commits de la Fase 4 ([ver abajo](#la-política-de-commits)). Si falta, decide el preset. |
 | `reglas.verificacion` | Los comandos con los que se verifica el proyecto; llegan a cada prompt. |
 | `fase5.prPorRepo` | Una descripción de PR por repositorio. |
@@ -550,11 +586,11 @@ Cambiarlos después exige reescribir el contexto inicial, que está protegido: e
 | Política | Qué hace la IA |
 |----------|----------------|
 | `agente-commitea-con-OK` | **Por defecto.** Te enseña los archivos y el mensaje, y hace el commit solo con tu OK. |
-| `agente-propone` | Te deja los `git add` y el `git commit` listos para copiar; el commit lo haces tú y le das el hash. |
-| `auto` | Hace el commit en cuanto el lote pasa su verificación, sin esperar. |
-| `ninguno` | Sin commits por lote; se detiene al cerrar cada uno para que revises. |
+| `agente-propone` | Te deja los `git add` y el `git commit` listos para copiar; el commit lo haces tú, le das el hash y lo ancla. |
+| `auto` | Hace el commit en cuanto el lote pasa su verificación, sin esperar, y lo ancla. |
+| `ninguno` | Sin commits por lote: cada lote se ancla a un archivo (sha256) o a una nota, y se detiene al cerrar cada uno para que revises. |
 
-En todas: `git add` archivo por archivo (nunca `-A`, `.` ni una carpeta), nunca `--no-verify` ni `--amend`, y comprueba la rama antes del primer commit. **Y nunca hace `push` ni abre el PR, en ninguna política: eso no es configurable.**
+En todas: `git add` archivo por archivo (nunca `-A`, `.` ni una carpeta), nunca `--no-verify` ni `--amend`, y comprueba la rama antes del primer commit. Con git, cada commit queda anclado a su lote y comprobado por el servidor ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)). **Y nunca hace `push` ni abre el PR, en ninguna política: eso no es configurable.**
 
 ### El bloque CONFIGURACIÓN DEL PROYECTO
 
@@ -731,7 +767,7 @@ descripciones de PR tuyas: el modelo imita esa voz más que cualquier instrucci�
 
 La 3.0 es la primera versión mayor: **el preset por defecto deja de ser el flujo de la réplica** (`software-replica`) y pasa a ser `software`, genérico. Si tus proyectos trabajaban con la réplica, en tres pasos conservas exactamente lo de antes:
 
-1. **Actualiza.** Por `npx` llega solo (mientras sea beta, `npx -y mcp-phase-gate@beta`). Desde el código: `git pull`, `npm install` y `npm run build`.
+1. **Actualiza.** Por `npx` llega solo. Desde el código: `git pull`, `npm install` y `npm run build`.
 2. **Elige tu preset.** Para seguir como antes en todos tus proyectos sin manifiesto, una de dos:
    - `npx mcp-phase-gate init --migrate` escribe `phase-gate.json` con `"preset": "software-replica"` en cada proyecto que no lo tenga (solo crea, nunca sobrescribe). Viaja con la Documentación.
    - `npx mcp-phase-gate init --migrate --solo-este-equipo` escribe `"presetPorDefecto": "software-replica"` en el `machine.json` de este equipo, sin tocar la Documentación. Repítelo en cada equipo.
@@ -744,7 +780,8 @@ Qué más cambia, por si te afecta:
 - **Los prompts de fábrica se mudaron a `prompts/es/`.** Tu `PHASE_GATE_PROMPTS_PATH` sigue igual: las capas propias tienen sus archivos en la raíz.
 - **Un `global-rules.md` propio** recibe ahora las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS` de fábrica si no las trae. Mejor aún: cámbialo por un `bloques.md` ([ver arriba](#bloques-cambiar-una-sección-sin-copiar-el-prompt)).
 - **`project` es opcional** en las tools que lo pedían, si tu cliente anuncia la carpeta abierta. Si ya lo pasas, nada cambia.
-- **Dos tools nuevas**, `read_repo_file` y `repo_status`, para los repos que declara un manifiesto. `read_cross_repo` sigue igual.
+- **Cuatro tools nuevas**: `read_repo_file` y `repo_status`, para los repos que declara un manifiesto, y `record_batch` y `get_batch_status`, con las que el servidor escribe y verifica la Fase 4. `read_cross_repo` sigue igual.
+- **La Fase 4 la escribe el servidor.** La IA ya no escribe recibos ni `04 - Ejecución.md` con `write_central_doc` (se rechazan): registra cada lote con `record_batch`. Una tarea a medio camino sigue desde el siguiente lote ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)).
 
 ---
 
@@ -787,6 +824,9 @@ El código fuente está en `src/`, repartido por responsabilidad:
 | `roots.ts` | El proyecto deducido de las carpetas abiertas en el cliente |
 | `git.ts` | La única puerta a git, de solo lectura |
 | `repos.ts` | Leer archivos y estado de git de los repos de un proyecto |
+| `recibos.ts` | Los recibos de lote como datos: leerlos, escribirlos y su nombre de archivo |
+| `anclas.ts` | Las anclas de los lotes: el commit en la rama, el sha256 de un artefacto, y reverificarlas |
+| `lotes.ts` | `record_batch` y `get_batch_status`: registrar cada lote, el documento de la Fase 4 y los commits para la Fase 5 |
 | `tasks.ts` | Qué tareas existen, en qué fase va cada una, cuál está activa, la compuerta y los pendientes heredados |
 | `schemas.ts` | Los argumentos de cada tool, con su descripción y su mensaje de error |
 | `servidor.ts` | Las tools del servidor. No calcula nada: traduce entre el protocolo y lo anterior |
