@@ -279,7 +279,9 @@ orden, las secciones condicionales que traigan texto (en el orden de la plantill
 
 - **Determinista:** el mismo recibo da los mismos bytes, en LF y con un salto final, y escribir lo que
   se leyó de un recibo escrito aquí vuelve a dar los mismos bytes (lo fija una prueba de ida y vuelta
-  con las cuatro anclas).
+  con las cuatro anclas). Son los mismos **bytes**, no siempre el mismo dato: una línea del texto que
+  empieza por `## ` vuelve sangrada un espacio, un `<br>` escrito tal cual en una celda vuelve como salto
+  de línea, y una sección que solo decía "Nada." vuelve vacía (lo señaló la auditoría de la Etapa 4).
 - **Sin encabezados vacíos:** una sección sin texto dice "Nada.", "Ninguno." o "Ninguna."; al leer,
   esas formas cuentan como vacías.
 - **Tablas:** `|` va como `\|` y un salto de línea dentro de una celda, como `<br>`.
@@ -1086,6 +1088,10 @@ variable, y quitarlo rompería configuraciones que nadie tiene por qué tocar.
 
 ## 2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes
 
+> **Matizada** el 2026-10-16 por "El auditor recibe los commits ya verificados": la entrada de la
+> auditoría ya no son los commits que el modelo lea en los recibos, sino los que lista el servidor al final
+> del prompt (COMMITS DE LA FASE 4), ya verificados. Lo de los pendientes sin comprobar sigue.
+
 **Decisión.** La entrada de la Fase 5 son los commits que registran los recibos de la Fase 4
 (el campo `commit` de cada recibo, o la tabla del índice). Si el usuario indica otro rango,
 manda el suyo, y la auditoría dice si no coincide con los recibos; si no hay ni recibos ni
@@ -1259,6 +1265,11 @@ que los overrides operen por ranuras para que nadie las pierda por accidente.
 
 ## 2026-10-14 — Un documento de fase se congela cuando existe el de una fase posterior
 
+> **Matizada** el 2026-10-16 por "Los recibos con ancla quedan sellados y la Fase 4 solo la escribe el
+> servidor": los recibos y `04 - Ejecución.md` ya no se escriben con `write_central_doc` aunque no haya Fase
+> 5 (se rechazan siempre, con la escotilla de confirmación); lo de "solo los congela una Fase 5 presente" y
+> que crear un recibo nuevo se permita ya no vale. El congelamiento de los demás documentos sigue igual.
+
 **Decisión.** Sin `force: true`, `write_central_doc` rechaza escribir:
 
 - **El contexto inicial**, siempre: también para crearlo. Solo `start_task` lo escribe sin
@@ -1345,6 +1356,11 @@ solo en Windows.
 ---
 
 ## 2026-10-14 — Los recibos de lote viven en una subcarpeta que declara el prompt
+
+> **Matizada** el 2026-10-16 por "Los recibos son datos con un formato determinista que escribe el
+> servidor" y por "`04 - Ejecución.md` lo genera el servidor; con un solo lote, el recibo se mueve" (H2):
+> con un solo lote, el recibo también vive en la subcarpeta mientras está abierto, y los recibos los
+> escribe el servidor. La subcarpeta y el nombre siguen.
 
 **Decisión.** La fase que ejecuta por lotes declara en su frontmatter la subcarpeta de sus
 recibos (`recibos: 04 - Ejecución`), igual que declara su documento. El servidor la lee y la

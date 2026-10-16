@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Iteración | **20** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13), puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7), con la ejecución de la Etapa 2 y su auditoría externa (iteraciones 16 y 17, §9.8), con la ejecución de la Etapa 3 y su auditoría externa (iteraciones 18 y 19, §9.9), y con la ejecución de la Etapa 4 (iteración 20, §9.10) |
+| Iteración | **21** — **Plan completado al 100 %** (iteración 7), **validado en Windows** (iteración 9, §9.4.1), ajustado con los desvíos de la ejecución de la Etapa 0 (iteraciones 10 a 12, §9.6), versionado en el repo con revisión de privacidad (iteración 13), puesto al día con la ejecución de la Etapa 1 (iteración 14, §9.7) y con su auditoría externa (iteración 15, §9.7), con la ejecución de la Etapa 2 y su auditoría externa (iteraciones 16 y 17, §9.8), con la ejecución de la Etapa 3 y su auditoría externa (iteraciones 18 y 19, §9.9), y con la ejecución de la Etapa 4 y su auditoría externa (iteraciones 20 y 21, §9.10) |
 | Base del análisis | commit `d7594ea`, árbol limpio |
 | Versión publicada | `2.2.0` (comprobado con `npm view` el 2026-10-15: `latest` = `2.2.0`) |
-| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapas 0, 1 y 2 ejecutadas** (§9.6 a §9.8), en `master` y publicadas (`2.0.1`, `2.1.0` y `2.2.0`); de la Etapa 2 queda la matriz de clientes de L10. **Etapa 3 ejecutada** (L01 a L13, §9.9) en la rama `etapa-3/configuracion`; auditada y con sus ajustes (A1 a A8); faltan el PR, el tag `v3.0.0-beta.0` y la publicación, que hace la autora. **Etapa 4 ejecutada** (L01 a L11, §9.10) en la rama `etapa-4/motor-de-lotes`, creada desde la punta local de `etapa-3/configuracion` (`16d25fc`) y sin subir; faltan su auditoría externa, su PR (después del de la Etapa 3), el tag `v3.0.0` y la publicación, que hace la autora |
+| Modo | Planificación (nivel Fase 3) **terminada** y validada. **Etapas 0, 1 y 2 ejecutadas** (§9.6 a §9.8), en `master` y publicadas (`2.0.1`, `2.1.0` y `2.2.0`); de la Etapa 2 queda la matriz de clientes de L10. **Etapa 3 ejecutada** (L01 a L13, §9.9) en la rama `etapa-3/configuracion`; auditada y con sus ajustes (A1 a A8); faltan el PR, el tag `v3.0.0-beta.0` y la publicación, que hace la autora. **Etapa 4 ejecutada** (L01 a L11, §9.10) en la rama `etapa-4/motor-de-lotes`, creada desde la punta local de `etapa-3/configuracion` (`16d25fc`) y sin subir; auditada y con sus ajustes (A1 a A8); faltan su PR (después del de la Etapa 3), el tag `v3.0.0` y la publicación, que hace la autora |
 | Ejecución | La hace el agente local de la autora, lote por lote, con la política `agente-commitea-con-OK` |
 | Fuente | Desde E0 L09, esta copia en `docs/plan-maestro-v3.md` es la fuente del plan (§9.2) |
 
@@ -3144,7 +3144,7 @@ pasa `artifact_path` (el archivo que cambió, para que el servidor lo selle con 
 | **L10** | README y migración desde la 2.x | `README.md`, `README.es.md` | Ambos explican el ciclo con `record_batch`, las anclas, el sellado, `reanclar` tras un rebase y qué pasa con las tareas a medio camino | `docs(readme): ejecutar por lotes con el servidor` |
 | **L11** | Versión estable `3.0.0` | `package.json`, `package-lock.json` | Base verde; la versión no lleva `-`, así que el workflow publica con la etiqueta `latest`. El tag `v3.0.0` lo pone la autora | `chore(release): 3.0.0` |
 
-> **Estado de ejecución:** de L01 a L11 hechos, en la rama `etapa-4/motor-de-lotes` (creada desde la punta local de `etapa-3/configuracion`, `16d25fc`, sin subir). Commits, desvíos (E4-D1 a E4-D10) y lo que queda por comprobar fuera de este equipo en §9.10. Falta la auditoría externa.
+> **Estado de ejecución:** de L01 a L11 hechos, en la rama `etapa-4/motor-de-lotes` (creada desde la punta local de `etapa-3/configuracion`, `16d25fc`, sin subir). Auditados (ajustes A1 a A8). Commits, desvíos (E4-D1 a E4-D10), la auditoría y lo que queda por comprobar fuera de este equipo en §9.10.
 
 **Por qué este orden.**
 - Primero los datos (L01) y la verificación (L02), que no dependen de nada y se prueban aislados.
@@ -4517,11 +4517,52 @@ En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_
 
 **Pendiente de comprobar fuera de este equipo:**
 
-1. **La auditoría externa** de la etapa, a ciegas, antes del PR.
+1. **La auditoría externa** de la etapa, a ciegas, antes del PR. *Hecha: ver abajo.*
 2. **La CI** (Linux y Node 22): todos los tests corrieron solo en Windows, con Node 24.11. Los que más dependen del sistema: la trampa de `gpg.program` (en Linux, con un script `.sh`), la de `core.fsmonitor`, el sha256 frente a `sha256sum`, el archivo de 256 MB + 1, el test de `GIT~1` (que en Linux se omite) y la ruta larga de `RUTA-LARGA`.
 3. **El orden de subida:** primero el PR de la Etapa 3 (`etapa-3/configuracion`), su merge y la publicación de `3.0.0-beta.0`; después esta rama, que sale de su punta.
 4. **El tag `v3.0.0` y la publicación**, que hace la autora después de lo anterior. Después, `npm view mcp-phase-gate dist-tags` debe dar `latest: 3.0.0`.
 5. **Clientes reales:** el ciclo de `record_batch` con un modelo de verdad, y las confirmaciones de `reanclar` y `cerrar_fase` en Claude Code, Cursor y VS Code (cabe en la matriz de clientes pendiente de la Etapa 2).
+
+**Auditoría externa (antes del PR).** Un segundo agente auditó la etapa a ciegas, con permiso para cuestionar las ADRs; declaró que un `grep` de encabezados le enseñó sin querer, antes de medir, la nota de estado de §6.10, el texto de E4-D8 y la fila 20 del Anexo A (sin cifras de tests). Veredicto: **apto con observaciones**. Los 12 commits compilan y pasan cada uno por su cuenta, con los totales de la tabla de arriba; el último da lo mismo en tres corridas. Midió además lo que la suite no cubre: las 11 tools anteriores no cambian ni un byte en `tools/list`; las Fases 1 a 3 siguen byte a byte las de la `2.2.0` (regeneradas por él desde el build de `v2.2.0`); ninguna de las formas hostiles de SHA que probó llega a git (con `GIT_TRACE`); 31 rutas hostiles de `artifact_path` no salen del repo; 5 trampas de configuración de git con control positivo (`core.fsmonitor`, un filtro `process`, `gpg.program` con `log.showSignature`, `textconv` y hooks) no se disparan desde el servidor; un asunto de commit hostil no rompe la estructura del bloque de la Fase 5; 270 ensamblados de la Fase 4 no piden `write_central_doc`. **0 escapes.** Encontró 3 hallazgos medios y 11 bajos, y 4 cuestionamientos de ADR. Se resolvieron con commits nuevos encima de `2dee107`, sin reescribir la historia:
+
+| Ajuste | Commit | Resuelve | Tests al cerrar |
+|---|---|---|---|
+| A1 | `6d53e1b` | 1 | 759 |
+| A2 | `a5794d8` | 2 (y el `EPERM` del candado de A1, que salió al repetir su test) | 762 |
+| A3 | `b52a8e7` | 3 | 764 |
+| A4 | `23a09e4` | 4, 5, 9, 11 y los cuestionamientos de H1 y H3 | 771 |
+| A5 | `419cbc9` | 7, 8 | 774 |
+| A6 | `356c181` | 10 | 774 |
+| A7 | `499cc38` | 12, 13 | 775 |
+| A8 | El commit de documentación de la auditoría | 6, 14 y esta sección | 775 |
+
+En todas las filas, 2 tests omitidos, como arriba.
+
+| # | Sev. | Lote | Hallazgo | Resolución |
+|---|---|---|---|---|
+| 1 | Media | L03 | Dos procesos que registraban el mismo lote a la vez dejaban dos recibos (11 de 12 rondas): la comprobación de `mtimeMs` solo cubría la carrera dentro de un proceso, y la ADR de L03 decía lo contrario | La comprobación y la escritura van bajo un candado de la tarea (`.record_batch.lock`, creado en exclusiva con `wx`; 3 s de espera; uno de más de 30 s se da por abandonado). Test con dos `node` de verdad en 8 rondas. En Windows, abrir un candado que otro proceso está borrando da `EPERM` (medido): cuenta como ocupado. ADR de L03 corregida |
+| 2 | Media | L05 | Sin elicitation, el modelo podía forjar con `force` un recibo con `origen: servidor` y ancla `commit` que `get_batch_status` presentaba como sellado y del servidor; el resumen decía "en `` `null` ``" | Lo que entra por la escotilla queda con `origen: manual` y sin `generado_por` (`comoManual`); el resumen sin repo no nombra ninguno. ADR de L05 ampliada |
+| 3 | Media | L02 | Con `--quiet`, git calla el aviso de un prefijo ambiguo y la persona recibía "el commit no existe"; E4-D2 decía que se detectaba | Sin `--quiet` (§6.3 lo pedía): medido en git 2.51, ambiguo da 128 con "is ambiguous", inexistente 128 con "Needed a single revision" (`clasificarRevParse`). Test con una colisión real de 7 caracteres (30 000 commits con `fast-import`, 1,3 s). ADR de L02 corregida |
+| 4 | Baja | L05 | Un recibo fuera de plan con el commit pendiente hacía decir "lote 5 de 2" | `pendienteDeCommit` solo mira los lotes del plan |
+| 5 | Baja | L03 | Al anclar un recibo de la 2.x sin repo no se usaba el único repo de la tarea | Se usa la regla de siempre (el indicado o el único) |
+| 6 | Baja | docs | Tres ADR antiguas que la etapa contradice no llevaban la nota al principio | Notas "Matizada" en las tres |
+| 7 | Baja | L07 | El bloque de la Fase 5 tardaba 9,5 s con 40 lotes (medido aquí; `get_batch_status` con `reverificar`, 6,9 s) y el respaldo por plazo tenía otro encabezado | Anclas verificadas de seis en seis y cada commit resuelto una sola vez: 2,1 s y 1,8 s (medido). El respaldo usa el mismo encabezado |
+| 8 | Baja | L02 | "Idéntico salvo finales de línea" valía también para binarios, y la conversión byte a byte costaba más de 2 s por cada 128 MB | Solo en texto (byte NUL en los primeros 8000, como git); conversión sobre `Buffer`: 128 MB en 482 y 288 ms (medido) |
+| 9 | Baja | L03/L02 | Errores de escritura crudos, con el nombre del temporal y rutas absolutas | `traducirEscritura`; el artefacto se nombra por su ruta relativa (`repo:api/…`) |
+| 10 | Baja | L08 | Frases del flujo viejo en la Fase 4 y en la última línea de `/f4` | Reescritas para `record_batch`; el oro de la Fase 4 cambia solo en esas dos líneas (revisado con `diff`) |
+| 11 | Baja | L07 | Si no se podían leer los recibos, el bloque de la Fase 5 desaparecía sin decirlo | Lo dice, con el error |
+| 12 | Baja | L09 | `RECIBO-ILEGIBLE` sin test; el texto de `INDICE-DESINCRONIZADO` sugería que vigila todo el recibo | Test, y el texto dice qué campos compara |
+| 13 | Baja | L08 | El test de las variantes de commits descartaba toda línea con `commit`, `git` o `rama` | Compara el texto exacto con las dos ranuras sustituidas por los bloques de la variante; y toda Fase 4 ensamblada (48 combinaciones) conserva la prohibición del push (P1), comprobado con una mutación |
+| 14 | Baja | L01 | La ida y vuelta da los mismos bytes, pero no siempre el mismo dato | Documentado en la ADR de L01 |
+
+| ADR cuestionada | Resolución |
+|---|---|
+| H1: un lote pendiente cuyo commit no llega bloqueaba los siguientes; dos lotes en un commit no tenían salida | Aceptado: un pendiente se cierra con solo `estado: descartado` (o `fallido`) y una nota; la salida de "dos lotes, un commit" queda en la ADR de L03 y en los README |
+| H3: un plan sin `lotes` obliga a editar un plan congelado | Se mantiene (el número sale solo del frontmatter), pero el error propone el número de filas de la tabla |
+| H5: un commit que no toca ninguno de los archivos declarados se ancla con un aviso | **Se mantiene, a decidir por la autora**: H5 es una decisión de cierre de la etapa. La propuesta del auditor (bloquear cuando no hay ningún archivo en común, salvo con confirmación) queda anotada |
+| Faltaban dos ADR: la tarea deducida que vale para leer y no para escribir, y el coste de `RUTA-LARGA` | La primera, añadida a la ADR de L03. La segunda, medida: recorrer 50 000 entradas cuesta 76 ms en este equipo, así que no cambia |
+
+**Pendiente antes del merge y del tag `v3.0.0`:** la CI del PR (nunca ha corrido en Linux ni en Node 22), después del merge y la publicación de la Etapa 3, y la decisión de la autora sobre H5.
 
 ---
 
@@ -4572,3 +4613,4 @@ En todas las filas, 2 de los tests se omiten fuera de Linux o macOS (`XDG_STATE_
 | 18 | 2026-10-15 | Etapa 3 ejecutada (L01 a L13) en la rama `etapa-3/configuracion`, con un OK general de la autora para los commits. Nueva §9.9 con los commits, lo comprobado fuera de la suite y los desvíos E3-D1 a E3-D14. Los de más peso: sin bloques, el prompt es byte a byte el de la `2.2.0` (comprobado contra su build); las variantes de regla conservan las salvaguardas que añadió la auditoría de la Etapa 1 y dicen qué partes fijas no aplican (deuda para la Etapa 4); `read_repo_file` deja leer `.github`; en Claude Code, `init` no modifica un registro existente |
 | 19 | 2026-10-16 | Auditoría externa de la Etapa 3, a ciegas y con permiso para cuestionar las ADRs: apto con observaciones (1 hallazgo alto, 8 medios y 20 bajos). Se resolvieron con los ajustes A1 a A8 en commits nuevos (§9.9) el alto, los medios y algunos bajos; el resto queda como pendiente de pulido. Los de más peso: la puerta de git anula también los filtros de `.gitattributes`; el servidor pide el estado de git sin bloquearse; una coincidencia débil de Roots ya no basta para escribir; `init` solo reconoce el paquete exacto y no toca las cadenas de otros servidores; un `machine.json` roto solo afecta a quien lo usa; `read_cross_repo` tampoco lee `.git` |
 | 20 | 2026-10-16 | Etapa 4 ejecutada (L01 a L11) en la rama `etapa-4/motor-de-lotes`, creada desde la punta local de `etapa-3/configuracion` (`16d25fc`) y sin subir, con un OK general de la autora para los commits. Nueva §9.10 con los commits, lo comprobado fuera de la suite y los desvíos E4-D1 a E4-D10. Los de más peso: `git show` ejecuta el `gpg.program` de `.git/config` con `log.showSignature`, así que la puerta lo llama con `--no-show-signature`; en Node 24.11 para Windows, `rmSync` no borra un nombre con acentos ni lanza; la deuda E3-D5 se cierra con cuatro ranuras nuevas (27 en el catálogo); el bloque de commits de la Fase 5 se arma en el servidor y no en `phases.ts`; `doctor --reverificar` va por un camino asíncrono aparte. Las Fases 1 a 3 siguen byte a byte las de la `2.2.0`; las 4 y 5 tienen oro nuevo en `test/oro/3.0.0/` |
+| 21 | 2026-10-16 | Auditoría externa de la Etapa 4, a ciegas y con permiso para cuestionar las ADRs: apto con observaciones (0 altos, 3 medios y 11 bajos, y 4 cuestionamientos de ADR). Se resolvieron todos con los ajustes A1 a A8 en commits nuevos (§9.10). Los de más peso: un candado por tarea para que dos procesos no dejen dos recibos del mismo lote (en Windows, abrir con `wx` un candado que otro proceso borra da `EPERM`); lo que entra por la escotilla de `write_central_doc` queda con `origen: manual`; sin `--quiet`, `rev-parse` distingue el hash ambiguo del inexistente; un lote pendiente se puede descartar con solo su estado. H5 (un commit que no toca ningún archivo declarado) se mantiene a la espera de la decisión de la autora. 775 tests (773 pasan, 2 omitidos) |
