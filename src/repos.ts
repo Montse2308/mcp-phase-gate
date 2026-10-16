@@ -9,7 +9,7 @@ import * as path from "path";
 import { git, gitSincrono } from "./git.js";
 import { manifiestoDe, resolverRepos } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
-import { estaDentroReal, leerTextoAcotado, rutaReal, validarSegmento } from "./paths.js";
+import { esSegmentoDeGit, estaDentroReal, leerTextoAcotado, rutaReal, validarSegmento } from "./paths.js";
 
 export function resolverRepo(carpetaProyecto: string, id: string): RepoResuelto {
   const manifiesto = manifiestoDe(carpetaProyecto);
@@ -35,15 +35,8 @@ export function resolverRepo(carpetaProyecto: string, id: string): RepoResuelto 
 }
 
 // ─── Leer un archivo de un repo ─────────────────────────────────────────────
-// Nada de .git: ni la carpeta (config puede llevar credenciales en una URL, y hooks/ es código), ni
-// un archivo .git (el puntero de un worktree o un submódulo). Se rechaza todo segmento que sea
-// `.git` o empiece por `.git`, sin distinguir mayúsculas (en Windows y macOS `.GIT` abre lo mismo).
-// La excepción es `.github`, que no puede ser .git y guarda los workflows de CI. Consecuencia
-// aceptada: .gitignore, .gitattributes y .gitmodules tampoco se leen con esta tool.
-function esDeGit(segmento: string): boolean {
-  const nombre = segmento.toLowerCase();
-  return nombre.startsWith(".git") && nombre !== ".github";
-}
+// Nada de .git: la regla vive en paths.ts (esSegmentoDeGit), compartida con read_cross_repo.
+const esDeGit = esSegmentoDeGit;
 
 export function rutaDeArchivoDeRepo(rutaDelRepo: string, relativa: string): string {
   if (path.win32.isAbsolute(relativa) || path.posix.isAbsolute(relativa)) {

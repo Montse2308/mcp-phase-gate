@@ -352,6 +352,19 @@ describe("resolveRepoPath", () => {
     }
   });
 
+  // Hallazgo 9 de la auditoría de la Etapa 3: la misma regla de .git que read_repo_file.
+  it("no entra en .git, ni en otras mayúsculas, ni por un enlace interno; .github sí", () => {
+    const repos = reposTemporales();
+    fs.mkdirSync(path.join(repos, "repoA", ".git"), { recursive: true });
+    crearSymlink(path.join(repos, "repoA", ".git"), path.join(repos, "repoA", "atajo"));
+
+    for (const malo of [".git/config", ".GIT/config", "src/../.git/config", ".gitmodules"]) {
+      assert.throws(() => resolveRepoPath("repoA", malo), /no puede entrar en \.git/, malo);
+    }
+    assert.throws(() => resolveRepoPath("repoA", "atajo/config"), /lleva a \.git a través de un enlace/);
+    assert.equal(resolveRepoPath("repoA", ".github/workflows/ci.yml"), path.join(repos, "repoA", ".github", "workflows", "ci.yml"));
+  });
+
   // Antes la comprobación miraba solo la carpeta de repos: salir a un repo vecino pasaba.
   it("rechaza un file_path que sale a otro repo", () => {
     reposTemporales();
