@@ -21,7 +21,8 @@ import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntor
 
 afterEach(limpiarEntorno);
 
-// Las 8 de siempre, get_orchestrator_status (Etapa 2), y read_repo_file y repo_status (Etapa 3).
+// Las 8 de siempre, get_orchestrator_status (Etapa 2), read_repo_file y repo_status (Etapa 3), y
+// record_batch (Etapa 4).
 const TOOLS = [
   "get_active_task",
   "get_orchestrator_status",
@@ -30,6 +31,7 @@ const TOOLS = [
   "read_central_doc",
   "read_cross_repo",
   "read_repo_file",
+  "record_batch",
   "repo_status",
   "start_task",
   "switch_task",
@@ -37,7 +39,7 @@ const TOOLS = [
 ];
 
 describe("tools/list", () => {
-  it("devuelve las 8 tools de siempre, get_orchestrator_status, read_repo_file y repo_status, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
+  it("devuelve las 8 tools de siempre, get_orchestrator_status, read_repo_file, repo_status y record_batch, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
     const { cliente, cerrar } = await conectar();
     try {
       const { tools } = await cliente.listTools();
@@ -72,6 +74,10 @@ describe("tools/list", () => {
         assert.equal(porNombre.get(nombre)?.readOnlyHint, true, nombre);
       }
       assert.equal(porNombre.get("start_task")?.idempotentHint, false);
+      assert.deepEqual(
+        [porNombre.get("record_batch")?.readOnlyHint, porNombre.get("record_batch")?.destructiveHint, porNombre.get("record_batch")?.idempotentHint],
+        [false, false, false]
+      );
       assert.equal(porNombre.get("switch_task")?.idempotentHint, true);
       assert.equal(porNombre.get("switch_task")?.readOnlyHint, false);
     } finally {

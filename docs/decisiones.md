@@ -12,6 +12,49 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — `record_batch` registra cada lote en dos tiempos: antes y después del commit
+
+**Decisión.** Una tool nueva, `record_batch`, escribe el recibo de cada lote de la Fase 4 en
+`<tarea>/04 - Ejecución/L0x - <slug>.md`. El modelo le pasa campos (título, estado, qué se hizo,
+archivos, verificación, lo que espera al usuario, desvíos, decisiones y las secciones condicionales) y
+el ancla; el servidor arma el recibo (`escribirRecibo`) y verifica el ancla (`anclarCommit` o
+`anclarArtefacto`).
+
+- **Dos tiempos para toda política con git** (H1). Primero, ANTES del commit, el contenido: el recibo
+  queda con el commit pendiente, y si el chat se corta ahí ya dice qué se hizo y qué se comprobó.
+  Después del commit, una segunda llamada con `lote` y `commit` lo ancla sin tocar el contenido. Si el
+  commit ya existe al registrar, va todo en una llamada. Sin git, o con la política `ninguno`, una sola
+  llamada con `artifact_path` o `verification_note`.
+- **Número de lotes:** solo del frontmatter del plan (`lotes: N`, de 1 a 99). Sin él, es un error
+  (H3): la tabla del plan es para personas, y contar sus filas daría un número que nadie declaró.
+- **Orden:** un lote exige que los anteriores tengan recibo con ancla; un fallido o un descartado
+  cuenta como cerrado.
+- **Modos:** sin recibo, se crea (con título, estado, qué se hizo y verificación); con el commit
+  pendiente, se reemplaza el contenido (y se renombra si cambia el título) o se ancla; un recibo
+  fallido o anclado a una nota se reemplaza entero (es otro intento); uno **sellado** (ancla `commit` o
+  `sha256`) no se reescribe.
+- **Repo del lote:** el indicado, o el único de la tarea; con varios, hay que indicarlo; sin repos,
+  ninguno.
+- **Ancla según la política efectiva** (tarea, manifiesto, preset): con git y política distinta de
+  `ninguno`, el ancla es el commit (o pendiente); sin git, `artifact_path` o `verification_note`, y uno de
+  los dos es obligatorio; un lote fallido o descartado se ancla a una nota. Una sola ancla por llamada.
+- **Escritura:** solo dentro de la subcarpeta de recibos de la tarea (comprobado sobre la ruta real),
+  con un temporal y un renombrado, y comparando el `mtimeMs` del recibo leído justo antes de escribir:
+  si otra ventana lo cambió, o creó el de ese lote mientras tanto, la llamada falla sin escribir (E4-R6).
+- **Proyecto y tarea:** el proyecto como en las demás tools que escriben (una coincidencia débil de
+  Roots no basta); la tarea, la indicada o la activa **guardada**: una deducida por fecha no vale para
+  escribir.
+
+**Reemplaza en parte** "La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del
+usuario" (2026-10-14): el recibo ya no lo redacta el modelo con `write_central_doc`.
+
+**Qué se descartó.** Escribir el recibo solo después del commit: un chat cortado entre el commit y el
+recibo perdía lo que se comprobó, que es justo lo que el ciclo de la Etapa 1 quería guardar. Bloquear la
+tarea activa deducida con una confirmación: es más simple pedir `task_name`, que el modelo ya conoce por
+`get_active_task`.
+
+---
+
 ## 2026-10-16 — Un lote se ancla a un commit en la rama actual, a un sha256 o a una nota
 
 **Decisión.** Lo que demuestra que un lote se hizo es su **ancla** (`src/anclas.ts`), y el servidor la
@@ -895,6 +938,11 @@ del PR no cambia; solo queda envuelto para que un preset de la Etapa 3 pueda sus
 ---
 
 ## 2026-10-14 — La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario
+
+> **Reemplazada en parte** el 2026-10-16 por "`record_batch` registra cada lote en dos tiempos: antes
+> y después del commit": el recibo ya no lo escribe el modelo con `write_central_doc`, sino el servidor
+> a partir de campos, y el hash no se anota a mano: se ancla y se verifica. El ciclo, el OK del usuario,
+> la lista de archivos uno por uno y la frontera del push siguen.
 
 **Decisión.** La Fase 4 ejecuta el plan **un lote a la vez**, en el orden de la tabla de lotes
 de la Fase 3, con un ciclo fijo: implementar solo ese lote, verificarlo con su criterio de

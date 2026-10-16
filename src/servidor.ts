@@ -37,6 +37,7 @@ import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerf
 import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
+import { registrarLote } from "./lotes.js";
 import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
@@ -51,6 +52,8 @@ import {
   readCentralDocShape,
   readCrossRepoShape,
   readRepoFileShape,
+  recordBatchSalidaShape,
+  recordBatchShape,
   repoStatusSalidaShape,
   repoStatusShape,
   sinNulos,
@@ -647,6 +650,55 @@ function registrarTools(mcp: McpServer): void {
       if (!existia) mcp.sendResourceListChanged();
 
       return responder(`Archivo escrito exitosamente en ${fullPath}${sufijo}${deducido ? `\n${deducido}` : ""}`);
+    })
+  );
+
+  // Escribe recibos, así que no es de solo lectura; no es destructiva (nunca pisa un recibo sellado) ni
+  // idempotente (la segunda llamada con el mismo lote cambia de modo o falla).
+  mcp.registerTool(
+    "record_batch",
+    {
+      title: "Registrar lote",
+      description:
+        "Registra un lote de la Fase 4 en su recibo, que escribe el servidor. Se llama dos veces por lote cuando hay " +
+        "git: ANTES del commit, con el contenido (titulo, estado, que_se_hizo, archivos, verificacion…), y el lote " +
+        "queda con el commit pendiente; DESPUÉS del commit, con `lote` y `commit`, para anclarlo. El servidor comprueba " +
+        "que el commit exista, esté en la rama actual y qué archivos toca. Sin git, una sola llamada con " +
+        "`artifact_path` (se sella con su sha256) o `verification_note`. Nunca escribas recibos con write_central_doc.",
+      inputSchema: recordBatchShape,
+      outputSchema: recordBatchSalidaShape,
+      annotations: anotaciones("Registrar lote", false, false, false),
+    },
+    sincronizandoTras(async (entrada, extra) => {
+      const args = sinNulos(entrada);
+      const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe");
+      const carpetaProyecto = requireProjectFolder(nombre);
+
+      // La tarea activa solo si es la que el usuario eligió: escribir en una deducida por fecha sería
+      // escribir en la tarea equivocada sin que nadie lo diga.
+      let taskName = args.task_name;
+      if (!taskName) {
+        const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
+        if (!activa || activa.origen !== "puntero") {
+          throw new Error(`No hay tarea activa guardada en ${carpetaProyecto}: indica \`task_name\` (o actívala con switch_task).`);
+        }
+        taskName = activa.estado.taskName;
+      }
+
+      const { lote, titulo, repo, estado, que_se_hizo, archivos, verificacion, espera_al_usuario, desvios, decisiones, condicionales, commit, artifact_path, verification_note } = args;
+      const resultado = await registrarLote(
+        carpetaProyecto,
+        taskName,
+        { lote, titulo, repo, estado, que_se_hizo, archivos, verificacion, espera_al_usuario, desvios, decisiones, condicionales, commit, artifact_path, verification_note },
+        { antesDeEscribir: () => siCancelada(extra) }
+      );
+      // Un recibo nuevo (o renombrado) cambia la lista de recursos.
+      if (resultado.archivoNuevo) mcp.sendResourceListChanged();
+
+      return {
+        content: [{ type: "text", text: `${resultado.texto}${deducido ? `\n${deducido}` : ""}` }],
+        structuredContent: resultado.salida,
+      };
     })
   );
 

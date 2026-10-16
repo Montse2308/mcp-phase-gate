@@ -226,6 +226,93 @@ export const repoStatusSalidaShape = {
   ),
 };
 
+// ─── Lotes de la Fase 4 (Etapa 4) ───────────────────────────────────────────
+const ESTADOS_DE_LOTE = ["verificado", "con pendientes", "fallido", "descartado"] as const;
+const TITULOS_CONDICIONALES = ["Lo que sigue igual", "Reversión", "Aviso a alguien más", "Deuda anotada"] as const;
+
+const textoNoVacio = (campo: string) => texto(campo).trim().min(1, `\`${campo}\` no puede ir vacío.`);
+
+const FILA_ARCHIVO = z
+  .object({ archivo: textoNoVacio("archivo"), cambio: textoNoVacio("cambio") }, { error: mensaje("archivos") })
+  .strict();
+const FILA_ESPERA = z
+  .object({ prueba: textoNoVacio("prueba"), esperado: textoNoVacio("esperado") }, { error: mensaje("espera_al_usuario") })
+  .strict();
+const CONDICIONAL = z
+  .object(
+    {
+      titulo: z.enum(TITULOS_CONDICIONALES, { error: () => `\`titulo\` es uno de: ${TITULOS_CONDICIONALES.join(", ")}.` }),
+      texto: textoNoVacio("texto"),
+    },
+    { error: mensaje("condicionales") }
+  )
+  .strict();
+
+const PROYECTO_QUE_ESCRIBE = `${PROYECTO} Si lo omites, se deduce de la carpeta que tienes abierta, si tu cliente la anuncia y la coincidencia es firme; si no, la tool te lo pide.`;
+
+export const recordBatchShape = {
+  project: texto("project").nullish().describe(PROYECTO_QUE_ESCRIBE),
+  task_name: texto("task_name").nullish().describe("Nombre de la carpeta de la tarea. Si lo omites, la tarea activa del proyecto."),
+  lote: z
+    .number({ error: mensaje("lote") })
+    .int({ error: mensaje("lote") })
+    .min(1, "`lote` va de 1 a 99.")
+    .max(99, "`lote` va de 1 a 99.")
+    .describe("Número del lote, el de la tabla de lotes del plan (L02 es 2)."),
+  // El contenido: obligatorio al crear el recibo; se omite al solo anclar un recibo pendiente.
+  titulo: textoNoVacio("titulo").max(120, "`titulo` no puede pasar de 120 caracteres.").nullish().describe("El objetivo del lote, en una frase. Da el nombre del recibo."),
+  repo: texto("repo")
+    .regex(ID_REPO, "`repo` es el id de un repo: minúsculas, números y guiones (ej. 'api').")
+    .nullish()
+    .describe(`${REPO} Si la tarea tiene un solo repo, se omite.`),
+  estado: z
+    .enum(ESTADOS_DE_LOTE, { error: () => "`estado` es verificado, con pendientes, fallido o descartado." })
+    .nullish()
+    .describe("Cómo quedó el lote tras su verificación."),
+  que_se_hizo: textoNoVacio("que_se_hizo").nullish().describe("Una o dos frases, con el número que importe."),
+  archivos: z
+    .array(FILA_ARCHIVO, { error: mensaje("archivos") })
+    .max(200, "`archivos` no puede tener más de 200 filas.")
+    .nullish()
+    .describe("Los archivos del lote, relativos a la raíz del repo, y qué cambió en cada uno. El servidor los compara con los del commit."),
+  verificacion: textoNoVacio("verificacion").nullish().describe("Lo que ejecutaste para verificar el lote, con su resultado en números."),
+  espera_al_usuario: z
+    .array(FILA_ESPERA, { error: mensaje("espera_al_usuario") })
+    .max(50, "`espera_al_usuario` no puede tener más de 50 filas.")
+    .nullish()
+    .describe("Las pruebas que solo puede hacer el usuario, con su resultado esperado."),
+  desvios: texto("desvios").nullish().describe("Lo que no salió como decía el plan. Vacío si no hubo."),
+  decisiones: texto("decisiones").nullish().describe("Las decisiones D<n> nuevas de este lote, cada una con su Base. Vacío si no hubo."),
+  condicionales: z
+    .array(CONDICIONAL, { error: mensaje("condicionales") })
+    .max(4, "`condicionales` no puede tener más de 4 secciones.")
+    .nullish()
+    .describe("Las secciones condicionales del recibo que apliquen (Lo que sigue igual, Reversión, Aviso a alguien más, Deuda anotada)."),
+  // El ancla: como mucho una de las tres.
+  commit: texto("commit")
+    .nullish()
+    .describe("El hash del commit del lote (de 7 a 40 caracteres hexadecimales), cuando exista. Sin él, el lote queda con el commit pendiente."),
+  artifact_path: texto("artifact_path")
+    .nullish()
+    .describe("Sin git: el archivo que cambió, relativo a la raíz del repo del lote o, sin repo, a la carpeta del proyecto. El servidor lo sella con su sha256."),
+  verification_note: textoNoVacio("verification_note")
+    .max(2000, "`verification_note` no puede pasar de 2000 caracteres.")
+    .nullish()
+    .describe("Sin git y sin archivo que sellar, o en un lote fallido o descartado: qué se comprobó o qué pasó."),
+};
+
+export const recordBatchSalidaShape = {
+  recibo: z.string(),
+  lote: z.string(),
+  de: z.number().int(),
+  estado: z.string(),
+  ancla: z.object({ tipo: z.string(), resumen: z.string() }),
+  avisos: z.array(z.string()),
+  siguiente: z.string().nullable(),
+  faseCerrada: z.boolean(),
+  documentoDeFase: z.string().nullable(),
+};
+
 // ─── Salida de get_orchestrator_status ──────────────────────────────────────
 // El objeto Diagnostico de diagnostico.ts, campo por campo. Con un outputSchema el cliente recibe
 // además `structuredContent`, y el SDK comprueba antes de enviarlo que cuadra con este shape:
