@@ -386,6 +386,39 @@ export function borrarArchivo(ruta: string): void {
 
 const OTRO_PROCESO = "Otro proceso modificó este recibo; vuelve a llamar.";
 
+// ─── El candado de la tarea ─────────────────────────────────────────────────
+// Un archivo creado en exclusiva (`wx`: falla si ya existe, también en Windows) en la carpeta de la tarea.
+// Empieza por punto y no acaba en .md, así que no es documento, recibo ni algo que write_central_doc pueda
+// escribir. Si un proceso murió con el candado puesto, a los 30 s se da por abandonado.
+export const CANDADO = ".record_batch.lock";
+export const ESPERA_DEL_CANDADO_MS = 3000;
+export const CANDADO_ABANDONADO_MS = 30_000;
+
+export async function conCandado<T>(carpetaTarea: string, seccion: () => T): Promise<T> {
+  const ruta = path.join(carpetaTarea, CANDADO);
+  const limite = Date.now() + ESPERA_DEL_CANDADO_MS;
+  for (;;) {
+    try {
+      fs.closeSync(fs.openSync(ruta, "wx"));
+      break;
+    } catch (error: any) {
+      if (error?.code !== "EEXIST") throw error;
+      const edad = Date.now() - (fs.statSync(ruta, { throwIfNoEntry: false })?.mtimeMs ?? Date.now());
+      if (edad > CANDADO_ABANDONADO_MS) {
+        borrarArchivo(ruta);
+        continue;
+      }
+      if (Date.now() > limite) throw new Error("Otro proceso está registrando un lote de esta tarea; vuelve a llamar.");
+      await new Promise((resolver) => setTimeout(resolver, 20 + Math.floor(Math.random() * 30)));
+    }
+  }
+  try {
+    return seccion();
+  } finally {
+    borrarArchivo(ruta);
+  }
+}
+
 // En bigint: el identificador de un archivo en NTFS es de 64 bits y como number pierde los últimos
 // dígitos, así que dos archivos vecinos parecerían el mismo (medido).
 function mismoArchivo(a: string, b: string): boolean {
@@ -650,6 +683,11 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
 
   contexto.antesDeEscribir?.();
 
+  // Con el candado de la tarea: comprobar y escribir es una sola sección, sin esperas en medio, y solo un
+  // proceso la recorre a la vez. Sin él, dos procesos que llegaban juntos pasaban los dos la comprobación.
+  const lotes = [...Array(total).keys()].map((i) => i + 1);
+  const cierra = fase.documento !== null && (entrada.cerrar_fase === true ? lotes.every((n) => cerrado(finales.get(n))) : lotes.every((n) => cierraLaFase(finales.get(n))));
+  const { archivoNuevo, documentoDeFase } = await conCandado(fase.carpetaTarea, () => {
   // Otro proceso pudo escribir mientras se verificaba el ancla (dos ventanas registrando el mismo lote).
   const ahoraEnDisco = recibosDeLaTarea(fase);
   if (preparado?.existente) {
@@ -658,6 +696,7 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   for (const lote of [...(preparado && !preparado.existente ? [entrada.lote] : []), ...descartes.map((r) => r.lote)]) {
     if ((ahoraEnDisco.get(lote) ?? []).length > 0) throw new Error(OTRO_PROCESO);
   }
+  if (fase.documento && fs.existsSync(path.join(fase.carpetaTarea, fase.documento))) throw new Error(OTRO_PROCESO);
 
   fs.mkdirSync(carpeta, { recursive: true });
   let archivoNuevo = descartes.length > 0;
@@ -673,8 +712,6 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   for (const recibo of descartes) escribirAtomico(rutaDe(recibo.lote, recibo.titulo), escribirRecibo(recibo));
 
   // ─── Cierre: todos los lotes con ancla, y ninguno fallido; o cerrar_fase ───
-  const lotes = [...Array(total).keys()].map((i) => i + 1);
-  const cierra = fase.documento !== null && (entrada.cerrar_fase === true ? lotes.every((n) => cerrado(finales.get(n))) : lotes.every((n) => cierraLaFase(finales.get(n))));
   let documentoDeFase: string | null = null;
   if (cierra) {
     const destino = path.join(fase.carpetaTarea, fase.documento!);
@@ -694,6 +731,8 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
     documentoDeFase = fase.documento;
     archivoNuevo = true;
   }
+  return { archivoNuevo, documentoDeFase };
+  });
 
   // ─── Respuesta ───
   const registrado = preparado?.recibo ?? null;
@@ -837,19 +876,21 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
 
   comprobarDentro(fase, existente.ruta);
   contexto.antesDeEscribir?.();
-  if (fs.statSync(existente.ruta, { throwIfNoEntry: false })?.mtimeMs !== existente.mtimeMs) throw new Error(OTRO_PROCESO);
-  escribirAtomico(existente.ruta, escribirRecibo(recibo, { comoDocumento: esElDocumento }));
+  const indiceRehecho = await conCandado(fase.carpetaTarea, () => {
+    if (fs.statSync(existente.ruta, { throwIfNoEntry: false })?.mtimeMs !== existente.mtimeMs) throw new Error(OTRO_PROCESO);
+    escribirAtomico(existente.ruta, escribirRecibo(recibo, { comoDocumento: esElDocumento }));
 
-  // Con la fase cerrada y varios lotes, el índice que generó el servidor se rehace con el ancla nueva. Uno
-  // escrito a mano (una tarea de la 2.x) no se toca: doctor lo marcará como desincronizado.
-  let indiceRehecho = false;
-  if (!esElDocumento && hayDocumento && total > 1 && separarFrontmatter(leerTextoAcotado(documento)).meta.generado_por === GENERADO_POR) {
-    const conNombre = new Map<number, ReciboConNombre>();
-    for (const [lote, recibos] of recibosDeLaTarea(fase)) if (lote <= total && recibos.length === 1) conNombre.set(lote, recibos[0]!);
-    comprobarDentro(fase, documento);
-    escribirAtomico(documento, textoDelIndice(fase, total, conNombre));
-    indiceRehecho = true;
-  }
+    // Con la fase cerrada y varios lotes, el índice que generó el servidor se rehace con el ancla nueva. Uno
+    // escrito a mano (una tarea de la 2.x) no se toca: doctor lo marcará como desincronizado.
+    if (!esElDocumento && hayDocumento && total > 1 && separarFrontmatter(leerTextoAcotado(documento)).meta.generado_por === GENERADO_POR) {
+      const conNombre = new Map<number, ReciboConNombre>();
+      for (const [lote, recibos] of recibosDeLaTarea(fase)) if (lote <= total && recibos.length === 1) conNombre.set(lote, recibos[0]!);
+      comprobarDentro(fase, documento);
+      escribirAtomico(documento, textoDelIndice(fase, total, conNombre));
+      return true;
+    }
+    return false;
+  });
 
   const donde = nueva.tipo === "commit" ? ` en \`${nueva.repo}\`${nueva.rama ? ` (${nueva.rama})` : ""}` : ` de \`${(nueva as Extract<Ancla, { tipo: "sha256" }>).ruta}\``;
   let texto = `${etiqueta} reanclado: \`${etiquetaDeAncla(viejo)}\` → \`${etiquetaDeAncla(nueva)}\`${donde}.${indiceRehecho ? ` Se actualizó \`${fase.documento}\`.` : ""}`;

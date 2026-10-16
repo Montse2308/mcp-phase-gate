@@ -330,6 +330,63 @@ describe("record_batch: el ancla según la política", () => {
   });
 });
 
+// Hallazgo 1 de la auditoría de la Etapa 4: dos procesos (dos ventanas del cliente, dos servidores) que
+// registran el mismo lote a la vez. Sin el candado de la tarea, los dos pasaban la comprobación y
+// quedaban dos recibos del lote. Dos node de verdad, que arrancan a la vez en cada ronda.
+describe("record_batch: dos procesos a la vez", () => {
+  const HIJO = [
+    "const [raiz, inicio, titulo] = process.argv.slice(2);",
+    "const { pathToFileURL } = await import('node:url');",
+    "const path = await import('node:path');",
+    "const mod = (nombre) => import(pathToFileURL(path.join(raiz, 'build-test', 'src', nombre)).href);",
+    "(await mod('config.js')).fijarRaizDelPaquete(raiz);",
+    "const { registrarLote } = await mod('lotes.js');",
+    "while (Date.now() < Number(inicio)) {}",
+    "try {",
+    "  await registrarLote('P', 't', { lote: 1, titulo, estado: 'verificado', que_se_hizo: 'x', verificacion: 'y', verification_note: 'z' });",
+    "  console.log('OK');",
+    "} catch (error) { console.log('ERROR ' + error.message); }",
+  ].join("\n");
+
+  it("nunca deja dos recibos del mismo lote, y el que pierde lo dice", async () => {
+    const { recibos } = instalacion({ repos: [] });
+    const script = path.join(carpetaTemporal("hijo"), "hijo.mjs");
+    fs.writeFileSync(script, HIJO, "utf-8");
+    const { spawn } = await import("node:child_process");
+    const lanzar = (inicio: number, titulo: string) =>
+      new Promise<string>((resolver) => {
+        const hijo = spawn(process.execPath, [script, RAIZ, String(inicio), titulo], { env: process.env });
+        let salida = "";
+        hijo.stdout.on("data", (d) => (salida += d));
+        hijo.on("close", () => resolver(salida.trim()));
+      });
+
+    const errores: string[] = [];
+    for (let ronda = 0; ronda < 8; ronda++) {
+      if (fs.existsSync(recibos)) for (const r of fs.readdirSync(recibos)) fs.unlinkSync(path.join(recibos, r));
+      const inicio = Date.now() + 1500;
+      const salidas = await Promise.all([lanzar(inicio, `titulo A ${ronda}`), lanzar(inicio, `titulo B ${ronda}`)]);
+      const deL01 = recibosEn(recibos).filter((r) => r.startsWith("L01 - "));
+      assert.equal(deL01.length, 1, `ronda ${ronda}: ${deL01.join(", ")} · ${salidas.join(" | ")}`);
+      assert.ok(salidas.every((s) => s === "OK" || s.startsWith("ERROR ")), salidas.join(" | "));
+      errores.push(...salidas.filter((s) => s.startsWith("ERROR ")));
+      assert.equal(fs.existsSync(path.join(recibos, "..", ".record_batch.lock")), false, "el candado se suelta");
+    }
+    for (const error of errores) assert.match(error, /Otro proceso (modificó este recibo|está registrando un lote de esta tarea); vuelve a llamar\./);
+  });
+
+  it("un candado abandonado (un proceso que murió) no bloquea para siempre", async () => {
+    const { tarea } = instalacion({ repos: [] });
+    const candado = path.join(tarea, ".record_batch.lock");
+    fs.writeFileSync(candado, "", "utf-8");
+    await assert.rejects(registrar(contenido(1, { verification_note: "z" })), /Otro proceso está registrando un lote de esta tarea/);
+    const viejo = new Date(Date.now() - 60_000);
+    fs.utimesSync(candado, viejo, viejo);
+    assert.equal((await registrar(contenido(1, { verification_note: "z" }))).salida.lote, "L01");
+    assert.equal(fs.existsSync(candado), false);
+  });
+});
+
 describe("record_batch: escritura", () => {
   it("si otro proceso modifica el recibo entre la lectura y la escritura, falla sin escribir", async () => {
     const { recibos, dirs } = instalacion();

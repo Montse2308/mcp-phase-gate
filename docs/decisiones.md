@@ -190,6 +190,11 @@ el ancla; el servidor arma el recibo (`escribirRecibo`) y verifica el ancla (`an
 - **Escritura:** solo dentro de la subcarpeta de recibos de la tarea (comprobado sobre la ruta real),
   con un temporal y un renombrado, y comparando el `mtimeMs` del recibo leído justo antes de escribir:
   si otra ventana lo cambió, o creó el de ese lote mientras tanto, la llamada falla sin escribir (E4-R6).
+  Esa comprobación y la escritura van bajo un **candado de la tarea** (`.record_batch.lock`, creado en
+  exclusiva en su carpeta), para que dos procesos no las recorran a la vez: sin él, dos ventanas que
+  registraban el mismo lote en el mismo instante pasaban las dos la comprobación y dejaban dos recibos
+  (hallazgo 1 de la auditoría de la Etapa 4). Quien no consigue el candado en 3 s falla y pide volver a
+  llamar; un candado de más de 30 s se da por abandonado.
 - **Proyecto y tarea:** el proyecto como en las demás tools que escriben (una coincidencia débil de
   Roots no basta); la tarea, la indicada o la activa **guardada**: una deducida por fecha no vale para
   escribir.
