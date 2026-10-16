@@ -110,6 +110,18 @@ async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args
   return { args: { ...args, project: nombre }, deducido };
 }
 
+function notaSinProyecto(pedido: string | undefined): string {
+  let preset = "software";
+  try {
+    const config = configuracionDe(null);
+    preset = `${config.preset.nombre}\` (${config.origenPreset}`;
+  } catch {
+    preset = "software` (por defecto";
+  }
+  const porQue = pedido ? `no existe el proyecto «${pedido.replace(/\s+/g, " ").trim()}»` : "no se indicó `project` ni se pudo deducir de la carpeta abierta";
+  return `> Nota del servidor: ${porQue}, así que este prompt usa el preset \`${preset}) y no lleva la configuración de ningún proyecto. Pasa \`project\` para recibir la de tu proyecto.`;
+}
+
 // Un proyecto que no existe no impide entregar un prompt: se entrega sin su configuración, y la
 // compuerta lo dice en el log como siempre. Sin Documentación configurada, tampoco hay proyecto.
 function proyectoSiExiste(project: string): string | null {
@@ -379,6 +391,9 @@ function registrarTools(mcp: McpServer): void {
       const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea, { estadoDeRepo: (repo) => columnas.get(repo.id) ?? null });
       const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map(notaDeHuerfano);
       for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
+      // Sin proyecto, el prompt no lleva la configuración de ninguno: se dice, para que el modelo no crea
+      // que tiene el preset de su proyecto (hallazgo 8 de la auditoría de la Etapa 3).
+      if (!carpetaProyecto) notas.unshift(notaSinProyecto(project));
 
       // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
       return responder([deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos].filter(Boolean).join("\n\n"));

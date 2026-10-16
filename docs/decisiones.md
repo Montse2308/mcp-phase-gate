@@ -297,7 +297,9 @@ sigue siendo la de fábrica; ahora es una de cuatro).
 `get_phase_prompt` con la ruta del problema: entregar el prompt de fábrica en su lugar sería el
 fallo silencioso que el manifiesto evita. En los listados de todos los proyectos, el proyecto roto
 sale con su error y los demás se listan igual. Un proyecto que no existe no impide entregar un
-prompt: se entrega sin configuración de proyecto, como antes.
+prompt: se entrega sin configuración de proyecto, como antes, y (desde la auditoría de la etapa) con
+una nota al principio que dice qué preset se usó y que falta `project`; sin ella, el modelo podía creer
+que tenía las reglas de su proyecto.
 
 **Qué se conservó a propósito.** El único puntero sigue sirviendo solo para la compuerta y los
 pendientes, no para elegir el preset ni el bloque de configuración: deducir el proyecto de un

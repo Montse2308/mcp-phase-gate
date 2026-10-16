@@ -135,6 +135,44 @@ describe("un machine.json roto solo afecta a quien lo necesita (hallazgo 7 de la
   });
 });
 
+describe("get_phase_prompt sin proyecto lo dice (hallazgo 8 de la auditoría de la Etapa 3)", () => {
+  it("sin project, o con uno que no existe, una nota dice qué preset se usa; con project, no hay nota", async () => {
+    const { config } = instalacion();
+    presetDeUsuario(config, "de-maquina", "---\nnombre: de-maquina\n---\n");
+    maquina(config, { version: 1, presetPorDefecto: "de-maquina" });
+    const { cliente, cerrar } = await conectar();
+    try {
+      const sin = textoDe(await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 1 } }));
+      assert.match(sin, /> Nota del servidor: no se indicó `project` ni se pudo deducir de la carpeta abierta, así que este prompt usa el preset `de-maquina` \(de machine\.json\) y no lleva la configuración de ningún proyecto/);
+
+      const noExiste = textoDe(await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 1, project: "NO-EXISTE" } }));
+      assert.match(noExiste, /> Nota del servidor: no existe el proyecto «NO-EXISTE»/);
+
+      const con = textoDe(await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 1, project: "PROYECTO-A" } }));
+      assert.equal(con.includes("Nota del servidor"), false);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("un project vacío explícito se rechaza en start_task y switch_task (hallazgo 15)", async () => {
+    instalacion();
+    const { cliente, cerrar } = await conectar();
+    try {
+      for (const [tool, args] of [
+        ["switch_task", { project: "   ", task_name: "tarea-a" }],
+        ["start_task", { project: "", task_name: "x", initial_context: "y" }],
+      ] as const) {
+        const r = await cliente.callTool({ name: tool, arguments: args });
+        assert.equal(r.isError, true, tool);
+        assert.match(textoDe(r), /`project` no puede ir vacío/);
+      }
+    } finally {
+      await cerrar();
+    }
+  });
+});
+
 describe("frontmatterDeTarea", () => {
   it("lee repos en las dos formas y el preset; sin frontmatter, nada", () => {
     const carpeta = carpetaTemporal("tarea");

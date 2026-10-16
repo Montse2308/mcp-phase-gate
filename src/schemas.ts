@@ -85,7 +85,7 @@ const ARCHIVO =
 
 // ─── Shapes ─────────────────────────────────────────────────────────────────
 export const startTaskShape = {
-  project: texto("project").trim().nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+  project: texto("project").trim().min(1, "`project` no puede ir vacío: omítelo para deducirlo de la carpeta abierta.").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
   task_name: obligatorio("task_name").describe("Nombre de la tarea (creará una carpeta con este nombre)."),
   initial_context: obligatorio("initial_context").describe("El contexto, correo o requerimiento inicial completo."),
   crear_proyecto: booleano("crear_proyecto")
@@ -112,12 +112,16 @@ export const startTaskShape = {
 
 export const getPhasePromptShape = {
   phase: z.number({ error: mensaje("phase") }).int({ error: mensaje("phase") }).describe(FASE),
+  // Un texto propio: aquí, sin proyecto la tool no falla, entrega el prompt sin configuración de
+  // proyecto (hallazgo 8 de la auditoría de la Etapa 3).
   project: texto("project")
     .nullish()
     .describe(
-      `${PROYECTO} Pásalo siempre que lo sepas —lo sabes por el repositorio que tienes abierto— para que se ` +
-        "pueda comprobar que no te saltas una fase. La tarea se toma de la activa de ese proyecto." +
-        DEDUCIBLE
+      "Proyecto: el nombre de una carpeta de proyecto de la Documentación Central. Pásalo siempre que lo sepas " +
+        "—lo sabes por el repositorio que tienes abierto—: con él, el prompt sale con el preset, las reglas y la " +
+        "configuración de ese proyecto, y se comprueba que no te saltas una fase (con su tarea activa). Si lo " +
+        "omites, se deduce de la carpeta abierta si tu cliente la anuncia. Si no se puede deducir, o el proyecto no " +
+        "existe, el prompt llega igual pero sin la configuración de ningún proyecto, y una nota al principio lo dice."
     ),
   task_name: texto("task_name")
     .nullish()
@@ -135,7 +139,7 @@ export const listTasksShape = {
 };
 
 export const switchTaskShape = {
-  project: texto("project").trim().nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+  project: texto("project").trim().min(1, "`project` no puede ir vacío: omítelo para deducirlo de la carpeta abierta.").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
   task_name: obligatorio("task_name").describe(
     "Nombre de la carpeta de la tarea a activar. Si no existe, la tool te devuelve las que sí."
   ),
