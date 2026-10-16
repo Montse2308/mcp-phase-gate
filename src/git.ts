@@ -10,7 +10,9 @@
 //   - GIT_TERMINAL_PROMPT=0, para que nada se quede esperando una contraseña;
 //   - LC_ALL=C, para que los mensajes de error no dependan del idioma del equipo;
 //   - execFile, sin shell, con argumentos que son constantes del código: ningún texto que venga del
-//     modelo llega a la línea de comandos de git.
+//     modelo llega a la línea de comandos de git, salvo el hash de un lote: antes pasa por SHA (solo
+//     hexadecimal) y va detrás de --end-of-options, y las consultas siguientes usan el SHA completo
+//     que devolvió git.
 
 import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
@@ -94,20 +96,28 @@ function siNoEsCarpeta(dir: string): ErrorDeGit | null {
   return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? null : new ErrorDeGit(`${dir} no existe o no es una carpeta.`, "otro");
 }
 
-function ejecutar(dir: string, args: readonly string[]): Promise<{ stdout: string; codigo: number | null }> {
+// `aceptados`: los códigos de salida que son una respuesta y no un error (merge-base --is-ancestor
+// contesta "no" con un 1).
+function ejecutar(dir: string, args: readonly string[], aceptados: readonly number[] = []): Promise<{ stdout: string; stderr: string; codigo: number }> {
   return new Promise((resolve, reject) => {
     execFile("git", [...ARGUMENTOS_FIJOS, ...args], opcionesDe(dir), (error, stdout, stderr) => {
-      if (error && !(args === CONSULTA_DE_FILTROS && sinCoincidencias(error.code))) reject(traducirError(error, stderr, dir));
-      else resolve({ stdout, codigo: error ? Number(error.code) : 0 });
+      const codigo = error ? Number(error.code) : 0;
+      const esRespuesta = !error || (typeof error.code === "number" && (aceptados.includes(error.code) || (args === CONSULTA_DE_FILTROS && sinCoincidencias(error.code))));
+      if (!esRespuesta) reject(traducirError(error!, stderr, dir));
+      else resolve({ stdout, stderr, codigo });
     });
   });
 }
 
-export async function git(dir: string, args: readonly string[]): Promise<string> {
+async function conFiltrosAnulados(dir: string, args: readonly string[], aceptados: readonly number[] = []): Promise<{ stdout: string; stderr: string; codigo: number }> {
   const noEs = siNoEsCarpeta(dir);
   if (noEs) throw noEs;
   const filtros = anularFiltros((await ejecutar(dir, CONSULTA_DE_FILTROS)).stdout, dir);
-  return (await ejecutar(dir, [...filtros, ...args])).stdout;
+  return ejecutar(dir, [...filtros, ...args], aceptados);
+}
+
+export async function git(dir: string, args: readonly string[]): Promise<string> {
+  return (await conFiltrosAnulados(dir, args)).stdout;
 }
 
 function ejecutarSincrono(dir: string, args: readonly string[]): string {
@@ -127,4 +137,78 @@ export function gitSincrono(dir: string, args: readonly string[]): string {
   if (noEs) throw noEs;
   const filtros = anularFiltros(ejecutarSincrono(dir, CONSULTA_DE_FILTROS), dir);
   return ejecutarSincrono(dir, [...filtros, ...args]);
+}
+
+// ─── Commits de los lotes (Etapa 4, §6.3 del plan) ──────────────────────────
+// El hash que registra un lote viene del modelo. Antes de llegar a git se valida con SHA: así no entran
+// referencias (HEAD, nombres de rama), opciones (--help) ni prefijos de menos de 7 caracteres, que git
+// resolvería sin quejarse (desde 4). Después de resolverCommit, el resto de consultas recibe el SHA
+// completo que devolvió git, nunca el texto del modelo.
+export const SHA = /^[0-9a-f]{7,40}$/i;
+const SHA_COMPLETO = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/; // SHA-1, o SHA-256 en un repo que lo use
+
+export type CommitResuelto = { ok: true; sha: string } | { ok: false; motivo: "formato" | "no-existe" | "ambiguo" };
+
+export async function resolverCommit(dir: string, sha: string): Promise<CommitResuelto> {
+  if (!SHA.test(sha)) return { ok: false, motivo: "formato" };
+  let respuesta: { stdout: string; stderr: string; codigo: number };
+  try {
+    respuesta = await conFiltrosAnulados(dir, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${sha}^{commit}`], [1]);
+  } catch (error) {
+    if (error instanceof ErrorDeGit && /is ambiguous/i.test(error.message)) return { ok: false, motivo: "ambiguo" };
+    throw error;
+  }
+  const completo = respuesta.stdout.trim().toLowerCase();
+  if (respuesta.codigo === 0 && SHA_COMPLETO.test(completo)) return { ok: true, sha: completo };
+  if (/is ambiguous/i.test(respuesta.stderr)) return { ok: false, motivo: "ambiguo" };
+  // Un 1 es "no hay un commit con ese nombre": no existe, o es un árbol o un blob.
+  return { ok: false, motivo: "no-existe" };
+}
+
+// merge-base --is-ancestor contesta con el código de salida: 0 sí, 1 no, y otro (128) si no pudo.
+export async function esAncestroDeHead(dir: string, sha: string): Promise<{ resultado: "si" | "no" | "error"; salida: string }> {
+  try {
+    const { codigo, stderr } = await conFiltrosAnulados(dir, ["merge-base", "--is-ancestor", sha, "HEAD"], [1]);
+    return { resultado: codigo === 0 ? "si" : "no", salida: stderr.trim() };
+  } catch (error) {
+    if (error instanceof ErrorDeGit && error.motivo === "otro") return { resultado: "error", salida: error.message };
+    throw error;
+  }
+}
+
+// Solo para el mensaje: decir en qué rama está un commit que no está en la actual.
+export async function ramasQueContienen(dir: string, sha: string): Promise<string[]> {
+  const salida = await git(dir, ["branch", "--contains", sha, "--format=%(refname:short)"]);
+  return salida.split(/\r?\n/).map((rama) => rama.trim()).filter(Boolean);
+}
+
+// --no-show-signature: con log.showSignature en la configuración, `show` verifica la firma y ejecuta
+// gpg.program, que también puede venir en .git/config.
+export async function datosDeCommit(dir: string, sha: string): Promise<{ sha: string; corto: string; fecha: string; asunto: string }> {
+  const salida = await git(dir, ["show", "-s", "--no-show-signature", "--format=%H%n%h%n%cI%n%s", "--abbrev=7", sha]);
+  const [completo = "", corto = "", fecha = "", ...asunto] = salida.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+  return { sha: completo.trim(), corto: corto.trim(), fecha: fecha.trim(), asunto: asunto.join("\n").trim() };
+}
+
+// Los archivos que toca un commit, con / y tal como los guarda git. -z: sin comillas ni escapes en los
+// nombres con acentos; --root: también el primer commit del repo.
+export async function archivosDeCommit(dir: string, sha: string): Promise<string[]> {
+  const salida = await git(dir, ["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "--root", sha]);
+  return salida.split("\0").filter(Boolean);
+}
+
+// null si HEAD está separado (detached).
+export async function ramaActual(dir: string): Promise<string | null> {
+  return (await git(dir, ["branch", "--show-current"])).trim() || null;
+}
+
+// ¿La carpeta está dentro de un repositorio de git? Cualquier otro fallo (git no instalado, propiedad
+// dudosa) se lanza: no es lo mismo que "no tiene git".
+export async function tieneGit(dir: string): Promise<boolean> {
+  try {
+    return (await git(dir, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
+  } catch (error) {
+    if (error instanceof ErrorDeGit && error.motivo === "no-es-repo") return false;
+    throw error;
+  }
 }

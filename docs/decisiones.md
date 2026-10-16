@@ -12,6 +12,47 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — Un lote se ancla a un commit en la rama actual, a un sha256 o a una nota
+
+**Decisión.** Lo que demuestra que un lote se hizo es su **ancla** (`src/anclas.ts`), y el servidor la
+comprueba al registrarla:
+
+- **Commit** (`anclarCommit`), cuando el lote tiene git. El hash se valida con `/^[0-9a-f]{7,40}$/i`
+  **antes de llamar a git**: así no entran `HEAD`, un nombre de rama, una opción como `--help` ni un
+  prefijo corto (git resuelve desde 4 caracteres). Después, `git rev-parse --verify --quiet
+  --end-of-options <sha>^{commit}` da el SHA completo, que es el único que usan las consultas
+  siguientes; `git merge-base --is-ancestor <sha> HEAD` exige que esté en la rama actual (si está en
+  otra, el error dice en cuáles, con `git branch --contains`); y `git diff-tree --root` da los archivos
+  que toca, para compararlos con la tabla Archivos del recibo. Si no coinciden, es un **aviso** que
+  queda escrito en "Verificación del commit" (H5), no un bloqueo. Un mismo commit no puede anclar dos
+  lotes.
+- **sha256** (`anclarArtefacto`), sin git: el de un archivo del repo o de la carpeta del proyecto en la
+  Documentación, con la misma contención que `read_repo_file` (relativa, cada segmento portable, nada de
+  `.git` ni en lo pedido ni en la ruta real, dentro de la base real), solo archivos normales de hasta
+  256 MB, y en streaming desde el mismo descriptor que se comprobó. La ruta se guarda como
+  `repo:<id>/<ruta>` o `proyecto:<ruta>`.
+- **Nota** (`verification_note`), cuando no hay nada que sellar.
+
+`reverificar` repite la comprobación más tarde (para `get_batch_status` y la Fase 5): un commit que ya
+no está en la rama (un `--amend`, un rebase, un squash) deja de estar vigente; un sha256 que no coincide
+se recalcula con los finales de línea cambiados, en las dos direcciones, y si así coincide se informa
+"idéntico salvo finales de línea" (E4-R2: con `core.autocrlf`, un archivo de texto tiene otros bytes en
+Windows que en Linux).
+
+**Amplía** "Git se consulta por una sola puerta, de solo lectura y sin efectos" (2026-10-15): todas
+estas consultas pasan por ella, y el texto del modelo que llega a git es solo un hash ya validado.
+Además, `git show` lleva `--no-show-signature`: con `log.showSignature` activo, `show` verifica la
+firma de un commit firmado ejecutando `gpg.program`, que también puede venir en `.git/config`. Se
+comprobó en este equipo (git 2.51) con un commit de firma falsa y un `gpg.program` trampa: `git show`
+normal lo ejecuta, la puerta no. El test repite ese control positivo, y el de `core.fsmonitor` sobre
+cada consulta nueva.
+
+**Qué se descartó.** `git cat-file -e`, que acepta `HEAD` y solo dice si el objeto existe (§6.1).
+Bloquear cuando los archivos del commit no son los declarados: un archivo generado o un cambio de
+última hora harían imposible anclar el lote, y la Fase 5 ya audita el commit entero.
+
+---
+
 ## 2026-10-16 — Los recibos son datos con un formato determinista que escribe el servidor
 
 **Decisión.** Un recibo de lote es un dato (`Recibo`, en `src/recibos.ts`) y `src/recibos.ts` es el
