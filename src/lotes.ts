@@ -290,8 +290,10 @@ export function fechaLocal(fecha: Date): string {
 
 export function resumenDeAncla(ancla: Ancla, repo: string | null): string {
   switch (ancla.tipo) {
-    case "commit":
-      return `commit ${ancla.corto} en \`${ancla.repo || repo}\`${ancla.rama ? ` (${ancla.rama})` : ""}`;
+    case "commit": {
+      const enRepo = ancla.repo || repo;
+      return `commit ${ancla.corto}${enRepo ? ` en \`${enRepo}\`` : ""}${ancla.rama ? ` (${ancla.rama})` : ""}`;
+    }
     case "sha256":
       return `sha256 \`${ancla.sha256.slice(0, 12)}…\` de \`${ancla.ruta}\``;
     case "nota": {
@@ -402,7 +404,9 @@ export async function conCandado<T>(carpetaTarea: string, seccion: () => T): Pro
       fs.closeSync(fs.openSync(ruta, "wx"));
       break;
     } catch (error: any) {
-      if (error?.code !== "EEXIST") throw error;
+      // En Windows, abrir un archivo que otro proceso está borrando da EPERM y no EEXIST (medido): también
+      // es "ocupado".
+      if (!["EEXIST", "EPERM", "EACCES", "EBUSY"].includes(error?.code)) throw error;
       const edad = Date.now() - (fs.statSync(ruta, { throwIfNoEntry: false })?.mtimeMs ?? Date.now());
       if (edad > CANDADO_ABANDONADO_MS) {
         borrarArchivo(ruta);

@@ -336,6 +336,17 @@ function anclaDe(meta: Record<string, string>, repo: string | null, rama: string
   return { tipo: "pendiente" };
 }
 
+// Lo que entra a mano por la escotilla de write_central_doc (un recibo o el documento de la Fase 4) nunca
+// puede pasar por algo que escribió el servidor: su frontmatter queda con `origen: manual` y sin
+// `generado_por`, diga lo que diga el texto (hallazgo 2 de la auditoría de la Etapa 4).
+export function comoManual(contenido: string): string {
+  const crudo = sinCR(contenido.replace(/^\uFEFF/, ""));
+  const encontrado = crudo.match(FRONTMATTER);
+  if (!encontrado) return crudo;
+  const lineas = (encontrado[1] ?? "").split("\n").filter((linea) => !/^\s*(origen|generado_por)\s*:/i.test(linea));
+  return `---\n${[...lineas, "origen: manual"].join("\n")}\n---\n${crudo.slice(encontrado[0].length)}`;
+}
+
 // Lo que hace falta para saber cómo va un lote, leyendo solo el frontmatter: para el progreso de una
 // tarea (tasks.ts), que se calcula en cada listado.
 export function cabeceraDeRecibo(contenido: string, nombre: string = ""): { lote: number; estado: EstadoLote; ancla: Ancla["tipo"] } {

@@ -38,6 +38,7 @@ import { IDIOMA_POR_DEFECTO } from "./config.js";
 import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
 import { bloqueDeCommitsConPlazo, estadoDeLotes, registrarLote } from "./lotes.js";
+import { comoManual } from "./recibos.js";
 import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
@@ -656,7 +657,7 @@ function registrarTools(mcp: McpServer): void {
       // escucha la respuesta: escribir ahora dejaría un archivo que el modelo cree que no existe.
       siCancelada(extra);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, args.content, "utf-8");
+      fs.writeFileSync(fullPath, motivo && esMotivoDeLotes(motivo) ? comoManual(args.content) : args.content, "utf-8");
 
       // Un archivo nuevo puede ser un documento o un recibo que se lista como recurso. Reescribir
       // uno que ya existía no cambia la lista.

@@ -112,7 +112,10 @@ argumento de aquella entrada sigue valiendo.
   último lote.") se rechazan **siempre** con `write_central_doc`, también para crearlos. Las dos aceptan la
   escotilla de confirmación de siempre (elicitation, o `force` sin ella) para reparar a mano un archivo
   dañado, y la respuesta lo dice: "Escrito a mano con confirmación; get_batch_status lo marcará como
-  manual". Cierra E1-R3 (el modelo escribía el índice antes de tiempo, o un recibo con otro nombre).
+  manual". Para que eso sea verdad, lo que entra por la escotilla queda siempre con `origen: manual` y sin
+  `generado_por` en su frontmatter, diga lo que diga el texto: sin elicitation, `force` lo pone el modelo,
+  y podía escribir un recibo "del servidor" sellado con un commit inventado (hallazgo 2 de la auditoría
+  de la Etapa 4). Cierra E1-R3 (el modelo escribía el índice antes de tiempo, o un recibo con otro nombre).
 
 `start_task` y `record_batch` no pasan por `write_central_doc`. Una tarea de la 2.x a medio camino sigue:
 `record_batch` lee sus recibos manuales (tolerante) y continúa desde el siguiente lote.

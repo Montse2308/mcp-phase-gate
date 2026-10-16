@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { validarSegmento } from "../src/paths.js";
-import { escribirRecibo, leerRecibo, loteDelNombre, nombreDeRecibo, parsearRecibo, slugDe } from "../src/recibos.js";
+import { comoManual, escribirRecibo, leerRecibo, loteDelNombre, nombreDeRecibo, parsearRecibo, slugDe } from "../src/recibos.js";
 import type { Recibo } from "../src/recibos.js";
 import { carpetaTemporal } from "./helpers.js";
 
@@ -198,6 +198,15 @@ describe("leerRecibo con recibos escritos a mano en la 2.x", () => {
     const ruta = path.join(carpeta, "L03 - refactor del menú.md");
     fs.writeFileSync(ruta, `\uFEFF${RECIBO_2X}`, "utf-8");
     assert.equal(leerRecibo(ruta).titulo, "refactor del menú");
+  });
+});
+
+describe("comoManual", () => {
+  it("deja origen: manual y quita generado_por; sin frontmatter, el texto queda igual (en LF)", () => {
+    assert.equal(comoManual("---\nlote: L01\norigen: servidor\ngenerado_por: mcp-phase-gate\n---\n# x\n"), "---\nlote: L01\norigen: manual\n---\n# x\n");
+    assert.equal(comoManual("---\r\nlote: L01\r\n---\r\n# x\r\n"), "---\nlote: L01\norigen: manual\n---\n# x\n");
+    assert.equal(comoManual("# sin frontmatter\r\n"), "# sin frontmatter\n");
+    assert.equal(parsearRecibo(comoManual(escribirRecibo(recibo()))).origen, "manual");
   });
 });
 
