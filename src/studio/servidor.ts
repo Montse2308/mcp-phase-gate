@@ -29,6 +29,7 @@ import { raizPaquete } from "../config.js";
 import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
 import { crearApi, entornoInitDelProceso } from "./api.js";
+import { crearEventos } from "./eventos.js";
 
 export const HOST = "127.0.0.1";
 export const CUERPO_MAXIMO = 64 * 1024;
@@ -398,10 +399,18 @@ export function abrir(url: string, plataforma: NodeJS.Platform = process.platfor
 // Arranca, imprime el enlace, lo abre (salvo --no-abrir) y se queda en primer plano hasta Ctrl+C.
 export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNavegador: (url: string) => boolean = abrir): Promise<number> {
   let studio: Studio;
+  const eventos = crearEventos();
   try {
-    const api = crearApi({ modo: "vivo", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDelProceso(ejecutarComando) });
-    studio = await arrancarStudio({ puerto: opciones.puerto, api });
+    const api = crearApi({
+      modo: "vivo",
+      watcher: eventos.estado,
+      sesiones: () => [],
+      entornoInit: () => entornoInitDelProceso(ejecutarComando),
+      eventos: (peticion, res) => eventos.manejar(peticion.req, res),
+    });
+    studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: () => eventos.cerrar() });
   } catch (error) {
+    eventos.cerrar();
     const codigo = (error as NodeJS.ErrnoException)?.code;
     salida.err(codigo === "EADDRINUSE" ? `El puerto ${opciones.puerto} ya está en uso: elige otro con --puerto, o déjalo libre.` : `No se pudo arrancar el Studio: ${error instanceof Error ? error.message : String(error)}`);
     return 1;

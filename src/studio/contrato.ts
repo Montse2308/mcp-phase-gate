@@ -227,3 +227,4 @@ export type PromptRespuesta = z.infer<typeof PromptRespuesta>;
 export type PlanDeClienteApi = z.infer<typeof PlanDeClienteApi>;
 export type ClientesRespuesta = z.infer<typeof ClientesRespuesta>;
 export type Modo = z.infer<typeof Modo>;
+export type EstadoDelWatcher = z.infer<typeof EstadoDelWatcher>;
