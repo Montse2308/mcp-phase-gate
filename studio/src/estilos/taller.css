@@ -64,6 +64,9 @@
   padding: 0.2rem 0.35rem;
   cursor: pointer;
   text-align: left;
+  /* Los modos llevan el archivo:línea que ganó, una ruta sin espacios donde partir: con break-word el
+     ancho mínimo del botón sería el de la ruta entera y desbordaría en un teléfono. */
+  overflow-wrap: anywhere;
 }
 .ranura-boton[aria-pressed="true"],
 .ranura-boton:hover {
