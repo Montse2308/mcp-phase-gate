@@ -11,16 +11,18 @@
     "prompts",
     "presets",
     "schema",
+    "studio/dist",
     "!build/**/*.map"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p studio/tsconfig.json && vite build --config studio/vite.config.ts && node scripts/presupuesto-studio.mjs",
     "start": "node build/index.js",
     "dev": "tsc --watch",
     "test": "tsc -p tsconfig.test.json && node --test \"build-test/test/**/*.test.js\"",
+    "test:e2e": "playwright test -c studio/playwright.config.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "repository": {
@@ -48,7 +50,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@preact/preset-vite": "2.10.6",
     "@types/node": "^25.9.1",
-    "typescript": "^6.0.3"
+    "axe-core": "4.13.0",
+    "preact": "10.29.8",
+    "typescript": "^6.0.3",
+    "vite": "8.3.1"
   }
 }

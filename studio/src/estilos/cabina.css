@@ -1,0 +1,39 @@
+/* Modo Cabina: un puesto de mando de señales ferroviarias, de noche. Arte propio, sin assets de nadie.
+   Todos los textos cumplen contraste AA sobre su fondo. */
+
+:root,
+:root[data-modo="cabina"] {
+  color-scheme: dark;
+  --fondo: #0c131b;
+  --barra: #111c27;
+  --panel: #15212d;
+  --placa: #1f2f3f;
+  --fondo-tren: #1b2a38;
+  --texto: #e9eef3;
+  --texto-secundario: #a9b7c4;
+  --texto-placa: #f0d9a6;
+  --borde: #2a3a4a;
+  --borde-fuerte: #4a6075;
+  --acento: #e0ac4b;
+  --enlace: #8fc8ff;
+  --foco: #ffd166;
+  --seleccion: #e0ac4b;
+  --texto-seleccion: #0c131b;
+  --boton: #233344;
+  --texto-boton: #e9eef3;
+  --banda: #e0ac4b;
+  --texto-banda: #0c131b;
+  --verde: #4bd88a;
+  --ambar: #f6bd46;
+  --rojo: #ff6d63;
+  --apagado: #8b9aa9;
+  --carril: #c7d2dc;
+  --traviesa: #6b5a43;
+}
+
+:root[data-modo="cabina"] .estacion {
+  box-shadow: inset 0 3px 0 var(--acento);
+}
+:root[data-modo="cabina"] .estacion-cabecera h2 {
+  text-transform: uppercase;
+}

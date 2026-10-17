@@ -1,0 +1,22 @@
+{
+  // El frontend tiene su propio tsconfig: el del paquete solo compila src/ (rootDir ./src). Este solo
+  // comprueba tipos (noEmit): quien compila es Vite. Incluye los tipos de Node porque los tipos de la API
+  // salen de src/studio/contrato.ts, y ese archivo importa módulos del servidor.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
+}
