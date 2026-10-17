@@ -5,10 +5,11 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
-import type { Estacion, FilaDeLote, LotesRespuesta, ProyectosRespuesta, TareaRespuesta } from "../../../src/studio/contrato.js";
+import type { Estacion, FilaDeLote, LotesRespuesta, TareaRespuesta } from "../../../src/studio/contrato.js";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
+import { Selector } from "../comun/selector";
 import { Tabla } from "../comun/tabla";
-import { get, ruta } from "../datos";
+import { ruta } from "../datos";
 import { useModoVisual } from "../preferencias";
 import { enlace } from "../rutas";
 import { Visor } from "../visor/visor";
@@ -38,46 +39,6 @@ function SelloVisible({ sello, nuevo }: { sello: Sello; nuevo: boolean }) {
           ))
         : null}
     </span>
-  );
-}
-
-// Elegir una tarea: los proyectos y sus tareas, con la activa primero.
-function Selector() {
-  const { datos, error } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["punteros", "documento"]);
-  const [tareas, setTareas] = useState<Record<string, string[]>>({});
-  useEffect(() => {
-    // Un proyecto con el manifiesto roto no tiene tareas que listar: su error ya sale en la Red.
-    for (const p of (datos?.proyectos ?? []).filter((p) => p.manifiesto.estado !== "invalido")) {
-      get<{ tareas: { tarea: string }[] }>(`/api/proyectos/${ruta(p.nombre)}/tareas`).then(
-        (r) => setTareas((antes) => ({ ...antes, [p.nombre]: r.tareas.map((t) => t.tarea) })),
-        () => {}
-      );
-    }
-  }, [datos]);
-  return (
-    <section class="vista" aria-labelledby="titulo-selector">
-      <h1 id="titulo-selector">Tablero</h1>
-      <p>Elige una tarea.</p>
-      {error ? <Aviso error={error} /> : null}
-      {(datos?.proyectos ?? []).map((p) => (
-        <section key={p.nombre} class="selector-proyecto" aria-label={p.nombre}>
-          <h2>{p.nombre}</h2>
-          {p.manifiesto.estado === "invalido" ? <p class="secundaria">Su phase-gate.json no es válido: arréglalo para ver sus tareas.</p> : null}
-          {(tareas[p.nombre] ?? []).length ? (
-            <ul>
-              {(tareas[p.nombre] ?? []).map((t) => (
-                <li key={t}>
-                  <a href={enlace("tablero", p.nombre, t)}>{t}</a>
-                  {p.activa?.tarea === t ? <span class="secundaria"> (activa)</span> : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p class="secundaria">Sin tareas.</p>
-          )}
-        </section>
-      ))}
-    </section>
   );
 }
 
@@ -120,7 +81,7 @@ function Vagones({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nue
 }
 
 export function Tablero({ p, t }: { p: string | undefined; t: string | undefined }) {
-  if (!p || !t) return <Selector />;
+  if (!p || !t) return <Selector vista="tablero" titulo="Tablero" />;
   return <TableroDeTarea key={`${p}/${t}`} p={p} t={t} />;
 }
 

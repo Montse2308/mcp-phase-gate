@@ -147,6 +147,13 @@ export async function crearArbol(raiz: string): Promise<Arbol> {
     // en-vivo: un lote sin registrar, para que un E2E lo registre y vea llegar el sello.
     tarea(docs, "TIENDA", "en-vivo", [...PREVIOS, ["03 - Plan Técnico.md", plan([["L01", "api", "Llega en vivo"]])]]);
 
+    // cerrada: un solo lote anclado (la fase se cierra) y reanclado después, como tras un rebase.
+    tarea(docs, "TIENDA", "cerrada", [...PREVIOS, ["03 - Plan Técnico.md", plan([["L01", "api", "Cerrar la fase"]])]]);
+    await registrarLote("TIENDA", "cerrada", { lote: 1, repo: "api", titulo: "Cerrar la fase", ...contenido, commit: commit(api, "cierre.txt", "feat(api): cerrar la fase") });
+    git(api, "reset", "-q", "--soft", "HEAD~1");
+    git(api, "commit", "-q", "-m", "feat(api): cerrar la fase, rehecho");
+    await registrarLote("TIENDA", "cerrada", { lote: 1, repo: "api", reanclar: true, force: true, commit: git(api, "rev-parse", "HEAD") });
+
     // con-hueco: falta la Fase 2.
     tarea(docs, "TIENDA", "con-hueco", [PREVIOS[0]!, PREVIOS[1]!, ["03 - Plan Técnico.md", plan([["L01", "api", "Algo"]])]]);
 

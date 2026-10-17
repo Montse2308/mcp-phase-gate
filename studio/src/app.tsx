@@ -1,6 +1,7 @@
 // La estructura de la página: la barra con las cinco vistas y el interruptor Cabina / Sobrio, la banda
 // de la demo y la vista que toca según el hash.
 
+import { Bitacora } from "./bitacora/bitacora";
 import { BANDA, MODO } from "./datos";
 import { cambiarModoVisual, useModoVisual } from "./preferencias";
 import { Red } from "./red/red";
@@ -29,6 +30,8 @@ function Vista({ ruta }: { ruta: Ruta }) {
       return <Taller ruta={ruta} />;
     case "vigia":
       return <Vigia />;
+    case "bitacora":
+      return <Bitacora p={ruta.partes[0]} t={ruta.partes[1]} />;
     default:
       return <Pendiente nombre={VISTAS.find((v) => v.id === ruta.vista)!.nombre} />;
   }

@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import { registrarLote } from "../src/lotes.js";
 import {
+  BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
   EstadoRespuesta,
@@ -218,6 +219,44 @@ describe("API del Studio: cada ruta con su shape", () => {
     const sinPlan = LotesRespuesta.parse((await s.get("/api/tareas/P/vacia/lotes")).json);
     assert.equal(sinPlan.disponible, false);
     assert.ok(!sinPlan.disponible && /todavía no tiene `03 - Plan Técnico.md`/.test(sinPlan.motivo));
+  });
+
+  it("/api/tareas/:p/:t/bitacora: documentos, recibos, commits, reanclajes y el cierre, de lo más reciente a lo más antiguo", async () => {
+    const { docs, api } = await instalacion();
+    // Una tarea de un lote: anclarlo cierra la fase; después se reancla a otro commit.
+    const cerrada = crearTarea(docs, "P", "cerrada", ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md", "02 - Decisiones.md"]);
+    fs.writeFileSync(path.join(cerrada, "03 - Plan Técnico.md"), PLAN.replace("lotes: 2", "lotes: 1"), "utf-8");
+    fs.writeFileSync(path.join(api, "c.txt"), "c\n", "utf-8");
+    git(api, "add", "c.txt");
+    git(api, "commit", "-q", "-m", "feat(api): cerrar");
+    const contenido = { titulo: "Cerrar", estado: "verificado" as const, que_se_hizo: "Hecho.", verificacion: "test" };
+    await registrarLote("P", "cerrada", { lote: 1, repo: "api", ...contenido, commit: git(api, "rev-parse", "HEAD") });
+    // Como tras un rebase: el commit del lote se rehace con otro SHA.
+    git(api, "reset", "-q", "--soft", "HEAD~1");
+    git(api, "commit", "-q", "-m", "feat(api): cerrar, otra vez");
+    await registrarLote("P", "cerrada", { lote: 1, repo: "api", reanclar: true, force: true, commit: git(api, "rev-parse", "HEAD") });
+
+    const s = await studioConApi();
+    const r = await s.get("/api/tareas/P/cerrada/bitacora");
+    assert.equal(r.estado, 200, r.texto);
+    const { eventos } = BitacoraRespuesta.parse(r.json);
+    const tipos = new Set(eventos.map((e) => e.tipo));
+    assert.deepEqual([...tipos].sort(), ["commit", "documento", "fase-cerrada", "reanclaje", "recibo"]);
+    const commit = eventos.find((e) => e.tipo === "commit")!;
+    assert.equal(commit.commit!.asunto, "feat(api): cerrar, otra vez");
+    assert.match(commit.commit!.corto, /^[0-9a-f]{7}$/);
+    assert.equal(commit.archivo, "04 - Ejecución.md");
+    assert.match(eventos.find((e) => e.tipo === "reanclaje")!.titulo, /L01 reanclado/);
+    // Ordenados de lo más reciente a lo más antiguo.
+    const momentos = eventos.map((e) => Date.parse(e.fecha.length === 10 ? `${e.fecha}T00:00:00` : e.fecha));
+    assert.deepEqual(momentos, [...momentos].sort((a, b) => b - a));
+
+    // Una tarea con un lote pendiente: su recibo sale, su commit no (no hay).
+    const enCurso = BitacoraRespuesta.parse((await s.get("/api/tareas/P/en-curso/bitacora")).json);
+    assert.deepEqual(enCurso.eventos.filter((e) => e.tipo === "recibo").map((e) => e.lote).sort(), ["L01", "L02"]);
+    assert.deepEqual(enCurso.eventos.filter((e) => e.tipo === "commit").map((e) => e.lote), ["L01"]);
+    assert.equal(enCurso.eventos.filter((e) => e.tipo === "fase-cerrada").length, 0);
+    assert.equal((await s.get("/api/tareas/P/noexiste/bitacora")).estado, 404);
   });
 
   it("/api/prompts/:p/:fase: el mismo texto que get_phase_prompt, con capas, ranuras de fábrica y efectivas", async () => {

@@ -19,24 +19,27 @@ import { capasDe, configuracionDe, contenidoEfectivoDeRanura, contextoInicialDe,
 import type { Capa } from "../capas.js";
 import { CLIENTES, detectarClientes, planDeArchivo, planDeClaude } from "../init.js";
 import type { EntornoInit } from "../init.js";
-import { estadoDeLotes, faseDeLotes, recibosDeLaTarea } from "../lotes.js";
+import { datosDeCommit } from "../git.js";
+import { VERIFICACIONES_A_LA_VEZ, enParalelo, estadoDeLotes, faseDeLotes, recibosDeLaTarea } from "../lotes.js";
 import { leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
 import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requireProjectFolder, rutaReal, validarSegmento } from "../paths.js";
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
-import { parsearRecibo } from "../recibos.js";
+import { etiquetaDeLote, parsearRecibo } from "../recibos.js";
 import type { Recibo } from "../recibos.js";
 import { archivoDeTarea } from "../recursos.js";
-import { estadosConPlazo } from "../repos.js";
+import { estadosConPlazo, resolverRepo } from "../repos.js";
 import { textoDelPromptDeFase } from "../servidor.js";
 import { avisoDeCompuerta, avisoDePendientes, describeEstado, detectarSalto, listarTareas, tareaActiva, tieneValidacionesPendientes } from "../tasks.js";
 import type { EstadoTarea } from "../tasks.js";
 import type {
+  BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
   Estacion,
   EstadoRespuesta,
   EstadoTareaApi,
+  EventoDeBitacora,
   LotesRespuesta,
   Modo,
   PlanDeClienteApi,
@@ -421,6 +424,89 @@ function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string,
   return sellos;
 }
 
+// ─── /api/tareas/:p/:t/bitacora ─────────────────────────────────────────────
+// La línea de tiempo de la tarea (§7.7.5), de lo más reciente a lo más antiguo:
+//   documento     el mtime de cada documento que existe (creado o modificado: el disco no distingue);
+//   recibo        el `registrado` del frontmatter de cada recibo (o su mtime, si es de la 2.x);
+//   commit        la fecha del commit anclado (%cI), con su asunto y su SHA corto (datosDeCommit);
+//   reanclaje     la fecha de cada línea "Reanclado el …" de la sección "Verificación del commit";
+//   fase-cerrada  el `registrado` más reciente de los recibos, si la fase tiene su documento.
+// Una escritura con confirmación (force o elicitation) no deja rastro propio en el disco —un recibo de la
+// escotilla solo queda con `origen: manual`, igual que uno de la 2.x—, así que no aparece.
+const REANCLADO = /^Reanclado el (\d{4}-\d{2}-\d{2}): (.*)$/;
+
+async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespuesta> {
+  const carpeta = proyectoDe(crudoP);
+  const phases = fasesDe(carpeta);
+  const estado = tareaDe(carpeta, crudoT, phases);
+  const eventos: EventoDeBitacora[] = [];
+  const iso = (ms: number): string => new Date(ms).toISOString();
+
+  for (const e of estaciones(carpeta, estado, phases)) {
+    if (!e.existe || e.mtimeMs === null) continue;
+    eventos.push({ tipo: "documento", fecha: iso(e.mtimeMs), titulo: `${e.numero === 0 ? "00" : `Fase ${e.numero}`} · ${e.titulo}: ${e.documento}`, archivo: e.documento, lote: null, commit: null });
+  }
+
+  let fase: ReturnType<typeof faseDeLotes> | null = null;
+  try {
+    fase = faseDeLotes(carpeta, estado.taskName);
+  } catch {
+    fase = null;
+  }
+  if (fase) {
+    const recibos: { recibo: Recibo; relativo: string; mtimeMs: number }[] = [];
+    try {
+      for (const lista of recibosDeLaTarea(fase).values()) for (const r of lista) recibos.push({ recibo: r.recibo, relativo: `${fase.recibos}/${r.nombre}`, mtimeMs: r.mtimeMs });
+    } catch {
+      // un recibo ilegible: el resto de la bitácora sigue (doctor lo avisa)
+    }
+    const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
+    const cerrada = documento !== null && fs.existsSync(documento);
+    if (cerrada && recibos.length === 0) {
+      try {
+        recibos.push({ recibo: parsearRecibo(leerTextoAcotado(documento!), fase.documento!), relativo: fase.documento!, mtimeMs: fs.statSync(documento!).mtimeMs });
+      } catch {
+        // con varios lotes el documento es un índice, no un recibo
+      }
+    }
+
+    for (const { recibo, relativo, mtimeMs } of recibos) {
+      const lote = etiquetaDeLote(recibo.lote);
+      const commit = recibo.ancla.tipo === "commit" ? { corto: recibo.ancla.corto, asunto: recibo.ancla.asunto } : null;
+      eventos.push({ tipo: "recibo", fecha: recibo.registrado || iso(mtimeMs), titulo: `${lote} · ${recibo.titulo}: ${recibo.estado}`, archivo: relativo, lote, commit });
+      for (const linea of (recibo.verificacionDelCommit ?? "").split("\n")) {
+        const m = linea.match(REANCLADO);
+        if (m) eventos.push({ tipo: "reanclaje", fecha: m[1]!, titulo: `${lote} reanclado: ${m[2]!.replace(/`/g, "")}`, archivo: relativo, lote, commit: null });
+      }
+    }
+
+    // Los commits, en paralelo y de seis en seis, con la puerta de git. Uno que ya no existe (un rebase) no
+    // tiene fecha que enseñar: no sale.
+    const conCommit = recibos.filter((r) => r.recibo.ancla.tipo === "commit");
+    const datos = await enParalelo(conCommit, VERIFICACIONES_A_LA_VEZ, async ({ recibo }) => {
+      const ancla = recibo.ancla as Extract<Recibo["ancla"], { tipo: "commit" }>;
+      try {
+        return await datosDeCommit(resolverRepo(carpeta, ancla.repo || recibo.repo || "").ruta!, ancla.sha);
+      } catch {
+        return null;
+      }
+    });
+    conCommit.forEach(({ recibo, relativo }, i) => {
+      const d = datos[i];
+      if (d && d.fecha) eventos.push({ tipo: "commit", fecha: d.fecha, titulo: d.asunto, archivo: relativo, lote: etiquetaDeLote(recibo.lote), commit: { corto: d.corto, asunto: d.asunto } });
+    });
+
+    const registrados = recibos.map((r) => r.recibo.registrado).filter(Boolean).sort();
+    if (cerrada && registrados.length) {
+      eventos.push({ tipo: "fase-cerrada", fecha: registrados[registrados.length - 1]!, titulo: `Fase ${fase.numero} (${fase.titulo}) cerrada: ${fase.documento}`, archivo: fase.documento, lote: null, commit: null });
+    }
+  }
+
+  const momento = (fecha: string): number => Date.parse(fecha.length === 10 ? `${fecha}T00:00:00` : fecha);
+  eventos.sort((a, b) => momento(b.fecha) - momento(a.fecha));
+  return { proyecto: carpeta, tarea: estado.taskName, eventos };
+}
+
 // ─── /api/prompts/:p/:fase?tarea= ───────────────────────────────────────────
 // De qué capa sale el contenido de una ranura, dicho para la ficha del Taller: "fábrica", "preset: <nombre>",
 // "reglas: <variante>", "global" o "proyecto". `contenidoDe` es "fábrica" o "<archivo>:<línea>" (en Windows
@@ -546,6 +632,7 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     { patron: /^\/tareas\/([^/]+)\/([^/]+)$/, atender: (m) => tarea(m[1]!, m[2]!) },
     { patron: /^\/tareas\/([^/]+)\/([^/]+)\/documento$/, atender: (m, p) => documento(m[1]!, m[2]!, p.consulta) },
     { patron: /^\/tareas\/([^/]+)\/([^/]+)\/lotes$/, atender: (m, p) => lotes(m[1]!, m[2]!, p.consulta) },
+    { patron: /^\/tareas\/([^/]+)\/([^/]+)\/bitacora$/, atender: (m) => bitacora(m[1]!, m[2]!) },
     { patron: /^\/prompts\/([^/]+)\/([^/]+)$/, atender: (m, p) => prompt(m[1]!, m[2]!, p.consulta) },
     { patron: /^\/clientes$/, atender: async (): Promise<ClientesRespuesta> => ({ clientes: await planesDeClientes(ctx.entornoInit()) }) },
   ];

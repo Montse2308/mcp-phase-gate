@@ -167,6 +167,18 @@ export const LotesRespuesta = z.union([
   z.object({ disponible: z.literal(false), motivo: z.string() }),
 ]);
 
+// ─── Bitácora ───────────────────────────────────────────────────────────────
+export const EventoDeBitacora = z.object({
+  tipo: z.enum(["documento", "recibo", "commit", "reanclaje", "fase-cerrada"]),
+  fecha: z.string(), // ISO; un reanclaje solo lleva el día
+  titulo: z.string(),
+  archivo: z.string().nullable(), // el documento o el recibo, dentro de la tarea
+  lote: z.string().nullable(),
+  commit: z.object({ corto: z.string(), asunto: z.string() }).nullable(),
+});
+
+export const BitacoraRespuesta = z.object({ proyecto: z.string(), tarea: z.string(), eventos: z.array(EventoDeBitacora) });
+
 // ─── Prompts ────────────────────────────────────────────────────────────────
 export const RanuraApi = z.object({
   id: z.string(), // "fase-3/pruebas", "global/evidencia"
@@ -243,6 +255,8 @@ export type PromptRespuesta = z.infer<typeof PromptRespuesta>;
 export type PlanDeClienteApi = z.infer<typeof PlanDeClienteApi>;
 export type ClientesRespuesta = z.infer<typeof ClientesRespuesta>;
 export type Modo = z.infer<typeof Modo>;
+export type EventoDeBitacora = z.infer<typeof EventoDeBitacora>;
+export type BitacoraRespuesta = z.infer<typeof BitacoraRespuesta>;
 export type PlanRespuesta = z.infer<typeof PlanRespuesta>;
 export type AplicarRespuesta = z.infer<typeof AplicarRespuesta>;
 export type EstadoDelWatcher = z.infer<typeof EstadoDelWatcher>;
