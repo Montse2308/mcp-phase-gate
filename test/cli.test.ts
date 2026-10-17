@@ -17,7 +17,7 @@ afterEach(limpiarEntorno);
 
 // Este archivo compila a build-test/test/; el binario, a build-test/src/.
 const BINARIO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "index.js");
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
 function salidaDePrueba(): Salida & { textoOut: () => string; textoErr: () => string } {
   const out: string[] = [];
@@ -85,7 +85,8 @@ describe("ejecutarCli", () => {
   });
 
   it("un subcomando, una bandera o un argumento de más desconocidos salen con 2 y la ayuda en stderr", () => {
-    for (const argv of [["init"], ["--json"], ["doctor", "extra"], ["doctor", "--verbose"]]) {
+    // `init` existe desde la Etapa 3: el subcomando desconocido es otro.
+    for (const argv of [["inventado"], ["--json"], ["doctor", "extra"], ["doctor", "--verbose"], ["doctor", "--yes"], ["init", "--json"]]) {
       const salida = salidaDePrueba();
 
       assert.deepEqual(ejecutarCli(argv, salida, false), { accion: "salir", codigo: 2 }, argv.join(" "));

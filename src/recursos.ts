@@ -7,6 +7,7 @@
 //   phase-gate://fases                                      las fases, con su documento y su capa
 //   phase-gate://tareas/{proyecto}/{tarea}/{documento}      un archivo de la carpeta de una tarea
 //   phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo} un recibo de lote de la Fase 4
+//   phase-gate://configuracion/{proyecto}                   la configuración efectiva de un proyecto
 //
 // Solo lectura, y con las mismas defensas que read_central_doc: cada variable se decodifica y se
 // valida como un segmento portable antes de armar ninguna ruta, la ruta final tiene que quedar
@@ -20,7 +21,7 @@ import type { Variables } from "@modelcontextprotocol/sdk/shared/uriTemplate.js"
 import * as fs from "fs";
 import * as path from "path";
 
-import { diagnosticar, fasesConCapa, formatearDiagnostico } from "./diagnostico.js";
+import { diagnosticarSinBloquear, fasesConCapa, formatearDiagnostico, informeDeConfiguracion } from "./diagnostico.js";
 import {
   discoverProjects,
   estaDentroReal,
@@ -30,7 +31,8 @@ import {
   taskFolderPath,
   validarSegmento,
 } from "./paths.js";
-import { discoverPhases, esCarpeta, nombreContextoInicial } from "./phases.js";
+import { contextoInicialDe, fasesDe } from "./capas.js";
+import { esCarpeta } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { listarTareas, tareaActiva } from "./tasks.js";
 
@@ -152,16 +154,22 @@ function recurso(uri: string, nombre: string, titulo: string, ruta: string): Res
 }
 
 // ─── Listado ────────────────────────────────────────────────────────────────
-// Solo los documentos que existen de la tarea ACTIVA de cada proyecto. Listar todas las tareas de
+// Solo los documentos que existen de la tarea ACTIVA de cada proyecto, con las fases de SU proyecto. Listar todas las tareas de
 // todos los proyectos inundaría el selector de "@" del cliente; el resto se alcanza por plantilla,
 // con autocompletado. Si la Documentación no está configurada no hay nada que listar, y el listado
 // no debe fallar por eso: los recursos fijos siguen sirviendo para diagnosticarlo.
-function tareasActivas(): { proyecto: string; tarea: string; carpeta: string; phases: Map<number, PhaseFile> }[] {
+function tareasActivas(): { proyecto: string; tarea: string; carpeta: string; phases: Map<number, PhaseFile>; contexto: string }[] {
   try {
-    const phases = discoverPhases();
     return [...discoverProjects().values()].sort().flatMap((proyecto) => {
-      const activa = tareaActiva(proyecto, phases);
-      return activa ? [{ proyecto, tarea: activa.estado.taskName, carpeta: activa.estado.folderPath, phases }] : [];
+      try {
+        const phases = fasesDe(proyecto);
+        const activa = tareaActiva(proyecto, phases);
+        return activa
+          ? [{ proyecto, tarea: activa.estado.taskName, carpeta: activa.estado.folderPath, phases, contexto: contextoInicialDe(proyecto) }]
+          : [];
+      } catch {
+        return []; // un proyecto con el manifiesto roto no se lista; doctor lo avisa
+      }
     });
   } catch {
     return [];
@@ -170,9 +178,9 @@ function tareasActivas(): { proyecto: string; tarea: string; carpeta: string; ph
 
 function listarDocumentos(): Resource[] {
   const lista: Resource[] = [];
-  for (const { proyecto, tarea, carpeta, phases } of tareasActivas()) {
+  for (const { proyecto, tarea, carpeta, phases, contexto } of tareasActivas()) {
     const nombres = [
-      nombreContextoInicial(),
+      contexto,
       ...[...phases.entries()].sort((a, b) => a[0] - b[0]).flatMap(([, datos]) => (datos.documento ? [datos.documento] : [])),
     ];
     for (const documento of nombres) {
@@ -215,6 +223,24 @@ function listarRecibos(): Resource[] {
   return lista;
 }
 
+export function uriDeConfiguracion(proyecto: string): string {
+  return `phase-gate://configuracion/${encodeURIComponent(proyecto)}`;
+}
+
+function listarConfiguraciones(): Resource[] {
+  try {
+    return [...discoverProjects().values()].sort().map((proyecto) => ({
+      uri: uriDeConfiguracion(proyecto),
+      name: `configuracion/${proyecto}`,
+      title: `Configuración de ${proyecto}`,
+      mimeType: MIME,
+      annotations: { audience: AUDIENCIA },
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ─── Autocompletado ─────────────────────────────────────────────────────────
 // Lo que ya se escribió filtra la lista, sin distinguir mayúsculas. Un fallo (Documentación sin
 // configurar, proyecto que no existe) devuelve una lista vacía: autocompletar no es el sitio
@@ -240,22 +266,22 @@ function completarTarea(escrito: string, contexto?: { arguments?: Record<string,
   return sinFallar(() => {
     const proyecto = findProjectFolder(contexto?.arguments?.proyecto ?? "");
     if (!proyecto) return [];
-    return filtrar(listarTareas(proyecto, discoverPhases()).map((tarea) => tarea.taskName), escrito);
+    return filtrar(listarTareas(proyecto, fasesDe(proyecto)).map((tarea) => tarea.taskName), escrito);
   });
 }
 
-function carpetaDeTareaPedida(contexto?: { arguments?: Record<string, string> }): string | null {
+function carpetaDeTareaPedida(contexto?: { arguments?: Record<string, string> }): { carpeta: string; proyecto: string } | null {
   const proyecto = findProjectFolder(contexto?.arguments?.proyecto ?? "");
   const tarea = contexto?.arguments?.tarea ?? "";
   if (!proyecto || !tarea || tarea.startsWith(".")) return null;
   validarSegmento(tarea, "tarea");
   const carpeta = taskFolderPath(proyecto, tarea);
-  return esCarpeta(carpeta) ? carpeta : null;
+  return esCarpeta(carpeta) ? { carpeta, proyecto } : null;
 }
 
 function completarDocumento(escrito: string, contexto?: { arguments?: Record<string, string> }): string[] {
   return sinFallar(() => {
-    const carpeta = carpetaDeTareaPedida(contexto);
+    const carpeta = carpetaDeTareaPedida(contexto)?.carpeta;
     if (!carpeta) return [];
     const documentos = fs
       .readdirSync(carpeta, { withFileTypes: true })
@@ -269,8 +295,8 @@ function completarDocumento(escrito: string, contexto?: { arguments?: Record<str
 
 function completarRecibo(escrito: string, contexto?: { arguments?: Record<string, string> }): string[] {
   return sinFallar(() => {
-    const carpeta = carpetaDeTareaPedida(contexto);
-    return carpeta ? filtrar(recibosDe(carpeta, discoverPhases()), escrito) : [];
+    const pedida = carpetaDeTareaPedida(contexto);
+    return pedida ? filtrar(recibosDe(pedida.carpeta, fasesDe(pedida.proyecto)), escrito) : [];
   });
 }
 
@@ -305,7 +331,7 @@ export function registrarRecursos(mcp: McpServer): void {
       mimeType: MIME,
       annotations: { audience: AUDIENCIA },
     },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: formatearDiagnostico(diagnosticar(), "markdown") }] })
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: formatearDiagnostico(await diagnosticarSinBloquear(), "markdown") }] })
   );
 
   mcp.registerResource(
@@ -318,6 +344,28 @@ export function registrarRecursos(mcp: McpServer): void {
       annotations: { audience: AUDIENCIA },
     },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: tablaDeFases() }] })
+  );
+
+  // La configuración efectiva de cada proyecto (Etapa 3): manifiesto, preset, reglas y repos.
+  mcp.registerResource(
+    "configuracion",
+    new ResourceTemplate("phase-gate://configuracion/{proyecto}", {
+      list: async () => ({ resources: listarConfiguraciones() }),
+      complete: { proyecto: completarProyecto },
+    }),
+    {
+      title: "Configuración de un proyecto",
+      description: "El manifiesto efectivo de un proyecto, de dónde sale cada valor (preset, reglas) y el estado de sus repos en este equipo.",
+      mimeType: MIME,
+    },
+    async (uri, variables) => {
+      const carpeta = conCodigo(() => {
+        const proyecto = variable(variables, "proyecto");
+        validarSegmento(proyecto, "proyecto");
+        return requireProjectFolder(proyecto);
+      });
+      return { contents: [{ uri: uri.href, mimeType: MIME, text: await informeDeConfiguracion(carpeta) }] };
+    }
   );
 
   // El de recibos va antes que el de documentos: los dos empiezan igual, y el SDK usa la primera
@@ -335,9 +383,12 @@ export function registrarRecursos(mcp: McpServer): void {
     },
     async (uri, variables) =>
       conCodigo(() => {
-        const subcarpeta = subcarpetaDeRecibos(discoverPhases());
+        // La subcarpeta la declara una fase de SU proyecto: el proyecto se valida antes de mirarla.
+        const proyecto = variable(variables, "proyecto");
+        validarSegmento(proyecto, "proyecto");
+        const subcarpeta = subcarpetaDeRecibos(fasesDe(requireProjectFolder(proyecto)));
         if (!subcarpeta) throw new Error("No existe ninguna fase que declare una subcarpeta de recibos.");
-        const { ruta } = archivoDeTarea(variable(variables, "proyecto"), variable(variables, "tarea"), [
+        const { ruta } = archivoDeTarea(proyecto, variable(variables, "tarea"), [
           subcarpeta,
           variable(variables, "recibo"),
         ]);

@@ -107,9 +107,9 @@ export function validarNombreVisible(valor: string, campo: string): string {
 // las carpetas que no son proyectos, y da de alta uno nuevo con solo crearle su subcarpeta.
 // Si la subcarpeta está vacía la regla no se puede aplicar y vale cualquier carpeta.
 // Las carpetas con punto nunca son proyecto: .obsidian o .git en la raíz de la Documentación.
-export function discoverProjects(): Map<string, string> {
+// `base` es para quien recorre otra Documentación que la del entorno: init --docs --migrate.
+export function discoverProjects(base: string = requireBasePath(DOCS)): Map<string, string> {
   const proyectos = new Map<string, string>(); // clave en minúsculas -> nombre real de la carpeta
-  const base = requireBasePath(DOCS);
   const subdir = tasksSubdir();
 
   for (const entrada of fs.readdirSync(base, { withFileTypes: true })) {
@@ -275,6 +275,9 @@ export function ubicarEnTarea(rutaAbsoluta: string): UbicacionEnTarea | null {
 // Ruta de un archivo dentro de UN repo. Antes la comprobación miraba la carpeta de repos
 // entera, y desde repoA "../repoB/.env" pasaba: estaba dentro de la carpeta de repos. El repo
 // se resuelve a su ruta real para que un repo que es un enlace a otra unidad siga valiendo.
+//
+// Tampoco entra en .git, con la misma regla que read_repo_file: config puede llevar el token de la URL
+// del remoto (hallazgo 9 de la auditoría de la Etapa 3, que ya pasaba antes de ella).
 export function resolveRepoPath(repoName: string, filePath: string): string {
   validarSegmento(repoName, "repo_name");
 
@@ -285,7 +288,25 @@ export function resolveRepoPath(repoName: string, filePath: string): string {
   if (!estaDentroReal(repoReal, ruta)) {
     throw new Error(`Acceso denegado: file_path "${filePath}" queda fuera del repositorio ${repoName}.`);
   }
+  if (filePath.split(/[\\/]/).some(esSegmentoDeGit)) {
+    throw new Error(`file_path no puede entrar en .git ni leer archivos de git ("${filePath}").`);
+  }
+  if (path.relative(repoReal, rutaReal(ruta)).split(/[\\/]/).some(esSegmentoDeGit)) {
+    throw new Error(`Acceso denegado: file_path "${filePath}" lleva a .git a través de un enlace.`);
+  }
   return ruta;
+}
+
+// Nada de .git: ni la carpeta (config puede llevar credenciales en una URL, y hooks/ es código), ni
+// un archivo .git (el puntero de un worktree o un submódulo). Se rechaza todo segmento que sea
+// `.git` o empiece por `.git`, sin distinguir mayúsculas (en Windows y macOS `.GIT` abre lo mismo).
+// La excepción es `.github`, que no puede ser .git y guarda los workflows de CI. Consecuencia
+// aceptada: .gitignore, .gitattributes y .gitmodules tampoco se leen con read_repo_file ni con
+// read_cross_repo. La ruta ya resuelta se comprueba igual, así que un nombre corto 8.3 (GIT~1) o un
+// enlace interno no lleva a .git.
+export function esSegmentoDeGit(segmento: string): boolean {
+  const nombre = segmento.toLowerCase();
+  return nombre.startsWith(".git") && nombre !== ".github";
 }
 
 // ─── Lectura acotada ────────────────────────────────────────────────────────

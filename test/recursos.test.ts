@@ -17,7 +17,7 @@ import { carpetaTemporal, crearProyecto, crearSymlink, crearTarea, docsTemporale
 
 afterEach(limpiarEntorno);
 
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 const CONTEXTO = "00 - Contexto Inicial.md";
 const ANALISIS = "01 - Análisis Técnico.md";
 const RECIBOS = "04 - Ejecución";
@@ -98,12 +98,13 @@ describe("resources/list", () => {
     }
   });
 
-  it("anuncia las dos plantillas", async () => {
+  it("anuncia las tres plantillas (la de configuración, desde la Etapa 3)", async () => {
     escenario();
     const { cliente, cerrar } = await conectar();
     try {
       const { resourceTemplates } = await cliente.listResourceTemplates();
       assert.deepEqual(resourceTemplates.map((t) => t.uriTemplate).sort(), [
+        "phase-gate://configuracion/{proyecto}",
         "phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}",
         "phase-gate://tareas/{proyecto}/{tarea}/{documento}",
       ]);

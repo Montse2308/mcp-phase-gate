@@ -181,7 +181,7 @@ describe("promptsLayers", () => {
   // alguien renombra un archivo de `prompts/` y rompe el patrón, esa fase desaparece del
   // paquete en silencio, y esto es lo único que lo caza.
   it("los prompts que se publican declaran sus cinco fases con documento", () => {
-    const fases = discoverPhases([path.join(process.cwd(), "prompts")]);
+    const fases = discoverPhases([path.join(process.cwd(), "prompts", "es")]);
 
     assert.deepEqual([...fases.keys()].sort((a, b) => a - b), [1, 2, 3, 4, 5]);
     for (const [numero, datos] of fases) {
@@ -268,7 +268,11 @@ describe("describePhaseFiles", () => {
 
     assert.ok(bloque.includes("Los recibos de lote van en la subcarpeta `04 - Ejecución/`, uno por lote"), bloque);
     assert.ok(bloque.includes("`04 - Ejecución/L01 - <slug>.md`"), bloque);
-    assert.ok(bloque.includes("Con un solo lote no hay subcarpeta: el recibo es el documento de esta fase."), bloque);
+    // Etapa 4 (L08): los escribe record_batch, también con un solo lote (H2), y el documento de la fase
+    // no se escribe con write_central_doc.
+    assert.ok(bloque.includes("Los escribe `record_batch`, también con un solo lote mientras está abierto."), bloque);
+    assert.ok(bloque.includes("Lo genera `record_batch` al cerrar el último lote: no lo escribas con `write_central_doc`."), bloque);
+    assert.equal(bloque.includes("Guárdalo con `write_central_doc`"), false, bloque);
   });
 
   it("una fase posterior ve la subcarpeta junto al documento de la Fase 4", () => {

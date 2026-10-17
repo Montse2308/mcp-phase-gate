@@ -19,6 +19,7 @@ import { log } from "./log.js";
 import { claveDeNombre, findProjectFolder, leerTextoAcotado, requireProjectFolder, tasksRootPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
+import { cabeceraDeRecibo, loteDelNombre } from "./recibos.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
 // Forma del archivo: { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" }
@@ -89,14 +90,86 @@ export function limpiarEstadoViejo(): void {
 }
 
 // ─── Estado deducido de una tarea ───────────────────────────────────────────
+// El progreso dentro de la fase que ejecuta por lotes (la 4), deducido de archivos que escribe el
+// servidor: el frontmatter del plan y el de cada recibo.
+export type ProgresoDeLotes = {
+  total: number | null;            // del frontmatter del plan; null si el plan no lo declara
+  cerrados: number;                // recibos con ancla distinta de pendiente (un fallido no cuenta)
+  actual: number | null;           // primer lote sin recibo cerrado
+  pendienteDeCommit: number | null; // lote con recibo y commit pendiente
+};
+
 export type EstadoTarea = {
   taskName: string;
   folderPath: string;
   fasesHechas: number[];
   siguienteFase: number | null;  // null = ya no queda ninguna fase con documento pendiente
   fasesConDocumento: number;     // 0 = no hay nada que deducir (ningún prompt declara documento)
-  ultimoCambio: number | null;   // mtime del documento más reciente, para ordenar por actividad
+  ultimoCambio: number | null;   // mtime del documento o recibo más reciente, para ordenar por actividad
+  lotes: ProgresoDeLotes | null; // solo cuando la fase siguiente es la que declara recibos
 };
+
+function esLoteCerrado(cabecera: { estado: string; ancla: string }): boolean {
+  return cabecera.ancla !== "pendiente" && cabecera.estado !== "fallido";
+}
+
+// Lee solo frontmatter: el `lotes` del plan y la cabecera de cada recibo. Un archivo ilegible no
+// cuenta; el progreso es una ayuda para el chat, no una condición.
+export function progresoDeLotes(folderPath: string, plan: string | null, recibos: string): ProgresoDeLotes {
+  let total: number | null = null;
+  if (plan) {
+    try {
+      const valor = (separarFrontmatter(leerTextoAcotado(path.join(folderPath, plan))).meta.lotes ?? "").trim();
+      if (/^\d+$/.test(valor) && Number(valor) >= 1 && Number(valor) <= 99) total = Number(valor);
+    } catch {
+      total = null;
+    }
+  }
+
+  const porLote = new Map<number, { estado: string; ancla: string }[]>();
+  const subcarpeta = path.join(folderPath, recibos);
+  for (const nombre of fs.existsSync(subcarpeta) ? fs.readdirSync(subcarpeta).sort() : []) {
+    const lote = loteDelNombre(nombre);
+    if (lote === null) continue;
+    try {
+      const cabecera = cabeceraDeRecibo(leerTextoAcotado(path.join(subcarpeta, nombre)), nombre);
+      porLote.set(lote, [...(porLote.get(lote) ?? []), cabecera]);
+    } catch {
+      // un recibo que no se puede leer no suma; doctor lo dice
+    }
+  }
+
+  const cerradoEl = (lote: number) => (porLote.get(lote) ?? []).some(esLoteCerrado);
+  // Un recibo de un lote que el plan no declara no es el lote "actual" (doctor lo marca fuera de plan).
+  const pendiente = [...porLote.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .find(([lote, cabeceras]) => (total === null || lote <= total) && cabeceras.some((c) => c.ancla === "pendiente"));
+  let actual: number | null = null;
+  if (total !== null) {
+    for (let lote = 1; lote <= total; lote++) {
+      if (!cerradoEl(lote)) {
+        actual = lote;
+        break;
+      }
+    }
+  }
+
+  return {
+    total,
+    cerrados: [...porLote.keys()].filter((lote) => (total === null || lote <= total) && cerradoEl(lote)).length,
+    actual,
+    pendienteDeCommit: pendiente ? pendiente[0] : null,
+  };
+}
+
+// La fase que declara recibos y el documento de la anterior (su plan).
+function faseDeRecibos(phases: Map<number, PhaseFile>): { numero: number; recibos: string; plan: string | null } | null {
+  const ordenadas = [...phases.entries()].sort((a, b) => a[0] - b[0]);
+  const conRecibos = ordenadas.find(([, datos]) => datos.recibos);
+  if (!conRecibos) return null;
+  const plan = ordenadas.filter(([n, d]) => n < conRecibos[0] && d.documento).pop();
+  return { numero: conRecibos[0], recibos: conRecibos[1].recibos!, plan: plan ? plan[1].documento! : null };
+}
 
 // Mira qué documentos existen en la carpeta y traduce eso a fases hechas y fase siguiente.
 // Solo cuentan las fases que declaran documento: una fase sin documento no puede completarse
@@ -133,6 +206,21 @@ export function estadoDeTarea(
     }
   }
 
+  // Los recibos también son actividad: durante la Fase 4 son lo único que cambia en días.
+  for (const datos of phases.values()) {
+    if (!datos.recibos) continue;
+    const subcarpeta = path.join(folderPath, datos.recibos);
+    try {
+      for (const entrada of fs.readdirSync(subcarpeta, { withFileTypes: true })) {
+        if (!entrada.isFile() || !entrada.name.toLowerCase().endsWith(".md")) continue;
+        const mtime = fs.statSync(path.join(subcarpeta, entrada.name)).mtimeMs;
+        if (ultimoCambio === null || mtime > ultimoCambio) ultimoCambio = mtime;
+      }
+    } catch {
+      // sin subcarpeta de recibos no hay nada que mirar
+    }
+  }
+
   // Sin ningún documento todavía, la carpeta recién creada por start_task marca la actividad.
   if (ultimoCambio === null) {
     try {
@@ -142,13 +230,18 @@ export function estadoDeTarea(
     }
   }
 
+  const siguienteFase = pendientes.length ? (pendientes[0] as number) : null;
+  const deRecibos = faseDeRecibos(phases);
+  const lotes = deRecibos && siguienteFase === deRecibos.numero ? progresoDeLotes(folderPath, deRecibos.plan, deRecibos.recibos) : null;
+
   return {
     taskName,
     folderPath,
     fasesHechas,
-    siguienteFase: pendientes.length ? (pendientes[0] as number) : null,
+    siguienteFase,
     fasesConDocumento: conDocumento.length,
     ultimoCambio,
+    lotes,
   };
 }
 
@@ -183,6 +276,16 @@ function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null 
 // falta nunca.
 const clave = claveDeNombre;
 
+// Desde la Etapa 4, los recibos y el documento de la fase que los declara los escribe el servidor
+// (record_batch). write_central_doc los rechaza siempre, también para crearlos; la escotilla de
+// confirmación (elicitation o force) queda para reparar a mano un archivo dañado (decisión H4).
+export const MOTIVO_RECIBO = "Los recibos los escribe `record_batch`.";
+export const MOTIVO_DOCUMENTO_DE_LOTES = "Este documento lo genera `record_batch` al cerrar el último lote.";
+
+export function esMotivoDeLotes(motivo: string | null): boolean {
+  return motivo === MOTIVO_RECIBO || motivo === MOTIVO_DOCUMENTO_DE_LOTES;
+}
+
 // Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
 // dentro de la tarea, con "/" como separador (la de ubicarEnTarea).
 export function motivoDeProteccion(
@@ -206,11 +309,14 @@ export function motivoDeProteccion(
   );
   if (!propia) return null; // no es un archivo de fase
 
-  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Se mira el nombre
-  // declarado y no el que llegó, que puede venir en otras mayúsculas. Un recibo nuevo sí se
-  // congela: con la Fase 5 presente, la ejecución ya se auditó.
+  // Las dos reglas de la Etapa 4 van antes que el congelamiento: en la fase de los recibos, ni sus
+  // recibos ni su documento se escriben con esta tool, existan o no.
   const [numero, datos] = propia;
   const esDocumento = datos.documento !== undefined && clave(datos.documento) === buscado;
+  if (datos.recibos) return esDocumento ? MOTIVO_DOCUMENTO_DE_LOTES : MOTIVO_RECIBO;
+
+  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Se mira el nombre
+  // declarado y no el que llegó, que puede venir en otras mayúsculas.
   if (esDocumento && !fs.existsSync(path.join(carpetaTarea, datos.documento!))) return null;
 
   for (const [posterior, datosPosterior] of fases) {
@@ -236,9 +342,18 @@ export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFil
   }
 
   const titulo = phases.get(estado.siguienteFase)?.title;
+  // En la fase de los lotes, también por dónde va dentro de ella.
+  const lotes = estado.lotes;
+  let progreso = "";
+  if (lotes) {
+    if (lotes.total === null) progreso = "; el plan no declara lotes";
+    else if (lotes.pendienteDeCommit !== null) progreso = `, lote ${lotes.pendienteDeCommit} de ${lotes.total}, commit pendiente`;
+    else if (lotes.actual !== null) progreso = `, lote ${lotes.actual} de ${lotes.total}`;
+    else progreso = `, ${lotes.cerrados} de ${lotes.total} lotes cerrados`;
+  }
   const siguiente = titulo
-    ? `va en Fase ${estado.siguienteFase} (${titulo})`
-    : `va en Fase ${estado.siguienteFase}`;
+    ? `va en Fase ${estado.siguienteFase} (${titulo}${progreso})`
+    : `va en Fase ${estado.siguienteFase}${progreso ? ` (${progreso.replace(/^[,;] /, "")})` : ""}`;
 
   return estado.fasesHechas.length
     ? `${siguiente}; hechas: ${estado.fasesHechas.join(", ")}`
@@ -347,13 +462,26 @@ export function detectarSalto(
 // alta, en vez de callar como si todo estuviera en orden.
 export type OpcionesDeTarea = { project?: string; taskName?: string };
 
+// Las fases con las que se deduce una tarea dependen de su proyecto (un proyecto puede sustituir
+// una fase con otro documento). Quien llama pasa un mapa fijo o la función que da las de cada
+// proyecto, porque aquí el proyecto se resuelve dentro.
+export type FasesPorProyecto = Map<number, PhaseFile> | ((carpetaProyecto: string) => Map<number, PhaseFile>);
+
+function fasesPara(phases: FasesPorProyecto, carpetaProyecto: string): Map<number, PhaseFile> {
+  return typeof phases === "function" ? phases(carpetaProyecto) : phases;
+}
+
+export type TareaResuelta = { estado: EstadoTarea; carpetaProyecto: string; phases: Map<number, PhaseFile> };
+
 // La tarea de la que habla una llamada a get_phase_prompt: la indicada, o la activa del proyecto.
 // Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa; con
 // varios, se devuelve "ambigua" para que quien llama lo diga en vez de callar.
-export function tareaDelPrompt(
-  phases: Map<number, PhaseFile>,
-  opciones: OpcionesDeTarea = {}
-): EstadoTarea | "ambigua" | null {
+export function tareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): EstadoTarea | "ambigua" | null {
+  const resuelta = resolverTareaDelPrompt(phases, opciones);
+  return resuelta === "ambigua" || resuelta === null ? resuelta : resuelta.estado;
+}
+
+export function resolverTareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): TareaResuelta | "ambigua" | null {
   let carpetaProyecto: string;
 
   if (opciones.project) {
@@ -369,30 +497,28 @@ export function tareaDelPrompt(
     carpetaProyecto = encontrada;
   }
 
+  const deEste = fasesPara(phases, carpetaProyecto);
   const estado = opciones.taskName
-    ? listarTareas(carpetaProyecto, phases).find((tarea) => tarea.taskName === opciones.taskName)
-    : tareaActiva(carpetaProyecto, phases)?.estado;
+    ? listarTareas(carpetaProyecto, deEste).find((tarea) => tarea.taskName === opciones.taskName)
+    : tareaActiva(carpetaProyecto, deEste)?.estado;
 
-  return estado ?? null; // null: proyecto sin tareas, o un nombre de tarea que no existe.
+  // null: proyecto sin tareas, o un nombre de tarea que no existe.
+  return estado ? { estado, carpetaProyecto, phases: deEste } : null;
 }
 
-export function avisoDeCompuerta(
-  fasePedida: number,
-  phases: Map<number, PhaseFile>,
-  opciones: OpcionesDeTarea = {}
-): string | null {
-  const estado = tareaDelPrompt(phases, opciones);
+export function avisoDeCompuerta(fasePedida: number, phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): string | null {
+  const resuelta = resolverTareaDelPrompt(phases, opciones);
 
-  if (estado === "ambigua") {
+  if (resuelta === "ambigua") {
     return (
       "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
       "proyectos con tarea activa. Pasa `project` para que se compruebe."
     );
   }
-  if (!estado) return null;
+  if (!resuelta) return null;
 
-  const salto = detectarSalto(fasePedida, estado, phases);
-  return salto ? avisoDeSalto(salto, estado.taskName, phases) : null;
+  const salto = detectarSalto(fasePedida, resuelta.estado, resuelta.phases);
+  return salto ? avisoDeSalto(salto, resuelta.estado.taskName, resuelta.phases) : null;
 }
 
 // ─── Recibos que ya existen ─────────────────────────────────────────────────

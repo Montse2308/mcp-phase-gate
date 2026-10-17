@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/mcp-phase-gate@3/schema/machine.json",
+  "title": "machine.json",
+  "description": "Configuración de mcp-phase-gate en este equipo: rutas de repos que salen de PHASE_GATE_REPOS_PATH y preset por defecto para proyectos sin manifiesto.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "repos": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[^/\\\\]+\\/[a-z0-9][a-z0-9-]{0,39}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "presetPorDefecto": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false
+}

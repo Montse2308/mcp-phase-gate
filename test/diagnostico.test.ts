@@ -8,9 +8,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cargarEnv } from "../src/config.js";
-import { deducirVia, diagnosticar, formatearDiagnostico } from "../src/diagnostico.js";
+import { execFileSync } from "node:child_process";
+
+import { doctorReverificando, ejecutarCli } from "../src/cli.js";
+import { cargarEnv, fijarRaizDelPaquete } from "../src/config.js";
+import { LARGO_DE_RUTA, anclasNoVigentes, deducirVia, diagnosticar, formatearDiagnostico } from "../src/diagnostico.js";
 import type { Diagnostico } from "../src/diagnostico.js";
+import { registrarLote } from "../src/lotes.js";
 import { guardarPuntero } from "../src/tasks.js";
 import {
   carpetaTemporal,
@@ -25,7 +29,7 @@ import {
 afterEach(limpiarEntorno);
 
 // Este archivo compila a build-test/test/; los prompts del repo están dos niveles arriba.
-const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
 const GLOBALES_COMPLETAS = [
   "## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)",
@@ -119,6 +123,29 @@ describe("diagnosticar", () => {
     assert.match(hallazgo?.texto ?? "", /"## BASE DE CADA DECISIÓN", "## PENDIENTES HEREDADOS"/);
     assert.equal(d.reglasGlobales.capa, "propia");
     assert.deepEqual(d.reglasGlobales.faltan, ["BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"]);
+  });
+
+  // Etapa 3, L02: BASE y PENDIENTES son esqueleto y se reinyectan desde la fábrica; EVIDENCIA no.
+  it("GLOBAL-REINYECTADO sustituye a GLOBAL-SIN-BASE cuando la fábrica tiene las secciones que faltan", () => {
+    instalacionCorrecta();
+    fijarRaizDelPaquete(path.resolve(PROMPTS_DEL_REPO, "..", ".."));
+    try {
+      promptsTemporales({ "global-rules.md": "## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)\n\n## EVIDENCIA\n" });
+      const sinEsqueleto = diagnosticar();
+      const reinyectado = sinEsqueleto.hallazgos.find((h) => h.codigo === "GLOBAL-REINYECTADO");
+      assert.equal(reinyectado?.severidad, "aviso");
+      assert.match(reinyectado?.texto ?? "", /se añaden al final las de fábrica/);
+      assert.match(reinyectado?.texto ?? "", /global\/evidencia/);
+      assert.ok(!codigos(sinEsqueleto).includes("GLOBAL-SIN-BASE"));
+
+      // Sin EVIDENCIA, que es una ranura y no se reinyecta, sigue saliendo GLOBAL-SIN-BASE para ella.
+      promptsTemporales({ "global-rules.md": "## BASE DE CADA DECISIÓN\n\n## PENDIENTES HEREDADOS\n" });
+      const sinEvidencia = diagnosticar();
+      assert.ok(!codigos(sinEvidencia).includes("GLOBAL-REINYECTADO"));
+      assert.match(sinEvidencia.hallazgos.find((h) => h.codigo === "GLOBAL-SIN-BASE")?.texto ?? "", /no tiene "## EVIDENCIA"\./);
+    } finally {
+      fijarRaizDelPaquete(null);
+    }
   });
 
   it("GLOBAL-SIN-BASE no salta con un global-rules.md propio completo, aunque esté en CRLF y con BOM", () => {
@@ -339,5 +366,124 @@ describe("diagnosticar ante instalaciones rotas", () => {
 
     const hallazgo = diagnosticar().hallazgos.find((h) => h.codigo === "ENV-ILEGIBLE");
     assert.equal(hallazgo?.severidad, "error");
+  });
+});
+
+// L09 de la Etapa 4: doctor revisa los recibos, las anclas y los índices de la Fase 4, y las rutas largas.
+describe("diagnosticar: los recibos de la Fase 4", () => {
+  const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  afterEach(() => fijarRaizDelPaquete(null));
+
+  const g = (dir: string, ...args: string[]): string =>
+    execFileSync("git", ["-c", "user.name=Prueba", "-c", "user.email=prueba@ejemplo.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", ...args], {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+
+  // Un proyecto con una tarea en la Fase 4; con `repo`, un repo de git `api` declarado en el manifiesto.
+  function enFase4(lotes: number, conRepo = false) {
+    fijarRaizDelPaquete(RAIZ);
+    const { docs, repos } = instalacionCorrecta();
+    crearProyecto(docs, "P");
+    if (conRepo) {
+      fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, repos: [{ id: "api", dir: "api" }] }), "utf-8");
+      fs.mkdirSync(path.join(repos, "api"));
+      g(path.join(repos, "api"), "init", "-q");
+    }
+    const tarea = crearTarea(docs, "P", "t", ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md", "02 - Decisiones.md"]);
+    fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), `---\nlotes: ${lotes}\n---\n# Plan\n`, "utf-8");
+    return { docs, tarea, repo: path.join(repos, "api") };
+  }
+  const lote = (n: number, extra: Record<string, unknown> = {}) => ({ lote: n, titulo: `lote ${n}`, estado: "verificado" as const, que_se_hizo: "x", verificacion: "y", ...extra });
+
+  it("un recibo de un lote que el plan no declara es RECIBO-FUERA-DE-PLAN, y uno escrito a mano, RECIBO-MANUAL (info)", () => {
+    const { tarea } = enFase4(2);
+    fs.mkdirSync(path.join(tarea, "04 - Ejecución"));
+    fs.writeFileSync(path.join(tarea, "04 - Ejecución", "L01 - a mano.md"), "---\nlote: L01\nestado: verificado\ncommit: no aplica\n---\n# L01 — a mano\n", "utf-8");
+    fs.writeFileSync(path.join(tarea, "04 - Ejecución", "L03 - sobra.md"), "---\nlote: L03\norigen: servidor\ncommit: pendiente\n---\n", "utf-8");
+
+    const d = diagnosticar();
+    const fuera = d.hallazgos.find((h) => h.codigo === "RECIBO-FUERA-DE-PLAN");
+    assert.equal(fuera?.severidad, "aviso");
+    assert.match(fuera!.texto, /^P\/t: `04 - Ejecución\/L03 - sobra\.md` es de un lote que el plan no declara \(declara 2\)\./);
+    const manual = d.hallazgos.find((h) => h.codigo === "RECIBO-MANUAL");
+    assert.equal(manual?.severidad, "info");
+    assert.match(manual!.texto, /^P\/t: el recibo de L01 se escribió a mano/);
+  });
+
+  it("INDICE-DESINCRONIZADO: el índice que generó el servidor ya no es el que ensamblaría hoy", async () => {
+    const { tarea } = enFase4(2);
+    await registrarLote("P", "t", lote(1, { verification_note: "revisado" }));
+    await registrarLote("P", "t", lote(2, { verification_note: "revisado" }));
+    assert.ok(fs.existsSync(path.join(tarea, "04 - Ejecución.md")));
+    assert.equal(codigos(diagnosticar()).includes("INDICE-DESINCRONIZADO"), false, "recién cerrado coincide");
+
+    // Un recibo tocado a mano después del cierre.
+    const recibo = path.join(tarea, "04 - Ejecución", "L02 - lote 2.md");
+    fs.writeFileSync(recibo, fs.readFileSync(recibo, "utf-8").replace("estado: verificado", "estado: con pendientes"), "utf-8");
+    const h = diagnosticar().hallazgos.find((x) => x.codigo === "INDICE-DESINCRONIZADO");
+    assert.equal(h?.severidad, "aviso");
+    assert.match(h!.texto, /^P\/t: `04 - Ejecución\.md` no coincide con lo que el servidor ensamblaría hoy/);
+  });
+
+  // Hallazgo 12 de la auditoría de la Etapa 4: el código existía y no tenía test.
+  it("un recibo que no se puede leer (binario) es RECIBO-ILEGIBLE", () => {
+    const { tarea } = enFase4(2);
+    fs.mkdirSync(path.join(tarea, "04 - Ejecución"));
+    fs.writeFileSync(path.join(tarea, "04 - Ejecución", "L01 - roto.md"), Buffer.from([0, 1, 2, 0]));
+    const h = diagnosticar().hallazgos.find((x) => x.codigo === "RECIBO-ILEGIBLE");
+    assert.equal(h?.severidad, "aviso");
+    assert.match(h!.texto, /^P\/t: No se pudo leer el recibo `04 - Ejecución\/L01 - roto\.md`: .*parece binario/);
+  });
+
+  it("un índice escrito a mano (de la 2.x) no se compara", async () => {
+    const { tarea } = enFase4(2);
+    fs.writeFileSync(path.join(tarea, "04 - Ejecución.md"), "---\nlotes: 2\n---\n# Ejecución a mano\n", "utf-8");
+    assert.equal(codigos(diagnosticar()).includes("INDICE-DESINCRONIZADO"), false);
+  });
+
+  it("RUTA-LARGA: alguna ruta de la Documentación pasa de 240 caracteres", () => {
+    const { tarea } = enFase4(1);
+    assert.equal(codigos(diagnosticar()).includes("RUTA-LARGA"), false);
+    const carpeta = path.join(tarea, "una carpeta con un nombre largo de verdad");
+    fs.mkdirSync(carpeta);
+    const nombre = `${"x".repeat(Math.max(1, LARGO_DE_RUTA + 3 - carpeta.length - 4))}.md`;
+    fs.writeFileSync(path.join(carpeta, nombre), "x", "utf-8");
+    assert.ok(path.join(carpeta, nombre).length > LARGO_DE_RUTA);
+
+    const h = diagnosticar().hallazgos.find((x) => x.codigo === "RUTA-LARGA");
+    assert.equal(h?.severidad, "aviso");
+    assert.match(h!.texto, /^1 ruta de la Documentación pasa de 240 caracteres; la más larga \(\d+\):/);
+  });
+
+  it("ANCLA-NO-VIGENTE solo con doctor --reverificar: tras un --amend, el commit del recibo ya no está en la rama", async () => {
+    const { repo } = enFase4(2, true);
+    fs.writeFileSync(path.join(repo, "a.txt"), "a\n", "utf-8");
+    g(repo, "add", "a.txt");
+    g(repo, "commit", "-q", "-m", "lote 1");
+    await registrarLote("P", "t", lote(1, { commit: g(repo, "rev-parse", "HEAD"), archivos: [{ archivo: "a.txt", cambio: "nuevo" }] }));
+    assert.deepEqual(await anclasNoVigentes(), []);
+
+    g(repo, "commit", "-q", "--amend", "-m", "lote 1, reescrito");
+    const hallazgos = await anclasNoVigentes();
+    assert.equal(hallazgos.length, 1);
+    assert.equal(hallazgos[0]!.severidad, "aviso");
+    assert.match(hallazgos[0]!.texto, /^P\/t, L01: El commit `[0-9a-f]{7}` ya no está en la rama actual \(`main`\)/);
+    assert.equal(codigos(diagnosticar()).includes("ANCLA-NO-VIGENTE"), false, "sin --reverificar no se mira git");
+
+    let salida = "";
+    const codigo = await doctorReverificando(true, { out: (t) => (salida += t), err: () => {} });
+    assert.equal(codigo, 0, "un aviso no es un error");
+    assert.ok((JSON.parse(salida) as Diagnostico).hallazgos.some((h) => h.codigo === "ANCLA-NO-VIGENTE"));
+  });
+
+  it("doctor --reverificar es una acción aparte, y no va con --fase", () => {
+    const err: string[] = [];
+    const salida = { out: () => {}, err: (t: string) => err.push(t) };
+    assert.deepEqual(ejecutarCli(["doctor", "--reverificar"], salida), { accion: "doctor-reverificar", json: false });
+    assert.deepEqual(ejecutarCli(["doctor", "--reverificar", "--json"], salida), { accion: "doctor-reverificar", json: true });
+    assert.deepEqual(ejecutarCli(["doctor", "--reverificar", "--fase", "3"], salida), { accion: "salir", codigo: 2 });
+    assert.match(err.join("\n"), /--reverificar no va con --fase ni con --proyecto/);
   });
 });

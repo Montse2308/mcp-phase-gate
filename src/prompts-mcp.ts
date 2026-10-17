@@ -3,7 +3,7 @@
 // servidor los ofrece a cualquier cliente que muestre prompts, y llegan con cada versión.
 //
 // El texto de cada comando vive en `comandos/fN.md` dentro de una capa de prompts (los de fábrica
-// en prompts/comandos/), y se resuelve por capas como las fases: gana la más alta que lo tenga.
+// en prompts/es/comandos/), y se resuelve por capas como las fases: gana la más alta que lo tenga.
 // Una fase sin comando, como una fase-6 propia, recibe un texto genérico que funciona igual.
 //
 // El prompt NO incluye el prompt de la fase: sigue siendo orquestación ("llama a
@@ -15,8 +15,11 @@ import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs";
 import { z } from "zod";
 
+import { capasDeCuerpos, rutasDeCuerpos } from "./capas.js";
 import { promptsLayers } from "./config.js";
 import { log } from "./log.js";
+import { findProjectFolder } from "./paths.js";
+import { proyectoPorRaices } from "./roots.js";
 import { discoverPhases, parsePhaseFile, resolveCommandFile } from "./phases.js";
 
 // Todos los argumentos son opcionales: el texto de cada comando ya pide lo que falte, y así el
@@ -109,6 +112,22 @@ export function textoDelComando(numero: number, titulo: string, args: Argumentos
   return datos ? `${cuerpo}\n\n${datos}` : cuerpo;
 }
 
+// Las capas de las que sale el texto de un comando. La lista de prompts no depende de ningún
+// proyecto (capas sin proyecto), pero al pedir uno con `project` el texto sale de las capas de ese
+// proyecto: un proyecto puede tener su propio comandos/f4.md. Un proyecto que no existe, o uno con el
+// manifiesto roto, no impide entregar el comando: se usa el de las capas sin proyecto.
+export function capasDelComando(project: string | undefined): string[] {
+  if (project?.trim()) {
+    try {
+      const carpeta = findProjectFolder(project);
+      if (carpeta) return rutasDeCuerpos(capasDeCuerpos(carpeta));
+    } catch {
+      // El comando se entrega igual; el error real lo dará la tool que use el proyecto.
+    }
+  }
+  return promptsLayers();
+}
+
 // ─── Registro dinámico ──────────────────────────────────────────────────────
 // Las fases se descubren de los archivos, así que los prompts también: una fase-6 que aparece en
 // una capa propia gana su /f6, y una fase que desaparece pierde el suyo. Cada registerPrompt,
@@ -128,9 +147,16 @@ function registrar(mcp: McpServer, numero: number, titulo: string): RegisteredPr
     async (args: Argumentos): Promise<GetPromptResult> => {
       // El título se toma del registro vigente: puede haber cambiado desde que se registró.
       const vigente = registros.get(mcp)?.get(numero)?.titulo ?? titulo;
+      // Sin project, el de la carpeta abierta: el comando sale de sus capas y el modelo recibe su
+      // nombre en "Datos de esta invocación", para pasárselo a las tools.
+      let datos = args;
+      if (!args.project?.trim()) {
+        const porRaices = await proyectoPorRaices(mcp);
+        if (porRaices.tipo === "unico") datos = { ...args, project: porRaices.carpetaProyecto };
+      }
       return {
         description: descripcionDePrompt(numero, vigente),
-        messages: [{ role: "user", content: { type: "text", text: textoDelComando(numero, vigente, args) } }],
+        messages: [{ role: "user", content: { type: "text", text: textoDelComando(numero, vigente, datos, capasDelComando(datos.project)) } }],
       };
     }
   );

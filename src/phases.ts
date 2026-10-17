@@ -4,6 +4,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { capasDesdeRutas, ensamblarConCapas, ensamblarFase } from "./capas.js";
 import { promptsLayers } from "./config.js";
 import { log } from "./log.js";
 import { claveDeNombre, validarSegmento } from "./paths.js";
@@ -82,7 +83,7 @@ export function quitarMarcadores(texto: string): string {
 // en mayúsculas, con texto detrás). Llegaría tal cual al modelo, así que queda en el log.
 const RESTO_DE_MARCADOR = /<!--[^\n]*?ranura/i;
 
-function entregable(texto: string, archivo: string): string {
+export function entregable(texto: string, archivo: string): string {
   const limpio = quitarMarcadores(texto);
   if (RESTO_DE_MARCADOR.test(limpio)) {
     log("warning", `${archivo} tiene un marcador de ranura que no se reconoce: llega tal cual al modelo.`);
@@ -227,39 +228,17 @@ export function nombreContextoInicial(capas: string[] = promptsLayers()): string
 }
 
 // Se lee en cada llamada (no se cachea) para poder afinar un prompt y probarlo
-// de inmediato, sin reiniciar el servidor MCP.
-export function loadPhasePrompt(phase: number, capas: string[] = promptsLayers()): string {
-  const available = discoverPhases(capas);
-  const entry = available.get(phase);
-
-  if (!entry) {
-    const list = [...available.keys()].sort((a, b) => a - b).join(", ");
-    throw new Error(
-      list
-        ? `Fase no válida. Las fases disponibles son: ${list}.`
-        : `No se encontró ningún prompt de fase en ${capas.join(", ")}. Verifica que la carpeta 'prompts' exista junto al build.`
-    );
-  }
-
-  const parts: string[] = [];
-
-  const globales = resolveGlobalRules(capas);
-  if (globales) {
-    parts.push(entregable(aLF(fs.readFileSync(globales, "utf-8")), globales));
-  }
-
-  parts.push(entregable(parsePhaseFile(entry.file).cuerpo, entry.file));
-
-  const archivos = describePhaseFiles(available, phase);
-  if (archivos) parts.push(archivos);
-
-  return parts.join("\n\n");
+// de inmediato, sin reiniciar el servidor MCP. El ensamblado (reglas globales, cuerpo de la fase,
+// bloques sobre sus ranuras y la lista de archivos) vive en capas.ts; esto queda para quien pide
+// el texto con una lista de carpetas concreta, sin proyecto.
+export function loadPhasePrompt(phase: number, capas?: string[]): string {
+  return (capas ? ensamblarConCapas(phase, capasDesdeRutas(capas)) : ensamblarFase(phase, null)).texto;
 }
 
-// Las reglas globales de la capa más alta que las tenga. Las tuyas SUSTITUYEN a las de
-// fábrica, no se suman: concatenar dos juegos de reglas hace imposible saber de qué archivo
-// salió la instrucción que estorbó cuando algo sale raro, que es justo el momento en que hay
-// que saberlo. Si quieres las de fábrica y algo más, las copias y añades.
+// El global-rules.md de la capa más alta que lo tenga. Un archivo propio sustituye al de fábrica,
+// pero las secciones esqueleto (BASE DE CADA DECISIÓN y PENDIENTES HEREDADOS) que le falten se
+// reinyectan al ensamblar (capas.ts). La forma recomendada de sumar reglas ya no es copiar el
+// archivo: es un bloques.md con `global/cero-rupturas`, `global/evidencia` o `global/extra`.
 export function resolveGlobalRules(capas: string[] = promptsLayers()): string | null {
   for (const base of [...capas].reverse()) {
     const ruta = path.join(base, GLOBAL_RULES_FILE);
@@ -300,19 +279,25 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
   }
 
   if (propio) {
-    lineas.push(
-      "",
-      `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
-        "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
-    );
-
+    // En la fase de los lotes, el documento y los recibos los escribe record_batch (Etapa 4): el
+    // servidor rechaza escribirlos con write_central_doc, así que decir aquí lo contrario sería mandar
+    // al modelo contra un muro.
     const recibos = available.get(phase)?.recibos;
     if (recibos) {
       lineas.push(
         "",
+        `El documento de esta fase se llama exactamente \`${propio}\`. Lo genera \`record_batch\` al ` +
+          "cerrar el último lote: no lo escribas con `write_central_doc`.",
+        "",
         `Los recibos de lote van en la subcarpeta \`${recibos}/\`, uno por lote: ` +
-          `\`${recibos}/L01 - <slug>.md\`. Con un solo lote no hay subcarpeta: el recibo es el ` +
-          "documento de esta fase."
+          `\`${recibos}/L01 - <slug>.md\`. Los escribe \`record_batch\`, también con un solo lote ` +
+          "mientras está abierto."
+      );
+    } else {
+      lineas.push(
+        "",
+        `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
+          "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
       );
     }
   } else {

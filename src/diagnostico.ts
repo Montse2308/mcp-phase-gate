@@ -21,6 +21,7 @@ import {
   SERVER_NAME,
   SERVER_VERSION,
   TASKS_SUBDIR_POR_DEFECTO,
+  configDir,
   errorDeEnv,
   leerVariable,
   promptsLayers,
@@ -28,10 +29,22 @@ import {
   stateFile,
 } from "./config.js";
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
-import { discoverProjects, estaDentro, findProjectFolder } from "./paths.js";
-import { discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
+import { discoverProjects, estaDentro, findProjectFolder, leerTextoAcotado, requireProjectFolder } from "./paths.js";
+import { SECCIONES_ESQUELETO, capasDe, configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, frontmatterDeTarea, revisarBloques, textoDeReinyeccion } from "./capas.js";
+import type { ConfiguracionProyecto, Procedencia } from "./capas.js";
+import { copiasEnConflicto, describirPresets, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
+import type { LecturaMaquina, Preset, RepoResuelto } from "./manifiesto.js";
+import { PLAZO_DE_ESTADOS_MS, estadoDeRepoSincrono, estadosConPlazo } from "./repos.js";
+import type { EstadoDeRepo } from "./repos.js";
+import { fuerzaPorProyecto, resolverPorRaices } from "./roots.js";
+import { GLOBAL_RULES_FILE, discoverPhases, esCarpeta, leerPromptNormalizado, resolveCommandFile, resolveGlobalRules } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { describeEstado, leerPunteros, listarTareas, tareaActiva } from "./tasks.js";
+import type { EstadoTarea } from "./tasks.js";
+import { reverificar } from "./anclas.js";
+import { ensamblarIndice, faseEnCarpeta, lotesDelPlan, recibosDeLaTarea } from "./lotes.js";
+import type { FaseDeLotes, ReciboEnDisco } from "./lotes.js";
+import { GENERADO_POR, etiquetaDeLote, frontmatterDeRecibo } from "./recibos.js";
 
 export type Severidad = "error" | "aviso" | "info";
 export type Hallazgo = { severidad: Severidad; codigo: string; texto: string };
@@ -60,7 +73,18 @@ export type Diagnostico = {
     nombre: string;
     tareas: number;
     activa: { tarea: string; origen: "puntero" | "deducida"; fase: string } | null;
+    // Desde la Etapa 3: su configuración.
+    manifiesto: string; // "válido", "ausente" o "inválido: <error>"
+    preset: { nombre: string; origen: string } | null; // null si no se pudo resolver
+    reglas: { lotes: boolean; commits: string } | null;
+    repos: { id: string; ruta: string | null; origen: string | null; existe: boolean; esGit: boolean; rama: string | null }[];
+    roots: { fuerza: "fuerte" | "debil" | null } | null; // null si no se conocen las raíces de la sesión
   }[];
+  configuracion: {
+    configDir: string;
+    maquina: { archivo: string; existe: boolean; valido: boolean; overrides: number; presetPorDefecto: string | null };
+    presets: { nombre: string; origen: string; ruta: string | null }[];
+  };
   cliente?: { nombre: string; version: string; capacidades: { elicitation: boolean; roots: boolean } };
   hallazgos: Hallazgo[];
 };
@@ -147,8 +171,315 @@ export function fasesConCapa(
     }));
 }
 
+// Las fases con las que se deducen las tareas de un proyecto. Si su manifiesto no se puede leer,
+// las de sin proyecto: el hallazgo ya lo dice.
+function fasesDelProyecto(carpetaProyecto: string, sinProyecto: Map<number, PhaseFile>): Map<number, PhaseFile> {
+  try {
+    return fasesDe(carpetaProyecto);
+  } catch {
+    return sinProyecto;
+  }
+}
+
+// ─── La configuración de un proyecto ────────────────────────────────────────
+type ContextoDeConfiguracion = {
+  maquina: LecturaMaquina;
+  presets: Map<string, Preset>;
+  presetPorDefecto: string | null;
+  fuerzas: Map<string, "fuerte" | "debil"> | null;
+  estado: { gitAusente: boolean; gitLento: boolean };
+  // Calculados antes, sin bloquear (el servidor); sin esto, git síncrono (doctor en la terminal).
+  estados: EstadosDeRepos | null;
+};
+
+// El estado de git de cada repo, por "<PROYECTO>/<id>". null: no respondió dentro del plazo.
+export type EstadosDeRepos = Map<string, EstadoDeRepo | null>;
+
+type ConfiguracionDiagnosticada = Pick<Diagnostico["proyectos"][number], "manifiesto" | "preset" | "reglas" | "repos" | "roots">;
+
+function configuracionDelProyecto(
+  nombre: string,
+  tareas: EstadoTarea[],
+  ctx: ContextoDeConfiguracion,
+  hallar: (severidad: Severidad, codigo: string, texto: string) => void
+): ConfiguracionDiagnosticada {
+  const lectura = leerManifiesto(nombre);
+  if (lectura.estado === "invalido") hallar("error", lectura.codigo === "PRESET-NO-EXISTE" ? "PRESET-NO-EXISTE" : "MANIFIESTO-INVALIDO", lectura.error);
+
+  const conflictos = copiasEnConflicto(nombre);
+  if (conflictos.length) {
+    hallar(
+      "aviso",
+      "MANIFIESTO-CONFLICTO",
+      `En la carpeta de ${nombre} hay ${conflictos.map((c) => `"${c}"`).join(", ")}, que parece${conflictos.length === 1 ? "" : "n"} una copia en ` +
+        "conflicto de phase-gate.json (OneDrive la deja al editar en dos equipos). Solo se lee phase-gate.json: compáralas y borra la que sobre."
+    );
+  }
+
+  // Las tareas que declaran un preset que no existe fallarían al pedir su prompt.
+  let contexto: string | null = null;
+  try {
+    contexto = contextoInicialDe(nombre);
+  } catch {
+    contexto = null; // manifiesto inválido: ya avisado
+  }
+  const sinPresetPropio = tareas.filter((tarea) => {
+    const declarado = contexto ? frontmatterDeTarea(tarea.folderPath, contexto).preset : null;
+    if (declarado && !ctx.presets.has(declarado)) {
+      hallar("error", "PRESET-NO-EXISTE", `La tarea "${tarea.taskName}" de ${nombre} declara el preset "${declarado}", que no existe. Los disponibles son: ${describirPresets(ctx.presets)}.`);
+    }
+    return !declarado;
+  });
+
+  if (lectura.estado === "ausente" && !ctx.presetPorDefecto && sinPresetPropio.length) {
+    hallar(
+      "aviso",
+      "PRESET-IMPLICITO",
+      `${nombre} no tiene phase-gate.json ni hay presetPorDefecto en machine.json: ${sinPresetPropio.length === 1 ? "su tarea usa" : `sus ${sinPresetPropio.length} tareas usan`} ` +
+        "el preset `software`. Si se crearon con el flujo de la réplica (el de antes de la 3.0), consérvalo con `init --migrate` o con " +
+        "\"presetPorDefecto\": \"software-replica\" en machine.json."
+    );
+  }
+
+  let config: ConfiguracionProyecto | null = null;
+  try {
+    config = configuracionDe(nombre);
+  } catch {
+    config = null; // manifiesto inválido o preset que no existe: ya avisado
+  }
+
+  if (config) {
+    try {
+      for (const h of revisarBloques(capasDe(nombre))) hallar(h.severidad, h.codigo, h.texto);
+    } catch {
+      // Lo que impida armar las capas ya está avisado arriba.
+    }
+  }
+
+  const repos: Diagnostico["proyectos"][number]["repos"] = [];
+  if (config?.manifiesto) {
+    const maquina = ctx.maquina.estado === "invalido" ? { ...ctx.maquina, repos: new Map<string, string>() } : ctx.maquina;
+    for (const repo of resolverRepos(nombre, config.manifiesto.repos, maquina)) {
+      let esGit = false;
+      let rama: string | null = null;
+      if (repo.ruta && !repo.existe) {
+        hallar("aviso", "REPO-NO-EXISTE", `El repo \`${repo.id}\` de ${nombre} apunta a "${repo.ruta}" (${repo.origenRuta}), que no existe en este equipo.`);
+      } else if (repo.existe && !ctx.estado.gitAusente) {
+        const estado = ctx.estados ? (ctx.estados.get(`${nombre}/${repo.id}`) ?? null) : estadoDeRepoSincrono(repo);
+        if (!estado) {
+          if (!ctx.estado.gitLento) {
+            ctx.estado.gitLento = true;
+            hallar("info", "GIT-LENTO", `git no respondió en ${PLAZO_DE_ESTADOS_MS / 1000} s en algún repo; su rama no se muestra. repo_status lo intenta sin ese plazo.`);
+          }
+          repos.push({ id: repo.id, ruta: repo.ruta, origen: repo.origenRuta, existe: repo.existe, esGit: false, rama: null });
+          continue;
+        }
+        if (estado.error && /no está instalado/.test(estado.error)) {
+          ctx.estado.gitAusente = true;
+          hallar("aviso", "GIT-NO-INSTALADO", `${estado.error} repo_status y el estado de los repos no estarán disponibles.`);
+        }
+        esGit = estado.esGit;
+        rama = estado.separado ? `(separado en ${estado.head})` : estado.rama;
+      }
+      repos.push({ id: repo.id, ruta: repo.ruta, origen: repo.origenRuta, existe: repo.existe, esGit, rama });
+    }
+  }
+
+  return {
+    manifiesto: lectura.estado === "valido" ? "válido" : lectura.estado === "ausente" ? "ausente" : `inválido: ${lectura.error}`,
+    preset: config ? { nombre: config.preset.nombre, origen: config.origenPreset } : null,
+    reglas: config ? { lotes: config.reglas.lotes, commits: config.reglas.commits } : null,
+    repos,
+    roots: ctx.fuerzas ? { fuerza: ctx.fuerzas.get(nombre) ?? null } : null,
+  };
+}
+
+// Los repos de todos los proyectos, resueltos como los resuelve el diagnóstico. Un manifiesto o un
+// machine.json roto no impide listar los demás: ya lo avisa el diagnóstico.
+function reposDeTodos(): { clave: string; repo: RepoResuelto }[] {
+  let maquina: LecturaMaquina | null = null;
+  try {
+    maquina = leerMaquina();
+    if (maquina.estado === "invalido") maquina = { ...maquina, repos: new Map() };
+  } catch {
+    maquina = null;
+  }
+  const lista: { clave: string; repo: RepoResuelto }[] = [];
+  try {
+    for (const proyecto of discoverProjects().values()) {
+      try {
+        const manifiesto = manifiestoDe(proyecto);
+        if (!manifiesto || !maquina) continue;
+        for (const repo of resolverRepos(proyecto, manifiesto.repos, maquina)) lista.push({ clave: `${proyecto}/${repo.id}`, repo });
+      } catch {
+        // manifiesto inválido: ya avisado
+      }
+    }
+  } catch {
+    // sin Documentación no hay repos
+  }
+  return lista;
+}
+
+// El diagnóstico para el servidor: el estado de git de los repos se pide antes, en paralelo y con plazo,
+// para no bloquear el resto de mensajes del protocolo (hallazgo 2 de la auditoría de la Etapa 3). doctor,
+// en la terminal, sigue usando diagnosticar(), síncrono.
+export async function diagnosticarSinBloquear(opciones: Omit<OpcionesDeDiagnostico, "estadosDeRepos"> = {}): Promise<Diagnostico> {
+  const repos = reposDeTodos();
+  const estados = await estadosConPlazo(repos.map((r) => r.repo));
+  return diagnosticar({ ...opciones, estadosDeRepos: new Map(repos.map((r, i) => [r.clave, estados[i] ?? null])) });
+}
+
+// ─── Los recibos de la Fase 4 (Etapa 4) ─────────────────────────────────────
+// Lo que se puede revisar sin git: recibos de lotes que el plan no declara, recibos escritos a mano y un
+// índice que ya no es el que el servidor ensamblaría con los recibos de hoy.
+type Hallar = (severidad: Severidad, codigo: string, texto: string) => void;
+
+function enumerar(elementos: string[]): string {
+  return elementos.length <= 1 ? elementos.join("") : `${elementos.slice(0, -1).join(", ")} y ${elementos[elementos.length - 1]}`;
+}
+
+function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<number, PhaseFile>, hallar: Hallar): void {
+  for (const tarea of tareas) {
+    let fase: FaseDeLotes;
+    try {
+      fase = faseEnCarpeta(tarea.folderPath, phases);
+    } catch {
+      return; // ninguna fase del proyecto declara recibos
+    }
+    const quien = `${nombre}/${tarea.taskName}`;
+
+    let porLote: Map<number, ReciboEnDisco[]>;
+    try {
+      porLote = recibosDeLaTarea(fase);
+    } catch (error) {
+      hallar("aviso", "RECIBO-ILEGIBLE", `${quien}: ${mensajeDe(error)}`);
+      continue;
+    }
+    let total: number | null = null;
+    try {
+      total = lotesDelPlan(fase);
+    } catch {
+      total = null; // sin plan, o sin `lotes`: no hay contra qué comparar
+    }
+
+    if (total !== null) {
+      for (const [lote, recibos] of [...porLote.entries()].sort((a, b) => a[0] - b[0])) {
+        if (lote <= total) continue;
+        for (const r of recibos) {
+          hallar("aviso", "RECIBO-FUERA-DE-PLAN", `${quien}: \`${fase.recibos}/${r.nombre}\` es de un lote que el plan no declara (declara ${total}).`);
+        }
+      }
+    }
+
+    const manuales = [...porLote.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .filter(([, recibos]) => recibos.some((r) => r.recibo.origen === "manual"))
+      .map(([lote]) => etiquetaDeLote(lote));
+    if (manuales.length) {
+      hallar(
+        "info",
+        "RECIBO-MANUAL",
+        `${quien}: ${manuales.length === 1 ? `el recibo de ${manuales[0]} se escribió` : `los recibos de ${enumerar(manuales)} se escribieron`} a mano ` +
+          "(sin `origen: servidor`). record_batch los lee igual y get_batch_status los marca como manuales."
+      );
+    }
+
+    // Solo un índice que generó el servidor: uno escrito a mano con la 2.x nunca va a coincidir.
+    if (fase.documento && total !== null && total > 1) {
+      const documento = path.join(tarea.folderPath, fase.documento);
+      try {
+        const texto = leerTextoAcotado(documento).replace(/\r\n/g, "\n");
+        if (frontmatterDeRecibo(texto).meta.generado_por === GENERADO_POR && texto !== ensamblarIndice(tarea.folderPath, phases)) {
+          hallar(
+            "aviso",
+            "INDICE-DESINCRONIZADO",
+            `${quien}: \`${fase.documento}\` no coincide con lo que el servidor ensamblaría hoy con sus recibos (¿se cambió a mano, después del cierre, ` +
+              "el título, el estado, el ancla o lo que espera al usuario de algún recibo, o el propio índice?)."
+          );
+        }
+      } catch {
+        // sin documento todavía, o ilegible: no hay índice que comparar
+      }
+    }
+  }
+}
+
+// ─── Rutas largas (validación V7) ───────────────────────────────────────────
+// Con una Documentación en una carpeta sincronizada de ruta larga, cerca de 255 o 260 caracteres
+// OneDrive y muchas herramientas de Windows dejan de poder abrir un archivo. Se avisa antes.
+export const LARGO_DE_RUTA = 240;
+const TOPE_DE_ENTRADAS = 50_000;
+
+export function rutasLargas(base: string, largo: number = LARGO_DE_RUTA): { cuenta: number; mas_larga: string | null; recortado: boolean } {
+  let cuenta = 0;
+  let masLarga: string | null = null;
+  let vistas = 0;
+  const pendientes = [base];
+  while (pendientes.length) {
+    const carpeta = pendientes.pop()!;
+    let entradas: fs.Dirent[];
+    try {
+      entradas = fs.readdirSync(carpeta, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entrada of entradas) {
+      if (++vistas > TOPE_DE_ENTRADAS) return { cuenta, mas_larga: masLarga, recortado: true };
+      const ruta = path.join(carpeta, entrada.name);
+      if (ruta.length > largo) {
+        cuenta++;
+        if (!masLarga || ruta.length > masLarga.length) masLarga = ruta;
+      }
+      // Sin seguir enlaces ni entrar en .git: lo que importa son los documentos.
+      if (entrada.isDirectory() && !entrada.isSymbolicLink() && entrada.name.toLowerCase() !== ".git") pendientes.push(ruta);
+    }
+  }
+  return { cuenta, mas_larga: masLarga, recortado: false };
+}
+
+// ─── Anclas que ya no valen (doctor --reverificar) ──────────────────────────
+// Necesita git, que es asíncrono: se calcula antes y llega al diagnóstico como hallazgos hechos.
+export async function anclasNoVigentes(): Promise<Hallazgo[]> {
+  const hallazgos: Hallazgo[] = [];
+  let proyectos: string[];
+  try {
+    proyectos = [...discoverProjects().values()].sort();
+  } catch {
+    return hallazgos; // sin Documentación ya hay un VAR-FALTA
+  }
+  for (const nombre of proyectos) {
+    let phases: Map<number, PhaseFile>;
+    try {
+      phases = fasesDe(nombre);
+    } catch {
+      continue; // el manifiesto inválido ya sale como hallazgo
+    }
+    for (const tarea of listarTareas(nombre, phases)) {
+      let porLote: Map<number, ReciboEnDisco[]>;
+      try {
+        porLote = recibosDeLaTarea(faseEnCarpeta(tarea.folderPath, phases));
+      } catch {
+        continue;
+      }
+      for (const [lote, recibos] of [...porLote.entries()].sort((a, b) => a[0] - b[0])) {
+        for (const { recibo } of recibos) {
+          if (recibo.ancla.tipo !== "commit" && recibo.ancla.tipo !== "sha256") continue;
+          const { vigente, texto } = await reverificar(nombre, recibo);
+          if (!vigente) hallazgos.push({ severidad: "aviso", codigo: "ANCLA-NO-VIGENTE", texto: `${nombre}/${tarea.taskName}, ${etiquetaDeLote(lote)}: ${texto}` });
+        }
+      }
+    }
+  }
+  return hallazgos;
+}
+
 // ─── El diagnóstico ─────────────────────────────────────────────────────────
-export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}): Diagnostico {
+// `raices`: las de la sesión MCP (la tool las conoce; doctor, en la terminal, no). `hallazgosExtra`: los
+// que se calcularon antes porque necesitan git asíncrono (doctor --reverificar).
+export type OpcionesDeDiagnostico = { cliente?: Diagnostico["cliente"]; raices?: string[]; estadosDeRepos?: EstadosDeRepos; hallazgosExtra?: Hallazgo[] };
+
+export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico {
   const hallazgos: Hallazgo[] = [];
   const hallar = (severidad: Severidad, codigo: string, texto: string): void => {
     hallazgos.push({ severidad, codigo, texto });
@@ -228,14 +559,24 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
       faltan = [...SECCIONES_GLOBALES];
     }
   }
+  // BASE y PENDIENTES son esqueleto: si un global-rules.md propio no las tiene, el ensamblado añade
+  // las de fábrica (GLOBAL-REINYECTADO). EVIDENCIA es una ranura y no se reinyecta: si falta, las
+  // fases citan una sección que no existe (GLOBAL-SIN-BASE).
   if (archivoGlobales && capaGlobales !== "fábrica" && faltan.length) {
-    hallar(
-      "aviso",
-      "GLOBAL-SIN-BASE",
-      `Tu global-rules.md (${archivoGlobales}) sustituye al de fábrica y no tiene ` +
-        `${faltan.map((seccion) => `"## ${seccion}"`).join(", ")}. Las fases citan esas secciones: ` +
-        `cópialas desde el de fábrica.`
-    );
+    const fabrica = path.join(capas[0]?.ruta ?? "", GLOBAL_RULES_FILE);
+    const reinyectadas = fs.existsSync(fabrica) ? faltan.filter((seccion) => SECCIONES_ESQUELETO.includes(seccion)) : [];
+    const sinReinyectar = faltan.filter((seccion) => !reinyectadas.includes(seccion));
+
+    if (reinyectadas.length) hallar("aviso", "GLOBAL-REINYECTADO", textoDeReinyeccion(archivoGlobales, reinyectadas));
+    if (sinReinyectar.length) {
+      hallar(
+        "aviso",
+        "GLOBAL-SIN-BASE",
+        `Tu global-rules.md (${archivoGlobales}) sustituye al de fábrica y no tiene ` +
+          `${sinReinyectar.map((seccion) => `"## ${seccion}"`).join(", ")}. Las fases citan esas secciones: ` +
+          `cópialas desde el de fábrica.`
+      );
+    }
   }
 
   // Fases.
@@ -267,27 +608,97 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
     }
   }
 
+  // Configuración local: machine.json y los presets disponibles.
+  const maquina = leerMaquina();
+  if (maquina.estado === "invalido") hallar("error", "MAQUINA-INVALIDA", `${maquina.error} Mientras no se corrija, fallan los prompts de los proyectos sin manifiesto (y sin proyecto), que necesitan su presetPorDefecto, y todo lo que resuelve repos.`);
+  for (const aviso of maquina.avisos) hallar(aviso.severidad, aviso.codigo, aviso.texto);
+
+  let presets = new Map<string, Preset>();
+  try {
+    presets = presetsDisponibles();
+  } catch (error) {
+    hallar("error", "PRESETS-ILEGIBLES", `No se pudieron leer los presets: ${mensajeDe(error)}`);
+  }
+  const presetPorDefecto = maquina.config?.presetPorDefecto ?? null;
+  if (presetPorDefecto && !presets.has(presetPorDefecto)) {
+    hallar(
+      "error",
+      "PRESET-NO-EXISTE",
+      `El presetPorDefecto de ${maquina.ruta} es "${presetPorDefecto}", que no existe. Los disponibles son: ${describirPresets(presets)}.`
+    );
+  }
+  const configuracion: Diagnostico["configuracion"] = {
+    configDir: configDir(),
+    maquina: {
+      archivo: maquina.ruta,
+      existe: maquina.estado !== "ausente",
+      valido: maquina.estado === "valido",
+      overrides: maquina.repos.size,
+      presetPorDefecto,
+    },
+    presets: [...presets.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ nombre: p.nombre, origen: p.origen, ruta: p.ruta })),
+  };
+
+  // Los bloques que se aplican sin proyecto: la capa global y el preset de machine.json.
+  try {
+    for (const h of revisarBloques(capasDe(null))) hallar(h.severidad, h.codigo, h.texto);
+  } catch {
+    // Un preset de machine.json que no existe ya es un PRESET-NO-EXISTE.
+  }
+
   // Proyectos y punteros. Sin DOCS_PATH no hay nada que listar, y eso ya es un VAR-FALTA.
   const proyectos: Diagnostico["proyectos"] = [];
   if (rutas.docs.existe) {
     try {
+      let fuerzas: Map<string, "fuerte" | "debil"> | null = null;
+      if (opciones.raices) {
+        fuerzas = fuerzaPorProyecto(opciones.raices);
+        const resolucion = resolverPorRaices(opciones.raices);
+        if (resolucion.tipo === "ambiguo") {
+          hallar(
+            "info",
+            "ROOTS-AMBIGUO",
+            `Las carpetas abiertas en el cliente coinciden con varios proyectos (${resolucion.candidatos.join(", ")}): ` +
+              "las tools no pueden deducir el proyecto e indican que se pase `project`."
+          );
+        }
+      }
+
+      const estado = { gitAusente: false, gitLento: false };
       for (const nombre of [...discoverProjects().values()].sort()) {
-        const tareas = listarTareas(nombre, phases);
-        const activa = tareaActiva(nombre, phases);
+        // Con las fases de SU proyecto. Un manifiesto inválido no tumba el listado: se avisa, y sus
+        // tareas se cuentan con las fases sin proyecto.
+        const delProyecto = fasesDelProyecto(nombre, phases);
+        const tareas = listarTareas(nombre, delProyecto);
+        const activa = tareaActiva(nombre, delProyecto);
         proyectos.push({
           nombre,
           tareas: tareas.length,
           activa: activa
-            ? { tarea: activa.estado.taskName, origen: activa.origen, fase: describeEstado(activa.estado, phases) }
+            ? { tarea: activa.estado.taskName, origen: activa.origen, fase: describeEstado(activa.estado, delProyecto) }
             : null,
+          ...configuracionDelProyecto(nombre, tareas, { maquina, presets, presetPorDefecto, fuerzas, estado, estados: opciones.estadosDeRepos ?? null }, hallar),
         });
+        revisarRecibos(nombre, tareas, delProyecto, hallar);
+      }
+
+      const largas = rutasLargas(requireBasePath(DOCS));
+      if (largas.cuenta) {
+        hallar(
+          "aviso",
+          "RUTA-LARGA",
+          `${largas.cuenta} ${largas.cuenta === 1 ? "ruta" : "rutas"} de la Documentación ${largas.cuenta === 1 ? "pasa" : "pasan"} de ${LARGO_DE_RUTA} caracteres; ` +
+            `la más larga (${largas.mas_larga!.length}): \`${largas.mas_larga}\`. Cerca de 255 o 260, OneDrive y muchas herramientas de Windows ` +
+            `dejan de abrir el archivo: acorta el nombre del proyecto, de la tarea o de la carpeta de la Documentación.` +
+            (largas.recortado ? ` (Se revisaron las primeras ${TOPE_DE_ENTRADAS} entradas.)` : "")
+        );
       }
 
       for (const [clave, tarea] of Object.entries(punteros)) {
         const carpeta = findProjectFolder(clave);
         if (!carpeta) {
           hallar("info", "PUNTERO-HUERFANO", `Hay un puntero guardado para el proyecto "${clave}", que ya no existe.`);
-        } else if (!listarTareas(carpeta, phases).some((t) => t.taskName === tarea)) {
+        } else if (!listarTareas(carpeta, fasesDelProyecto(carpeta, phases)).some((t) => t.taskName === tarea)) {
           hallar(
             "info",
             "PUNTERO-HUERFANO",
@@ -300,7 +711,12 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
     }
   }
 
-  hallazgos.sort((a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad]);
+  for (const h of opciones.hallazgosExtra ?? []) hallazgos.push(h);
+
+  // El mismo aviso puede salir de varios proyectos (un bloques.md global mal formado, por ejemplo).
+  const unicos =hallazgos.filter((h, i) => hallazgos.findIndex((otro) => otro.codigo === h.codigo && otro.texto === h.texto) === i);
+  unicos.sort((a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad]);
+  hallazgos.splice(0, hallazgos.length, ...unicos);
 
   return {
     paquete: { version: SERVER_VERSION, ruta: rutaPaquete, via: deducirVia(rutaPaquete) },
@@ -312,6 +728,7 @@ export function diagnosticar(opciones: { cliente?: Diagnostico["cliente"] } = {}
     reglasGlobales: { archivo: archivoGlobales, capa: capaGlobales, faltan },
     fases,
     proyectos,
+    configuracion,
     ...(opciones.cliente ? { cliente: opciones.cliente } : {}),
     hallazgos,
   };
@@ -373,6 +790,27 @@ function lineaDeProyecto(proyecto: Diagnostico["proyectos"][number]): string {
   return `${tareas} · activa: ${proyecto.activa.tarea} (${proyecto.activa.origen}) · ${proyecto.activa.fase}`;
 }
 
+function lineaDeConfiguracion(proyecto: Diagnostico["proyectos"][number]): string {
+  const manifiesto = proyecto.manifiesto.startsWith("inválido") ? "manifiesto inválido" : `manifiesto ${proyecto.manifiesto}`;
+  const preset = proyecto.preset ? `preset ${proyecto.preset.nombre} (${proyecto.preset.origen})` : "preset sin resolver";
+  const reglas = proyecto.reglas ? ` · lotes ${proyecto.reglas.lotes ? "sí" : "no"} · commits ${proyecto.reglas.commits}` : "";
+  const raiz = proyecto.roots?.fuerza ? ` · carpeta abierta: coincidencia ${proyecto.roots.fuerza}` : "";
+  return `${manifiesto} · ${preset}${reglas}${raiz}`;
+}
+
+function lineaDeRepo(repo: Diagnostico["proyectos"][number]["repos"][number]): string {
+  if (!repo.ruta) return `${repo.id}: sin ruta`;
+  const estado = !repo.existe ? "no existe" : repo.esGit ? `git · ${repo.rama ?? "sin rama"}` : "sin git";
+  return `${repo.id}: ${repo.ruta} (${repo.origen}) · ${estado}`;
+}
+
+function lineaDeMaquina(c: Diagnostico["configuracion"]): string {
+  if (!c.maquina.existe) return "todavía no existe";
+  if (!c.maquina.valido) return "inválido (ver hallazgos)";
+  const preset = c.maquina.presetPorDefecto ? ` · presetPorDefecto ${c.maquina.presetPorDefecto}` : "";
+  return `válido · ${c.maquina.overrides} ${c.maquina.overrides === 1 ? "override" : "overrides"} de repo${preset}`;
+}
+
 function formatearTexto(d: Diagnostico): string {
   const lineas: string[] = [];
   const columna = (texto: string, ancho: number): string => texto.padEnd(ancho);
@@ -393,6 +831,10 @@ function formatearTexto(d: Diagnostico): string {
 
   const punteros = `${d.estado.punteros} ${d.estado.punteros === 1 ? "puntero" : "punteros"}`;
   lineas.push("", `${columna("Estado", 15)}${d.estado.archivo} · ${d.estado.existe ? punteros : "todavía no existe"}`);
+
+  lineas.push("", `${columna("Configuración", 15)}${d.configuracion.configDir}`);
+  lineas.push(`  ${columna("machine.json", 14)}${lineaDeMaquina(d.configuracion)}`);
+  lineas.push(`  ${columna("presets", 14)}${d.configuracion.presets.map((p) => `${p.nombre} (${p.origen})`).join(", ") || "ninguno"}`);
 
   lineas.push("", "Prompts (de menor a mayor prioridad)");
   for (const capa of d.capas) {
@@ -419,7 +861,11 @@ function formatearTexto(d: Diagnostico): string {
     lineas.push("  (ninguno todavía)");
   } else {
     const anchoProyecto = Math.max(...d.proyectos.map((p) => p.nombre.length)) + 3;
-    for (const proyecto of d.proyectos) lineas.push(`  ${columna(proyecto.nombre, anchoProyecto)}${lineaDeProyecto(proyecto)}`);
+    for (const proyecto of d.proyectos) {
+      lineas.push(`  ${columna(proyecto.nombre, anchoProyecto)}${lineaDeProyecto(proyecto)}`);
+      lineas.push(`  ${columna("", anchoProyecto)}${lineaDeConfiguracion(proyecto)}`);
+      for (const repo of proyecto.repos) lineas.push(`  ${columna("", anchoProyecto)}  repo ${lineaDeRepo(repo)}`);
+    }
   }
 
   lineas.push("", "Hallazgos");
@@ -469,6 +915,11 @@ function formatearMarkdown(d: Diagnostico): string {
   const punteros = `${d.estado.punteros} ${d.estado.punteros === 1 ? "puntero" : "punteros"}`;
   lineas.push("", "### Estado", "", `${codigo(d.estado.archivo)} · ${d.estado.existe ? punteros : "todavía no existe"}`);
 
+  lineas.push("", "### Configuración", "");
+  lineas.push(`- **Carpeta:** ${codigo(d.configuracion.configDir)}`);
+  lineas.push(`- **machine.json:** ${codigo(d.configuracion.maquina.archivo)} · ${celda(lineaDeMaquina(d.configuracion))}`);
+  lineas.push(`- **Presets:** ${d.configuracion.presets.map((p) => `\`${p.nombre}\` (${p.origen})`).join(", ") || "ninguno"}`);
+
   lineas.push("", "### Prompts", "", "Capas, de menor a mayor prioridad:", "");
   lineas.push(
     ...tabla(
@@ -507,12 +958,14 @@ function formatearMarkdown(d: Diagnostico): string {
   } else {
     lineas.push(
       ...tabla(
-        ["Proyecto", "Tareas", "Tarea activa", "Fase"],
+        ["Proyecto", "Tareas", "Tarea activa", "Fase", "Configuración", "Repos"],
         d.proyectos.map((p) => [
           celda(p.nombre),
           String(p.tareas),
           p.activa ? `${celda(p.activa.tarea)} (${p.activa.origen})` : "",
           p.activa ? celda(p.activa.fase) : "",
+          celda(lineaDeConfiguracion(p)),
+          celda(p.repos.map(lineaDeRepo).join("; ")),
         ])
       )
     );
@@ -530,4 +983,117 @@ function formatearMarkdown(d: Diagnostico): string {
 
 export function formatearDiagnostico(d: Diagnostico, formato: "texto" | "markdown"): string {
   return formato === "texto" ? formatearTexto(d) : formatearMarkdown(d);
+}
+
+// ─── Procedencia de una fase (doctor --fase N --proyecto P) ─────────────────
+// Qué capa y qué archivo:línea gana en cada ranura del prompt que recibe el modelo, y qué modos se le
+// sumaron. Con proyecto, para su tarea activa (que puede declarar su propio preset).
+export type InformeDeProcedencia = {
+  fase: number;
+  proyecto: string | null;
+  tarea: string | null;
+  preset: { nombre: string; origen: string };
+  procedencia: Procedencia[];
+  avisos: Hallazgo[];
+};
+
+export function procedenciaDeFase(fase: number, proyecto: string | null): InformeDeProcedencia {
+  const carpeta = proyecto ? requireProjectFolder(proyecto) : null;
+  const activa = carpeta ? tareaActiva(carpeta, fasesDe(carpeta)) : null;
+  const carpetaTarea = activa?.estado.folderPath ?? null;
+  const config = configuracionDe(carpeta, carpetaTarea);
+  const { procedencia, avisos } = ensamblarFase(fase, carpeta, carpetaTarea, { incluirConfigProyecto: false });
+  return {
+    fase,
+    proyecto: carpeta,
+    tarea: activa?.estado.taskName ?? null,
+    preset: { nombre: config.preset.nombre, origen: config.origenPreset },
+    procedencia,
+    avisos,
+  };
+}
+
+export function formatearProcedencia(informe: InformeDeProcedencia): string {
+  const donde = informe.proyecto ? ` · ${informe.proyecto}${informe.tarea ? ` · tarea activa: ${informe.tarea}` : ""}` : " · sin proyecto";
+  const lineas = [`Fase ${informe.fase}${donde} · preset ${informe.preset.nombre} (${informe.preset.origen})`, ""];
+  const ancho = Math.max(6, ...informe.procedencia.map((p) => p.ranura.length)) + 3;
+  lineas.push(`  ${"Ranura".padEnd(ancho)}Gana`);
+  for (const p of informe.procedencia) {
+    const modos = p.modos.length ? `  + ${p.modos.join(", ")}` : "";
+    lineas.push(`  ${p.ranura.padEnd(ancho)}${p.contenidoDe}${modos}`);
+  }
+  if (informe.avisos.length) {
+    lineas.push("", "Avisos");
+    for (const h of informe.avisos) lineas.push(`  ${h.severidad.padEnd(7)}${h.codigo}  ${h.texto}`);
+  }
+  return lineas.join("\n");
+}
+
+// ─── El informe de configuración de un proyecto (phase-gate://configuracion/{proyecto}) ───
+// El manifiesto efectivo, de dónde sale cada valor y el estado de sus repos en este equipo. El estado
+// de git se pide antes, sin bloquear, con el mismo plazo que el diagnóstico.
+export async function informeDeConfiguracion(carpetaProyecto: string): Promise<string> {
+  let repos: RepoResuelto[] = [];
+  try {
+    const m = manifiestoDe(carpetaProyecto);
+    if (m?.repos.length) repos = resolverRepos(carpetaProyecto, m.repos);
+  } catch {
+    repos = []; // el error lo enseña el propio informe
+  }
+  const estados = await estadosConPlazo(repos);
+  return textoDeConfiguracion(carpetaProyecto, new Map(repos.map((repo, i) => [repo.id, estados[i] ?? null])));
+}
+
+function textoDeConfiguracion(carpetaProyecto: string, estados: Map<string, EstadoDeRepo | null>): string {
+  const lectura = leerManifiesto(carpetaProyecto);
+  const lineas = [`### Configuración de ${carpetaProyecto}`, ""];
+  const estadoManifiesto = lectura.estado === "valido" ? "válido" : lectura.estado === "ausente" ? "no existe" : `inválido: ${celda(lectura.error)}`;
+  lineas.push(`- **Manifiesto:** ${codigo(lectura.ruta)} · ${estadoManifiesto}`);
+
+  let config: ConfiguracionProyecto | null = null;
+  try {
+    config = configuracionDe(carpetaProyecto);
+  } catch (error) {
+    lineas.push("", `No se pudo resolver la configuración: ${celda(mensajeDe(error))}`);
+    return lineas.join("\n");
+  }
+
+  const m = config.manifiesto;
+  const delManifiesto = (definido: boolean): string => (definido ? "phase-gate.json" : "por defecto");
+  lineas.push(
+    "",
+    ...tabla(
+      ["Valor", "Efectivo", "De dónde sale"],
+      [
+        ["Preset", codigo(config.preset.nombre), config.origenPreset],
+        ["Idioma", config.idioma, delManifiesto(Boolean(m))],
+        ["Lotes", config.reglas.lotes ? "sí" : "no", config.reglas.origen.lotes],
+        ["Commits", codigo(config.reglas.commits), config.reglas.origen.commits],
+        ["Verificación", m?.reglas.verificacion?.map(codigo).join(", ") || "—", delManifiesto(Boolean(m?.reglas.verificacion))],
+        ["PR por repo", m?.fase5.prPorRepo ? "sí" : "no", delManifiesto(m?.fase5.prPorRepo !== undefined)],
+      ]
+    )
+  );
+
+  if (m?.repos.length) {
+    lineas.push("", "#### Repos", "");
+    const filas = resolverRepos(carpetaProyecto, m.repos).map((repo) => {
+      const estado = estados.get(repo.id) ?? null;
+      const git = !repo.existe
+        ? "—"
+        : !estado
+          ? `sin respuesta en ${PLAZO_DE_ESTADOS_MS / 1000} s`
+          : estado.error
+            ? celda(estado.error)
+            : estado.esGit
+              ? `${estado.separado ? "separado" : estado.rama} · ${estado.limpio ? "limpio" : "con cambios"}`
+              : "sin git";
+      return [codigo(repo.id), celda(repo.rol ?? ""), repo.ruta ? codigo(repo.ruta) : celda(repo.error ?? ""), repo.origenRuta ?? "—", repo.existe ? "sí" : "no", git];
+    });
+    lineas.push(...tabla(["Id", "Rol", "Ruta en este equipo", "Origen de la ruta", "Existe", "Git"], filas));
+  } else {
+    lineas.push("", "El proyecto no declara repos.");
+  }
+
+  return lineas.join("\n");
 }

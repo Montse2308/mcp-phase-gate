@@ -21,21 +21,26 @@ import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntor
 
 afterEach(limpiarEntorno);
 
-// Las 8 de siempre más get_orchestrator_status, que llega en la Etapa 2.
+// Las 8 de siempre, get_orchestrator_status (Etapa 2), read_repo_file y repo_status (Etapa 3), y
+// record_batch y get_batch_status (Etapa 4).
 const TOOLS = [
   "get_active_task",
+  "get_batch_status",
   "get_orchestrator_status",
   "get_phase_prompt",
   "list_tasks",
   "read_central_doc",
   "read_cross_repo",
+  "read_repo_file",
+  "record_batch",
+  "repo_status",
   "start_task",
   "switch_task",
   "write_central_doc",
 ];
 
 describe("tools/list", () => {
-  it("devuelve las 8 tools de siempre y get_orchestrator_status, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
+  it("devuelve las 8 tools de siempre, get_orchestrator_status, read_repo_file, repo_status, record_batch y get_batch_status, cada una con sus cuatro anotaciones y openWorldHint false", async () => {
     const { cliente, cerrar } = await conectar();
     try {
       const { tools } = await cliente.listTools();
@@ -65,10 +70,15 @@ describe("tools/list", () => {
         tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name),
         ["write_central_doc"]
       );
-      for (const nombre of ["get_phase_prompt", "get_active_task", "list_tasks", "read_central_doc", "read_cross_repo", "get_orchestrator_status"]) {
+      for (const nombre of ["get_phase_prompt", "get_active_task", "list_tasks", "read_central_doc", "read_cross_repo", "get_orchestrator_status", "read_repo_file", "repo_status", "get_batch_status"]) {
+        assert.equal(porNombre.get(nombre)?.idempotentHint, true, nombre);
         assert.equal(porNombre.get(nombre)?.readOnlyHint, true, nombre);
       }
       assert.equal(porNombre.get("start_task")?.idempotentHint, false);
+      assert.deepEqual(
+        [porNombre.get("record_batch")?.readOnlyHint, porNombre.get("record_batch")?.destructiveHint, porNombre.get("record_batch")?.idempotentHint],
+        [false, false, false]
+      );
       assert.equal(porNombre.get("switch_task")?.idempotentHint, true);
       assert.equal(porNombre.get("switch_task")?.readOnlyHint, false);
     } finally {
@@ -100,7 +110,9 @@ describe("tools/list", () => {
       const { tools } = await cliente.listTools();
       const porNombre = new Map(tools.map((t) => [t.name, t.inputSchema]));
 
-      assert.deepEqual([...(porNombre.get("start_task")?.required ?? [])].sort(), ["initial_context", "project", "task_name"]);
+      // `project` es opcional desde la Etapa 3: sin él, se deduce de la carpeta abierta (Roots).
+      assert.deepEqual([...(porNombre.get("start_task")?.required ?? [])].sort(), ["initial_context", "task_name"]);
+      assert.deepEqual(porNombre.get("switch_task")?.required, ["task_name"]);
       assert.deepEqual(porNombre.get("write_central_doc")?.required, ["content"]);
       assert.deepEqual(porNombre.get("get_phase_prompt")?.required, ["phase"]);
 
@@ -227,7 +239,7 @@ const _diagnosticoCuadra: z.input<z.ZodObject<typeof diagnosticoShape>> = {} as 
 void _diagnosticoCuadra;
 
 describe("MCP Prompts /fN", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const comandoDelRepo = (numero: number): string =>
     fs.readFileSync(path.join(PROMPTS_DEL_REPO, "comandos", `f${numero}.md`), "utf-8").replace(/\r\n/g, "\n").trim();
   const esperar = () => new Promise((resolver) => setImmediate(resolver));
@@ -365,7 +377,7 @@ describe("MCP Prompts /fN", () => {
 });
 
 describe("confirmaciones por elicitation", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const CONGELADO = "01 - Análisis Técnico.md";
 
   afterEach(() => fijarEsperaDeConfirmacion(null));
@@ -578,7 +590,7 @@ describe("confirmaciones por elicitation", () => {
 });
 
 describe("get_phase_prompt con pendientes heredados", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
   it("el aviso va después del de la compuerta y antes del prompt", async () => {
     const docs = docsTemporales();
@@ -627,7 +639,7 @@ describe("una capa de prompts que no es carpeta", () => {
 
 // Ajustes de la auditoría de la Etapa 2: la cancelación del cliente y los valores de apagado.
 describe("confirmaciones: cancelación y apagado", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const CONGELADO = "01 - Análisis Técnico.md";
 
   function tareaConCongelado(): string {
@@ -684,7 +696,7 @@ describe("confirmaciones: cancelación y apagado", () => {
 
 // Ajuste de la auditoría de la Etapa 2: un argumento de una línea no puede abrir secciones.
 describe("argumentos de /fN", () => {
-  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts");
+  const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 
   it("project, task_name y commits se aplanan a una línea; el contexto se conserva", async () => {
     estadoTemporal();

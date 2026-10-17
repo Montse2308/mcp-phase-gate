@@ -52,4 +52,14 @@ jobs:
       #
       # No hace falta compilar ni probar aquí: prepublishOnly lo hace, y así publicar a mano
       # desde una laptop pasa por exactamente los mismos pasos que publicar desde CI.
-      - run: npm publish --provenance --access public
+      #
+      # Una prerelease (una versión con guion: 3.0.0-beta.0) se publica con la etiqueta "beta".
+      # Sin --tag, npm la marcaría como "latest" y `npx mcp-phase-gate` le instalaría la beta a todo
+      # el mundo. Con "beta", solo la recibe quien la pide: `npx -y mcp-phase-gate@beta`.
+      - name: Publicar (con la etiqueta beta si es una prerelease)
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          case "$VERSION" in
+            *-*) npm publish --provenance --access public --tag beta ;;
+            *)   npm publish --provenance --access public ;;
+          esac

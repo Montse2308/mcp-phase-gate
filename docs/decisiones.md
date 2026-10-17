@@ -12,6 +12,755 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-16 — Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras
+
+**Decisión.** Cuatro ranuras nuevas (el catálogo pasa de 23 a 27): `fase-3/prohibido-lotes` y
+`fase-3/autoverificacion-lotes` (las líneas del plan sin tabla de lotes o sin `lotes: N`), y
+`fase-4/prohibido-commits` y `fase-4/autoverificacion-commits` (las del commit sin el OK del usuario y
+la rama sin comprobar; en la AUTOVERIFICACIÓN de la Fase 4 pasan a ser los puntos 14 y 15, juntos). Cada
+variante de regla pone las suyas: `sin-lotes` pide solo el frontmatter `lotes: 1`; `agente-propone`
+prohíbe ejecutar `git add` o `git commit`; `auto`, commitear un lote que no quedó verificado; `ninguno`,
+cualquier comando de git que escriba. Las variantes ya no dicen "lo que este prompt dice en PROHIBIDO y
+en AUTOVERIFICACIÓN… no aplica".
+
+Con el texto de fábrica no cambia nada de lo que llega al modelo: el oro de las Fases 1 a 3 sigue siendo
+byte a byte el de la `2.2.0`.
+
+A la vez, la ranura `fase-4/lotes` pasa a ser el ciclo con `get_batch_status` y `record_batch` (§6.9 del
+plan), sin plantilla de recibo ni de índice, y `sin-lotes` le añade una línea **después** (modo
+`despues`) en vez de sustituirla.
+
+**Reemplaza en parte** "Las fases, los prompts y la deducción se resuelven por proyecto…" (2026-10-15),
+que dejó esto como deuda para la Etapa 4 (E3-D5), y **amplía** la lista de ranuras de "La Fase 4
+ejecuta lote por lote…" (2026-10-14).
+
+**Qué se descartó.** Hacer ranura toda la sección PROHIBIDO: un preset la sustituiría entera y perdería
+las prohibiciones que no dependen de ninguna regla (el push, reescribir fases anteriores).
+
+---
+
+## 2026-10-16 — El auditor recibe los commits ya verificados
+
+**Decisión.** Al entregar el prompt de la Fase 5 (la siguiente a la que declara recibos), el servidor
+añade al final un bloque **"COMMITS DE LA FASE 4 (verificados por el servidor al entregar este
+prompt)"**: por cada repo, una tabla `Lote | Commit | Asunto | Vigente`, con la vigencia comprobada en ese
+momento (`reverificar`: el commit sigue en la rama actual); si son consecutivos en la rama
+(`sonConsecutivos`: `git rev-list --reverse <primero>^..<último>`, o todos los ancestros si el primero es
+el commit raíz), el rango exacto para auditarlos (`git log --oneline a1b2c3d^..e4f5a6b` y `git diff
+a1b2c3d^ e4f5a6b`); si no, que se audite cada uno con `git show`. Aparte, los lotes sin commit (sha256,
+con su vigencia, o nota) y los que no entran en la auditoría (descartados, fallidos, pendientes, sin
+recibo). Si un ancla ya no corresponde a la rama, su fila dice por qué y el bloque termina con "Hay anclas
+que ya no corresponden a la rama: díselo al usuario antes de auditar."
+
+El bloque tiene un plazo de 15 s: si git no responde, el prompt se entrega igual, con el mismo encabezado y
+una línea que manda a `get_batch_status` con `reverificar`. Las anclas se verifican de seis en seis y cada
+commit se resuelve una sola vez (con 40 lotes, uno detrás de otro, el bloque tardaba 9,5 s; así, 2,1 s,
+medido). Si no se pueden leer los recibos, el bloque lo dice en vez de desaparecer.
+
+**Amplía** "La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como
+bloqueantes" (2026-10-14): la entrada de la auditoría ya no se reconstruye leyendo recibos, la da el
+servidor verificada. Si el usuario indica otro rango, sigue mandando el suyo (el texto de la regla 1
+cambia en los prompts de la Fase 5).
+
+**Qué se descartó.** Dar solo el rango: si un rebase cambió los SHA, el auditor revisaría commits que ya no
+son los del lote sin saberlo. Bloquear el prompt si algo no es vigente: el auditor tiene que poder
+decírselo al usuario, y el resto de la auditoría sigue valiendo.
+
+---
+
+## 2026-10-16 — La Fase 4 tiene granularidad de lote
+
+**Decisión.** `EstadoTarea` gana `lotes` (`total`, `cerrados`, `actual` y `pendienteDeCommit`), que
+se calcula solo cuando la fase siguiente es la que declara recibos, leyendo **solo frontmatter**: el
+`lotes` del plan y la cabecera de cada recibo. `describeEstado` lo dice, y con él `get_active_task`,
+`list_tasks` y `doctor`:
+
+- `va en Fase 4 (Ejecución, lote 1 de 4); hechas: 1, 2, 3`
+- `va en Fase 4 (Ejecución, lote 2 de 4, commit pendiente); hechas: 1, 2, 3`
+- `va en Fase 4 (Ejecución; el plan no declara lotes); hechas: 1, 2, 3`
+
+Un lote fallido no cuenta como cerrado. `ultimoCambio` toma también el recibo más reciente: durante la
+Fase 4 es lo único que cambia en días, y una tarea en plena ejecución se ordenaba como si estuviera
+parada.
+
+**La fase sigue saliendo de los documentos.** Lo nuevo es el progreso **dentro** de la Fase 4, y se
+deduce de archivos que escribe el servidor (`record_batch`), así que no depende de que el modelo se
+acuerde de reportar nada. Con todos los recibos cerrados, la tarea sigue en la Fase 4 hasta que existe
+su documento.
+
+**Reemplaza** el límite de "La fase de cada tarea se deduce de sus documentos, no se guarda"
+(2026-08-08): "la granularidad es fases terminadas, no a media fase".
+
+**Qué se descartó.** Guardar el lote actual en el archivo de estado: sería otra copia de la verdad, y el
+argumento de aquella entrada sigue valiendo.
+
+---
+
+## 2026-10-16 — Los recibos con ancla quedan sellados y la Fase 4 solo la escribe el servidor
+
+**Decisión.** Dos reglas:
+
+- **Sellado.** Un recibo con ancla `commit` o `sha256` (también uno manual de la 2.x con un hash) no se
+  reescribe con `record_batch`. Para cambiar su ancla, el caso típico de un rebase o un squash que cambió
+  el SHA, `record_batch` con `reanclar: true` y el ancla nueva: pasa por `pedirConfirmacion` ("El recibo
+  L02 está sellado con el commit `a1b2c3d`. ¿Reemplazar su ancla por `e4f5a6b`?"), o por `force` sin
+  elicitation. Solo cambia el ancla; "Verificación del commit" dice la comparación del commit nuevo y
+  guarda, línea a línea, el historial ("Reanclado el AAAA-MM-DD: `viejo` → `nuevo`"). Con la fase ya
+  cerrada también vale: con un solo lote, el recibo es el documento de la fase; con varios, se rehace el
+  índice si lo generó el servidor.
+- **Solo el servidor escribe la Fase 4** (H4). `motivoDeProteccion` gana dos reglas que se evalúan antes
+  que las de siempre: un archivo de la subcarpeta de recibos ("Los recibos los escribe `record_batch`.") y
+  el documento de la fase que declara los recibos ("Este documento lo genera `record_batch` al cerrar el
+  último lote.") se rechazan **siempre** con `write_central_doc`, también para crearlos. Las dos aceptan la
+  escotilla de confirmación de siempre (elicitation, o `force` sin ella) para reparar a mano un archivo
+  dañado, y la respuesta lo dice: "Escrito a mano con confirmación; get_batch_status lo marcará como
+  manual". Para que eso sea verdad, lo que entra por la escotilla queda siempre con `origen: manual` y sin
+  `generado_por` en su frontmatter, diga lo que diga el texto: sin elicitation, `force` lo pone el modelo,
+  y podía escribir un recibo "del servidor" sellado con un commit inventado (hallazgo 2 de la auditoría
+  de la Etapa 4). Cierra E1-R3 (el modelo escribía el índice antes de tiempo, o un recibo con otro nombre).
+
+`start_task` y `record_batch` no pasan por `write_central_doc`. Una tarea de la 2.x a medio camino sigue:
+`record_batch` lee sus recibos manuales (tolerante) y continúa desde el siguiente lote.
+
+**Amplía** "Un documento de fase se congela cuando existe el de una fase posterior" (2026-10-14): la tabla
+de verdad de §3.7.3 gana tres filas, y cambian las que permitían escribir un recibo o el índice.
+
+**Qué se descartó.** Bloquear sin escotilla: un recibo dañado a mano (o por un cliente que corta la
+escritura) dejaría la tarea sin salida. Reescribir un índice que alguien escribió a mano: se avisa con
+`doctor`, no se pisa.
+
+---
+
+## 2026-10-16 — `04 - Ejecución.md` lo genera el servidor; con un solo lote, el recibo se mueve
+
+**Decisión.** El documento de la Fase 4 ya no lo redacta el modelo: lo escribe `record_batch` cuando
+la fase se cierra, y su existencia es lo que la cierra.
+
+- **Cuándo:** al terminar una llamada en la que **todos** los lotes `1…N` tienen recibo con ancla y
+  ninguno está fallido; o con `cerrar_fase: true`, que lo decide el usuario. Con `cerrar_fase`, los
+  lotes sin recibo se registran como `descartado` con `motivo_descarte` (obligatorio si falta alguno;
+  el título sale de la tabla de lotes del plan si se puede leer), los fallidos se quedan como están, y
+  hace falta la confirmación de la persona (elicitation, o `force` sin ella) **antes de escribir nada**:
+  "Cerrar la Fase 4 con L03 y L04 descartados («motivo»). ¿Confirmas?". Un lote abierto con el commit
+  pendiente lo impide.
+- **Con más de un lote: un índice** (`ensamblarIndice`), determinista. Frontmatter `lotes` y
+  `generado_por: mcp-phase-gate`; la rama común a los commits (o "varias (ver lotes)"); la fecha de
+  cierre del recibo escrito más tarde, no la hora del ensamblado; la línea Estado ("sin pendientes"
+  solo si todo está verificado o descartado y nada espera al usuario, más los descartados); la tabla
+  de lotes (con columna Repo solo si algún lote tiene repo); "Espera al usuario" con las filas de los
+  recibos, sin reescribir; y "Validaciones pendientes" solo si hay lotes con pendientes o fallidos (B1).
+  Los cinco formatos tienen su índice de oro en `test/oro/indice-*.md`, comparado byte a byte.
+- **Con un solo lote (H2):** mientras el lote está abierto, su recibo vive en la subcarpeta, como los
+  demás; al cerrarse, el servidor lo **mueve** a `04 - Ejecución.md` (con `lotes: 1` y `generado_por`
+  en su frontmatter) y borra la subcarpeta si queda vacía. Queda un solo archivo, como pedía R2, y la
+  fase no aparece cerrada con el commit pendiente.
+
+**Amplía** R2 (§1.2 del plan) y "Los recibos de lote viven en una subcarpeta que declara el prompt"
+(2026-10-14). **Cierra** la ventana aceptada de "La Fase 4 ejecuta lote por lote…" (2026-10-14): con
+`lotes: 1`, el documento ya no existe antes del commit, y un lote que el usuario rechaza se queda en la
+subcarpeta.
+
+**Qué se descartó.** Contar las filas de la tabla del plan para saber cuántos lotes hay (H3): solo la usa
+este lote para el objetivo de un lote descartado. Regenerar el índice en cada llamada: el documento de
+la fase existe si y solo si la fase está cerrada (§1.1), así que se escribe una vez, al cerrar.
+
+---
+
+## 2026-10-16 — `record_batch` registra cada lote en dos tiempos: antes y después del commit
+
+**Decisión.** Una tool nueva, `record_batch`, escribe el recibo de cada lote de la Fase 4 en
+`<tarea>/04 - Ejecución/L0x - <slug>.md`. El modelo le pasa campos (título, estado, qué se hizo,
+archivos, verificación, lo que espera al usuario, desvíos, decisiones y las secciones condicionales) y
+el ancla; el servidor arma el recibo (`escribirRecibo`) y verifica el ancla (`anclarCommit` o
+`anclarArtefacto`).
+
+- **Dos tiempos para toda política con git** (H1). Primero, ANTES del commit, el contenido: el recibo
+  queda con el commit pendiente, y si el chat se corta ahí ya dice qué se hizo y qué se comprobó.
+  Después del commit, una segunda llamada con `lote` y `commit` lo ancla sin tocar el contenido. Si el
+  commit ya existe al registrar, va todo en una llamada. Sin git, o con la política `ninguno`, una sola
+  llamada con `artifact_path` o `verification_note`.
+- **Número de lotes:** solo del frontmatter del plan (`lotes: N`, de 1 a 99). Sin él, es un error
+  (H3): la tabla del plan es para personas, y contar sus filas daría un número que nadie declaró.
+- **Orden:** un lote exige que los anteriores tengan recibo con ancla; un fallido o un descartado
+  cuenta como cerrado.
+- **Modos:** sin recibo, se crea (con título, estado, qué se hizo y verificación); con el commit
+  pendiente, se reemplaza el contenido (y se renombra si cambia el título) o se ancla; un recibo
+  fallido o anclado a una nota se reemplaza entero (es otro intento); uno **sellado** (ancla `commit` o
+  `sha256`) no se reescribe.
+- **Repo del lote:** el indicado, o el único de la tarea; con varios, hay que indicarlo; sin repos,
+  ninguno.
+- **Ancla según la política efectiva** (tarea, manifiesto, preset): con git y política distinta de
+  `ninguno`, el ancla es el commit (o pendiente); sin git, `artifact_path` o `verification_note`, y uno de
+  los dos es obligatorio; un lote fallido o descartado se ancla a una nota. Una sola ancla por llamada.
+- **Escritura:** solo dentro de la subcarpeta de recibos de la tarea (comprobado sobre la ruta real),
+  con un temporal y un renombrado, y comparando el `mtimeMs` del recibo leído justo antes de escribir:
+  si otra ventana lo cambió, o creó el de ese lote mientras tanto, la llamada falla sin escribir (E4-R6).
+  Esa comprobación y la escritura van bajo un **candado de la tarea** (`.record_batch.lock`, creado en
+  exclusiva en su carpeta), para que dos procesos no las recorran a la vez: sin él, dos ventanas que
+  registraban el mismo lote en el mismo instante pasaban las dos la comprobación y dejaban dos recibos
+  (hallazgo 1 de la auditoría de la Etapa 4). Quien no consigue el candado en 3 s falla y pide volver a
+  llamar; un candado de más de 30 s se da por abandonado.
+- **Proyecto y tarea:** el proyecto como en las demás tools que escriben (una coincidencia débil de
+  Roots no basta); la tarea, la indicada o la activa **guardada**: una deducida por fecha no vale para
+  escribir. Para leer (`get_batch_status`) sí vale una deducida, y la respuesta lo dice: equivocarse de
+  tarea al leer no pisa nada.
+- **Un commit que no llega.** Si el usuario decide no hacer el commit de un lote pendiente, ese lote
+  bloquearía a los siguientes: se cierra con `record_batch` y solo `lote`, `estado: descartado` (o
+  `fallido`) y, si se quiere, `verification_note`; el contenido que ya tenía se conserva. Si dos lotes
+  acabaron en un mismo commit, uno se ancla a él y el otro se descarta con una nota que lo diga ("un
+  commit, un lote" no deja anclar el mismo commit dos veces). Las dos salidas las pidió la auditoría de
+  la Etapa 4.
+
+**Reemplaza en parte** "La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del
+usuario" (2026-10-14): el recibo ya no lo redacta el modelo con `write_central_doc`.
+
+**Qué se descartó.** Escribir el recibo solo después del commit: un chat cortado entre el commit y el
+recibo perdía lo que se comprobó, que es justo lo que el ciclo de la Etapa 1 quería guardar. Bloquear la
+tarea activa deducida con una confirmación: es más simple pedir `task_name`, que el modelo ya conoce por
+`get_active_task`.
+
+---
+
+## 2026-10-16 — Un lote se ancla a un commit en la rama actual, a un sha256 o a una nota
+
+**Decisión.** Lo que demuestra que un lote se hizo es su **ancla** (`src/anclas.ts`), y el servidor la
+comprueba al registrarla:
+
+- **Commit** (`anclarCommit`), cuando el lote tiene git. El hash se valida con `/^[0-9a-f]{7,40}$/i`
+  **antes de llamar a git**: así no entran `HEAD`, un nombre de rama, una opción como `--help` ni un
+  prefijo corto (git resuelve desde 4 caracteres). Después, `git rev-parse --verify --end-of-options
+  <sha>^{commit}` da el SHA completo, que es el único que usan las consultas siguientes. Va **sin
+  `--quiet`** (como pedía §6.3): con él, git calla el aviso de un prefijo ambiguo y el error decía que
+  el commit no existía (hallazgo 3 de la auditoría de la Etapa 4; probado con una colisión real de 7
+  caracteres); `git merge-base --is-ancestor <sha> HEAD` exige que esté en la rama actual (si está en
+  otra, el error dice en cuáles, con `git branch --contains`); y `git diff-tree --root` da los archivos
+  que toca, para compararlos con la tabla Archivos del recibo. Si no coinciden, es un **aviso** que
+  queda escrito en "Verificación del commit" (H5), no un bloqueo. Un mismo commit no puede anclar dos
+  lotes.
+- **sha256** (`anclarArtefacto`), sin git: el de un archivo del repo o de la carpeta del proyecto en la
+  Documentación, con la misma contención que `read_repo_file` (relativa, cada segmento portable, nada de
+  `.git` ni en lo pedido ni en la ruta real, dentro de la base real), solo archivos normales de hasta
+  256 MB, y en streaming desde el mismo descriptor que se comprobó. La ruta se guarda como
+  `repo:<id>/<ruta>` o `proyecto:<ruta>`.
+- **Nota** (`verification_note`), cuando no hay nada que sellar.
+
+`reverificar` repite la comprobación más tarde (para `get_batch_status` y la Fase 5): un commit que ya
+no está en la rama (un `--amend`, un rebase, un squash) deja de estar vigente; un sha256 que no coincide
+se recalcula con los finales de línea cambiados, en las dos direcciones, y si así coincide se informa
+"idéntico salvo finales de línea" (E4-R2: con `core.autocrlf`, un archivo de texto tiene otros bytes en
+Windows que en Linux). Solo en texto: un archivo con un byte NUL en sus primeros 8000 (la heurística de
+git) es binario, y en un binario quitar un `0x0D` es un cambio de verdad (hallazgo 8 de la auditoría de
+la Etapa 4).
+
+**Amplía** "Git se consulta por una sola puerta, de solo lectura y sin efectos" (2026-10-15): todas
+estas consultas pasan por ella, y el texto del modelo que llega a git es solo un hash ya validado.
+Además, `git show` lleva `--no-show-signature`: con `log.showSignature` activo, `show` verifica la
+firma de un commit firmado ejecutando `gpg.program`, que también puede venir en `.git/config`. Se
+comprobó en este equipo (git 2.51) con un commit de firma falsa y un `gpg.program` trampa: `git show`
+normal lo ejecuta, la puerta no. El test repite ese control positivo, y el de `core.fsmonitor` sobre
+cada consulta nueva.
+
+**Qué se descartó.** `git cat-file -e`, que acepta `HEAD` y solo dice si el objeto existe (§6.1).
+Bloquear cuando los archivos del commit no son los declarados: un archivo generado o un cambio de
+última hora harían imposible anclar el lote, y la Fase 5 ya audita el commit entero.
+
+---
+
+## 2026-10-16 — Los recibos son datos con un formato determinista que escribe el servidor
+
+**Decisión.** Un recibo de lote es un dato (`Recibo`, en `src/recibos.ts`) y `src/recibos.ts` es el
+único lugar que lo lee y lo escribe. `escribirRecibo` produce la plantilla de la Etapa 1 con claves
+nuevas en el frontmatter, siempre en este orden: `lote`, `de`, `repo`, `rama`, `estado`, `commit`,
+`fecha` (las de la 2.x, en su sitio), `ancla` (`commit`, `sha256`, `nota` o `pendiente`), los datos de
+esa ancla (`commit_completo` y `asunto`; `artefacto`, `sha256` y `bytes`; o `nota`), `registrado` (la
+hora ISO de la escritura) y `origen` (`servidor` o `manual`). Debajo, los encabezados de siempre, en su
+orden, las secciones condicionales que traigan texto (en el orden de la plantilla) y, solo con ancla
+`commit`, "Verificación del commit".
+
+- **Determinista:** el mismo recibo da los mismos bytes, en LF y con un salto final, y escribir lo que
+  se leyó de un recibo escrito aquí vuelve a dar los mismos bytes (lo fija una prueba de ida y vuelta
+  con las cuatro anclas). Son los mismos **bytes**, no siempre el mismo dato: una línea del texto que
+  empieza por `## ` vuelve sangrada un espacio, un `<br>` escrito tal cual en una celda vuelve como salto
+  de línea, y una sección que solo decía "Nada." vuelve vacía (lo señaló la auditoría de la Etapa 4).
+- **Sin encabezados vacíos:** una sección sin texto dice "Nada.", "Ninguno." o "Ninguna."; al leer,
+  esas formas cuentan como vacías.
+- **Tablas:** `|` va como `\|` y un salto de línea dentro de una celda, como `<br>`.
+- **Una línea:** los valores del frontmatter son de una línea; los saltos de una nota o de una ruta van
+  escapados (`\n`, `\\`). Un repo o una rama que no hay se escriben `—`. Una línea del texto que empieza
+  como un encabezado (`# `, `## `) se sangra un espacio, para que al leer no parta la sección.
+- **Lectura tolerante:** un recibo escrito a mano con la 2.x se lee sin lanzar. Sin `ancla`, se deduce
+  de `commit` (un hash es un commit sin verificar; `pendiente`; `no aplica` es una nota); sin `origen`,
+  es `manual`; una sección que falta se lee vacía, y un `## ` que no es de la plantilla se queda dentro
+  de la sección donde aparece. Un estado que no se reconoce queda como `con pendientes`: nunca se da por
+  bueno. Se normalizan el BOM y `\r\n` antes de leer (§1.3), con un lector de frontmatter propio que no
+  quita comillas (un asunto de commit puede empezar por una).
+
+**El nombre del archivo lo hace el servidor** (`nombreDeRecibo`): `L` y el número con dos dígitos,
+`" - "` y un slug del título en NFC, en el que todo lo que no es letra, número, espacio o guion pasa a
+espacio, cortado a 40 caracteres sin partir palabras (validación V7) y sin punto ni espacio al final;
+vacío, es `lote`. El resultado pasa `validarSegmento`. El ajuste A3 de la Etapa 1 pedía al modelo que
+no usara `:` `/` `\`…; ahora lo hace cumplir el código.
+
+**Amplía** "Los recibos de lote viven en una subcarpeta que declara el prompt" (2026-10-14): la
+subcarpeta y el nombre siguen siendo los mismos, pero el contenido ya no lo redacta el modelo con una
+plantilla sino el servidor con campos.
+
+**Qué se descartó.** YAML de verdad en el frontmatter: el resto del proyecto lee `clave: valor` con
+`separarFrontmatter`, y un recibo de la 3.0 tiene que seguir siendo legible por las reglas de la 2.x
+(por ejemplo, el aviso de pendientes heredados, que mira `estado`). Guardar la hora de verificación del
+ancla aparte: el servidor verifica el ancla en la misma escritura, así que es `registrado`.
+
+---
+
+## 2026-10-15 — `init` escribe la configuración del cliente con copia, diff y confirmación
+
+**Decisión.** `npx mcp-phase-gate init` registra el servidor en los clientes de este equipo:
+
+- **Claude Code** (si `claude --version` responde): `claude mcp add <clave> --scope user --env
+  PHASE_GATE_DOCS_PATH=… --env PHASE_GATE_REPOS_PATH=… -- npx -y mcp-phase-gate`.
+- **Cursor** (si existe `~/.cursor/`): una entrada en `~/.cursor/mcp.json`, bajo `mcpServers`. En
+  Windows, con `PHASE_GATE_ELICITATION=off`, por el bug abierto en el que el formulario de
+  confirmación no aparece (validación V4).
+- **VS Code** (si existe su carpeta de usuario): una entrada en su `mcp.json`, bajo `servers`, con
+  `"type": "stdio"`.
+
+Las rutas salen de `--docs`/`--repos`, de las variables, o se preguntan en una terminal; sin
+terminal y sin ellas, es un error. Además: `--comandos` copia los `/fN` (con la marca `<!-- generado
+por mcp-phase-gate init vX.Y.Z -->`) a `~/.claude/commands/` o `~/.cursor/commands/`;
+`--migrate` crea `phase-gate.json` con `"preset": "software-replica"` (u otro con `--preset`) en
+los proyectos que no lo tienen, o con `--solo-este-equipo` escribe `presetPorDefecto` en
+`machine.json`; `--dry-run` dice todo lo que haría sin escribir nada. Al final imprime cómo poner
+un candado a `git push` y ejecuta `doctor`. Sale con 0, con 1 si alguna acción no se hizo, y con 2
+si los argumentos no valen.
+
+**Cómo escribe en archivos que no son suyos.**
+
+1. Un archivo que no existe, o que existe vacío (el `mcp.json` de VS Code puede tener 0 bytes), es
+   `{}`.
+2. Se toleran comentarios y comas finales, solo para leer. Un JSON que aun así no se entiende **no
+   se toca**: se imprime el bloque para pegarlo a mano.
+3. **Un registro que ya existe no se duplica**: si otra clave ya ejecuta `mcp-phase-gate` (un `npx`
+   o un `build/index.js` de un clon), se actualiza esa entrada y **conserva su clave**, porque
+   cambiarla cambia el nombre de todas las tools y los prompts y rompe los permisos ya concedidos.
+   Solo con `--clave` explícita se renombra, y se avisa. Se cambian las dos rutas (con los nombres
+   `PHASE_GATE_*`, quitando sus alias `ORQUESTADOR_*`, que quedarían en discrepancia); el comando y
+   el resto de variables se conservan.
+4. Si la entrada queda igual: "sin cambios". Si cambia, o si al reescribir se perderían comentarios,
+   se muestra el diff y hace falta `--yes` o confirmarlo en la terminal. Una clave que ya usa otro
+   servidor no se pisa nunca.
+5. Antes de escribir, copia `<archivo>.bak-AAAAMMDD-HHMMSS`. Se escribe JSON estricto con dos
+   espacios.
+
+Un comando `/fN` sin la marca es de la persona y no se pisa sin `--yes` (entonces, con copia).
+`--migrate` solo crea manifiestos, nunca sobrescribe.
+
+**En Claude Code, un registro que ya existe no se toca.** `claude mcp list` enseña la clave y el
+comando, no las variables, así que no hay diff posible; init dice el `claude mcp remove` y el
+`claude mcp add` con la misma clave para hacerlo a mano. Se probó el formato de `mcp list` en este
+equipo (Claude Code 2.1, `clave: comando - estado`), y un `init --dry-run --cliente todos` contra la
+configuración real: reconoce el registro existente de Cursor y propone el diff sin escribir nada.
+
+**El candado de `git push`**, solo informativo y graduado con honestidad: las reglas `deny` de
+Claude Code (`Bash(git push *)` **y** `PowerShell(git push *)`, validación V6) no son una frontera
+de seguridad (`git -C . push` las esquiva); un hook `pre-push` es más firme pero `--no-verify` lo
+salta; la única frontera real está en el remoto (protección de ramas) o en que el agente no tenga
+credenciales.
+
+**Reemplaza en parte** el descarte del 2026-08-10, en "Varias documentaciones se resuelven
+registrando el servidor dos veces, no con código", de una app que escribiera la configuración "para
+un público que ya edita un `mcp.json` a mano". La app sigue descartada; lo que cambia es que
+escribir la configuración ya no es un paso manual, porque con la 3.0 hay más que escribir (rutas,
+presets, comandos) y equivocarse en un JSON a mano deja el cliente sin el servidor.
+
+**Qué se descartó.** Que init escriba también el candado de `git push` en la configuración de Claude
+Code: es una decisión de seguridad de la persona, y presentarlo como algo que init "instala" haría
+creer que es una frontera.
+
+---
+
+## 2026-10-15 — Git se consulta por una sola puerta, de solo lectura y sin efectos
+
+**Decisión.** Toda llamada a git pasa por `git(dir, args)` de `src/git.ts`: `execFile` (sin
+shell), con `-c core.fsmonitor=false` delante de todo, `GIT_OPTIONAL_LOCKS=0`,
+`GIT_TERMINAL_PROMPT=0` y `LC_ALL=C`, un plazo de 10 s, salida acotada a 1 MB y `windowsHide`.
+Los argumentos son constantes del código: ningún texto que venga del modelo llega a la línea de
+comandos. Los errores se dicen para una persona: git no instalado, "no es un repositorio",
+"dubious ownership" (con el `git config --global --add safe.directory …` exacto) o el plazo
+vencido.
+
+Sobre ella, dos tools nuevas, de solo lectura e idempotentes:
+
+- **`read_repo_file(project?, repo, path)`** lee un archivo de un repo del proyecto por su id,
+  esté donde esté en este equipo (`machine.json` o `<PHASE_GATE_REPOS_PATH>/<dir>`). Contención
+  con la ruta real, cada segmento portable, y **nada de `.git`**: se rechaza todo segmento que sea
+  `.git` o empiece por `.git`, sin distinguir mayúsculas, y la misma regla se aplica a la ruta ya
+  resuelta, para que un enlace interno (o un nombre corto 8.3 como `GIT~1`) no lleve a
+  `.git/config`. Lectura acotada a 1 MB de texto.
+- **`repo_status(project?, repo?)`** devuelve, de un repo o de los de la tarea activa, la rama (o
+  si está separado), el commit, cuántos van adelante y atrás de su upstream, y si el árbol está
+  limpio, con cuántos cambios y cuántos sin seguimiento. Sale de `git status --porcelain=v2
+  --branch`, un formato estable para máquinas, y va también como `structuredContent` con su
+  `outputSchema`.
+
+El bloque CONFIGURACIÓN DEL PROYECTO añade a cada repo su estado (`· git · rama \`feat/x\` · árbol
+limpio`). Si tarda más de 3 s o falla, esa columna se omite y el prompt se entrega igual.
+`read_cross_repo` se conserva tal cual; su descripción remite a `read_repo_file` cuando el proyecto
+declara repos.
+
+**Por qué una puerta y esas banderas.** Leer también tiene efectos. `git status` puede reescribir el
+índice y tomar `index.lock`, y estorbar al commit que el agente esté haciendo en ese momento. Y si el
+repo configura `core.fsmonitor`, git **ejecuta** ese comando: un repo clonado de cualquier sitio
+podría traerlo. Se comprobó en este equipo (git 2.51 para Windows): una trampa en `core.fsmonitor`
+se dispara con un `git status` normal y no con la puerta; el test lo repite con su control positivo.
+`LC_ALL=C` hace que "not a git repository" se reconozca sin depender del idioma del equipo.
+
+**Los filtros de `.gitattributes` también se anulan** (añadido tras la auditoría de la etapa, que lo
+encontró). Un `filter.<nombre>.clean` o `.process` definido en `.git/config` es otro comando que
+`git status` ejecuta, con cualquier archivo que cambió de fecha, y con `GIT_OPTIONAL_LOCKS=0` en cada
+llamada. Antes de cada consulta, la puerta lee los drivers definidos con `git config --get-regexp
+'^filter\.'` (leer la configuración no ejecuta nada) y anula cada uno con `-c filter.<n>.clean=`,
+`smudge=`, `process=` y `required=false`; un nombre que no se puede escribir en un `-c` hace fallar
+la consulta. Comprobado con control positivo en git 2.51: con el valor vacío, ni `clean` ni `process`
+se ejecutan. Ni los hooks, ni `core.hooksPath`, ni `include.path` se ejecutan con `status`.
+
+**Sigue sin escribir en git** (principio 3 del plan): los commits los hace el agente con su terminal.
+Esta puerta es la única forma en que el servidor toca git, y solo lee.
+
+**Una excepción a la regla de `.git`: `.github`.** No puede resolver a `.git` (es otro nombre, y la
+ruta resuelta se comprueba igual) y guarda los workflows de CI, que una revisión de varios repos
+necesita leer. Consecuencia aceptada: `.gitignore`, `.gitattributes` y `.gitmodules` no se leen con
+esta tool (`.gitmodules` puede llevar una URL con credenciales).
+
+**Qué se descartó.** Exponer `git log` o `git diff` como tools: la Fase 5 los usa desde la terminal
+del agente, que ya los tiene; repetirlos aquí sería una superficie más que defender sin un caso que
+la pida.
+
+---
+
+## 2026-10-15 — El servidor deduce el proyecto de las raíces del cliente
+
+**Decisión.** El servidor pide al cliente sus raíces (MCP Roots: las carpetas que tiene abiertas)
+al terminar el initialize, y otra vez cuando el cliente avisa con `notifications/roots/list_changed`.
+Solo si el cliente declaró la capacidad `roots`: el SDK no lo comprueba, y la petición volvería con
+error. Cada URI pasa por `fileURLToPath` (que resuelve igual `file:///C:/…`, `file:///c:/…` y el
+`file:///c%3A/…` de VS Code, y decodifica espacios y acentos) y por `rutaReal`; nunca se manipula
+como texto. Las que fallan se descartan y quedan en el log.
+
+Las raíces se cruzan con los proyectos:
+
+| Coincidencia | Fuerza |
+|---|---|
+| La raíz es un repo del proyecto (según su `phase-gate.json` y `machine.json`) o está dentro de él | fuerte |
+| La raíz está dentro de `<DOCS>/<PROYECTO>` | fuerte |
+| Un repo del proyecto está dentro de la raíz | débil |
+
+Un solo proyecto con coincidencia fuerte, o ninguno fuerte y uno solo débil, es el proyecto; varios
+fuertes son ambiguos; cualquier otro caso (también varios débiles) no apunta a ninguno.
+
+**`project` pasa a ser opcional** en `start_task`, `switch_task`, `read_central_doc` y
+`write_central_doc` (con `task_name` + `file_name`), además de `get_phase_prompt` y los `/fN`, que ya
+lo eran. El orden de resolución: el `project` explícito; si no, el de las raíces; y solo para la
+compuerta y el aviso de pendientes, el único puntero, como antes. Si no se puede resolver, la tool
+falla con "No sé en qué proyecto estás: indica `project`.", con los candidatos si son varios. Cuando
+se deduce, la respuesta lo dice en una línea ("Proyecto deducido de la carpeta abierta: PROYECTO-A
+(la carpeta abierta `…` es el repo `api` de PROYECTO-A).") —en `read_central_doc`, como una parte
+aparte de la respuesta, para no mezclarla con el documento—. Estrenar un proyecto exige siempre
+`project`: un nombre nuevo no se deduce.
+
+**Amplía** la entrada del 2026-08-08 "La compuerta avisa, no bloquea, y la resuelve el servidor": el
+servidor resuelve ahora también el proyecto, con un dato que el cliente ya tiene y que el modelo no
+tiene que adivinar. De obligatorio a opcional es un cambio compatible para quien ya pasa `project`.
+
+**Por qué el puntero no se usa para todo.** El puntero dice cuál fue la última tarea de cada
+proyecto, no en qué proyecto está esta ventana. Para la compuerta, equivocarse cuesta un aviso de
+más; para elegir el preset, las reglas o el proyecto donde escribir, cuesta instrucciones o
+archivos equivocados. Las raíces sí dicen dónde está la ventana.
+
+**Una coincidencia débil no basta para escribir** (añadido tras la auditoría de la etapa). Con la raíz
+de un disco o la carpeta del usuario abiertas, cualquier proyecto con repos "estaba dentro", y si solo
+uno los declaraba, `write_central_doc` escribía en él sin que la IA lo nombrara. Ahora esas dos raíces
+no dan coincidencia débil, y una débil sirve para leer (`get_phase_prompt`, `read_central_doc`,
+`read_repo_file`, `repo_status`, `/fN`) pero no para escribir: `start_task`, `switch_task` y
+`write_central_doc` piden `project` si la carpeta abierta solo contiene un repo del proyecto. Además,
+solo cuenta la respuesta de la última petición de raíces: una anterior que llegaba tarde, tras un
+`roots/list_changed`, volvía a poner las raíces viejas.
+
+**Las raíces se esperan.** Una tool llamada justo después del initialize espera a que llegue la
+respuesta de `roots/list` (como mucho 5 s): sin eso, la primera llamada de cada sesión no vería el
+proyecto. Si el cliente no responde, todo sigue como sin raíces.
+
+**Qué se descartó.** Deducir el proyecto de un repo que no está en ningún manifiesto, por el nombre
+de su carpeta: dos proyectos pueden tener un repo `api`, y un nombre parecido no es una prueba.
+
+---
+
+## 2026-10-15 — El preset por defecto es `software`; la réplica pasa a `software-replica`
+
+**Decisión.** Los prompts de fábrica dejan de suponer un proyecto sin suite y con réplica de datos.
+Cambia el contenido por defecto de seis ranuras, y nada de la estructura:
+
+| Ranura | Antes (2.2.0) | Ahora (`software`) |
+|---|---|---|
+| `fase-1/verificacion` | una consulta contra una réplica, una consola del framework | correr la prueba o el comando que confirma o descarta, leer los logs |
+| `fase-2/verificacion` | consultas contra una réplica, conteos de volumen | barridos de consumidores, código de las dependencias, las pruebas de la zona |
+| `fase-3/comprobaciones` | la clave de idioma, la relación, el dump de esquema | la función y su firma, la configuración, lo que exporta un módulo, quién más lo consume |
+| `fase-3/pruebas` | sin suite; comparación de volcados contra la réplica | con suite, el plan la usa (y dice qué prueba nueva); sin suite, lo que sí se ejecuta |
+| `fase-4/verificacion` | consola del framework, consultas contra la réplica, SQL antes y después | la suite si existe, tipos, linter, scripts, la salida real |
+| `fase-4/pruebas` | sin suite, una línea y sigue | con suite, córrela por lote y un lote en rojo no se da por verificado |
+
+El texto de la 2.2.0 de esas seis ranuras pasa, byte a byte, al preset
+**`presets/es/software-replica.md`** (`lotes: true`, `commits: agente-commitea-con-OK`). Se generó
+extrayendo las ranuras con un script, no a mano.
+
+**La prueba de oro** (`test/oro.test.ts`): con `software-replica`, por manifiesto o por
+`presetPorDefecto` de `machine.json`, y también sin proyecto, `ensamblarFase(N, …,
+{ incluirConfigProyecto: false })` produce exactamente el texto que entregaba `loadPhasePrompt(N)`
+en la `2.2.0`, en las cinco fases. Las copias de `test/oro/2.2.0/fase-N.txt` salen del build de la
+etiqueta `v2.2.0`. Y la red puede fallar: con `software`, las fases 1 a 4 ya no coinciden.
+
+**Reemplaza** la entrada del 2026-08-07 "Sin suite de pruebas: la comparación contra la réplica ocupa
+ese lugar", que deja de ser la regla general: era la regla de un proyecto concreto, escrita como si
+fuera la de todos. Sigue entera dentro de su preset.
+
+**Por qué el genérico es "con suite si la hay".** Prohibir inventar pruebas sigue valiendo: es lo que
+evita que el modelo proponga escribir la primera prueba del módulo en mitad de una tarea. Lo que ya
+no se supone es que no existan; un proyecto con suite la usa como criterio de salida de cada lote.
+
+**Para quien ya usaba la réplica** (riesgo E3-R1): `presetPorDefecto: "software-replica"` en su
+`machine.json`, o `init --migrate`, que escribe `"preset": "software-replica"` en cada proyecto sin
+manifiesto. El bloque CONFIGURACIÓN DEL PROYECTO dice en cada prompt qué preset se usa y por qué
+(`por defecto; este proyecto no tiene phase-gate.json`), y `doctor` avisará con `PRESET-IMPLICITO`.
+
+**Un ajuste al texto del plan.** La ranura `fase-3/comprobaciones` abarca el párrafo entero, desde
+"Antes de escribir el primer paso, comprueba…"; el texto genérico del plan era solo el fragmento que
+empieza en "que el identificador…". Se conservó la entrada del párrafo para que la frase siga
+completa.
+
+---
+
+## 2026-10-15 — Las fases, los prompts y la deducción se resuelven por proyecto; la política de commits es configurable y el push queda fuera de cualquier variante
+
+> **Reemplazada en parte** el 2026-10-16 por "Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen
+> de una regla son ranuras": el punto "Las partes fijas que contradirían una variante" ya no vale (cada
+> variante pone sus propias líneas). Y desde "`04 - Ejecución.md` lo genera el servidor…" (2026-10-16),
+> `ninguno` ancla el lote a un artefacto o a una nota, y `sin-lotes` ya no copia la plantilla del recibo.
+
+**Decisión.** Lo que hasta ahora era global pasa a resolverse con el proyecto:
+
+- **Las fases de un proyecto** (`fasesDe(proyecto)`) salen de sus capas de cuerpos: fábrica,
+  global y la del proyecto (`<DOCS>/<PROYECTO>/.phase-gate/prompts/`). Si un proyecto sustituye una
+  fase con otro `documento`, sus tareas se deducen, se protegen (R4) y se listan con ese nombre.
+  `list_tasks`, `get_active_task`, `switch_task`, `write_central_doc`, la compuerta, el aviso de
+  pendientes, los recursos y el diagnóstico usan las fases de SU proyecto.
+- **El prompt de una fase** (`ensamblarFase(fase, proyecto, tarea)`) sale de todas las capas del
+  proyecto: el preset efectivo, las variantes de regla y la capa del proyecto. El **preset** sigue
+  la precedencia frontmatter de la tarea > `phase-gate.json` > `presetPorDefecto` de `machine.json`
+  > `software`; las **reglas** (`lotes`, `commits`), `reglas` del manifiesto > frontmatter del
+  preset > fábrica. Sin proyecto, entran la fábrica, el preset de `machine.json` (o `software`), sus
+  reglas y la capa global.
+- **El bloque `## CONFIGURACIÓN DEL PROYECTO`** se añade al final del prompt cuando se sabe el
+  proyecto: preset y su origen (`de la tarea`, `del proyecto`, `de machine.json` o `por defecto;
+  este proyecto no tiene phase-gate.json`), idioma, lotes y commits, los repos de la tarea con su
+  ruta en este equipo, los comandos de verificación y si hay un PR por repo. Es dato, no prosa.
+- **`get_phase_prompt` antepone una nota** por cada bloque huérfano de la fase que entrega:
+  `> Nota del servidor: el bloque «fase-3/verificaion» de <archivo>:<línea> no encaja en ninguna
+  ranura y se ignoró.`
+- **`start_task` gana `repos` y `preset`**, opcionales. Se validan contra el manifiesto y los
+  presets disponibles antes de crear nada (un id o un preset desconocido devuelven la lista de los
+  válidos) y se escriben como frontmatter del contexto inicial. Cambiarlos después exige reescribir
+  el contexto inicial, que está protegido: es deliberado, cambiar de repos a mitad de tarea es una
+  decisión.
+- **Los MCP Prompts** se listan sin proyecto, pero `/fN` con `project` toma el texto del
+  `comandos/fN.md` de ese proyecto si lo tiene.
+
+**Variantes de la política de commits** (`prompts/es/reglas/`), cada una un archivo de bloques que
+sustituye la ranura `fase-4/commits`: `agente-propone` (el agente propone, el usuario commitea y le
+da el hash), `auto` (el agente commitea en cuanto el lote queda `verificado`, sin esperar OK) y
+`ninguno` (sin commits; el recibo queda con `commit: no aplica`). `agente-commitea-con-OK` es el
+contenido de fábrica y no tiene archivo. Con `lotes: false`, `reglas/sin-lotes.md` sustituye
+`fase-3/lotes` y `fase-4/lotes`: un solo lote, cuyo recibo es el documento de la fase, con la
+plantilla copiada entera (el modelo no ve el plan).
+
+**El push no es una variante.** Ninguna política lo permite y ninguna lo hace configurable: lo que
+sale del equipo hacia el remoto, y el PR, los hace siempre la persona (decisión de la iteración 8
+del plan). Las variantes que commitean (`auto`) conservan lo que añadió la auditoría de la Etapa 1
+al contenido de fábrica: comprobar la rama antes del primer commit, `git add` archivo por archivo
+(nunca `-A`, `.`, `-u`, una carpeta ni `commit -a`), y nunca `--no-verify` ni `--amend`.
+
+**Las partes fijas que contradirían una variante.** PROHIBIDO y AUTOVERIFICACIÓN de la Fase 4 dicen
+"un commit sin el OK del usuario", y los de la Fase 3, "un plan sin la tabla de lotes". No son
+ranuras, así que una variante no puede cambiarlos. Cada variante lo dice dentro de su bloque: qué
+de esas secciones no aplica con esa política. Es un parche de texto, no de estructura; la revisión
+de la Fase 4 de la Etapa 4 es el sitio para convertir esas líneas en ranuras.
+
+**Amplía** la entrada del 2026-08-08 "La fase de cada tarea se deduce de sus documentos, no se
+guarda" (sigue deduciéndose; ahora con los nombres de documento de su proyecto) y la del 2026-10-14
+"La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario" (esa política
+sigue siendo la de fábrica; ahora es una de cuatro).
+
+**Errores explícitos.** Un manifiesto inválido o un preset que no existe hacen fallar
+`get_phase_prompt` con la ruta del problema: entregar el prompt de fábrica en su lugar sería el
+fallo silencioso que el manifiesto evita. En los listados de todos los proyectos, el proyecto roto
+sale con su error y los demás se listan igual. Un proyecto que no existe no impide entregar un
+prompt: se entrega sin configuración de proyecto, como antes, y (desde la auditoría de la etapa) con
+una nota al principio que dice qué preset se usó y que falta `project`; sin ella, el modelo podía creer
+que tenía las reglas de su proyecto.
+
+**Qué se conservó a propósito.** El único puntero sigue sirviendo solo para la compuerta y los
+pendientes, no para elegir el preset ni el bloque de configuración: deducir el proyecto de un
+puntero puede equivocarse, y equivocarse de preset cambia todas las instrucciones.
+
+---
+
+## 2026-10-15 — Cada proyecto puede declarar un `phase-gate.json`; cada equipo, un `machine.json`
+
+**Decisión.** Dos archivos de configuración, los dos opcionales:
+
+- **`<DOCS>/<PROYECTO>/phase-gate.json`**, el manifiesto del proyecto: `version: 1`, `preset`
+  (`software` por defecto), `idioma` (`es`), `repos` (cada uno con `id`, `dir` relativo a
+  `PHASE_GATE_REPOS_PATH` y `rol`), `reglas` (`lotes`, `commits`, `verificacion`) y
+  `fase5.prPorRepo`. Viaja con la Documentación, así que vale en todos los equipos.
+- **`<configDir>/machine.json`**, lo de este equipo: `repos` con la ruta absoluta de un repo
+  concreto (`"<PROYECTO>/<id>"`, con el proyecto comparado en minúsculas) y `presetPorDefecto`
+  para los proyectos sin manifiesto. `configDir()` es `PHASE_GATE_CONFIG_PATH` si está definida;
+  si no, `%APPDATA%\mcp-phase-gate\` en Windows, `~/Library/Application Support/mcp-phase-gate/`
+  en macOS y `$XDG_CONFIG_HOME/mcp-phase-gate/` (o `~/.config/…`) en Linux.
+
+Los valida un shape zod de `src/manifiesto.ts`, más lo que zod no expresa: ids de repo únicos, un
+`dir` que no es absoluto (en ningún sistema, porque el manifiesto viaja entre equipos) ni tiene
+`..`, y un `preset` que existe (si no, `PRESET-NO-EXISTE` con la lista de los disponibles).
+`schema/project.json` y `schema/machine.json` se **generan** de esos shapes
+(`scripts/generar-esquemas.mjs`) y un test exige que lo publicado coincida: una sola fuente. Los
+presets disponibles son los del paquete (`presets/<idioma>/`) más los del usuario
+(`<configDir>/presets/`), que ganan con el mismo nombre; `software` existe siempre, porque son los
+prompts de fábrica sin bloques.
+
+`<configDir>/prompts/` pasa a ser la capa global cuando `PHASE_GATE_PROMPTS_PATH` no está
+definida y la carpeta existe: se puede tener una capa propia sin tocar ninguna variable.
+
+**Un archivo inválido es un error, no un "no hay".** Un manifiesto o un `machine.json` que existe
+y está mal escrito se rechaza con la ruta exacta del problema (`repos[1].dir: no puede ser una
+ruta absoluta…`). Caer a los valores por defecto en silencio es el fallo silencioso que este
+diseño evita: un preset mal escrito que se ignora cambiaría el comportamiento de todas las fases
+sin que nadie lo note.
+
+**Reemplaza en parte** el rechazo a un archivo de configuración de las entradas del 2026-08-08
+"Los proyectos son las carpetas que existen, no una lista" (la issue #3) y "El nombre del
+documento lo declara el prompt de su fase". Lo que aquellas protegían sigue en pie: **los
+proyectos siguen siendo las carpetas que existen** (el manifiesto no declara proyectos, vive
+dentro de uno) y **el nombre de cada documento sigue en la cabecera de su prompt** (el manifiesto
+no tiene nombres de documento). Lo que cambia es que ya hay datos que no caben en una variable de
+entorno ni en el disco: qué preset usa un proyecto, qué repos toca y dónde está cada uno en cada
+equipo. **Matiza** la del 2026-08-10 "Varias documentaciones se resuelven registrando el servidor
+dos veces, no con código": su "introducir un formato de configuración nuevo" ya no es un costo por
+pagar, pero los "espacios" con `use_space` siguen descartados; varias documentaciones siguen siendo
+varios registros.
+
+**Un `machine.json` roto solo afecta a quien lo usa** (añadido tras la auditoría de la etapa). Se lee
+solo cuando hace falta: para resolver repos, y para el `presetPorDefecto` de un proyecto sin
+manifiesto (o sin proyecto). Antes se leía siempre al armar el bloque de configuración, y un error en
+él dejaba sin prompts a todos los proyectos. Sus rutas de repo tienen que ser absolutas: una relativa
+se resolvería contra el directorio de trabajo de cada cliente.
+
+**Por qué dos archivos y no uno.** El manifiesto viaja con la Documentación por OneDrive y lo leen
+todos los equipos; una ruta como `D:\trabajo\backend-api` solo vale en uno. Mezclarlas obligaría a
+elegir entre rutas que no existen en el otro equipo o repos que hay que declarar dos veces.
+`machine.json` vive fuera de `DOCS` y ninguna tool puede escribirlo (SEG-M), así que puede apuntar
+fuera de `PHASE_GATE_REPOS_PATH` sin abrir una puerta.
+
+**Quién los escribe.** Solo la persona y el CLI (`init`, `eject`). `write_central_doc` no puede
+escribir `phase-gate.json` desde la Etapa 1.
+
+**Para los tests.** `limpiarEntorno()` deja `PHASE_GATE_CONFIG_PATH` en una carpeta temporal vacía
+(`configTemporal()`), y los E2E se la pasan al servidor que lanzan: sin eso, la suite leería el
+`machine.json` y los presets reales de quien la corre.
+
+---
+
+## 2026-10-15 — Los presets y las personalizaciones se escriben como bloques sobre ranuras, en un solo archivo, con modos `reemplazar`, `antes` y `despues`
+
+**Decisión.** Un archivo de bloques cambia el contenido de las ranuras sin copiar el prompt:
+
+```markdown
+<!-- bloque: fase-3/pruebas -->
+contenido que sustituye a la ranura
+<!-- /bloque -->
+
+<!-- bloque: global/cero-rupturas | despues -->
+contenido que se añade al final de la ranura
+<!-- /bloque -->
+```
+
+El identificador es `<archivo>/<ranura>` (`global` o `fase-N`), y el modo, `reemplazar` (por
+defecto), `antes` o `despues`. Un preset es un archivo así; una capa propia (la global o la de un
+proyecto, `<DOCS>/<PROYECTO>/.phase-gate/prompts/`) los escribe en su `bloques.md`.
+
+Las capas, de menor a mayor: fábrica (1), preset (2), variantes de regla (2.5), global (3) y
+proyecto (4). El **cuerpo** de una fase sale de la capa más alta entre 1, 3 y 4 que tenga su
+`fase-N-*.md`, y su cabecera da el nombre del documento: un bloque no lo puede cambiar. Después,
+los bloques se aplican por capa ascendente (y, dentro de una capa, en el orden del archivo), así
+que el de más arriba manda aunque su capa esté por debajo de la del cuerpo. Un `despues` del
+preset seguido de un `reemplazar` del proyecto deja solo el del proyecto.
+
+Lo que no encaja se avisa y no se aplica: un bloque de una ranura que no existe es
+`BLOQUE-HUERFANO`; el mismo identificador dos veces en un archivo es `BLOQUE-DUPLICADO` (vale el
+primero); un bloque sin cerrar, un cierre suelto, uno anidado o un marcador mal escrito es
+`BLOQUE-MAL-FORMADO`, y el archivo entero se ignora. Los marcadores nunca llegan al modelo, y una
+ranura que ningún bloque toca se entrega byte a byte como antes: sin bloques, el prompt es
+idéntico al de la `2.2.0` (comprobado contra el build de `v2.2.0` en las cinco fases).
+
+**`global/extra`.** `global-rules.md` gana al final una ranura vacía bajo `## REGLAS
+ADICIONALES`, para sumar reglas globales sin sustituir ninguna. Si queda vacía, el encabezado no
+se entrega. El catálogo pasa a 23 ranuras.
+
+**Reemplaza en parte** la entrada del 2026-08-10 "Publicable en npm: los prompts se superponen en
+capas", en su punto "`global-rules.md` sustituye, no concatena". Un `global-rules.md` propio sigue
+sustituyendo al de fábrica, pero las secciones `## BASE DE CADA DECISIÓN` y `## PENDIENTES
+HEREDADOS` son **esqueleto**: no son ranuras, ningún bloque las toca, y si el archivo que gana no
+las tiene se añaden al final las de fábrica. `doctor` lo dice con `GLOBAL-REINYECTADO`, que
+sustituye a `GLOBAL-SIN-BASE` para esas dos. `## EVIDENCIA` es una ranura y no se reinyecta: si
+falta, `GLOBAL-SIN-BASE` sigue avisando. La forma recomendada de cambiar las reglas globales deja
+de ser copiar el archivo y pasa a ser un `bloques.md` con `global/cero-rupturas`,
+`global/evidencia` o `global/extra`. **Amplía** la del 2026-10-14 "Ranuras en los prompts base:
+estructura fija, contenido sustituible", que reservó las ranuras para esto.
+
+**Por qué el motivo de la entrada vieja ya no pesa.** Concatenar dos juegos de reglas hacía
+imposible saber de qué archivo salió una instrucción. Un bloque nombra su ranura y su modo, y la
+procedencia de cada ranura (qué capa y qué `archivo:línea` ganó, y qué modos se sumaron) la da el
+ensamblado; `doctor` la mostrará. Lo que se suma es visible y tiene dirección.
+
+**Por qué un archivo de bloques mal formado se ignora entero.** Aplicar la mitad de un preset daría
+un prompt que nadie escribió. Mejor el prompt de fábrica y un aviso con archivo y línea.
+
+**Qué se descartó.** Bloques que cambien el frontmatter (el nombre del documento o de los recibos):
+la deducción de fase depende de esos nombres, y que un preset de tarea pudiera cambiarlos haría que
+la fase de una tarea dependiera de qué preset tiene. Y un parser de Markdown completo: los
+marcadores se reconocen por línea entera, como los de ranura, sin entender bloques de código.
+
+---
+
+## 2026-10-15 — Los prompts de fábrica viven en `prompts/<idioma>/`
+
+**Decisión.** Los prompts que trae el paquete pasan de `prompts/` a `prompts/es/`: las cinco
+fases, `global-rules.md` y `comandos/`. `defaultPromptsPath()` apunta ahí y acepta el idioma
+(`"es"` por defecto). El paquete publica además `presets/` y `schema/`, que llegan en los lotes
+siguientes de la Etapa 3.
+
+**Amplía** la entrada del 2026-08-10 "Publicable en npm: los prompts se superponen en capas": las
+capas siguen igual, solo cambia dónde está la de fábrica.
+
+**Por qué una subcarpeta por idioma.** La versión en inglés (Etapa 6) llega al lado, en
+`prompts/en/`, sin mover nada ni partir los nombres de archivo con sufijos. Hacerlo ahora, con un
+solo idioma, cuesta un `git mv`; hacerlo con dos idiomas y presets apuntando a la ruta vieja
+costaría una migración.
+
+**Qué no cambia.** Las capas propias (`PHASE_GATE_PROMPTS_PATH`, o su alias
+`ORQUESTADOR_PROMPTS_PATH`) siguen teniendo sus `fase-N-*.md` en la raíz: nadie tiene que mover
+su carpeta. `.claude/commands/` sigue siendo la copia idéntica de los comandos, ahora de
+`prompts/es/comandos/`.
+
+---
+
 ## 2026-10-15 — El servidor avisa de los pendientes heredados leyendo encabezados, sin guardar estado
 
 **Decisión.** `get_phase_prompt` añade un bloque `## PENDIENTES HEREDADOS (detectados por el
@@ -339,6 +1088,10 @@ variable, y quitarlo rompería configuraciones que nadie tiene por qué tocar.
 
 ## 2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes
 
+> **Matizada** el 2026-10-16 por "El auditor recibe los commits ya verificados": la entrada de la
+> auditoría ya no son los commits que el modelo lea en los recibos, sino los que lista el servidor al final
+> del prompt (COMMITS DE LA FASE 4), ya verificados. Lo de los pendientes sin comprobar sigue.
+
 **Decisión.** La entrada de la Fase 5 son los commits que registran los recibos de la Fase 4
 (el campo `commit` de cada recibo, o la tabla del índice). Si el usuario indica otro rango,
 manda el suyo, y la auditoría dice si no coincide con los recibos; si no hay ni recibos ni
@@ -366,6 +1119,11 @@ del PR no cambia; solo queda envuelto para que un preset de la Etapa 3 pueda sus
 ---
 
 ## 2026-10-14 — La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario
+
+> **Reemplazada en parte** el 2026-10-16 por "`record_batch` registra cada lote en dos tiempos: antes
+> y después del commit": el recibo ya no lo escribe el modelo con `write_central_doc`, sino el servidor
+> a partir de campos, y el hash no se anota a mano: se ancla y se verifica. El ciclo, el OK del usuario,
+> la lista de archivos uno por uno y la frontera del push siguen.
 
 **Decisión.** La Fase 4 ejecuta el plan **un lote a la vez**, en el orden de la tabla de lotes
 de la Fase 3, con un ciclo fijo: implementar solo ese lote, verificarlo con su criterio de
@@ -507,6 +1265,11 @@ que los overrides operen por ranuras para que nadie las pierda por accidente.
 
 ## 2026-10-14 — Un documento de fase se congela cuando existe el de una fase posterior
 
+> **Matizada** el 2026-10-16 por "Los recibos con ancla quedan sellados y la Fase 4 solo la escribe el
+> servidor": los recibos y `04 - Ejecución.md` ya no se escriben con `write_central_doc` aunque no haya Fase
+> 5 (se rechazan siempre, con la escotilla de confirmación); lo de "solo los congela una Fase 5 presente" y
+> que crear un recibo nuevo se permita ya no vale. El congelamiento de los demás documentos sigue igual.
+
 **Decisión.** Sin `force: true`, `write_central_doc` rechaza escribir:
 
 - **El contexto inicial**, siempre: también para crearlo. Solo `start_task` lo escribe sin
@@ -593,6 +1356,11 @@ solo en Windows.
 ---
 
 ## 2026-10-14 — Los recibos de lote viven en una subcarpeta que declara el prompt
+
+> **Matizada** el 2026-10-16 por "Los recibos son datos con un formato determinista que escribe el
+> servidor" y por "`04 - Ejecución.md` lo genera el servidor; con un solo lote, el recibo se mueve" (H2):
+> con un solo lote, el recibo también vive en la subcarpeta mientras está abierto, y los recibos los
+> escribe el servidor. La subcarpeta y el nombre siguen.
 
 **Decisión.** La fase que ejecuta por lotes declara en su frontmatter la subcarpeta de sus
 recibos (`recibos: 04 - Ejecución`), igual que declara su documento. El servidor la lee y la
@@ -917,6 +1685,10 @@ intentaría republicarla y npm la rechazaría por duplicada. Los tags empiezan e
 
 ## 2026-08-10 — Publicable en npm: los prompts se superponen en capas
 
+> **Reemplazada en parte** el 2026-10-15 por "Los presets y las personalizaciones se escriben
+> como bloques sobre ranuras…": el punto "`global-rules.md` sustituye, no concatena" ya no vale
+> para las secciones esqueleto (BASE y PENDIENTES), que se reinyectan. El resto sigue.
+
 **Decisión.** El paquete gana `bin`, el `index.ts` gana shebang, y `ORQUESTADOR_PROMPTS_PATH`
 deja de **reemplazar** la carpeta de prompts para **superponerse** a ella. Se publica como
 `2.0.0`, sin scope, con un workflow que dispara en tag.
@@ -1023,6 +1795,12 @@ pero por accidente, que es la peor forma de funcionar. Ahora se declara qué se 
 
 ## 2026-08-10 — Varias documentaciones se resuelven registrando el servidor dos veces, no con código
 
+> **Matizada** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`; cada equipo,
+> un `machine.json`": ya existe un formato de configuración, pero los espacios con `use_space`
+> siguen descartados. Y **reemplazada en parte** el mismo día por "`init` escribe la configuración
+> del cliente con copia, diff y confirmación": el descarte de la app de escritorio sigue, pero
+> escribir la configuración del cliente ya no se deja a mano.
+
 **Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se
 documenta como un patrón de configuración: **registrar el servidor más de una vez** en el
 cliente, con un bloque `env` distinto en cada registro. No se añade nada al código.
@@ -1103,6 +1881,10 @@ el modelo tiene sin preguntar, porque la ventana está abierta en ese repositori
 ---
 
 ## 2026-08-08 — La fase de cada tarea se deduce de sus documentos, no se guarda
+
+> **Reemplazada en parte** el 2026-10-16 por "La Fase 4 tiene granularidad de lote": el límite "la
+> granularidad es fases terminadas, no a media fase" ya no vale para la Fase 4. La fase se sigue
+> deduciendo de qué documentos existen.
 
 **Decisión.** No hay ningún registro que diga en qué fase va cada tarea. El servidor mira qué
 documentos existen en la carpeta y lo deduce: la fase siguiente es la primera cuyo documento
@@ -1279,6 +2061,10 @@ panel de los otros dos clientes muestre el nombre de un editor que no es el que 
 
 ## 2026-08-08 — Los proyectos son las carpetas que existen, no una lista
 
+> **Reemplazada en parte** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`;
+> cada equipo, un `machine.json`": el descarte de un archivo de configuración ya no vale. Los
+> proyectos siguen siendo las carpetas que existen.
+
 **Decisión.** Se borra `PROJECT_DOC_DIRS`. Es proyecto la carpeta que contenga la subcarpeta
 de tareas. Un proyecto inexistente se rechaza mostrando los válidos; para estrenar uno hay que
 pasar `crear_proyecto: true` a `start_task`.
@@ -1303,6 +2089,10 @@ archivo que mantener para reproducir peor lo que el disco ya sabe.
 ---
 
 ## 2026-08-08 — El nombre del documento lo declara el prompt de su fase
+
+> **Reemplazada en parte** el 2026-10-15 por "Cada proyecto puede declarar un `phase-gate.json`;
+> cada equipo, un `machine.json`": el descarte de `orquestador.config.json` ya no vale. El
+> nombre de cada documento sigue en la cabecera de su prompt.
 
 **Decisión.** Cada `prompts/fase-N-*.md` declara en una cabecera cómo se llama el documento
 que produce. `get_phase_prompt` la lee y le entrega al modelo el nombre exacto del documento
@@ -1561,6 +2351,9 @@ micro-decisión de Fase 3 como `D7`, continuando desde la Fase 2, sin que nadie 
 ---
 
 ## 2026-08-07 — Sin suite de pruebas: la comparación contra la réplica ocupa ese lugar
+
+> **Reemplazada** el 2026-10-15 por "El preset por defecto es `software`; la réplica pasa a
+> `software-replica`": deja de ser la regla general. El texto vive, intacto, en ese preset.
 
 **Decisión.** El proyecto de la usuaria no tiene pruebas automatizadas, así que la Fase 3
 tiene **prohibido** inventar una sección de tests o proponer escribir la primera del módulo.

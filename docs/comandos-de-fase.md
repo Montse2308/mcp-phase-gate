@@ -2,7 +2,7 @@
 
 Los comandos `/f1`…`/f5` disparan el flujo: cada uno le dice al modelo qué tools llamar, y en
 qué orden, para arrancar su fase. Su texto vive en **una sola fuente**:
-[`prompts/comandos/`](../prompts/comandos), que viaja dentro del paquete de npm.
+[`prompts/es/comandos/`](../prompts/es/comandos), que viaja dentro del paquete de npm.
 
 ## Cómo llegan a tu cliente
 
@@ -28,19 +28,24 @@ largo puede ir pegado después del comando como texto normal del chat.
 
 **Como comandos de archivo.** Para quien trabaja en este repo, o con un cliente que no muestra
 bien los prompts MCP, hay una copia idéntica en [`.claude/commands/`](../.claude/commands), que
-Claude Code lee al abrir el repo. Para usarlos en Cursor sin prompts MCP, copia los archivos de
-`prompts/comandos/` a `~/.cursor/commands/`. Un test (`test/docs.test.ts`) obliga a que
-`.claude/commands/` y `prompts/comandos/` sean idénticos.
+Claude Code lee al abrir el repo. Para usarlos en otros proyectos, o en Cursor sin prompts MCP,
+`npx mcp-phase-gate init --comandos` copia los de `prompts/es/comandos/` a `~/.claude/commands/`
+o a `~/.cursor/commands/`, con una marca en la primera línea; un archivo tuyo, sin la marca, no
+lo pisa. Un test (`test/docs.test.ts`) obliga a que `.claude/commands/` y `prompts/es/comandos/`
+sean idénticos.
 
 **Comandos propios.** Un `comandos/fN.md` en tu carpeta de prompts propia
-(`PHASE_GATE_PROMPTS_PATH`) gana al de fábrica, igual que los prompts de fase. Una fase sin
-comando —por ejemplo, una `fase-6` que añadas tú— recibe su `/f6` con un texto genérico que
+(`PHASE_GATE_PROMPTS_PATH`) gana al de fábrica, igual que los prompts de fase; uno en la capa de
+un proyecto (`<DOCS>/<PROYECTO>/.phase-gate/prompts/comandos/`) gana solo en ese proyecto, cuando
+el comando se pide con su `project` o el servidor lo deduce de la carpeta abierta.
+`npx mcp-phase-gate eject comando-f4 --a global` te copia el texto actual para empezar. Una fase
+sin comando —por ejemplo, una `fase-6` que añadas tú— recibe su `/f6` con un texto genérico que
 hace lo mismo: buscar la tarea activa, pedir el prompt de la fase y guardar su documento.
 
 ## Qué carga cada uno, y qué no
 
 Los comandos son **orquestación**: qué tool llamar y en qué orden. El rol, las reglas, la
-estructura del documento **y su nombre de archivo** viven en `prompts/*.md` y llegan por
+estructura del documento **y su nombre de archivo** viven en `prompts/es/*.md` y llegan por
 `get_phase_prompt`. Por eso un comando puede quedarse igual mientras el prompt de su fase
 cambia por completo. Un prompt `/fN` tampoco trae dentro el prompt de la fase: si lo trajera,
 habría dos caminos para recibirlo y en uno la compuerta no sabría en qué proyecto estás.
@@ -56,5 +61,5 @@ existen, y `start_task` devuelve la lista si le pasas uno que no reconoce.
 
 La regla al editarlos: si lo que quieres cambiar es **cómo se comporta** el modelo, **qué
 secciones** tiene el documento o **cómo se llama**, va en el prompt. Solo si cambia **qué
-tool se llama, o en qué orden**, hay que tocar el comando: en `prompts/comandos/`, y la misma
+tool se llama, o en qué orden**, hay que tocar el comando: en `prompts/es/comandos/`, y la misma
 edición en `.claude/commands/`.

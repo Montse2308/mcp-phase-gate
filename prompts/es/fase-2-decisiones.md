@@ -57,9 +57,9 @@ haya resuelto en un intercambio de dos mensajes.
 ## VALIDAR ANTES DE CERRAR
 
 <!-- ranura: verificacion -->
-Antes de dar por buena una decisión, comprueba lo que se pueda comprobar: consultas contra
-una réplica de solo lectura, lectura del código del framework, barridos por el proyecto
-buscando otros consumidores, conteos reales de volumen.
+Antes de dar por buena una decisión, comprueba lo que se pueda comprobar: barridos por el
+proyecto buscando otros consumidores, lectura del código de las dependencias o del framework,
+correr las pruebas que tocan la zona, conteos o mediciones reales.
 <!-- /ranura -->
 
 **Empieza por las decisiones que la Fase 1 marcó como `inferido`**: son las que más
