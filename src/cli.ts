@@ -62,6 +62,7 @@ eject <objetivo>:
 ui:
   --puerto <n>           El puerto (en 127.0.0.1). Sin esto, uno libre.
   --no-abrir             No abre el navegador: solo imprime el enlace, que sirve una sola vez.
+  --demo                 Sobre una demo con datos de ejemplo, en una carpeta temporal: no toca tu Documentación.
 
 Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
 
@@ -112,7 +113,7 @@ export type ResultadoCli =
 
 // Las opciones de `ui`, ya validadas. El Studio vive en src/studio/ y se carga solo para `ui`, con un
 // import dinámico: el servidor MCP por stdio no carga nada de él (test/aislamiento.test.ts).
-export type OpcionesUi = { puerto: number | null; abrir: boolean };
+export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean };
 
 export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
   const { lanzarStudio } = await import("./studio/servidor.js");
@@ -140,7 +141,7 @@ const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
-  ui: ["puerto", "no-abrir"],
+  ui: ["puerto", "no-abrir", "demo"],
 };
 
 type Valores = {
@@ -164,6 +165,7 @@ type Valores = {
   reverificar?: boolean;
   puerto?: string;
   "no-abrir"?: boolean;
+  demo?: boolean;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -232,6 +234,7 @@ export function ejecutarCli(
         reverificar: { type: "boolean" },
         puerto: { type: "string" },
         "no-abrir": { type: "boolean" },
+        demo: { type: "boolean" },
       },
     }));
   } catch (error) {
@@ -293,7 +296,7 @@ export function ejecutarCli(
       puerto = Number(valores.puerto);
       if (!/^\d+$/.test(valores.puerto) || puerto < 1 || puerto > 65535) return invalido(salida, `--puerto "${valores.puerto}" no es válido: un número de 1 a 65535.`);
     }
-    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"] } };
+    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"], demo: valores.demo === true } };
   }
 
   return invalido(salida);

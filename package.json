@@ -18,7 +18,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc && tsc -p studio/tsconfig.json && vite build --config studio/vite.config.ts && node scripts/presupuesto-studio.mjs",
+    "build": "tsc && node scripts/copiar-demo.mjs && tsc -p studio/tsconfig.json && vite build --config studio/vite.config.ts && node scripts/presupuesto-studio.mjs",
     "start": "node build/index.js",
     "dev": "tsc --watch",
     "test": "tsc -p tsconfig.test.json && node --test \"build-test/test/**/*.test.js\"",

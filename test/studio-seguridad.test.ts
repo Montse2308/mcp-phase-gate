@@ -119,9 +119,10 @@ describe("Studio: arranque", () => {
 
   it("ui y sus banderas en la CLI; una bandera de otro subcomando es un error", () => {
     const salida = { out: () => {}, err: () => {} };
-    assert.deepEqual(ejecutarCli(["ui"], salida), { accion: "ui", opciones: { puerto: null, abrir: true } });
-    assert.deepEqual(ejecutarCli(["ui", "--puerto", "4321", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: 4321, abrir: false } });
-    for (const malo of [["ui", "--puerto", "0"], ["ui", "--puerto", "70000"], ["ui", "--puerto", "12a"], ["ui", "--json"], ["doctor", "--no-abrir"], ["ui", "extra"]]) {
+    assert.deepEqual(ejecutarCli(["ui"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: false } });
+    assert.deepEqual(ejecutarCli(["ui", "--puerto", "4321", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: 4321, abrir: false, demo: false } });
+    assert.deepEqual(ejecutarCli(["ui", "--demo", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: true } });
+    for (const malo of [["ui", "--puerto", "0"], ["ui", "--puerto", "70000"], ["ui", "--puerto", "12a"], ["ui", "--json"], ["doctor", "--no-abrir"], ["doctor", "--demo"], ["ui", "extra"]]) {
       assert.deepEqual(ejecutarCli(malo, salida), { accion: "salir", codigo: 2 }, malo.join(" "));
     }
   });

@@ -30,6 +30,8 @@ import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
 import { INTERVALO_MS, sesionesAbiertas } from "../sesiones.js";
 import { crearApi, entornoInitDelProceso } from "./api.js";
+import { activarDemo, entornoInitDeDemo, prepararDemo } from "./demo.js";
+import type { CarpetasDeDemo } from "./demo.js";
 import { crearEventos } from "./eventos.js";
 
 export const HOST = "127.0.0.1";
@@ -400,6 +402,20 @@ export function abrir(url: string, plataforma: NodeJS.Platform = process.platfor
 // Arranca, imprime el enlace, lo abre (salvo --no-abrir) y se queda en primer plano hasta Ctrl+C.
 export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNavegador: (url: string) => boolean = abrir): Promise<number> {
   let studio: Studio;
+  // Con --demo, el proceso entero trabaja sobre la demo (§7.8): sus PHASE_GATE_* sustituyen a las de quien lo
+  // lanza antes de leer nada, e init-cliente escribe en la casa de la demo.
+  let demo: CarpetasDeDemo | null = null;
+  if (opciones.demo) {
+    try {
+      const preparada = await prepararDemo();
+      demo = preparada.carpetas;
+      if (!preparada.reutilizada) salida.out(`Demo generada en ${demo.raiz}.`);
+    } catch (error) {
+      salida.err(`No se pudo preparar la demo: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+    activarDemo(demo);
+  }
   const eventos = crearEventos();
   // Las sesiones caducadas o con el pid muerto se borran al arrancar y cada minuto, nunca dentro de un
   // GET: leer la API no escribe en el disco.
@@ -411,14 +427,16 @@ export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNa
     eventos.cerrar();
   };
   try {
+    const enDemo = demo;
     const api = crearApi({
-      modo: "vivo",
+      modo: enDemo ? "demo" : "vivo",
       watcher: eventos.estado,
       sesiones: () => sesionesAbiertas(),
-      entornoInit: () => entornoInitDelProceso(ejecutarComando),
+      entornoInit: () => (enDemo ? entornoInitDeDemo(enDemo) : entornoInitDelProceso(ejecutarComando)),
       eventos: (peticion, res) => eventos.manejar(peticion.req, res),
     });
-    studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: parar });
+    const configJs = enDemo ? `window.PG_MODO = "demo";\nwindow.PG_BANDA = ${JSON.stringify(`Demo: datos de ejemplo en ${enDemo.raiz}`)};\n` : undefined;
+    studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: parar, ...(configJs ? { configJs } : {}) });
   } catch (error) {
     parar();
     const codigo = (error as NodeJS.ErrnoException)?.code;

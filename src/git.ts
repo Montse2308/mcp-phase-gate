@@ -1,4 +1,5 @@
-// La única puerta a git, y de solo lectura.
+// La única puerta a git, y de solo lectura para el servidor MCP. (La única escritura, gitEnLaDemo, es la de
+// la demo del Studio en sus propios repos temporales: ver al final.)
 //
 // El servidor nunca escribe en git (principio 3 del plan): los commits los hace el agente con su
 // terminal. Pero hasta leer tiene efectos si no se tiene cuidado: `git status` puede reescribir el
@@ -16,6 +17,7 @@
 
 import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 
 export const ESPERA_DE_GIT_MS = 10_000;
 const SALIDA_MAXIMA = 1_048_576;
@@ -220,6 +222,39 @@ export async function sonConsecutivos(dir: string, shas: string[]): Promise<bool
   const rango = (await tienePadre(dir, primero)) ? [`${primero}^..${ultimo}`] : [ultimo];
   const lista = (await git(dir, ["rev-list", "--reverse", ...rango])).split(/\r?\n/).map((linea) => linea.trim()).filter(Boolean);
   return lista.length === shas.length && lista.every((sha, i) => sha === shas[i]!.toLowerCase());
+}
+
+// ─── Los repos de la demo del Studio ────────────────────────────────────────
+// La única escritura en git del paquete, y no la hace el servidor MCP: la demo del Studio (§7.8 del plan)
+// crea sus propios repos en una carpeta nueva y hace en ellos commits reales, con autor y fecha fijos, para
+// que sus SHA sean siempre los mismos. Solo vale dentro de una carpeta marcada como demo (MARCA_DE_DEMO en
+// su raíz), y deja fuera la configuración global y del sistema de quien la genera: sus hooks, su
+// core.autocrlf o una firma obligatoria cambiarían los SHA, o ejecutarían código. El archivo de la marca,
+// vacío, hace de configuración global.
+export const MARCA_DE_DEMO = ".demo-mcp-phase-gate";
+
+export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string[], cuando: { fecha: string; nombre: string; correo: string }): string {
+  const marca = path.join(raizDemo, MARCA_DE_DEMO);
+  if (!fs.statSync(marca, { throwIfNoEntry: false })?.isFile()) throw new Error(`${raizDemo} no es una carpeta de demo: no se escribe en git fuera de una.`);
+  const relativa = path.relative(path.resolve(raizDemo), path.resolve(dir));
+  if (!relativa || relativa.startsWith("..") || path.isAbsolute(relativa)) throw new Error(`${dir} no está dentro de la carpeta de la demo.`);
+  // Ninguna GIT_* de quien la genera (GIT_DIR, GIT_TEMPLATE_DIR, GIT_CONFIG_PARAMETERS…): solo las de aquí.
+  const heredado = Object.fromEntries(Object.entries(process.env).filter(([clave]) => !clave.toUpperCase().startsWith("GIT_")));
+  const env = {
+    ...heredado,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: marca,
+    GIT_AUTHOR_NAME: cuando.nombre,
+    GIT_AUTHOR_EMAIL: cuando.correo,
+    GIT_AUTHOR_DATE: cuando.fecha,
+    GIT_COMMITTER_NAME: cuando.nombre,
+    GIT_COMMITTER_EMAIL: cuando.correo,
+    GIT_COMMITTER_DATE: cuando.fecha,
+    GIT_TERMINAL_PROMPT: "0",
+    LC_ALL: "C",
+  };
+  const fijos = [...ARGUMENTOS_FIJOS, "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", "-c", `core.hooksPath=${path.join(raizDemo, ".sin-hooks")}`];
+  return execFileSync("git", [...fijos, ...args], { cwd: dir, env, timeout: ESPERA_DE_GIT_MS, maxBuffer: SALIDA_MAXIMA, windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
 // ¿La carpeta está dentro de un repositorio de git? Cualquier otro fallo (git no instalado, propiedad
