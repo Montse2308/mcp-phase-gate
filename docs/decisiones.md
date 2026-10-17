@@ -12,6 +12,55 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-17 — El servidor MCP deja constancia de sus sesiones abiertas
+
+**Decisión.** Cada servidor MCP lanzado por stdio escribe `<stateDir>/sesiones/<pid>.json` con seis
+campos: `pid`, `cliente` (nombre y versión que anunció en el initialize), `raices` (las de la sesión,
+como mucho 20), `proyecto` (el que deducen esas raíces con `resolverPorRaices`, o `null`), `desde` y
+`actualizado`. Nada de la conversación. Lo escribe al conocer las raíces —al terminar el initialize,
+también si el cliente no declara `roots` (con raíces vacías), y tras cada `roots/list_changed`— y lo
+refresca cada minuto; como mucho escribe una vez por minuto, y un cambio dentro de ese minuto se escribe
+al acabarlo. Lo borra al salir: en `exit`, en `SIGINT` (y sale con 130), en `SIGTERM` (143) y cuando el
+cliente cierra stdin.
+
+Escribirlo nunca tumba el servidor ni retrasa una respuesta: la escritura es asíncrona (un temporal y un
+`rename`), nadie la espera, y un fallo se anota una vez en el log. Comprobado con una escritura que no
+termina nunca, con otra que falla y con la carpeta de estado convertida en un archivo: las tools
+responden igual. Solo lo hace el servidor por stdio (`index.ts`); el que montan los tests en memoria, no.
+
+El Studio lo lee como entrada no confiable, porque lo escriben otros procesos. Una sesión cuenta solo si
+su nombre es un entero positivo (`^[1-9]\d{0,9}\.json$`), es un archivo normal de 16 kB o menos, su
+contenido cuadra con un shape zod estricto (sin claves de más), el `pid` de dentro es el del nombre, ese
+`pid` sigue vivo (`process.kill(pid, 0)`; `EPERM` es vivo, de otro usuario) y `actualizado` es de hace
+menos de 10 minutos y no del futuro. Lo demás se ignora. El Studio borra lo que no cuenta al arrancar y
+cada minuto —nunca dentro de un GET de la API—, sin seguir enlaces: `unlink` quita un enlace o un archivo,
+una junction se quita con `rmdir` sin recursión, y una carpeta de verdad no se toca. El temporal de una
+escritura en curso se respeta durante un minuto. A la API solo llegan `pid`, `cliente`, `proyecto`,
+`desde` y `actualizado`: las raíces, que son rutas del equipo, no.
+
+Probado entre procesos de verdad: dos servidores a la vez dejan cada uno su archivo; uno que muere de
+golpe (`SIGKILL`) deja un huérfano que el Studio descarta y borra; el otro, al cerrar stdin, sale y se
+lleva el suyo. Cada regla del lector y del escritor se comprobó rompiéndola a propósito: de 21
+mutaciones, 19 dejan algún test en rojo; las otras dos quitaban solo una de las dos comprobaciones del
+tope de tamaño (al listar y al leer), y quitar las dos a la vez sí lo deja en rojo.
+
+**Riesgos aceptados.**
+
+- Un `pid` que el sistema reutiliza para otro programa parece vivo: esa sesión se sigue enseñando hasta
+  que caduca, como mucho 10 minutos después de su último refresco.
+- En Windows, `kill` termina el proceso sin que pueda limpiar, y un cierre del equipo tampoco limpia: el
+  archivo queda huérfano hasta que el Studio lo descarta por `pid` o por antigüedad.
+
+**Qué se descartó.**
+
+- Que el Studio preguntara a cada servidor por un canal propio (un socket o un pipe con nombre): abriría
+  en el servidor MCP una superficie que hoy no tiene, para un dato solo informativo.
+- Un solo archivo compartido con todas las sesiones: dos servidores escribiéndolo a la vez necesitarían
+  un candado; con un archivo por `pid` cada uno escribe solo el suyo.
+- Guardarlo en `active-tasks.json`: los punteros son la elección de la persona y duran; esto es efímero.
+
+---
+
 ## 2026-10-17 — El Studio es un servidor local separado del MCP, en `127.0.0.1`, con token, cookie y CSP
 
 **Decisión.** La interfaz visual es un proceso aparte: `mcp-phase-gate ui` arranca un servidor HTTP

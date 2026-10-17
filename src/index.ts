@@ -12,6 +12,7 @@ import { SALIDA_DE_PROCESO, doctorReverificando, ejecutarCli, ejecutarUi } from 
 import { ejecutarInit, entornoDelProceso } from "./init.js";
 import { log } from "./log.js";
 import { crearServidor } from "./servidor.js";
+import { registrarSesion } from "./sesiones.js";
 import { limpiarEstadoViejo } from "./tasks.js";
 
 // Deja en el log el estado de cada ruta al arrancar. No aborta: el servidor sigue en pie y
@@ -62,7 +63,10 @@ async function main() {
   limpiarEstadoViejo();
   reportarRutas();
 
-  await crearServidor().connect(new StdioServerTransport());
+  // El registro de sesiones solo lo lleva el servidor por stdio: es el que lanza un cliente de verdad.
+  const mcp = crearServidor();
+  registrarSesion(mcp);
+  await mcp.connect(new StdioServerTransport());
   log("info", `${SERVER_NAME} MCP server running on stdio`);
 }
 

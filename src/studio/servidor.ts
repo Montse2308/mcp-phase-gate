@@ -28,6 +28,7 @@ import type { OpcionesUi, Salida } from "../cli.js";
 import { raizPaquete } from "../config.js";
 import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
+import { INTERVALO_MS, sesionesAbiertas } from "../sesiones.js";
 import { crearApi, entornoInitDelProceso } from "./api.js";
 import { crearEventos } from "./eventos.js";
 
@@ -400,17 +401,26 @@ export function abrir(url: string, plataforma: NodeJS.Platform = process.platfor
 export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNavegador: (url: string) => boolean = abrir): Promise<number> {
   let studio: Studio;
   const eventos = crearEventos();
+  // Las sesiones caducadas o con el pid muerto se borran al arrancar y cada minuto, nunca dentro de un
+  // GET: leer la API no escribe en el disco.
+  sesionesAbiertas({ borrar: true });
+  const limpieza = setInterval(() => sesionesAbiertas({ borrar: true }), INTERVALO_MS);
+  limpieza.unref();
+  const parar = (): void => {
+    clearInterval(limpieza);
+    eventos.cerrar();
+  };
   try {
     const api = crearApi({
       modo: "vivo",
       watcher: eventos.estado,
-      sesiones: () => [],
+      sesiones: () => sesionesAbiertas(),
       entornoInit: () => entornoInitDelProceso(ejecutarComando),
       eventos: (peticion, res) => eventos.manejar(peticion.req, res),
     });
-    studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: () => eventos.cerrar() });
+    studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: parar });
   } catch (error) {
-    eventos.cerrar();
+    parar();
     const codigo = (error as NodeJS.ErrnoException)?.code;
     salida.err(codigo === "EADDRINUSE" ? `El puerto ${opciones.puerto} ya está en uso: elige otro con --puerto, o déjalo libre.` : `No se pudo arrancar el Studio: ${error instanceof Error ? error.message : String(error)}`);
     return 1;
