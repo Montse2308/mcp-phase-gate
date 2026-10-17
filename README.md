@@ -2,6 +2,12 @@
 
 *Read this in [Spanish](README.es.md) · This is the English README.*
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Montse2308/mcp-phase-gate/master/docs/medios/tablero-cabina.png" alt="The Studio's task board: the stations of a task with their signals, and the Phase 4 batches as wagons, each with its stamp" width="820">
+</p>
+
+**[Try the Studio demo in your browser](https://montse2308.github.io/mcp-phase-gate/)** — read-only, with example data. On your machine: `npx mcp-phase-gate ui --demo`.
+
 An MCP (Model Context Protocol) server that splits every incoming requirement into **five gated phases**, and forces each one to leave a written document behind before the next can start. Your client's panel will show it as `mcp-phase-gate`.
 
 > Tool names and most parameters are in English, but the tool descriptions and the server's messages are in Spanish, and so is one parameter: `crear_proyecto`. The **phase prompts that drive the AI's behaviour are written in Spanish**, so the documents it produces come out in Spanish. If you want them in another language, translate `prompts/es/*.md` into a layer of your own — no code changes needed.
@@ -241,6 +247,42 @@ In phase 4 it also checks the receipts: one for a batch the plan doesn't declare
 **Where does this text come from?** `doctor --fase 3 --proyecto PROJECT-A` shows, slot by slot, which layer and which `file:line` wins in that phase's prompt, and what got added on top. It's the answer to "I changed a preset and can't tell whether it took".
 
 It's the same information returned by the `get_orchestrator_status` tool and the `phase-gate://estado` resource; from the chat, it also includes which client is connected, which capabilities it announced, and which project the folder you have open matches.
+
+---
+
+## 🖥 The Studio: see the flow in your browser, `ui`
+
+```bash
+npx mcp-phase-gate ui
+```
+
+It opens a local web app with what the server sees, built from the same functions the tools use, and live: a new document or receipt shows up without reloading.
+
+| View | What it shows |
+|---|---|
+| **Network** | Each project as a station: its preset, its manifest, its repos with branch and pending changes, the active task with its phase, and which MCP client has it open right now |
+| **Board** | A task's phases as a track with signals (closed, with pending items, gap, not yet), and the Phase 4 batches as wagons with their stamp (verified commit, sealed sha256, failed, discarded, manual…). Click to read the document or receipt |
+| **Workshop** | The prompt each phase receives, slot by slot: which layer and `file:line` won, a diff against the packaged text, and `eject` to edit it |
+| **Watchtower** | `doctor`'s findings with how to fix each one, and what `init` would do in each client |
+| **Log** | The task's timeline: documents, receipts, commits with their subject, re-anchors and the phase 4 close |
+
+Everything has a **Plain** mode (tables, light theme) besides the default **Cabin** mode, works with the keyboard and on a phone, and never expresses a state with colour alone.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Montse2308/mcp-phase-gate/master/docs/medios/tablero-sobrio.png" alt="The same task board in Plain mode: the stations and the batches as tables" width="720">
+</p>
+
+**It only writes configuration** — the preset, the rules, a new `phase-gate.json`, `eject`, `init` in a client — and always in two steps: a preview with the diff, and "Apply", which only writes if the disk hasn't changed since you saw it. It never writes task documents, receipts or anything in your repos.
+
+**Security.** It listens only on `127.0.0.1`, on a random port. The link it prints carries a one-time token, exchanged for an `HttpOnly`, `SameSite=Strict` cookie; every request checks `Host` and `Origin`, writes need an extra header, and the page has a strict CSP. The documents' Markdown is sanitized before being shown. The MCP server never loads any of it.
+
+| Option | What it does |
+|---|---|
+| `--puerto <n>` | A fixed port instead of a random one |
+| `--no-abrir` | Doesn't open the browser: it only prints the link |
+| `--demo` | On a demo with example data, in a temporary folder: three projects (multi-repo, an AI agent and a research one) with real git commits. It doesn't touch your documentation |
+| `--export-static <dir>` | Starts nothing: writes a read-only static site with the demo into `<dir>` (new or empty). That's what's published on GitHub Pages |
+| `--incluir-datos-reales` | With `--export-static`: your documentation instead of the demo. It asks you to type `exportar` (or `--yes`), and replaces this machine's paths with `<Documentación>`, `<repos>`, `~`… |
 
 ---
 
@@ -783,7 +825,7 @@ The source lives in `src/`, split by responsibility:
 | `bloques.ts` | Reading blocks and applying them to slots |
 | `manifiesto.ts` | `phase-gate.json`, `machine.json`, the available presets and the published JSON Schemas |
 | `roots.ts` | The project worked out from the client's open folders |
-| `git.ts` | The single, read-only door to git |
+| `git.ts` | The single door to git, read-only for the server (its one write is the Studio demo's, in its own temporary repos) |
 | `repos.ts` | Reading files and git state from a project's repos |
 | `recibos.ts` | Batch receipts as data: reading them, writing them and their file name |
 | `anclas.ts` | Batch anchors: the commit on the branch, an artifact's sha256, and re-checking them |
@@ -795,10 +837,12 @@ The source lives in `src/`, split by responsibility:
 | `prompts-mcp.ts` | The `/f1`…`/fN` commands as MCP Prompts |
 | `confirmacion.ts` | Direct confirmations to the user (elicitation) |
 | `diagnostico.ts` | The X-ray shared by `doctor`, `get_orchestrator_status` and `phase-gate://estado` |
-| `cli.ts` | The command line: `doctor`, `init`, `eject`, `--help`, `--version` |
+| `cli.ts` | The command line: `doctor`, `init`, `eject`, `ui`, `--help`, `--version` |
 | `init.ts` | `init`: registering the server in the clients, copying the commands and migrating |
 | `eject.ts` | `eject`: copying a prompt, a slot, a command or a preset into a layer of your own |
 | `log.ts` | Logging: stderr and, with a client connected, MCP notifications |
+| `sesiones.ts` | The record of open MCP sessions and their project, which the Studio reads |
+| `studio/` | The Studio's backend, loaded only by `ui`: the local HTTP server and its security, the read API, live events, writes with preview and fingerprint, the demo and the static export |
 | `index.ts` | The entry point: the command line, or the server over stdio |
 
 The client runs the compiled `build/index.js`, so after any change:
@@ -810,13 +854,14 @@ npm run build
 Then restart the MCP server in your client so it picks up the new version.
 
 Available scripts:
-- `npm run build` → compiles TypeScript into `build/`.
+- `npm run build` → compiles TypeScript into `build/`, copies the demo's texts, and builds the Studio's frontend (`studio/`, Vite and Preact) into `studio/dist/`, checking its size budget.
 - `npm test` → compiles the tests and runs them with Node's test runner (needs **Node 22+**).
 - `npm start` → runs the compiled server.
 - `npm run dev` → recompiles into `build/` on every change (`tsc --watch`).
+- `npm run test:e2e` → the Studio's end-to-end tests in a headless Chromium (Playwright), after `npm run build`. The browser goes inside `node_modules`: `PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium`.
 
 Tests live in `test/` and need no extra dependency: they use `node:test`, which ships with
-Node. They build a throwaway central-documentation tree in a temp folder, so they never touch
+Node. The Studio's end-to-end tests live in `studio/e2e/`. They build a throwaway central-documentation tree in a temp folder, so they never touch
 yours. CI runs them on every PR.
 
 ### Where everything is

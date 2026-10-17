@@ -2,6 +2,12 @@
 
 *Léelo en [inglés](README.md) · Este es el README en español.*
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Montse2308/mcp-phase-gate/master/docs/medios/tablero-cabina.png" alt="El tablero de una tarea en el Studio: las estaciones con sus señales y los lotes de la Fase 4 como vagones, cada uno con su sello" width="820">
+</p>
+
+**[Prueba la demo del Studio en el navegador](https://montse2308.github.io/mcp-phase-gate/)**, de solo lectura y con datos de ejemplo. En tu equipo: `npx mcp-phase-gate ui --demo`.
+
 Un servidor MCP (Model Context Protocol) que parte cada requerimiento en **cinco fases con compuerta** y obliga a que cada una deje su documento antes de pasar a la siguiente. En el panel de tu cliente se identifica como `mcp-phase-gate`.
 
 ## El problema
@@ -239,6 +245,42 @@ En la Fase 4 revisa además los recibos: uno de un lote que el plan no declara (
 **¿De dónde sale este texto?** `doctor --fase 3 --proyecto PROYECTO-A` enseña, ranura por ranura, qué capa y qué `archivo:línea` gana en el prompt de esa fase y qué se le sumó encima. Es la respuesta a "cambié un preset y no sé si se nota".
 
 Es la misma información que devuelve la tool `get_orchestrator_status` y el recurso `phase-gate://estado`; desde el chat, además, incluye qué cliente está conectado, qué capacidades anunció y con qué proyecto coincide la carpeta que tienes abierta.
+
+---
+
+## 🖥 El Studio: ver el flujo en el navegador, `ui`
+
+```bash
+npx mcp-phase-gate ui
+```
+
+Abre una aplicación web local con lo que ve el servidor, armada con las mismas funciones que usan las tools, y en vivo: un documento o un recibo nuevo aparece sin recargar.
+
+| Vista | Qué enseña |
+|---|---|
+| **Red** | Cada proyecto como una estación: su preset, su manifiesto, sus repos con rama y cambios pendientes, la tarea activa con su fase y qué cliente MCP lo tiene abierto ahora mismo |
+| **Tablero** | Las fases de una tarea como una vía con semáforos (cerrada, con pendientes, hueco, pendiente), y los lotes de la Fase 4 como vagones con su sello (commit verificado, sha256 sellado, fallido, descartado, manual…). Un clic abre el documento o el recibo |
+| **Taller** | El prompt que recibe cada fase, ranura por ranura: qué capa y qué `archivo:línea` ganó, el diff frente al texto de fábrica y `eject` para editarlo |
+| **Vigía** | Los hallazgos de `doctor` con cómo se arregla cada uno, y lo que haría `init` en cada cliente |
+| **Bitácora** | La línea de tiempo de la tarea: documentos, recibos, commits con su asunto, reanclajes y el cierre de la Fase 4 |
+
+Todo tiene un modo **Sobrio** (tablas, tema claro) además del modo **Cabina** de siempre, funciona con el teclado y en el teléfono, y nunca expresa un estado solo con color.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Montse2308/mcp-phase-gate/master/docs/medios/tablero-sobrio.png" alt="El mismo tablero en modo Sobrio: las estaciones y los lotes como tablas" width="720">
+</p>
+
+**Solo escribe configuración** —el preset, las reglas, un `phase-gate.json` nuevo, `eject`, `init` en un cliente— y siempre en dos pasos: una vista previa con el diff, y "Aplicar", que solo escribe si el disco no cambió desde que lo viste. Nunca escribe documentos de tareas, recibos ni nada de tus repos.
+
+**Seguridad.** Solo escucha en `127.0.0.1`, en un puerto al azar. El enlace que imprime lleva un token de un solo uso, que se canjea por una cookie `HttpOnly` y `SameSite=Strict`; cada petición comprueba `Host` y `Origin`, las escrituras exigen una cabecera más, y la página tiene una CSP estricta. El Markdown de los documentos se sanea antes de enseñarlo. El servidor MCP no carga nada de esto.
+
+| Opción | Qué hace |
+|---|---|
+| `--puerto <n>` | Un puerto fijo en vez de uno al azar |
+| `--no-abrir` | No abre el navegador: solo imprime el enlace |
+| `--demo` | Sobre una demo con datos de ejemplo, en una carpeta temporal: tres proyectos (multi-repo, un agente de IA y uno de investigación) con commits de git de verdad. No toca tu Documentación |
+| `--export-static <dir>` | No arranca nada: escribe en `<dir>` (nueva o vacía) un sitio estático de solo lectura con la demo. Es lo que se publica en GitHub Pages |
+| `--incluir-datos-reales` | Con `--export-static`: tu Documentación en vez de la demo. Pide que escribas `exportar` (o `--yes`), y sustituye las rutas de este equipo por `<Documentación>`, `<repos>`, `~`… |
 
 ---
 
@@ -822,7 +864,7 @@ El código fuente está en `src/`, repartido por responsabilidad:
 | `bloques.ts` | Leer los bloques y aplicarlos sobre las ranuras |
 | `manifiesto.ts` | `phase-gate.json`, `machine.json`, los presets disponibles y los JSON Schema publicados |
 | `roots.ts` | El proyecto deducido de las carpetas abiertas en el cliente |
-| `git.ts` | La única puerta a git, de solo lectura |
+| `git.ts` | La única puerta a git, de solo lectura para el servidor (su única escritura es la de la demo del Studio, en sus propios repos temporales) |
 | `repos.ts` | Leer archivos y estado de git de los repos de un proyecto |
 | `recibos.ts` | Los recibos de lote como datos: leerlos, escribirlos y su nombre de archivo |
 | `anclas.ts` | Las anclas de los lotes: el commit en la rama, el sha256 de un artefacto, y reverificarlas |
@@ -834,10 +876,12 @@ El código fuente está en `src/`, repartido por responsabilidad:
 | `prompts-mcp.ts` | Los comandos `/f1`…`/fN` como MCP Prompts |
 | `confirmacion.ts` | Las confirmaciones directas al usuario (elicitation) |
 | `diagnostico.ts` | La radiografía que comparten `doctor`, `get_orchestrator_status` y `phase-gate://estado` |
-| `cli.ts` | La línea de comandos: `doctor`, `init`, `eject`, `--help`, `--version` |
+| `cli.ts` | La línea de comandos: `doctor`, `init`, `eject`, `ui`, `--help`, `--version` |
 | `init.ts` | `init`: registrar el servidor en los clientes, copiar los comandos y migrar |
 | `eject.ts` | `eject`: copiar un prompt, una ranura, un comando o un preset a una capa propia |
 | `log.ts` | El log: stderr y, con un cliente conectado, notificaciones MCP |
+| `sesiones.ts` | El registro de las sesiones MCP abiertas y su proyecto, que lee el Studio |
+| `studio/` | El backend del Studio, que solo carga `ui`: el servidor HTTP local y su seguridad, la API de lectura, los eventos en vivo, las escrituras con vista previa y huella, la demo y el export estático |
 | `index.ts` | El punto de entrada: la línea de comandos, o el servidor por stdio |
 
 El cliente ejecuta la versión compilada `build/index.js`, así que después de cualquier cambio:
@@ -849,13 +893,14 @@ npm run build
 Y luego reinicia el MCP en tu cliente para que cargue la nueva versión.
 
 Scripts disponibles:
-- `npm run build` → compila TypeScript a `build/`.
+- `npm run build` → compila TypeScript a `build/`, copia los textos de la demo y compila el frontend del Studio (`studio/`, Vite y Preact) a `studio/dist/`, comprobando su presupuesto de tamaño.
 - `npm test` → compila los tests y los corre con el runner de Node (necesita **Node 22 o superior**).
 - `npm start` → ejecuta el servidor compilado.
 - `npm run dev` → recompila a `build/` con cada cambio (`tsc --watch`).
+- `npm run test:e2e` → las pruebas de extremo a extremo del Studio en un Chromium sin ventana (Playwright), después de `npm run build`. El navegador va dentro de `node_modules`: `PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium`.
 
 Los tests viven en `test/` y no necesitan ninguna dependencia extra: usan `node:test`, que
-viene con Node. Montan una Documentación Central de mentira en una carpeta temporal, así que
+viene con Node. Las pruebas de extremo a extremo del Studio viven en `studio/e2e/`. Montan una Documentación Central de mentira en una carpeta temporal, así que
 no tocan la tuya. El CI los corre en cada PR.
 
 ### Dónde está cada cosa
