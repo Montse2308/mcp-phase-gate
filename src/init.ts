@@ -570,46 +570,62 @@ function comandosDeFabrica(): { numero: number; texto: string }[] {
     });
 }
 
+// El plan de --comandos para un cliente que lee comandos de archivo: cada /fN, dónde iría, con qué texto y
+// qué pasaría. "ajeno" es un archivo sin la marca de init: es de la persona y no se pisa sin --yes.
+export type ComandoPlaneado = { numero: number; archivo: string; texto: string; estado: "nuevo" | "actualiza" | "sin-cambios" | "ajeno" | "carpeta" };
+
+export function carpetaDeComandos(cliente: "claude-code" | "cursor", entorno: Pick<EntornoInit, "home">): string {
+  return path.join(entorno.home, cliente === "claude-code" ? ".claude" : ".cursor", "commands");
+}
+
+export function planDeComandos(cliente: "claude-code" | "cursor", entorno: Pick<EntornoInit, "home">): ComandoPlaneado[] {
+  const carpeta = carpetaDeComandos(cliente, entorno);
+  return comandosDeFabrica().map(({ numero, texto }) => {
+    const archivo = path.join(carpeta, `f${numero}.md`);
+    const contenido = `${MARCA_DE_COMANDO} v${SERVER_VERSION} -->\n${texto}\n`;
+    if (fs.statSync(archivo, { throwIfNoEntry: false })?.isDirectory()) return { numero, archivo, texto: contenido, estado: "carpeta" };
+    const actual = fs.existsSync(archivo) ? fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n") : null;
+    if (actual === null) return { numero, archivo, texto: contenido, estado: "nuevo" };
+    if (!actual.startsWith(MARCA_DE_COMANDO)) return { numero, archivo, texto: contenido, estado: "ajeno" };
+    if (actual.slice(actual.indexOf("\n") + 1) === `${texto}\n`) return { numero, archivo, texto: contenido, estado: "sin-cambios" };
+    return { numero, archivo, texto: contenido, estado: "actualiza" };
+  });
+}
+
 async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void> {
-  const destinos: [string, string][] = [];
-  if (clientes.includes("claude-code")) destinos.push(["Claude Code", path.join(ctx.entorno.home, ".claude", "commands")]);
-  if (clientes.includes("cursor")) destinos.push(["Cursor", path.join(ctx.entorno.home, ".cursor", "commands")]);
+  const destinos: ["claude-code" | "cursor", string][] = [];
+  if (clientes.includes("claude-code")) destinos.push(["claude-code", "Claude Code"]);
+  if (clientes.includes("cursor")) destinos.push(["cursor", "Cursor"]);
   if (destinos.length === 0) {
     ctx.entorno.salida.out("--comandos: ninguno de los clientes elegidos lee comandos de archivo (Claude Code o Cursor).");
     return;
   }
 
-  const comandos = comandosDeFabrica();
-  for (const [nombre, carpeta] of destinos) {
-    for (const { numero, texto } of comandos) {
-      const archivo = path.join(carpeta, `f${numero}.md`);
-      const contenido = `${MARCA_DE_COMANDO} v${SERVER_VERSION} -->\n${texto}\n`;
-      if (fs.statSync(archivo, { throwIfNoEntry: false })?.isDirectory()) {
+  for (const [cliente, nombre] of destinos) {
+    for (const { numero, archivo, texto: contenido, estado } of planDeComandos(cliente, ctx.entorno)) {
+      if (estado === "carpeta") {
         fallar(ctx, `${nombre}: ${archivo} es una carpeta; no se toca.`);
         continue;
       }
-      const actual = fs.existsSync(archivo) ? fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n") : null;
-
-      if (actual !== null && !actual.startsWith(MARCA_DE_COMANDO)) {
-        // Un archivo sin la marca es de la persona: no se pisa sin --yes.
-        if (!ctx.opciones.yes) {
-          ctx.entorno.salida.out(`${nombre}: ${archivo} es tuyo (no lo generó init); no se toca. Con --yes se reemplaza, con copia.`);
-          continue;
-        }
-      } else if (actual !== null && actual.slice(actual.indexOf("\n") + 1) === `${texto}\n`) {
+      // Un archivo sin la marca es de la persona: no se pisa sin --yes.
+      if (estado === "ajeno" && !ctx.opciones.yes) {
+        ctx.entorno.salida.out(`${nombre}: ${archivo} es tuyo (no lo generó init); no se toca. Con --yes se reemplaza, con copia.`);
+        continue;
+      }
+      if (estado === "sin-cambios") {
         ctx.entorno.salida.out(`${nombre}: /f${numero} sin cambios.`);
         continue;
       }
 
       // Reemplazar un archivo de la persona deja copia; uno generado por init se reescribe sin más.
       let copia: string | null = null;
-      if (actual !== null && !actual.startsWith(MARCA_DE_COMANDO)) {
+      if (estado === "ajeno") {
         copia = escribirConCopia(ctx, archivo, contenido);
       } else if (!ctx.opciones.dryRun) {
-        fs.mkdirSync(carpeta, { recursive: true });
+        fs.mkdirSync(path.dirname(archivo), { recursive: true });
         fs.writeFileSync(archivo, contenido, "utf-8");
       }
-      decir(ctx, `${nombre}: /f${numero} ${actual === null ? "copiado" : "actualizado"} en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
+      decir(ctx, `${nombre}: /f${numero} ${estado === "nuevo" ? "copiado" : "actualizado"} en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
     }
   }
 }

@@ -314,6 +314,26 @@ describe("acciones: init-cliente, sobre un HOME falso", () => {
     assert.equal(fs.readdirSync(path.join(otro.home, ".cursor")).filter((n) => n.startsWith("mcp.json.bak-")).length, 1);
   });
 
+  it("con comandos: los /fN que copiaría init --comandos, sin pisar uno que no generó init; VS Code no los lee", async () => {
+    instalacion();
+    const entorno = entornoInitDePrueba();
+    const propio = path.join(entorno.home, ".cursor", "commands", "f3.md");
+    fs.mkdirSync(path.dirname(propio), { recursive: true });
+    fs.writeFileSync(propio, "mi /f3", "utf-8");
+    const s = await studioConApi({ entornoInit: () => entorno });
+    const p = await planPosible(s, "init-cliente", { cliente: "cursor", comandos: true });
+    assert.deepEqual(
+      p.cambios.map((c) => c.archivo),
+      ["~/.cursor/mcp.json", "~/.cursor/commands/f1.md", "~/.cursor/commands/f2.md", "~/.cursor/commands/f4.md", "~/.cursor/commands/f5.md"]
+    );
+    assert.match(p.resumen, /\/f3 ya existen y no los generó init: no se tocan/);
+    assert.equal((await aplicar(s, "init-cliente", { cliente: "cursor", comandos: true }, p.huella)).estado, 200);
+    assert.equal(fs.readFileSync(propio, "utf-8"), "mi /f3");
+    assert.match(fs.readFileSync(path.join(entorno.home, ".cursor", "commands", "f4.md"), "utf-8"), /^<!-- generado por mcp-phase-gate init/);
+    const vscode = await plan(s, "init-cliente", { cliente: "vscode", comandos: true });
+    assert.ok(vscode.posible && /VS Code no lee los comandos de fase/.test(vscode.resumen));
+  });
+
   it("Claude Code: el comando se enseña y, al aplicar, se ejecuta con el claude de mentira; si falla, se dice", async () => {
     instalacion();
     let falla = false;

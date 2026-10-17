@@ -7,6 +7,7 @@ import { Red } from "./red/red";
 import { VISTAS, useRuta } from "./rutas";
 import { Tablero } from "./tablero/tablero";
 import { Taller } from "./taller/taller";
+import { Vigia } from "./vigia/vigia";
 import type { Ruta } from "./rutas";
 
 function Pendiente({ nombre }: { nombre: string }) {
@@ -26,6 +27,8 @@ function Vista({ ruta }: { ruta: Ruta }) {
       return <Tablero p={ruta.partes[0]} t={ruta.partes[1]} />;
     case "taller":
       return <Taller ruta={ruta} />;
+    case "vigia":
+      return <Vigia />;
     default:
       return <Pendiente nombre={VISTAS.find((v) => v.id === ruta.vista)!.nombre} />;
   }

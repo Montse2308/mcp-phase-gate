@@ -15,12 +15,21 @@ import { expect, test as base } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import { crearArbol } from "./arbol";
+import { entornoFalso, huellaDeLosClientesReales } from "./entorno";
+import type { EntornoFalso } from "./entorno";
 import type { Arbol } from "./arbol";
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 export const BINARIO = path.join(AQUI, "..", "..", "build", "index.js");
 
-export type Servidor = { origen: string; puerto: number; cookie: { name: string; value: string }; arbol: Arbol };
+export type Servidor = { origen: string; puerto: number; cookie: { name: string; value: string }; arbol: Arbol; falso: EntornoFalso };
+
+// El entorno del proceso sin lo que diría dónde está el usuario de verdad: eso lo pone entornoFalso.
+function entornoDeUi(arbol: Arbol, falso: EntornoFalso): NodeJS.ProcessEnv {
+  const fuera = new Set(["PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME"]);
+  const base = Object.fromEntries(Object.entries(process.env).filter(([clave]) => !fuera.has(clave.toUpperCase())));
+  return { ...base, ...falso.env, ...arbol.env };
+}
 
 function esperarUrl(hijo: ChildProcess): Promise<string> {
   return new Promise((resolver, rechazar) => {
@@ -39,14 +48,15 @@ function esperarUrl(hijo: ChildProcess): Promise<string> {
 }
 
 export async function lanzarUi(arbol: Arbol, extra: string[] = []): Promise<{ hijo: ChildProcess; servidor: Servidor }> {
-  const hijo = spawn(process.execPath, [BINARIO, "ui", "--no-abrir", ...extra], { env: { ...process.env, ...arbol.env }, stdio: ["ignore", "pipe", "pipe"] });
+  const falso = entornoFalso(arbol.raiz);
+  const hijo = spawn(process.execPath, [BINARIO, "ui", "--no-abrir", ...extra], { env: entornoDeUi(arbol, falso), stdio: ["ignore", "pipe", "pipe"] });
   hijo.stderr!.on("data", () => {});
   const url = new URL(await esperarUrl(hijo));
   const canje = await fetch(url, { redirect: "manual" });
   expect(canje.status).toBe(303);
   const [par = ""] = (canje.headers.get("set-cookie") ?? "").split(";");
   const [name = "", value = ""] = par.split("=");
-  return { hijo, servidor: { origen: url.origin, puerto: Number(url.port), cookie: { name, value }, arbol } };
+  return { hijo, servidor: { origen: url.origin, puerto: Number(url.port), cookie: { name, value }, arbol, falso } };
 }
 
 // `permitidos`: mensajes de consola que una prueba concreta espera (y que no cuentan como error).
@@ -56,11 +66,13 @@ export const test = base.extend<{ registro: Registro }, { servidor: Servidor }>(
   servidor: [
     async ({}, use) => {
       const raiz = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "pg-e2e-"));
+      const reales = huellaDeLosClientesReales();
       const arbol = await crearArbol(raiz);
       const { hijo, servidor } = await lanzarUi(arbol);
       await use(servidor);
       hijo.kill();
       await new Promise((r) => (hijo.exitCode !== null ? r(null) : hijo.on("exit", r)));
+      expect(huellaDeLosClientesReales(), "la configuración real de los clientes no cambió").toEqual(reales);
       fs.rmSync(raiz, { recursive: true, force: true, maxRetries: 3 });
     },
     { scope: "worker" },

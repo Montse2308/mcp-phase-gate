@@ -24,7 +24,7 @@ import { z } from "zod";
 import { DOCS, REPOS, carpetaPromptsGlobal, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
 import { carpetaPromptsDeProyecto } from "../capas.js";
 import { ErrorDeEject, planDeEject } from "../eject.js";
-import { CLAVE_VALIDA, CLIENTES, diffDeLineas, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude } from "../init.js";
+import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, diffDeLineas, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
 import type { EntornoInit } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
 import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, leerManifiesto, presetsDisponibles, rutaManifiesto } from "../manifiesto.js";
@@ -48,7 +48,7 @@ const ARGUMENTOS = {
     .refine((a) => a.lotes !== undefined || a.commits !== undefined, "indica `lotes` o `commits`"),
   "crear-manifiesto": z.object({ proyecto: Proyecto, preset: z.string().regex(ID).optional() }).strict(),
   eject: z.object({ objetivo: z.string().min(1).max(120), destino: z.string().min(1).max(260), fuerza: z.boolean().optional() }).strict(),
-  "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional() }).strict(),
+  "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional(), comandos: z.boolean().optional() }).strict(),
 } as const;
 
 export const PeticionDePlan = z.object({ accion: z.enum(ACCIONES), argumentos: z.unknown() }).strict();
@@ -212,35 +212,59 @@ function rutasDeInit(): { docs: string; repos: string } | null {
   return d && r ? { docs: d, repos: r } : null;
 }
 
+// El registro en el cliente y, con `comandos`, los /fN que copiaría `init --comandos` (solo Claude Code y
+// Cursor los leen de archivo). Un /fN que no generó init es de la persona: no se pisa (el CLI pide --yes).
 async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: ContextoDeAcciones): Promise<Plan> {
   const rutas = rutasDeInit();
   if (!rutas) return { posible: false, motivo: "Faltan PHASE_GATE_DOCS_PATH y PHASE_GATE_REPOS_PATH (o no existen): init no sabría qué rutas registrar." };
   const entorno = ctx.entornoInit();
+  const resumen: string[] = [];
+  const hecho: string[] = [];
+  const motivos: string[] = [];
+  const escrituras: Escritura[] = [];
+  const comandos: Comando[] = [];
+
   if (a.cliente === "claude-code") {
     const plan = await planDeClaude(rutas, a.clave ?? null, entorno);
-    if (plan.estado === "sin-lista") return { posible: false, motivo: `Claude Code: ${sinRutasDelEquipo(plan.mensaje)}` };
-    if (plan.estado === "existente") return { posible: false, motivo: `Claude Code ya lo tiene registrado como «${plan.existente}»; init no lo toca. Para cambiarlo: ${plan.comando}` };
-    return {
-      posible: true,
-      interno: { accion: "init-cliente", resumen: `Registrar el servidor en Claude Code como «${plan.clave}» (ámbito user).`, escrituras: [], comandos: [{ comando: "claude", args: plan.args, mostrar: plan.comando }], hecho: `Registrado en Claude Code como «${plan.clave}».` },
-    };
+    if (plan.estado === "sin-lista") motivos.push(`Claude Code: ${sinRutasDelEquipo(plan.mensaje)}`);
+    else if (plan.estado === "existente") motivos.push(`Claude Code ya lo tiene registrado como «${plan.existente}»; init no lo toca. Para cambiarlo: ${plan.comando}`);
+    else {
+      resumen.push(`Registrar el servidor en Claude Code como «${plan.clave}» (ámbito user).`);
+      comandos.push({ comando: "claude", args: plan.args, mostrar: plan.comando });
+      hecho.push(`Registrado en Claude Code como «${plan.clave}».`);
+    }
+  } else {
+    const plan = planDeArchivo(a.cliente, rutas, a.clave ?? null, entorno);
+    if (plan.estado === "roto") motivos.push(`${plan.nombre}: no se pudo leer su mcp.json (${plan.error ?? "?"}); no se toca.`);
+    else if (plan.estado === "forma-rara") motivos.push(`${plan.nombre}: en su mcp.json, "${plan.seccion}" o el "env" de alguna entrada no es un objeto; no se toca.`);
+    else if (plan.estado === "clave-ocupada") motivos.push(`${plan.nombre}: la clave «${plan.clave}» ya la usa otro servidor.`);
+    else if (plan.estado === "sin-cambios") motivos.push(`${plan.nombre}: sin cambios, ya está registrado como «${plan.claveFinal}».`);
+    else {
+      const antes = leerCrudo(plan.archivo);
+      resumen.push(`${plan.estado === "nuevo" ? "Registrar" : "Actualizar"} el servidor en ${plan.nombre} como «${plan.claveFinal}»${plan.comentarios ? " (el archivo tiene comentarios: se perderán, queda la copia)" : ""}.`);
+      escrituras.push({ ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false });
+      hecho.push(`${plan.nombre}: ${plan.estado === "nuevo" ? "registrado" : "actualizado"} como «${plan.claveFinal}».`);
+    }
   }
-  const plan = planDeArchivo(a.cliente, rutas, a.clave ?? null, entorno);
-  if (plan.estado === "roto") return { posible: false, motivo: `${plan.nombre}: no se pudo leer su mcp.json (${plan.error ?? "?"}); no se toca.` };
-  if (plan.estado === "forma-rara") return { posible: false, motivo: `${plan.nombre}: en su mcp.json, "${plan.seccion}" o el "env" de alguna entrada no es un objeto; no se toca.` };
-  if (plan.estado === "clave-ocupada") return { posible: false, motivo: `${plan.nombre}: la clave «${plan.clave}» ya la usa otro servidor.` };
-  if (plan.estado === "sin-cambios") return { posible: false, motivo: `${plan.nombre}: sin cambios, ya está registrado como «${plan.claveFinal}».` };
-  const antes = leerCrudo(plan.archivo);
-  return {
-    posible: true,
-    interno: {
-      accion: "init-cliente",
-      resumen: `${plan.estado === "nuevo" ? "Registrar" : "Actualizar"} el servidor en ${plan.nombre} como «${plan.claveFinal}»${plan.comentarios ? " (el archivo tiene comentarios: se perderán, queda la copia)" : ""}.`,
-      escrituras: [{ ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false }],
-      comandos: [],
-      hecho: `${plan.nombre}: ${plan.estado === "nuevo" ? "registrado" : "actualizado"} como «${plan.claveFinal}».`,
-    },
-  };
+
+  if (a.comandos) {
+    if (a.cliente === "vscode") motivos.push("VS Code no lee los comandos de fase de archivo: usa los MCP Prompts /f1…/fN del servidor.");
+    else {
+      const planeados = planDeComandos(a.cliente, entorno);
+      const copiar = planeados.filter((c) => c.estado === "nuevo" || c.estado === "actualiza");
+      const ajenos = planeados.filter((c) => c.estado === "ajeno" || c.estado === "carpeta");
+      for (const c of copiar) escrituras.push({ ruta: c.archivo, antes: leerCrudo(c.archivo), despues: c.texto, copia: false, exclusiva: false });
+      if (copiar.length) {
+        resumen.push(`Copiar ${copiar.map((c) => `/f${c.numero}`).join(", ")} a ${mostrar(carpetaDeComandos(a.cliente, entorno), ctx)}.`);
+        hecho.push(`Comandos copiados: ${copiar.map((c) => `/f${c.numero}`).join(", ")}.`);
+      }
+      if (ajenos.length) resumen.push(`${ajenos.map((c) => `/f${c.numero}`).join(", ")} ya existen y no los generó init: no se tocan.`);
+      if (!copiar.length && !ajenos.length) motivos.push("Los comandos de fase ya están al día.");
+    }
+  }
+
+  if (!escrituras.length && !comandos.length) return { posible: false, motivo: motivos.join(" ") };
+  return { posible: true, interno: { accion: "init-cliente", resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" ") } };
 }
 
 async function planificar(accion: Accion, crudo: unknown, ctx: ContextoDeAcciones): Promise<Plan> {
