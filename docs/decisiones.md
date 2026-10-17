@@ -12,6 +12,79 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-17 — El Studio es un servidor local separado del MCP, en `127.0.0.1`, con token, cookie y CSP
+
+**Decisión.** La interfaz visual es un proceso aparte: `mcp-phase-gate ui` arranca un servidor HTTP
+(`src/studio/servidor.ts`) que escucha **solo** en `127.0.0.1`, en un puerto libre (o el de
+`--puerto`), sin ninguna opción para otra interfaz. El servidor MCP por stdio no lo carga: `cli.ts` lo
+despacha con un `import()` dinámico, y un test (`test/aislamiento.test.ts`) sigue con el analizador de
+TypeScript los imports estáticos del código compilado desde `index.js` y falla si llega a algún archivo
+de `studio/` o a un paquete que no sea el SDK o `zod`.
+
+Cada petición pasa por este filtro, en este orden:
+
+1. `Host` tiene que llegar **una vez** y ser exactamente `127.0.0.1:<puerto>` o `localhost:<puerto>`
+   (sin otras mayúsculas): si no, `421`. Es la defensa contra el DNS rebinding. Node se queda con el
+   primer `Host` repetido, así que las repeticiones se cuentan en `rawHeaders`; y el servidor se crea con
+   `requireHostHeader: false` para que una petición sin `Host` reciba ese mismo `421`.
+2. `Origin`, si viene, una vez y exactamente `http://127.0.0.1:<puerto>` o `http://localhost:<puerto>`
+   (`null` no vale): si no, `403`.
+3. `GET /?token=<t>`: el token son 32 bytes de `crypto.randomBytes` en base64url, nuevo en cada arranque y
+   solo en memoria. Con el correcto, `303` a `/` y `Set-Cookie: pg_sesion_<puerto>=<s>; HttpOnly;
+   SameSite=Strict; Path=/`, con `<s>` otro valor aleatorio de 32 bytes. El token es **de un solo uso**: el
+   canje lo invalida. Todo lo demás (otro token, dos `token`, uno ya usado, el canje por `POST`), `401`.
+4. `/api/**` exige esa cookie, una sola vez y con su valor: sin ella, con otro valor, sin `=` o repetida,
+   `401`.
+5. Un método distinto de `GET` (también `HEAD` y `OPTIONS`) exige `X-Phase-Gate: 1`, una vez: si no,
+   `403`. Ninguna respuesta lleva cabeceras `Access-Control-*`, así que el preflight que esa cabecera
+   provoca en un navegador nunca se concede. El cuerpo es JSON de hasta 64 kB: un `Content-Length` mayor
+   es `413` sin leer nada, y un cuerpo por trozos se corta con `413` en cuanto pasa del límite, mientras
+   llega.
+6. Los estáticos salen solo de `studio/dist`: cada segmento se decodifica **una** vez y pasa por
+   `validarSegmento` (fuera `%2F` y `%5C` decodificados, NUL, `..`, `:` y por tanto `::$DATA`, nombres
+   reservados de Windows), nada que empiece por punto, y la ruta real tiene que quedar dentro de `dist`
+   (`estaDentroReal`: un enlace, una junction o un nombre corto 8.3 que lleve fuera da `404`).
+
+Toda respuesta lleva `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self';
+img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none';
+form-action 'none'`, `X-Content-Type-Options: nosniff` y `Referrer-Policy: no-referrer`; la API y el canje,
+además, `Cache-Control: no-store`. Las cabeceras tienen 10 s para llegar y la petición entera, 15 s.
+
+Al arrancar se imprime `http://127.0.0.1:<puerto>/?token=<token>` y, salvo `--no-abrir`, se abre con
+`execFile` (Windows: `cmd /c start "" <url>`; macOS: `open`; Linux: `xdg-open`), después de comprobar que
+la URL solo lleva `[A-Za-z0-9:/?=._-]`: un `&` partiría el comando de `cmd`. Se queda en primer plano hasta
+`Ctrl+C`.
+
+Cada fila del filtro tiene su test (`test/studio-seguridad.test.ts`, por sockets crudos para poder mandar
+cabeceras repetidas, rutas sin normalizar o un cuerpo a trozos), y cada test se comprobó rompiendo a
+propósito el código que protege: 29 mutaciones, y las 29 dejan algún test en rojo.
+
+**Reemplaza** el descarte de una interfaz gráfica de "Varias documentaciones se resuelven registrando el
+servidor dos veces, no con código" (2026-08-10): aquello era una app de escritorio con firma, tres builds
+y autoactualización para elegir rutas. Esto es una página servida por el mismo paquete, sin nada que
+instalar, que enseña lo que el servidor ya sabe.
+
+**Riesgos aceptados.**
+
+- Un navegador no separa las cookies por puerto (RFC 6265, §8.5): si la persona visita otro servidor en
+  `127.0.0.1` con el mismo navegador, ese servidor recibe la cookie. Por eso su nombre lleva el puerto
+  (dos Studios abiertos no se pisan la sesión), pero no es una frontera frente a otro programa local que
+  ya escuche en `127.0.0.1`.
+- El enlace con el token viaja en la línea de comandos de `cmd`, `open` o `xdg-open` mientras se abre. Un
+  proceso del equipo que la lea a tiempo podría canjearlo antes; como es de un solo uso, la persona
+  recibiría el `401`. Con `--no-abrir` no pasa por ninguna línea de comandos.
+
+**Qué se descartó.**
+
+- Servir la interfaz desde el propio servidor MCP: abriría un puerto en cada sesión que lanza el cliente,
+  y el servidor por stdio dejaría de ser un proceso sin red.
+- Que la página leyera los recursos MCP: un navegador no puede lanzar un servidor por stdio, así que haría
+  falta un puente igualmente, y los recursos no tienen el estado de git, el diagnóstico ni las acciones.
+- Una bandera para escuchar en otra interfaz: el Studio enseña rutas y documentos del equipo y ejecuta
+  acciones; en la red no tiene sentido.
+
+---
+
 ## 2026-10-16 — Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras
 
 **Decisión.** Cuatro ranuras nuevas (el catálogo pasa de 23 a 27): `fase-3/prohibido-lotes` y
@@ -1799,7 +1872,9 @@ pero por accidente, que es la peor forma de funcionar. Ahora se declara qué se 
 > un `machine.json`": ya existe un formato de configuración, pero los espacios con `use_space`
 > siguen descartados. Y **reemplazada en parte** el mismo día por "`init` escribe la configuración
 > del cliente con copia, diff y confirmación": el descarte de la app de escritorio sigue, pero
-> escribir la configuración del cliente ya no se deja a mano.
+> escribir la configuración del cliente ya no se deja a mano. Y **reemplazada en parte** el
+> 2026-10-17 por "El Studio es un servidor local separado del MCP, en `127.0.0.1`, con token, cookie y
+> CSP": ya hay una interfaz visual, aunque no una app de escritorio.
 
 **Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se
 documenta como un patrón de configuración: **registrar el servidor más de una vez** en el

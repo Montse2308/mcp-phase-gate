@@ -35,6 +35,7 @@ Uso:
   ${SERVER_NAME} init            Registra el servidor en tus clientes (Claude Code, Cursor, VS Code).
   ${SERVER_NAME} eject <objetivo> --a global|proyecto:<NOMBRE>
                                 Copia un prompt, una ranura, un comando o un preset para editarlo.
+  ${SERVER_NAME} ui              El Studio: una vista local de tus proyectos y tareas en el navegador.
   ${SERVER_NAME} --version       La versión.
   ${SERVER_NAME} --help          Esta ayuda.
 
@@ -57,6 +58,10 @@ eject <objetivo>:
   comando-f4             El texto del comando /f4.
   preset:<nombre>        El archivo del preset (siempre a tu carpeta de configuración).
   --a global|proyecto:<NOMBRE>   A qué capa. --dry-run lo enseña sin escribir; --fuerza reemplaza con copia.
+
+ui:
+  --puerto <n>           El puerto (en 127.0.0.1). Sin esto, uno libre.
+  --no-abrir             No abre el navegador: solo imprime el enlace, que sirve una sola vez.
 
 Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
 
@@ -102,7 +107,17 @@ export type ResultadoCli =
   | { accion: "servidor" }
   | { accion: "salir"; codigo: number }
   | { accion: "init"; opciones: OpcionesInit }
-  | { accion: "doctor-reverificar"; json: boolean };
+  | { accion: "doctor-reverificar"; json: boolean }
+  | { accion: "ui"; opciones: OpcionesUi };
+
+// Las opciones de `ui`, ya validadas. El Studio vive en src/studio/ y se carga solo para `ui`, con un
+// import dinámico: el servidor MCP por stdio no carga nada de él (test/aislamiento.test.ts).
+export type OpcionesUi = { puerto: number | null; abrir: boolean };
+
+export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
+  const { lanzarStudio } = await import("./studio/servidor.js");
+  return lanzarStudio(opciones, salida);
+}
 
 // El diagnóstico impreso, y el código de salida: 1 si hay algún error.
 function escribirDiagnostico(diagnostico: Diagnostico, json: boolean, salida: Salida): number {
@@ -125,6 +140,7 @@ const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
+  ui: ["puerto", "no-abrir"],
 };
 
 type Valores = {
@@ -146,6 +162,8 @@ type Valores = {
   fase?: string;
   proyecto?: string;
   reverificar?: boolean;
+  puerto?: string;
+  "no-abrir"?: boolean;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -212,6 +230,8 @@ export function ejecutarCli(
         proyecto: { type: "string" },
         fuerza: { type: "boolean" },
         reverificar: { type: "boolean" },
+        puerto: { type: "string" },
+        "no-abrir": { type: "boolean" },
       },
     }));
   } catch (error) {
@@ -265,6 +285,15 @@ export function ejecutarCli(
   if (posicionales.length === 1 && subcomando === "init") {
     const opciones = opcionesDeInit(valores);
     return typeof opciones === "string" ? invalido(salida, opciones) : { accion: "init", opciones };
+  }
+
+  if (posicionales.length === 1 && subcomando === "ui") {
+    let puerto: number | null = null;
+    if (valores.puerto !== undefined) {
+      puerto = Number(valores.puerto);
+      if (!/^\d+$/.test(valores.puerto) || puerto < 1 || puerto > 65535) return invalido(salida, `--puerto "${valores.puerto}" no es válido: un número de 1 a 65535.`);
+    }
+    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"] } };
   }
 
   return invalido(salida);
