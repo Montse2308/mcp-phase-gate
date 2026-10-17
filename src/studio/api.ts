@@ -19,11 +19,13 @@ import { capasDe, configuracionDe, contenidoEfectivoDeRanura, contextoInicialDe,
 import type { Capa } from "../capas.js";
 import { CLIENTES, detectarClientes, planDeArchivo, planDeClaude } from "../init.js";
 import type { EntornoInit } from "../init.js";
-import { estadoDeLotes } from "../lotes.js";
+import { estadoDeLotes, faseDeLotes, recibosDeLaTarea } from "../lotes.js";
 import { leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
 import { discoverProjects, esSegmentoDeGit, leerTextoAcotado, requireProjectFolder, rutaReal, validarSegmento } from "../paths.js";
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
+import { parsearRecibo } from "../recibos.js";
+import type { Recibo } from "../recibos.js";
 import { archivoDeTarea } from "../recursos.js";
 import { estadosConPlazo } from "../repos.js";
 import { textoDelPromptDeFase } from "../servidor.js";
@@ -116,6 +118,8 @@ function estadoDe(error: unknown): number {
   if (/ no es válido: /.test(texto)) return 400;
   if (/empiezan por punto/.test(texto)) return 400;
   if (/límite de lectura|parece binario|no es un archivo/.test(texto)) return 422;
+  // Un phase-gate.json o un machine.json mal escritos: el proyecto existe, pero no se puede leer su configuración.
+  if (/^(?:phase-gate|machine)\.json .*no es válido/.test(texto)) return 422;
   return 500;
 }
 
@@ -401,18 +405,49 @@ async function lotes(crudoP: string, crudoT: string, consulta: URLSearchParams):
   const reverificar = consulta.get("reverificar") === "1";
   try {
     const { salida } = await estadoDeLotes(carpeta, estado.taskName, { reverificar });
+    const sellos = sellosDeLaTarea(carpeta, estado.taskName);
     return {
       disponible: true,
       reverificado: reverificar,
       estado: {
         ...salida,
-        lotes: salida.lotes.map((f) => ({ ...f, problema: f.problema === null ? null : sinRutasDelEquipo(f.problema) })),
+        lotes: salida.lotes.map((f) => ({ ...f, problema: f.problema === null ? null : sinRutasDelEquipo(f.problema), sello: f.recibo ? (sellos.get(f.recibo) ?? null) : null })),
         avisos: salida.avisos.map(sinRutasDelEquipo),
       },
     };
   } catch (error) {
     return { disponible: false, motivo: mensajeDe(error) };
   }
+}
+
+// Lo que el tablero pinta en cada sello y estadoDeLotes no da por separado: el SHA corto, los 8 primeros
+// caracteres del sha256 y la fecha del recibo. Se leen con las mismas funciones del motor de lotes, por la
+// ruta relativa del recibo (la que da estadoDeLotes). Con un solo lote y la fase cerrada, el recibo es el
+// documento de la fase.
+type Sello = { corto: string | null; sha256: string | null; fecha: string | null };
+
+function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string, Sello> {
+  const sellos = new Map<string, Sello>();
+  const deRecibo = (recibo: Recibo): Sello => ({
+    corto: recibo.ancla.tipo === "commit" ? recibo.ancla.corto : null,
+    sha256: recibo.ancla.tipo === "sha256" ? recibo.ancla.sha256.slice(0, 8) : null,
+    fecha: recibo.fecha || null,
+  });
+  try {
+    const fase = faseDeLotes(carpetaProyecto, taskName);
+    for (const recibos of recibosDeLaTarea(fase).values()) for (const r of recibos) sellos.set(`${fase.recibos}/${r.nombre}`, deRecibo(r.recibo));
+    const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
+    if (documento && fs.existsSync(documento)) {
+      try {
+        sellos.set(fase.documento!, deRecibo(parsearRecibo(leerTextoAcotado(documento), fase.documento!)));
+      } catch {
+        // un índice de varios lotes no es un recibo: no tiene sello propio
+      }
+    }
+  } catch {
+    // sin recibos legibles, los vagones van sin detalle; estadoDeLotes ya lo dijo
+  }
+  return sellos;
 }
 
 // ─── /api/prompts/:p/:fase?tarea= ───────────────────────────────────────────

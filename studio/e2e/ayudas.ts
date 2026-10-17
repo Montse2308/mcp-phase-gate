@@ -49,7 +49,8 @@ export async function lanzarUi(arbol: Arbol, extra: string[] = []): Promise<{ hi
   return { hijo, servidor: { origen: url.origin, puerto: Number(url.port), cookie: { name, value }, arbol } };
 }
 
-export type Registro = { peticiones: string[]; ajenas: string[]; errores: string[] };
+// `permitidos`: mensajes de consola que una prueba concreta espera (y que no cuentan como error).
+export type Registro = { peticiones: string[]; ajenas: string[]; errores: string[]; permitidos: RegExp[]; vistos: string[] };
 
 export const test = base.extend<{ registro: Registro }, { servidor: Servidor }>({
   servidor: [
@@ -65,7 +66,7 @@ export const test = base.extend<{ registro: Registro }, { servidor: Servidor }>(
     { scope: "worker" },
   ],
   registro: async ({}, use) => {
-    await use({ peticiones: [], ajenas: [], errores: [] });
+    await use({ peticiones: [], ajenas: [], errores: [], permitidos: [], vistos: [] });
   },
   page: async ({ page, context, servidor, registro }, use, info) => {
     await context.addCookies([{ ...servidor.cookie, domain: "127.0.0.1", path: "/", httpOnly: true, sameSite: "Strict", secure: false }]);
@@ -76,7 +77,10 @@ export const test = base.extend<{ registro: Registro }, { servidor: Servidor }>(
       if (!url.startsWith(`${servidor.origen}/`)) registro.ajenas.push(url);
     });
     page.on("console", (mensaje) => {
-      if (mensaje.type() === "error" || /Content Security Policy/i.test(mensaje.text())) registro.errores.push(mensaje.text());
+      const texto = mensaje.text();
+      if (mensaje.type() !== "error" && !/Content Security Policy/i.test(texto)) return;
+      if (registro.permitidos.some((p) => p.test(texto))) registro.vistos.push(texto);
+      else registro.errores.push(texto);
     });
     page.on("pageerror", (error) => registro.errores.push(error.message));
     await use(page);

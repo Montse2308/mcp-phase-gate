@@ -144,6 +144,8 @@ export const FilaDeLote = z.object({
   origen: z.enum(["servidor", "manual"]).nullable(),
   vigente: z.boolean().nullable(),
   problema: z.string().nullable(),
+  // Lo que pinta el sello: el SHA corto, los 8 primeros del sha256 y la fecha del recibo.
+  sello: z.object({ corto: z.string().nullable(), sha256: z.string().nullable(), fecha: z.string().nullable() }).nullable(),
 });
 
 export const LotesRespuesta = z.union([

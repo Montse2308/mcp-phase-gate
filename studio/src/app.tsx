@@ -5,6 +5,7 @@ import { BANDA, MODO } from "./datos";
 import { cambiarModoVisual, useModoVisual } from "./preferencias";
 import { Red } from "./red/red";
 import { VISTAS, useRuta } from "./rutas";
+import { Tablero } from "./tablero/tablero";
 import type { Ruta } from "./rutas";
 
 function Pendiente({ nombre }: { nombre: string }) {
@@ -20,6 +21,8 @@ function Vista({ ruta }: { ruta: Ruta }) {
   switch (ruta.vista) {
     case "red":
       return <Red />;
+    case "tablero":
+      return <Tablero p={ruta.partes[0]} t={ruta.partes[1]} />;
     default:
       return <Pendiente nombre={VISTAS.find((v) => v.id === ruta.vista)!.nombre} />;
   }

@@ -207,6 +207,10 @@ describe("API del Studio: cada ruta con su shape", () => {
     assert.equal(datos.estado.declarados, 2);
     assert.deepEqual(datos.estado.lotes.map((f) => `${f.lote}:${f.ancla?.tipo}`), ["L01:commit", "L02:pendiente"]);
     assert.equal(datos.estado.lotes[0]!.vigente, null);
+    // El sello: el SHA corto y la fecha del recibo; un lote pendiente no tiene corto.
+    assert.match(datos.estado.lotes[0]!.sello!.corto!, /^[0-9a-f]{7}$/);
+    assert.match(datos.estado.lotes[0]!.sello!.fecha!, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(datos.estado.lotes[1]!.sello!.corto, null);
     const reverificado = LotesRespuesta.parse((await s.get("/api/tareas/P/en-curso/lotes?reverificar=1")).json);
     assert.ok(reverificado.disponible && reverificado.reverificado && reverificado.estado.lotes[0]!.vigente === true);
 
@@ -369,6 +373,15 @@ describe("API del Studio: parámetros, errores y lo que no se hace", () => {
       assert.ok(!r.texto.includes(docs) && !r.texto.includes(docs.replace(/\\/g, "\\\\")), r.texto);
       assert.match(r.json.error, /<Documentación>/);
     }
+  });
+
+  it("un proyecto con el manifiesto roto es 422, no 500", async () => {
+    const { docs } = await instalacion();
+    const s = await studioConApi();
+    const r = await s.get("/api/proyectos/R/tareas");
+    assert.equal(r.estado, 422, r.texto);
+    assert.match(r.json.error, /no es un JSON válido/);
+    assert.ok(!r.texto.includes(docs));
   });
 
   it("solo GET: un POST con todo en regla a una ruta de lectura es 405", async () => {
