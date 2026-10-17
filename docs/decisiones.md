@@ -12,6 +12,97 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-17 — La demo se genera con el código real y commits de git deterministas
+
+**Decisión.** La demo del Studio no es un árbol de archivos escrito a mano: `generarDemo(destino)`
+(`src/studio/demo.ts`) la construye **ejecutando las funciones de las tools** sobre carpetas nuevas
+(`docs/`, `repos/`, `estado/`, `config/` y `casa/`): `registrarLote` (record_batch) escribe cada recibo y
+cierra la Fase 4, y `guardarPuntero` (switch_task) deja la tarea activa de cada proyecto. Los repos son de
+git de verdad, con commits de verdad, y los recibos se anclan a sus SHA. Si el formato de un recibo
+cambia, la demo cambia con él (E5-R9).
+
+| Proyecto | Preset | Repos | Tareas |
+|---|---|---|---|
+| `TIENDA` | `multi-repo-feature` | `api` y `web`, con git | `cupones-de-descuento`, terminada: L01 a L03 verificados, L04 descartado al cerrar la fase, Fase 5 con dos PR y la coordinación. `envio-gratis`, en la Fase 4: L01 verificado, L02 con el commit pendiente (el cambio de `web` sin commitear), L03 sin recibo |
+| `ASISTENTE` | `ai-agent-ops` | `agente`, sin git | `tono-en-reclamos`: los dos lotes anclados por sha256, con la batería de casos en los recibos, y la Fase 4 cerrada |
+| `INVESTIGACION` | `research-ops` | ninguno | `costo-de-embeddings`: `00` y `01`, con `## Validaciones pendientes` (el semáforo ámbar) |
+
+Los textos son ejemplos inventados y viven en `test/fixtures/demo/` (`demo.json`, el guion, más un
+archivo por documento). El paquete publicado no lleva `test/`, así que `npm run build` los copia a
+`build/studio/demo/` (`scripts/copiar-demo.mjs`), junto al módulo que los lee.
+
+**Determinista.** Dos generaciones, en dos procesos, en dos carpetas (una con espacios y acentos en la
+ruta) y con otra zona horaria, dan los mismos bytes y las mismas fechas en los 39 archivos y las 24
+carpetas de fuera de `.git`, y los mismos HEAD: `tienda-api` `debffa2c…` (4 commits) y `tienda-web`
+`cacff761…` (2 commits). El test los compara con esas constantes, no solo entre sí: cualquier cosa del
+equipo que se colara en un commit los cambiaría. Para eso:
+
+- **Los commits** los hace `gitEnLaDemo` (`src/git.ts`), la única escritura en git del paquete. Solo vale
+  dentro de una carpeta con la marca `.demo-mcp-phase-gate` en su raíz y con un `dir` que esté dentro de
+  ella (`..` incluido). Quita del entorno toda `GIT_*` heredada (`GIT_DIR`, `GIT_CONFIG_PARAMETERS`…), pone
+  `GIT_CONFIG_NOSYSTEM=1` y `GIT_CONFIG_GLOBAL=<la marca>` (que solo lleva un comentario: ninguna
+  configuración de quien la genera), autor y committer `Demo <demo@example.invalid>` con la fecha del paso, y
+  `-c commit.gpgsign=false -c init.defaultBranch=main -c core.autocrlf=false -c core.hooksPath=<raíz>/.sin-hooks`
+  (una carpeta que no existe: ningún hook se ejecuta). Los repos se crean con `git init --template=`: nada
+  de la plantilla de la instalación de git.
+- **El reloj** avanza una hora por paso desde `2026-03-02T10:00:00Z` (`registrarLote` recibe `ahora`), y
+  cada archivo lleva la fecha de su paso; las carpetas, la del último.
+- **Mientras se genera**, el proceso trabaja con un entorno prestado: `TZ=UTC` (los recibos guardan la
+  fecha local), ninguna `PHASE_GATE_*`, `ORQUESTADOR_*` ni `GIT_*` de quien la lanza, y la marca como
+  configuración global de git también para las **lecturas** (el asunto y la fecha del commit que guarda el
+  recibo: un `i18n.commitEncoding` de quien la genera cambiaba sus bytes). Al terminar se devuelve el
+  entorno exacto que había.
+- **Sin datos del equipo:** en ningún archivo (salvo `.git/objects` y `.git/index`) aparece el temporal, la
+  raíz de la demo, la carpeta personal, el usuario, el nombre del equipo ni la versión de git.
+
+**`ui --demo`.** Genera la demo en una carpeta fija del temporal del sistema (`mcp-phase-gate-demo`, con el
+uid en Linux y macOS) y la reutiliza mientras su marca diga esta misma versión: arrancar no tarda lo que
+tarda generarla. Si no vale, la genera al lado (`<carpeta>.<pid>-<aleatorio>`) y la renombra al terminar:
+dos `ui --demo` a la vez no se pisan, y una generación cortada no deja una demo a medias con la marca
+puesta. En Linux y macOS, donde el temporal es compartido, solo reutiliza una carpeta del mismo usuario,
+que no sea un enlace y en la que nadie más pueda escribir. Antes de leer nada, el proceso entero pasa a la
+demo (`activarDemo`: fuera las `PHASE_GATE_*`, `ORQUESTADOR_*` y `GIT_*` de quien lo lanza), así que no
+toca la Documentación de nadie; arranca con todas las acciones (§7.8), `init-cliente` escribe en la casa
+de la demo y nunca ejecuta `claude`, y el frontend enseña la banda "Demo: datos de ejemplo en
+`<carpeta>`". `borrarDemo` solo borra una carpeta con la marca, sin seguir enlaces.
+
+Los E2E de las vistas (L05 a L09) siguen sobre su árbol mínimo de `studio/e2e/arbol.ts`: un documento con
+HTML malicioso, un manifiesto roto o una tarea con hueco no caben en una demo que se publica. La demo gana
+su propio E2E contra `ui --demo` (`studio/e2e/demo.spec.ts`).
+
+Probado en `test/demo.test.ts` con procesos `node` de verdad: dos generaciones a la vez en dos zonas
+horarias; otras dos con un entorno hostil (`TZ=Pacific/Kiritimati` o `Asia/Kathmandu`, una capa de prompts
+propia por `PHASE_GATE_PROMPTS_PATH` o por su alias, otra Documentación, `GIT_DIR` y `GIT_WORK_TREE` a un
+repo señuelo, `GIT_CONFIG_COUNT`, y una casa con un `.gitconfig` con otra codificación y unos hooks que
+fallan): el mismo árbol, los HEAD de oro, el señuelo sin commits y ningún hook ejecutado; y `ui --demo
+--no-abrir` como proceso, con el temporal y las cuatro variables en carpetas propias. Comprobado rompiéndolo
+a propósito: de 22 mutaciones, 21 dejan algún test en rojo. La otra quita `GIT_CONFIG_NOSYSTEM` y no se
+puede alcanzar por separado: la configuración del sistema solo se cambia con permisos de administrador (y
+`GIT_CONFIG_SYSTEM` es una `GIT_*`, que el filtro ya quita), y la de Git for Windows no trae nada que los
+`-c` explícitos no fijen.
+
+**Amplía** R6 ("la demo se genera ejecutando las tools reales contra un fixture que también usan los
+tests"): los textos son ese fixture y el mismo generador alimenta los tests de la demo y su E2E.
+
+**Riesgos aceptados.**
+
+- Los HEAD de oro dependen del formato de los objetos de git (SHA-1). Un git que creara los repos en
+  SHA-256 por defecto los cambiaría: el test lo diría, y habría que fijar el formato.
+- La demo vive en el temporal del sistema: otro programa del mismo usuario puede cambiarla entre dos
+  arranques, y `ui --demo` la reutiliza mientras la marca coincida. Es una demo; borrar la carpeta la
+  regenera.
+
+**Qué se descartó.**
+
+- Recibos y documentos escritos a mano como fixture: se quedarían atrás del formato real sin que nada
+  fallara.
+- Guardar los repos de la demo ya hechos (un `.git` o un archivo comprimido en el repo): binarios en el
+  control de versiones, y no ejercitaría el código.
+- Generar la demo en cada arranque: medido en dos equipos, 3,2 s frente a 0,3–0,4 s reutilizándola.
+- Sustituir los E2E de las vistas por la demo, como decía §7.11: los casos hostiles no caben en ella.
+
+---
+
 ## 2026-10-17 — El Studio solo ejecuta acciones del CLI, con vista previa y huella
 
 **Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos

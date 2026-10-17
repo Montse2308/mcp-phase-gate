@@ -230,7 +230,7 @@ export async function sonConsecutivos(dir: string, shas: string[]): Promise<bool
 // que sus SHA sean siempre los mismos. Solo vale dentro de una carpeta marcada como demo (MARCA_DE_DEMO en
 // su raíz), y deja fuera la configuración global y del sistema de quien la genera: sus hooks, su
 // core.autocrlf o una firma obligatoria cambiarían los SHA, o ejecutarían código. El archivo de la marca,
-// vacío, hace de configuración global.
+// que solo lleva un comentario, hace de configuración global.
 export const MARCA_DE_DEMO = ".demo-mcp-phase-gate";
 
 export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string[], cuando: { fecha: string; nombre: string; correo: string }): string {

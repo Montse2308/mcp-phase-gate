@@ -67,7 +67,7 @@ export function carpetaDeTextos(): string {
 const sinCR = (texto: string): string => texto.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
 
 // Las PHASE_GATE_* que usan las funciones del servidor, apuntando a la demo. Mientras se genera, todo lo
-// demás del entorno (los alias ORQUESTADOR_*, una capa de prompts propia) queda fuera.
+// demás del entorno (los alias ORQUESTADOR_*, una capa de prompts propia, un GIT_DIR) queda fuera.
 export function entornoDeDemo(c: CarpetasDeDemo): Record<string, string> {
   return {
     PHASE_GATE_DOCS_PATH: c.docs,
@@ -78,7 +78,10 @@ export function entornoDeDemo(c: CarpetasDeDemo): Record<string, string> {
   };
 }
 
-const PREFIJOS = ["PHASE_GATE_", "ORQUESTADOR_"];
+// También las GIT_*: gitEnLaDemo ya las deja fuera de sus commits, pero las lecturas de git del servidor
+// (registrarLote comprueba el repo y el commit) las heredan del proceso, y un GIT_DIR las llevaría a otro
+// repo.
+const PREFIJOS = ["PHASE_GATE_", "ORQUESTADOR_", "GIT_"];
 
 // Con un entorno prestado: se quita lo que el servidor leería de quien ejecuta y se pone el de la demo; al
 // terminar se devuelve exactamente lo que había.
@@ -130,7 +133,10 @@ export async function generarDemo(destino: string): Promise<CarpetasDeDemo> {
   };
   const git = (dir: string, args: string[], fecha: Date): string => gitEnLaDemo(destino, dir, args, { fecha: fecha.toISOString(), ...guion.autor });
 
-  await conEntorno(entornoDeDemo(c), async () => {
+  // Las lecturas de git del servidor (el asunto y la fecha de cada commit que guarda el recibo) usan, como los
+  // commits, la marca como configuración global y ninguna del sistema: un i18n.commitEncoding de quien la
+  // genera cambiaría la codificación del asunto, y con ella los bytes de los recibos.
+  await conEntorno({ ...entornoDeDemo(c), GIT_CONFIG_GLOBAL: path.join(destino, MARCA_DE_DEMO), GIT_CONFIG_NOSYSTEM: "1" }, async () => {
     for (const p of guion.proyectos) {
       const carpetaProyecto = path.join(c.docs, p.nombre);
       fs.mkdirSync(path.join(carpetaProyecto, "Proyectos"), { recursive: true });
@@ -280,8 +286,8 @@ export async function prepararDemo(raiz: string = carpetaDeLaDemo()): Promise<{ 
   return { carpetas: carpetasDeDemo(raiz), reutilizada: false };
 }
 
-// El proceso de `ui --demo` trabaja solo sobre la demo: fuera las PHASE_GATE_* y ORQUESTADOR_* de quien lo
-// lanza (también las que vinieron del .env), dentro las de la demo.
+// El proceso de `ui --demo` trabaja solo sobre la demo: fuera las PHASE_GATE_*, ORQUESTADOR_* y GIT_* de
+// quien lo lanza (también las que vinieron del .env), dentro las de la demo.
 export function activarDemo(c: CarpetasDeDemo): void {
   for (const clave of Object.keys(process.env)) if (PREFIJOS.some((p) => clave.toUpperCase().startsWith(p))) delete process.env[clave];
   Object.assign(process.env, entornoDeDemo(c));
