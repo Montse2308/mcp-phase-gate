@@ -615,6 +615,12 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
 }
 
 // ─── 4. Migración ───────────────────────────────────────────────────────────
+// El phase-gate.json que crea la migración (y "Crear phase-gate.json" en el Studio): solo $schema,
+// version y preset.
+export function manifiestoNuevo(preset: string): string {
+  return `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset })}\n`;
+}
+
 async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   const preset = ctx.opciones.preset ?? "software-replica";
   const presets = presetsDisponibles();
@@ -650,7 +656,7 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   for (const proyecto of proyectos) {
     const archivo = path.join(docs, proyecto, ARCHIVO_MANIFIESTO);
     if (fs.existsSync(archivo)) continue; // solo crea, nunca sobrescribe
-    if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset })}\n`, "utf-8");
+    if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, manifiestoNuevo(preset), "utf-8");
     decir(ctx, `--migrate: ${archivo} con "preset": "${preset}".`);
     creados++;
   }

@@ -416,8 +416,10 @@ export const CANDADO = ".record_batch.lock";
 export const ESPERA_DEL_CANDADO_MS = 3000;
 export const CANDADO_ABANDONADO_MS = 30_000;
 
-export async function conCandado<T>(carpetaTarea: string, seccion: () => T): Promise<T> {
-  const ruta = path.join(carpetaTarea, CANDADO);
+// `opciones` es para otro candado con el mismo mecanismo (el de las acciones del Studio): su nombre y el
+// mensaje si sigue ocupado.
+export async function conCandado<T>(carpetaTarea: string, seccion: () => T | Promise<T>, opciones: { nombre?: string; ocupado?: string } = {}): Promise<T> {
+  const ruta = path.join(carpetaTarea, opciones.nombre ?? CANDADO);
   const limite = Date.now() + ESPERA_DEL_CANDADO_MS;
   for (;;) {
     try {
@@ -432,12 +434,13 @@ export async function conCandado<T>(carpetaTarea: string, seccion: () => T): Pro
         borrarArchivo(ruta);
         continue;
       }
-      if (Date.now() > limite) throw new Error("Otro proceso está registrando un lote de esta tarea; vuelve a llamar.");
+      if (Date.now() > limite) throw new Error(opciones.ocupado ?? "Otro proceso está registrando un lote de esta tarea; vuelve a llamar.");
       await new Promise((resolver) => setTimeout(resolver, 20 + Math.floor(Math.random() * 30)));
     }
   }
+  // await: si la sección es asíncrona, el candado se suelta cuando termina, no cuando empieza.
   try {
-    return seccion();
+    return await seccion();
   } finally {
     borrarArchivo(ruta);
   }

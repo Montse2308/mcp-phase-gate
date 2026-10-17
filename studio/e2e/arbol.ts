@@ -166,6 +166,12 @@ export async function crearArbol(raiz: string): Promise<Arbol> {
     ["01 - Análisis Técnico.md", "# Análisis\n\n## Validaciones pendientes\n\n- Falta medir el costo real.\n"],
   ]);
 
+  // TALLER: el preset ai-agent-ops (cambia ranuras de fábrica), para el Taller y sus acciones. NUEVO: sin
+  // manifiesto, para "Crear phase-gate.json". Los dos son de las pruebas que escriben: así no tocan a los demás.
+  escribir(path.join(docs, "TALLER", "phase-gate.json"), `${JSON.stringify({ version: 1, preset: "ai-agent-ops", reglas: { verificacion: ["npm test"] } }, null, 2)}\n`);
+  tarea(docs, "TALLER", "afinar", [PREVIOS[0]!]);
+  tarea(docs, "NUEVO", "primera", [PREVIOS[0]!]);
+
   // ROTO: un manifiesto que no es JSON.
   escribir(path.join(docs, "ROTO", "phase-gate.json"), "{ esto no es json");
   fs.mkdirSync(path.join(docs, "ROTO", "Proyectos"), { recursive: true });

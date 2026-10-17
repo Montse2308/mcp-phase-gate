@@ -21,7 +21,7 @@ import { CLIENTES, detectarClientes, planDeArchivo, planDeClaude } from "../init
 import type { EntornoInit } from "../init.js";
 import { estadoDeLotes, faseDeLotes, recibosDeLaTarea } from "../lotes.js";
 import { leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
-import { discoverProjects, esSegmentoDeGit, leerTextoAcotado, requireProjectFolder, rutaReal, validarSegmento } from "../paths.js";
+import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requireProjectFolder, rutaReal, validarSegmento } from "../paths.js";
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
 import { parsearRecibo } from "../recibos.js";
@@ -48,6 +48,8 @@ import type {
   TareaRespuesta,
   TareasRespuesta,
 } from "./contrato.js";
+import { ErrorDeAccion, crearAcciones } from "./acciones.js";
+import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
 export type ContextoApi = {
@@ -71,38 +73,7 @@ export class ErrorHttp extends Error {
   }
 }
 
-// Las rutas del equipo que no hace falta enseñar, de la más larga a la más corta.
-export function sinRutasDelEquipo(texto: string): string {
-  const raices: [string, string][] = [];
-  const anotar = (obtener: () => string, nombre: string): void => {
-    try {
-      const ruta = obtener();
-      raices.push([ruta, nombre]);
-      try {
-        raices.push([rutaReal(ruta), nombre]);
-      } catch {
-        // si no existe, basta con la ruta tal cual
-      }
-    } catch {
-      // sin esa ruta configurada no hay nada que quitar
-    }
-  };
-  anotar(() => requireBasePath(DOCS), "<Documentación>");
-  anotar(() => requireBasePath(REPOS), "<repos>");
-  anotar(() => configDir(), "<configuración>");
-  anotar(() => stateDir(), "<estado>");
-  anotar(() => os.homedir(), "~");
-  let resultado = texto;
-  for (const [ruta, nombre] of raices.sort((a, b) => b[0].length - a[0].length)) {
-    if (!ruta) continue;
-    const variantes = new Set([ruta, ruta.replace(/\\/g, "/")]);
-    for (const variante of variantes) {
-      const escapada = variante.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      resultado = resultado.replace(new RegExp(escapada, process.platform === "win32" ? "gi" : "g"), nombre);
-    }
-  }
-  return resultado;
-}
+export { sinRutasDelEquipo };
 
 function mensajeDe(error: unknown): string {
   return sinRutasDelEquipo(error instanceof Error ? error.message : String(error));
@@ -451,6 +422,23 @@ function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string,
 }
 
 // ─── /api/prompts/:p/:fase?tarea= ───────────────────────────────────────────
+// De qué capa sale el contenido de una ranura, dicho para la ficha del Taller: "fábrica", "preset: <nombre>",
+// "reglas: <variante>", "global" o "proyecto". `contenidoDe` es "fábrica" o "<archivo>:<línea>" (en Windows
+// el archivo lleva sus propios ":", así que se corta por el último).
+export function capaDeProcedencia(contenidoDe: string, capas: Capa[]): string {
+  if (contenidoDe === "fábrica") return "fábrica";
+  const corte = contenidoDe.lastIndexOf(":");
+  const archivo = path.resolve(corte > 0 ? contenidoDe.slice(0, corte) : contenidoDe);
+  for (const capa of [...capas].sort((a, b) => b.orden - a.orden)) {
+    if (capa.orden === 2 || capa.orden === 2.5) {
+      if (path.resolve(capa.ruta) === archivo) return `${capa.etiqueta}: ${path.basename(capa.ruta, ".md")}`;
+    } else if (estaDentro(capa.ruta, archivo)) {
+      return capa.etiqueta;
+    }
+  }
+  return "desconocida";
+}
+
 async function prompt(crudoP: string, crudoFase: string, consulta: URLSearchParams): Promise<PromptRespuesta> {
   const carpeta = proyectoDe(crudoP);
   if (!/^\d{1,3}$/.test(crudoFase)) throw new ErrorHttp(400, "La fase es un número (ej. 3).");
@@ -476,6 +464,7 @@ async function prompt(crudoP: string, crudoFase: string, consulta: URLSearchPara
     ranuras: ensamblado.procedencia.map((p) => ({
       id: p.ranura,
       contenidoDe: p.contenidoDe,
+      capa: capaDeProcedencia(p.contenidoDe, capas),
       modos: p.modos,
       efectivo: contenidoEfectivoDeRanura(capas, p.ranura)?.contenido ?? "",
       fabrica: contenidoEfectivoDeRanura(fabrica, p.ranura)?.contenido ?? null,
@@ -561,10 +550,21 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     { patron: /^\/clientes$/, atender: async (): Promise<ClientesRespuesta> => ({ clientes: await planesDeClientes(ctx.entornoInit()) }) },
   ];
 
+  const acciones = crearAcciones({ entornoInit: ctx.entornoInit });
   return async (peticion, res): Promise<RespuestaApi | "manejada"> => {
     if (peticion.ruta === "/eventos" && peticion.metodo === "GET" && ctx.eventos) {
       ctx.eventos(peticion, res);
       return "manejada";
+    }
+    // Las dos únicas escrituras: el plan con su huella, y aplicarlo (§7.6).
+    if (peticion.ruta === "/acciones/plan" || peticion.ruta === "/acciones/aplicar") {
+      if (peticion.metodo !== "POST") return { estado: 405, json: { error: "Esta ruta solo admite POST." } };
+      try {
+        return { estado: 200, json: peticion.ruta === "/acciones/plan" ? await acciones.plan(peticion.cuerpo) : await acciones.aplicar(peticion.cuerpo) };
+      } catch (error) {
+        const codigo = error instanceof ErrorDeAccion ? error.estado : estadoDe(error);
+        return { estado: codigo, json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? `Error interno: ${mensajeDe(error)}` : mensajeDe(error) } };
+      }
     }
     for (const { patron, atender } of rutas) {
       const m = peticion.ruta.match(patron);

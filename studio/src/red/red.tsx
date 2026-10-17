@@ -7,6 +7,7 @@ import { Aviso, Cargando, useRecurso } from "../comun/estado";
 import { Farol, Marca, Tren, Via } from "../comun/marcas";
 import type { Forma, Tono } from "../comun/marcas";
 import { Tabla } from "../comun/tabla";
+import { AccionesDeProyecto } from "./acciones";
 import { useModoVisual } from "../preferencias";
 import { enlace } from "../rutas";
 
@@ -34,7 +35,7 @@ function placa(p: ProyectoApi): string {
   return p.preset ? `${p.preset.nombre} · ${p.preset.origen}` : "preset sin resolver";
 }
 
-function Estacion({ p }: { p: ProyectoApi }) {
+function Estacion({ p, presets, recargar }: { p: ProyectoApi; presets: string[]; recargar: () => void }) {
   const manifiesto = estadoDelManifiesto(p);
   const id = `estacion-${p.nombre.replace(/[^\w-]/g, "_")}`;
   return (
@@ -90,6 +91,7 @@ function Estacion({ p }: { p: ProyectoApi }) {
         <Farol encendido={p.sesiones.length > 0} />
         {p.sesiones.length ? `Abierto en ${p.sesiones.map((s) => s.cliente).join(", ")}` : "Ninguna sesión MCP lo tiene abierto"}
       </p>
+      <AccionesDeProyecto p={p} presets={presets} alAplicar={recargar} />
     </article>
   );
 }
@@ -116,7 +118,7 @@ function TablaDeProyectos({ proyectos }: { proyectos: ProyectoApi[] }) {
 
 export function Red() {
   const modo = useModoVisual();
-  const { datos, error, cargando } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts"]);
+  const { datos, error, cargando, recargar } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts"]);
   return (
     <section class="vista vista-red" aria-labelledby="titulo-red">
       <h1 id="titulo-red">Red de proyectos</h1>
@@ -130,7 +132,7 @@ export function Red() {
         ) : (
           <div class="estaciones">
             {datos.proyectos.map((p) => (
-              <Estacion key={p.nombre} p={p} />
+              <Estacion key={p.nombre} p={p} presets={datos.presets} recargar={recargar} />
             ))}
           </div>
         )

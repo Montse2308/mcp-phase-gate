@@ -54,6 +54,7 @@
     "@preact/preset-vite": "2.10.6",
     "@types/node": "^25.9.1",
     "axe-core": "4.13.0",
+    "diff": "9.0.0",
     "dompurify": "3.4.16",
     "marked": "18.0.14",
     "preact": "10.29.8",

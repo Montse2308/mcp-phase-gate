@@ -12,6 +12,70 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-17 — El Studio solo ejecuta acciones del CLI, con vista previa y huella
+
+**Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos
+(`src/studio/acciones.ts`):
+
+| Acción | Equivale a | Lo único que puede tocar |
+|---|---|---|
+| `preset` | escribir `preset` en el manifiesto | `<DOCS>/<P>/phase-gate.json` |
+| `reglas` | escribir `reglas.lotes` o `reglas.commits` | el mismo archivo |
+| `crear-manifiesto` | `init --migrate` para un proyecto | crea ese archivo, nunca lo sobrescribe |
+| `eject` | `eject <objetivo> --a …` | la capa global, la del proyecto o la carpeta de presets |
+| `init-cliente` | `init --cliente <c>` | el `mcp.json` de Cursor o VS Code (con copia), o `claude mcp add` |
+
+1. `POST /api/acciones/plan` con `{ accion, argumentos }` devuelve `{ resumen, diff, huella, cambios }`, o
+   `{ posible: false, motivo }` si no hay nada que hacer o no se puede. La huella es el sha256 de lo que se
+   haría —por cada archivo, su ruta, lo que tiene, lo que tendría, si deja copia y su `mtimeMs`; o el
+   comando— así que cambia si el archivo cambia de contenido o solo de fecha.
+2. `POST /api/acciones/aplicar` con `{ accion, argumentos, huella }` **recalcula** el plan y solo escribe si
+   la huella coincide; si no, `409` con "El disco cambió desde que viste el cambio. Revísalo otra vez." Una
+   huella aplicada no vuelve a valer en ese Studio: un plan que solo ejecuta `claude mcp add` no cambia
+   ningún archivo, y la misma vista previa lo ejecutaría dos veces. Aplicar va bajo un candado en la
+   carpeta de estado (`.studio-acciones.lock`, el mismo mecanismo que el de `record_batch`): con dos
+   procesos `node` aplicando la misma huella a la vez, en 5 rondas, uno escribe y el otro recibe `409`.
+
+Cada plan sale de la misma función que usa el CLI: `planDeEject` (eject se partió en plan y escritura),
+`planDeArchivo` y `planDeClaude` (init), `manifiestoNuevo` (lo que escribe `--migrate`). Los argumentos
+se validan con shapes zod estrictos: una clave de más, también `__proto__`, es `400`.
+
+**El manifiesto** se cambia sobre el objeto que da `JSON.parse`, que conserva el orden: la clave que se
+cambia se queda en su sitio y una nueva va al final (`reglas.lotes` y `reglas.commits`, al final de
+`reglas`); se escribe con 2 espacios y LF (el BOM y los CRLF de un archivo escrito a mano no se conservan),
+con un temporal y un `rename`, después de copiar el de antes, byte a byte, a
+`phase-gate.json.bak-<AAAAMMDD-HHMMSS>`. El resultado se valida con el mismo shape que lo lee antes de
+ofrecerlo. Un manifiesto roto o ausente no se cambia desde el Studio: se dice por qué.
+
+**Nunca** escribe documentos de tareas, recibos ni nada de los repos. Cada destino se comprueba sobre su
+ruta real, al planificar y al aplicar: no puede caer dentro de una tarea ni de `PHASE_GATE_REPOS_PATH`, y
+dentro de la Documentación solo puede ser el `phase-gate.json` de un proyecto o su `.phase-gate/prompts/`.
+Probado con la capa global apuntando dentro de una tarea y dentro de un repo: el plan lo rechaza y no se
+crea nada.
+
+`init-cliente` usa el entorno de init que le da el Studio (la carpeta del usuario, `APPDATA` y cómo se
+ejecuta `claude`); en los tests es uno falso, y un test comprueba que la configuración real de los clientes
+no cambió. Las respuestas no llevan rutas del equipo (`<Documentación>`, `~`).
+
+Comprobado rompiéndolo a propósito: de 15 mutaciones, 13 dejan algún test en rojo. Las otras dos son capas
+que no se pueden alcanzar por separado: crear con `wx` (bajo el candado, el recálculo ya ve el archivo que
+apareció) y la lista de destinos de `eject` (`planDeEject` solo produce esas rutas).
+
+**Amplía** SEG-M del plan ("`phase-gate.json` y `.phase-gate/` se editan solo por CLI o UI"): esta es la UI.
+
+**Riesgo aceptado.** Entre el recálculo y la escritura (dentro del candado) pasan milisegundos; un programa
+que no usa el candado, como un editor o OneDrive, podría escribir el mismo archivo justo ahí sin que se
+note.
+
+**Qué se descartó.**
+
+- Un editor libre del manifiesto en el Studio: sin el shape a mano, una coma de más rompería el proyecto.
+- Lanzar el CLI como proceso hijo: habría que analizar su salida, y no daría el diff antes de escribir.
+- Una huella solo con el `mtimeMs`: no ve un cambio que conserve la fecha; por eso cubre también el
+  contenido.
+
+---
+
 ## 2026-10-17 — El servidor MCP deja constancia de sus sesiones abiertas
 
 **Decisión.** Cada servidor MCP lanzado por stdio escribe `<stateDir>/sesiones/<pid>.json` con seis

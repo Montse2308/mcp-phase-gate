@@ -171,6 +171,7 @@ export const LotesRespuesta = z.union([
 export const RanuraApi = z.object({
   id: z.string(), // "fase-3/pruebas", "global/evidencia"
   contenidoDe: z.string(), // "fábrica", o "<archivo>:<línea>" del bloque que ganó
+  capa: z.string(), // "fábrica", "preset: <nombre>", "reglas: <variante>", "global" o "proyecto"
   modos: z.array(z.string()),
   efectivo: z.string(),
   fabrica: z.string().nullable(), // null si la ranura no existe en el cuerpo de fábrica
@@ -210,6 +211,19 @@ export const PlanDeClienteApi = z.object({
 
 export const ClientesRespuesta = z.object({ clientes: z.array(PlanDeClienteApi) });
 
+// ─── Acciones (§7.6) ────────────────────────────────────────────────────────
+export const PlanRespuesta = z.union([
+  z.object({
+    posible: z.literal(true),
+    resumen: z.string(),
+    diff: z.string(),
+    huella: z.string().regex(/^[0-9a-f]{64}$/),
+    cambios: z.array(z.object({ archivo: z.string(), tipo: z.enum(["crear", "reemplazar", "comando"]) })),
+  }),
+  z.object({ posible: z.literal(false), motivo: z.string() }),
+]);
+export const AplicarRespuesta = z.object({ hecho: z.literal(true), mensaje: z.string(), archivos: z.array(z.string()), copias: z.array(z.string()) });
+
 export type EstadoRespuesta = z.infer<typeof EstadoRespuesta>;
 export type EstadoTareaApi = z.infer<typeof EstadoTareaApi>;
 export type TareasRespuesta = z.infer<typeof TareasRespuesta>;
@@ -229,4 +243,6 @@ export type PromptRespuesta = z.infer<typeof PromptRespuesta>;
 export type PlanDeClienteApi = z.infer<typeof PlanDeClienteApi>;
 export type ClientesRespuesta = z.infer<typeof ClientesRespuesta>;
 export type Modo = z.infer<typeof Modo>;
+export type PlanRespuesta = z.infer<typeof PlanRespuesta>;
+export type AplicarRespuesta = z.infer<typeof AplicarRespuesta>;
 export type EstadoDelWatcher = z.infer<typeof EstadoDelWatcher>;
