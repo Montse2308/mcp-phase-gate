@@ -98,6 +98,15 @@ async function conEntorno<T>(env: Record<string, string>, hacer: () => Promise<T
   }
 }
 
+// Todo lo que se hace sobre una demo sin que dependa de quien lo hace: generarla, y leerla para el export
+// estático. Además de las PHASE_GATE_* de la demo, las lecturas de git del servidor (el asunto y la fecha de
+// cada commit que guarda el recibo) usan, como los commits, la marca como configuración global y ninguna del
+// sistema: un i18n.commitEncoding de quien la genera cambiaría la codificación del asunto, y con ella los
+// bytes de los recibos.
+export function conEntornoDeDemo<T>(c: CarpetasDeDemo, hacer: () => Promise<T>): Promise<T> {
+  return conEntorno({ ...entornoDeDemo(c), GIT_CONFIG_GLOBAL: path.join(c.raiz, MARCA_DE_DEMO), GIT_CONFIG_NOSYSTEM: "1" }, hacer);
+}
+
 function escribir(ruta: string, texto: string, fecha: Date): void {
   fs.mkdirSync(path.dirname(ruta), { recursive: true });
   fs.writeFileSync(ruta, texto, "utf-8");
@@ -133,10 +142,7 @@ export async function generarDemo(destino: string): Promise<CarpetasDeDemo> {
   };
   const git = (dir: string, args: string[], fecha: Date): string => gitEnLaDemo(destino, dir, args, { fecha: fecha.toISOString(), ...guion.autor });
 
-  // Las lecturas de git del servidor (el asunto y la fecha de cada commit que guarda el recibo) usan, como los
-  // commits, la marca como configuración global y ninguna del sistema: un i18n.commitEncoding de quien la
-  // genera cambiaría la codificación del asunto, y con ella los bytes de los recibos.
-  await conEntorno({ ...entornoDeDemo(c), GIT_CONFIG_GLOBAL: path.join(destino, MARCA_DE_DEMO), GIT_CONFIG_NOSYSTEM: "1" }, async () => {
+  await conEntornoDeDemo(c, async () => {
     for (const p of guion.proyectos) {
       const carpetaProyecto = path.join(c.docs, p.nombre);
       fs.mkdirSync(path.join(carpetaProyecto, "Proyectos"), { recursive: true });

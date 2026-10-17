@@ -12,6 +12,69 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-17 — El export estático publica la demo y nunca datos reales sin confirmación
+
+**Decisión.** `mcp-phase-gate ui --export-static <dir>` (`src/studio/exportar.ts`) no arranca ningún
+servidor: escribe en `<dir>` un sitio que funciona servido tal cual (GitHub Pages, o cualquier carpeta), en
+solo lectura.
+
+- **Sin `--incluir-datos-reales`, siempre la demo.** La genera en una carpeta temporal y la lee con el mismo
+  entorno prestado con que se genera (`conEntornoDeDemo`: sus `PHASE_GATE_*`, `TZ=UTC`, ninguna
+  `PHASE_GATE_*`, `ORQUESTADOR_*` ni `GIT_*` de quien exporta): la Documentación de quien lo lanza no se
+  lee. Probado con una Documentación configurada con un proyecto marcador, que no aparece en ningún archivo y
+  queda intacta.
+- **Con `--incluir-datos-reales`**, exporta la Documentación configurada, después de decir cuántos proyectos
+  y que va todo su contenido, y de pedir que se escriba exactamente `exportar`. Sin terminal y sin `--yes`
+  no exporta nada; cualquier otra respuesta, tampoco.
+- **Las mismas rutas que pide el frontend**, con los mismos manejadores de la API (§7.5): el estado, los
+  clientes, los proyectos y, por proyecto, sus tareas y el prompt de cada fase (sin tarea y con cada una);
+  por tarea, su estado, los lotes (también reverificados), la bitácora y cada documento y recibo. Cada
+  respuesta va a `datos/<sha256>.json`, con el nombre sacado del contenido (así no hay que meter la ruta,
+  con sus espacios y acentos, en un nombre de archivo, y una respuesta repetida se guarda una vez), y
+  `datos/indice.json` dice qué archivo y qué código corresponden a cada ruta exacta. Además, el frontend
+  compilado, `config.js` con `window.PG_MODO = "estatico"` y la banda, y `.nojekyll`.
+- **Sin rutas del equipo.** Las raíces de la demo (o las configuradas), el paquete, la carpeta del usuario
+  y el temporal se sustituyen por `<Documentación>`, `<repos>`, `<configuración>`, `<estado>`, `<paquete>`,
+  `~` y `<temporal>`, en sus tres formas (tal cual, con `/` y con las barras escapadas dentro de un JSON que
+  va como texto, como el diff de un `mcp.json`), y lo que va detrás pasa a `/`. Si después quedara alguna
+  de esas raíces en lo que se va a publicar, **no se escribe nada** (probado por separado, sin la
+  sustitución). `/api/clientes` se calcula sobre una casa vacía y sin ejecutar `claude`: nunca la
+  configuración real de los clientes.
+- **Determinista.** JSON con las claves ordenadas: dos exports dan los mismos bytes, y la lista de rutas y
+  seis respuestas que no dependen del sistema (proyectos, y la tarea, los lotes, la bitácora, un recibo y el
+  prompt de la Fase 4 de `cupones-de-descuento`) se comparan con `test/oro/export/`. `/api/estado` (la
+  versión del paquete y la de Node) y `/api/clientes` (la ruta del `mcp.json` de VS Code de cada sistema)
+  quedan fuera del oro: la misma versión da los mismos bytes en el mismo sistema.
+- **Sin pisar nada.** `<dir>` tiene que no existir o estar vacía; el sitio se escribe al lado y se renombra
+  al terminar.
+
+**En el sitio, el frontend** (`studio/src/datos.ts`) resuelve cada `get` en el índice, no abre SSE,
+deshabilita las acciones con "En la demo publicada todo es de solo lectura…" y enseña la banda. Una ruta
+que no está en el índice dice "Esto no está en la demo publicada". Todas las rutas son relativas a la
+página: probado en Chromium con el sitio servido bajo `/mcp-phase-gate/` por un servidor de archivos sin
+API ni CSP, como Pages, y sin ninguna petición fuera de ese subdirectorio.
+
+**Amplía** R6: exportar datos reales exige la bandera y una confirmación escrita, y ni así se publican las
+rutas del equipo.
+
+**Riesgos aceptados.**
+
+- Con datos reales, la sustitución solo conoce las raíces configuradas y las del equipo: una ruta que un
+  documento escriba a mano con otra raíz (otro disco, la carpeta de otro usuario) se publica tal cual. Por
+  eso se pide escribir `exportar`.
+- Exportar la demo tarda unos 16 s en este equipo: unos 3 s generarla y el resto ensamblar los 40 prompts
+  (con el estado de git de los repos). Es un paso del build de Pages, no de uso diario.
+
+**Qué se descartó.**
+
+- Guardar cada respuesta en un archivo con el nombre de su ruta (`datos/tareas/TIENDA/…`): habría que
+  codificar espacios, acentos y la consulta en nombres de archivo, y Pages los sirve decodificados.
+- Publicar las rutas locales con los datos reales, como decía el aviso de §7.9 ("y sus rutas locales"): no
+  aportan nada a quien lee el sitio y dicen cómo está organizado el equipo de quien lo publica.
+- Un Service Worker que hiciera de API: más código en el navegador para lo mismo que un índice.
+
+---
+
 ## 2026-10-17 — La demo se genera con el código real y commits de git deterministas
 
 **Decisión.** La demo del Studio no es un árbol de archivos escrito a mano: `generarDemo(destino)`

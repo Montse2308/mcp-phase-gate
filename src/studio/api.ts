@@ -56,7 +56,7 @@ import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
 export type ContextoApi = {
-  modo: Exclude<Modo, "estatico">;
+  modo: Modo; // "estatico" solo al exportar (exportar.ts): ningún servidor sirve en ese modo
   watcher: () => EstadoRespuesta["studio"]["watcher"];
   sesiones: () => SesionApi[];
   // Para /api/clientes: la carpeta del usuario, APPDATA y cómo se ejecuta `claude`. En los tests y en la

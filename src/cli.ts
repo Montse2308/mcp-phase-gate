@@ -63,6 +63,8 @@ ui:
   --puerto <n>           El puerto (en 127.0.0.1). Sin esto, uno libre.
   --no-abrir             No abre el navegador: solo imprime el enlace, que sirve una sola vez.
   --demo                 Sobre una demo con datos de ejemplo, en una carpeta temporal: no toca tu Documentación.
+  --export-static <dir>  No arranca nada: escribe en <dir> (nueva o vacía) un sitio estático de solo lectura con la demo.
+    --incluir-datos-reales  Con tu Documentación en vez de la demo. Pide que escribas "exportar" (o --yes).
 
 Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
 
@@ -113,9 +115,16 @@ export type ResultadoCli =
 
 // Las opciones de `ui`, ya validadas. El Studio vive en src/studio/ y se carga solo para `ui`, con un
 // import dinámico: el servidor MCP por stdio no carga nada de él (test/aislamiento.test.ts).
-export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean };
+// Con `exportar`, `ui` no arranca el Studio: escribe el sitio estático (§7.9 del plan).
+export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean; exportar?: { destino: string; datosReales: boolean; yes: boolean } };
 
 export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
+  if (opciones.exportar) {
+    const { exportarEstatico } = await import("./studio/exportar.js");
+    const { entornoDelProceso } = await import("./init.js");
+    const { esTerminal, preguntar } = entornoDelProceso(salida);
+    return exportarEstatico(opciones.exportar, { salida, esTerminal, preguntar });
+  }
   const { lanzarStudio } = await import("./studio/servidor.js");
   return lanzarStudio(opciones, salida);
 }
@@ -141,7 +150,7 @@ const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
-  ui: ["puerto", "no-abrir", "demo"],
+  ui: ["puerto", "no-abrir", "demo", "export-static", "incluir-datos-reales", "yes"],
 };
 
 type Valores = {
@@ -166,6 +175,8 @@ type Valores = {
   puerto?: string;
   "no-abrir"?: boolean;
   demo?: boolean;
+  "export-static"?: string;
+  "incluir-datos-reales"?: boolean;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -235,6 +246,8 @@ export function ejecutarCli(
         puerto: { type: "string" },
         "no-abrir": { type: "boolean" },
         demo: { type: "boolean" },
+        "export-static": { type: "string" },
+        "incluir-datos-reales": { type: "boolean" },
       },
     }));
   } catch (error) {
@@ -291,6 +304,13 @@ export function ejecutarCli(
   }
 
   if (posicionales.length === 1 && subcomando === "ui") {
+    const exportar = valores["export-static"];
+    if (exportar !== undefined) {
+      if (!exportar.trim()) return invalido(salida, "--export-static necesita una carpeta.");
+      if (valores.puerto !== undefined || valores["no-abrir"] || valores.demo) return invalido(salida, "--export-static no arranca el Studio: no va con --puerto, --no-abrir ni --demo (sin --incluir-datos-reales, ya exporta la demo).");
+      return { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: exportar, datosReales: valores["incluir-datos-reales"] === true, yes: valores.yes === true } } };
+    }
+    if (valores["incluir-datos-reales"] || valores.yes) return invalido(salida, "--incluir-datos-reales y --yes solo valen con --export-static.");
     let puerto: number | null = null;
     if (valores.puerto !== undefined) {
       puerto = Number(valores.puerto);

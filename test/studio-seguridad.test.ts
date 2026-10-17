@@ -122,7 +122,30 @@ describe("Studio: arranque", () => {
     assert.deepEqual(ejecutarCli(["ui"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--puerto", "4321", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: 4321, abrir: false, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--demo", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: true } });
-    for (const malo of [["ui", "--puerto", "0"], ["ui", "--puerto", "70000"], ["ui", "--puerto", "12a"], ["ui", "--json"], ["doctor", "--no-abrir"], ["doctor", "--demo"], ["ui", "extra"]]) {
+    // --export-static no arranca el Studio: nunca abre nada.
+    assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: "sitio", datosReales: false, yes: false } } });
+    assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio", "--incluir-datos-reales", "--yes"], salida), {
+      accion: "ui",
+      opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: "sitio", datosReales: true, yes: true } },
+    });
+    for (const malo of [
+      ["ui", "--puerto", "0"],
+      ["ui", "--puerto", "70000"],
+      ["ui", "--puerto", "12a"],
+      ["ui", "--json"],
+      ["doctor", "--no-abrir"],
+      ["doctor", "--demo"],
+      ["ui", "extra"],
+      ["ui", "--export-static"],
+      ["ui", "--export-static", " "],
+      ["ui", "--export-static", "sitio", "--demo"],
+      ["ui", "--export-static", "sitio", "--no-abrir"],
+      ["ui", "--export-static", "sitio", "--puerto", "4321"],
+      ["ui", "--incluir-datos-reales"],
+      ["ui", "--yes"],
+      ["doctor", "--export-static", "sitio"],
+      ["init", "--incluir-datos-reales"],
+    ]) {
       assert.deepEqual(ejecutarCli(malo, salida), { accion: "salir", codigo: 2 }, malo.join(" "));
     }
   });
