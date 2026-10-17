@@ -393,6 +393,9 @@ describe("Studio: estáticos, solo dentro de dist", () => {
       "/%2e%2e/secreto.txt",
       "/%2E%2E/fuera/secreto.txt",
       "/assets/%2e%2e/%2e%2e/secreto.txt",
+      // Con la normalización de WHATWG sería /index.html: aquí %2e%2e se decodifica a ".." y se rechaza.
+      "/assets/%2e%2e/index.html",
+      "/assets/../index.html",
       "/..%2fsecreto.txt",
       "/..%2Ffuera%2Fsecreto.txt",
       "/..%5csecreto.txt",

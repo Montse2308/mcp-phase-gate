@@ -368,46 +368,7 @@ function registrarTools(mcp: McpServer): void {
           deducido = `> ${lineaDeDeduccion(porRaices)}`;
         }
       }
-      const delPrompt = project ?? carpetaProyecto;
-      const opciones = { ...(delPrompt ? { project: delPrompt } : {}), ...(task_name ? { taskName: task_name } : {}) };
-
-      // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
-      // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
-      // Lo mismo con la lista de recibos: es una ayuda, no una condición.
-      let aviso: string | null = null;
-      let pendientes: string | null = null;
-      let recibos: string | null = null;
-      let commits: string | null = null;
-      let carpetaTarea: string | null = null;
-      try {
-        aviso = avisoDeCompuerta(phase, fasesDe, opciones);
-
-        const resuelta = resolverTareaDelPrompt(fasesDe, opciones);
-        if (resuelta && resuelta !== "ambigua") {
-          pendientes = avisoDePendientes(phase, resuelta.estado, resuelta.phases);
-          recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases);
-          // La tarea aporta su preset si declara uno en su contexto inicial.
-          if (carpetaProyecto && resuelta.carpetaProyecto === carpetaProyecto) carpetaTarea = resuelta.estado.folderPath;
-          // En la fase siguiente a la de los lotes (la 5), los commits ya verificados para el auditor.
-          const deLotes = [...resuelta.phases.entries()].find(([, datos]) => datos.recibos);
-          if (deLotes && phase === deLotes[0] + 1) commits = await bloqueDeCommitsConPlazo(resuelta.carpetaProyecto, resuelta.estado.folderPath, resuelta.phases);
-        }
-      } catch (error) {
-        log("warning", `No se pudo comprobar la compuerta: ${mensajeDe(error)}`);
-      }
-
-      // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su
-      // lugar sería el fallo silencioso que el manifiesto evita.
-      const columnas = carpetaProyecto ? await columnasDeGit(carpetaProyecto, carpetaTarea) : new Map<string, string>();
-      const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea, { estadoDeRepo: (repo) => columnas.get(repo.id) ?? null });
-      const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map(notaDeHuerfano);
-      for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
-      // Sin proyecto, el prompt no lleva la configuración de ninguno: se dice, para que el modelo no crea
-      // que tiene el preset de su proyecto (hallazgo 8 de la auditoría de la Etapa 3).
-      if (!carpetaProyecto) notas.unshift(notaSinProyecto(project));
-
-      // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
-      return responder([deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos, commits].filter(Boolean).join("\n\n"));
+      return responder(await textoDelPromptDeFase(phase, { project, task_name, carpetaProyecto, deducido }));
     })
   );
 
@@ -853,6 +814,56 @@ function registrarTools(mcp: McpServer): void {
       return { content: [{ type: "text", text: texto }], structuredContent: { proyecto: carpetaProyecto, repos: estados } };
     })
   );
+}
+
+// El texto que entrega get_phase_prompt, una vez resuelto el proyecto: `project` es el que se pidió (puede
+// no existir), `carpetaProyecto` el que existe (el pedido o el que dedujeron las raíces) y `deducido` la
+// línea de la deducción. La tool lo llama tras deducir; el Studio, con el proyecto y la tarea que elige la
+// persona, para enseñar exactamente el mismo texto.
+export async function textoDelPromptDeFase(
+  phase: number,
+  { project, task_name, carpetaProyecto, deducido }: { project?: string | undefined; task_name?: string | undefined; carpetaProyecto: string | null; deducido: string | null }
+): Promise<string> {
+  const delPrompt = project ?? carpetaProyecto;
+  const opciones = { ...(delPrompt ? { project: delPrompt } : {}), ...(task_name ? { taskName: task_name } : {}) };
+
+  // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
+  // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
+  // Lo mismo con la lista de recibos: es una ayuda, no una condición.
+  let aviso: string | null = null;
+  let pendientes: string | null = null;
+  let recibos: string | null = null;
+  let commits: string | null = null;
+  let carpetaTarea: string | null = null;
+  try {
+    aviso = avisoDeCompuerta(phase, fasesDe, opciones);
+
+    const resuelta = resolverTareaDelPrompt(fasesDe, opciones);
+    if (resuelta && resuelta !== "ambigua") {
+      pendientes = avisoDePendientes(phase, resuelta.estado, resuelta.phases);
+      recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases);
+      // La tarea aporta su preset si declara uno en su contexto inicial.
+      if (carpetaProyecto && resuelta.carpetaProyecto === carpetaProyecto) carpetaTarea = resuelta.estado.folderPath;
+      // En la fase siguiente a la de los lotes (la 5), los commits ya verificados para el auditor.
+      const deLotes = [...resuelta.phases.entries()].find(([, datos]) => datos.recibos);
+      if (deLotes && phase === deLotes[0] + 1) commits = await bloqueDeCommitsConPlazo(resuelta.carpetaProyecto, resuelta.estado.folderPath, resuelta.phases);
+    }
+  } catch (error) {
+    log("warning", `No se pudo comprobar la compuerta: ${mensajeDe(error)}`);
+  }
+
+  // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su
+  // lugar sería el fallo silencioso que el manifiesto evita.
+  const columnas = carpetaProyecto ? await columnasDeGit(carpetaProyecto, carpetaTarea) : new Map<string, string>();
+  const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea, { estadoDeRepo: (repo) => columnas.get(repo.id) ?? null });
+  const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map(notaDeHuerfano);
+  for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
+  // Sin proyecto, el prompt no lleva la configuración de ninguno: se dice, para que el modelo no crea
+  // que tiene el preset de su proyecto (hallazgo 8 de la auditoría de la Etapa 3).
+  if (!carpetaProyecto) notas.unshift(notaSinProyecto(project));
+
+  // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
+  return [deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos, commits].filter(Boolean).join("\n\n");
 }
 
 // El estado de git de los repos de la tarea, para el bloque CONFIGURACIÓN DEL PROYECTO. Si tarda más de

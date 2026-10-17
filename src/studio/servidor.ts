@@ -26,7 +26,9 @@ import * as path from "path";
 
 import type { OpcionesUi, Salida } from "../cli.js";
 import { raizPaquete } from "../config.js";
+import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
+import { crearApi, entornoInitDelProceso } from "./api.js";
 
 export const HOST = "127.0.0.1";
 export const CUERPO_MAXIMO = 64 * 1024;
@@ -246,12 +248,16 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
       return;
     }
 
+    // La ruta tal como llegó, sin normalizar: el analizador WHATWG de URL convierte %2e%2e en ".." y
+    // quita segmentos antes de que nadie los valide. Aquí cada segmento se decodifica una sola vez,
+    // donde se usa, y se valida después.
     const crudo = req.url ?? "";
     if (!crudo.startsWith("/")) {
       enviar(res, 400, "Petición mal formada.");
       return;
     }
-    const url = new URL(crudo, `http://${HOST}:${puerto}`);
+    const corte = crudo.indexOf("?");
+    const url = { pathname: corte === -1 ? crudo : crudo.slice(0, corte), searchParams: new URLSearchParams(corte === -1 ? "" : crudo.slice(corte + 1)) };
     const metodo = req.method ?? "";
 
     // 3. El canje del token por la cookie. De un solo uso: la copia del historial ya no sirve.
@@ -393,7 +399,8 @@ export function abrir(url: string, plataforma: NodeJS.Platform = process.platfor
 export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNavegador: (url: string) => boolean = abrir): Promise<number> {
   let studio: Studio;
   try {
-    studio = await arrancarStudio({ puerto: opciones.puerto });
+    const api = crearApi({ modo: "vivo", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDelProceso(ejecutarComando) });
+    studio = await arrancarStudio({ puerto: opciones.puerto, api });
   } catch (error) {
     const codigo = (error as NodeJS.ErrnoException)?.code;
     salida.err(codigo === "EADDRINUSE" ? `El puerto ${opciones.puerto} ya está en uso: elige otro con --puerto, o déjalo libre.` : `No se pudo arrancar el Studio: ${error instanceof Error ? error.message : String(error)}`);

@@ -392,11 +392,12 @@ export type TareaActiva = {
 // Con puntero guardado se devuelve esa. Sin puntero —estado borrado, equipo nuevo, archivo
 // corrupto— se deduce la tarea con actividad más reciente, marcada como deducción. Así perder
 // el archivo de estado deja de ser un callejón sin salida.
+// `tareas` es para quien ya listó las tareas del proyecto (el Studio): así no se recorren dos veces.
 export function tareaActiva(
   carpetaProyecto: string,
-  phases: Map<number, PhaseFile>
+  phases: Map<number, PhaseFile>,
+  tareas: EstadoTarea[] = listarTareas(carpetaProyecto, phases)
 ): TareaActiva | null {
-  const tareas = listarTareas(carpetaProyecto, phases);
   if (tareas.length === 0) return null;
 
   const apuntada = leerPunteros()[carpetaProyecto.toLowerCase()];
