@@ -19,6 +19,7 @@ import { DOCS, IDIOMA_POR_DEFECTO, REPOS, configDir, raizPaquete, requireBasePat
 import type { Hallazgo } from "./diagnostico.js";
 import { validarSegmento } from "./paths.js";
 import { leerPromptNormalizado, separarFrontmatter } from "./phases.js";
+import { valorDePreset } from "./vocabulario.js";
 
 // ─── Shapes ─────────────────────────────────────────────────────────────────
 export const POLITICAS_COMMIT = ["agente-commitea-con-OK", "agente-propone", "auto", "ninguno"] as const;
@@ -165,9 +166,11 @@ function leerPreset(ruta: string, nombre: string, origen: OrigenPreset): Preset 
   } catch {
     // Un preset ilegible sigue existiendo: el error real sale al leer sus bloques.
   }
-  const lotes = meta.lotes === "true" ? true : meta.lotes === "false" ? false : null;
+  // Las claves en el idioma del preset: `lotes` o `batches`, `descripcion` o `description` (§8.2).
+  const delPreset = valorDePreset(meta, "lotes");
+  const lotes = delPreset === "true" ? true : delPreset === "false" ? false : null;
   const commits = (POLITICAS_COMMIT as readonly string[]).includes(meta.commits ?? "") ? (meta.commits as PoliticaCommit) : null;
-  return { nombre, descripcion: meta.descripcion || null, lotes, commits, ruta, origen };
+  return { nombre, descripcion: valorDePreset(meta, "descripcion") || null, lotes, commits, ruta, origen };
 }
 
 function presetsDe(carpeta: string, origen: OrigenPreset): Preset[] {

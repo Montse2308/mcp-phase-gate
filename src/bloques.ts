@@ -19,6 +19,7 @@ import * as fs from "fs";
 import type { Capa } from "./capas.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { leerPromptNormalizado } from "./phases.js";
+import { archivoCanonico, modoCanonico, nombreCanonicoDeRanura } from "./vocabulario.js";
 
 export type ModoBloque = "reemplazar" | "antes" | "despues";
 
@@ -31,13 +32,26 @@ export type Bloque = {
   origen: { capa: Capa; archivo: string; linea: number };
 };
 
-// Por línea, como quitarMarcadores: un marcador ocupa su propia línea entera.
-const APERTURA = /^[ \t]*<!--\s*bloque:\s*(global|fase-\d+)\/([\w-]+)\s*(?:\|\s*(reemplazar|antes|despues)\s*)?-->[ \t]*$/;
-const CIERRE = /^[ \t]*<!--\s*\/bloque\s*-->[ \t]*$/;
+// Por línea, como quitarMarcadores: un marcador ocupa su propia línea entera. En los dos idiomas (§8.2):
+// `bloque` o `block`, `fase-3` o `phase-3`, el id de la ranura o su alias inglés, y el modo en cualquiera
+// de los dos (`despues` o `after`). Todo se resuelve al id y al modo canónicos.
+const APERTURA = /^[ \t]*<!--\s*(?:bloque|block):\s*(global|(?:fase|phase)-\d+)\/([\w-]+)\s*(?:\|\s*(reemplazar|antes|despues|replace|before|after)\s*)?-->[ \t]*$/;
+const CIERRE = /^[ \t]*<!--\s*\/(?:bloque|block)\s*-->[ \t]*$/;
 // Lo que parece un marcador de bloque y no es ninguno de los dos: un identificador inventado, un
 // modo con acento, texto detrás. Dentro de un bloque llegaría tal cual al modelo, y fuera se
 // ignoraría en silencio; las dos cosas esconden un error de quien lo escribió.
-const PARECE_MARCADOR = /<!--\s*\/?\s*bloque\b/i;
+const PARECE_MARCADOR = /<!--\s*\/?\s*(?:bloque|block)\b/i;
+
+// El id canónico del bloque que abre esta línea, o null si no abre ninguno. Para quien busca un bloque
+// concreto en un archivo (eject), en cualquiera de las dos formas del marcador.
+export function idDeAperturaDeBloque(linea: string): string | null {
+  const apertura = linea.match(APERTURA);
+  return apertura ? `${archivoCanonico(apertura[1]!)}/${nombreCanonicoDeRanura(apertura[2]!)}` : null;
+}
+
+export function esCierreDeBloque(linea: string): boolean {
+  return CIERRE.test(linea);
+}
 
 function aviso(codigo: string, texto: string): Hallazgo {
   return { severidad: "aviso", codigo, texto };
@@ -66,9 +80,9 @@ export function parsearBloques(texto: string, archivo: string, capa: Capa): { bl
     if (apertura) {
       if (abierto) return malFormado(n, `un bloque se abre dentro de otro (el de la línea ${abierto.linea})`);
       abierto = {
-        archivo: apertura[1]!,
-        ranura: apertura[2]!,
-        modo: (apertura[3] as ModoBloque | undefined) ?? "reemplazar",
+        archivo: archivoCanonico(apertura[1]!),
+        ranura: nombreCanonicoDeRanura(apertura[2]!),
+        modo: modoCanonico(apertura[3]) ?? "reemplazar",
         linea: n,
         desde: i + 1,
       };
@@ -114,8 +128,9 @@ export function leerBloques(archivo: string, capa: Capa): { bloques: Bloque[]; a
 }
 
 // ─── Ranuras ────────────────────────────────────────────────────────────────
-const RANURA_ABRE = /^[ \t]*<!--[ \t]*ranura[ \t]*:[ \t]*([\w-]+)[ \t]*-->[ \t]*$/;
-const RANURA_CIERRA = /^[ \t]*<!--[ \t]*\/ranura[ \t]*-->[ \t]*$/;
+// `ranura` o `slot`, con el id o su alias inglés: el nombre que se devuelve es siempre el canónico.
+const RANURA_ABRE = /^[ \t]*<!--[ \t]*(?:ranura|slot)[ \t]*:[ \t]*([\w-]+)[ \t]*-->[ \t]*$/;
+const RANURA_CIERRA = /^[ \t]*<!--[ \t]*\/(?:ranura|slot)[ \t]*-->[ \t]*$/;
 
 type Ranura = { nombre: string; apertura: number; cierre: number }; // índices de línea de los marcadores
 
@@ -127,7 +142,7 @@ export function ranurasDe(texto: string): Ranura[] {
   for (const [i, linea] of texto.split("\n").entries()) {
     const abre = linea.match(RANURA_ABRE);
     if (abre) {
-      abierta = abierta ? null : { nombre: abre[1]!, apertura: i };
+      abierta = abierta ? null : { nombre: nombreCanonicoDeRanura(abre[1]!), apertura: i };
       continue;
     }
     if (RANURA_CIERRA.test(linea) && abierta) {

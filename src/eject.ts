@@ -15,6 +15,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { esCierreDeBloque, idDeAperturaDeBloque } from "./bloques.js";
 import { ARCHIVO_BLOQUES, capasDe, capasDeCuerpos, carpetaPromptsDeProyecto, contenidoEfectivoDeRanura, ranurasDisponibles, rutasDeCuerpos } from "./capas.js";
 import type { Capa } from "./capas.js";
 import type { Salida } from "./cli.js";
@@ -24,6 +25,7 @@ import { requireProjectFolder } from "./paths.js";
 import { PHASE_FILE_PATTERN, discoverPhases, leerPromptNormalizado, resolveCommandFile } from "./phases.js";
 import { textoGenerico } from "./prompts-mcp.js";
 import { marcaDeTiempo } from "./init.js";
+import { idCanonicoDeRanura } from "./vocabulario.js";
 
 export type OpcionesEject = { destino: string | null; dryRun: boolean; fuerza: boolean };
 
@@ -38,10 +40,15 @@ export function parsearObjetivo(texto: string): Objetivo | string {
   if (/^global-rules(\.md)?$/i.test(texto)) {
     return "global-rules entero no se puede ejectar: su forma soportada son sus ranuras (global/cero-rupturas, global/evidencia, global/extra).";
   }
-  let m = texto.match(/^fase-(\d+)$/);
+  // `phase-3` y `phase-3/tests` valen igual que `fase-3` y `fase-3/pruebas` (§8.2): se resuelven al id canónico.
+  let m = texto.match(/^(?:fase|phase)-(\d+)$/);
   if (m) return { tipo: "fase", numero: Number(m[1]) };
-  m = texto.match(/^(global|fase-\d+)\/([\w-]+)$/);
-  if (m) return { tipo: "ranura", id: texto, archivo: m[1]!, ranura: m[2]! };
+  m = texto.match(/^(global|(?:fase|phase)-\d+)\/([\w-]+)$/);
+  if (m) {
+    const id = idCanonicoDeRanura(texto);
+    const [archivo = "", ranura = ""] = id.split("/");
+    return { tipo: "ranura", id, archivo, ranura };
+  }
   m = texto.match(/^comando-f(\d+)$/);
   if (m) return { tipo: "comando", numero: Number(m[1]) };
   m = texto.match(/^preset:([a-z0-9][a-z0-9-]{0,39})$/);
@@ -125,9 +132,10 @@ function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
 // Sustituye el bloque con ese id en un archivo de bloques, o lo añade al final.
 function conBloque(actual: string, id: string, bloque: string): string {
   const lineas = actual.split("\n");
-  const abre = lineas.findIndex((l) => new RegExp(`^[ \\t]*<!--\\s*bloque:\\s*${id.replace("/", "\\/")}\\s*(?:\\|[^>]*)?-->[ \\t]*$`).test(l));
+  // El marcador puede estar en español o en inglés, con el id o con su alias.
+  const abre = lineas.findIndex((l) => idDeAperturaDeBloque(l) === id);
   if (abre !== -1) {
-    const cierra = lineas.findIndex((l, i) => i > abre && /^[ \t]*<!--\s*\/bloque\s*-->[ \t]*$/.test(l));
+    const cierra = lineas.findIndex((l, i) => i > abre && esCierreDeBloque(l));
     if (cierra !== -1) {
       lineas.splice(abre, cierra - abre + 1, ...bloque.split("\n"));
       return lineas.join("\n");
@@ -152,7 +160,7 @@ function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: 
 
   const archivo = path.join(destino.carpeta, ARCHIVO_BLOQUES);
   const actual = fs.existsSync(archivo) ? leerPromptNormalizado(archivo) : "";
-  const yaEsta = new RegExp(`<!--\\s*bloque:\\s*${objetivo.id.replace("/", "\\/")}\\s*(?:\\|[^>]*)?-->`).test(actual);
+  const yaEsta = actual.split("\n").some((l) => idDeAperturaDeBloque(l) === objetivo.id);
   siExisteSinFuerza(yaEsta, `El bloque «${objetivo.id}» de ${archivo}`, fuerza);
 
   const bloque = `<!-- bloque: ${objetivo.id} -->\n${efectivo.contenido}\n<!-- /bloque -->`;

@@ -35,6 +35,7 @@ import {
   separarFrontmatter,
 } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
+import { VOCABULARIO } from "./vocabulario.js";
 
 export type EtiquetaCapa = "fábrica" | "preset" | "reglas" | "global" | "proyecto";
 export type Capa = { orden: 1 | 2 | 2.5 | 3 | 4; etiqueta: EtiquetaCapa; ruta: string };
@@ -325,11 +326,15 @@ export function ensamblarReglasGlobales(capas: Capa[], bloques: Bloque[]): Regla
   const deFabrica = fabrica ? path.join(fabrica.ruta, GLOBAL_RULES_FILE) : null;
   if (capa?.orden !== 1 && deFabrica && fs.existsSync(deFabrica)) {
     const original = leerPromptNormalizado(deFabrica);
-    for (const titulo of SECCIONES_ESQUELETO) {
-      const deEllas = seccion(original, titulo);
-      if (deEllas && !tieneSeccion(texto, titulo)) {
+    // Cada sección, en el idioma de la fábrica; y un archivo propio que la tiene en el otro idioma ya la
+    // tiene (§8.2).
+    for (const [i, titulo] of SECCIONES_ESQUELETO.entries()) {
+      const titulos = [titulo, VOCABULARIO.en.seccionesEsqueleto[i]!];
+      const deFabricaEn = titulos.find((t) => seccion(original, t) !== null);
+      const deEllas = deFabricaEn ? seccion(original, deFabricaEn) : null;
+      if (deEllas && !titulos.some((t) => tieneSeccion(texto, t))) {
         texto = `${texto}\n\n${deEllas}`;
-        reinyectadas.push(titulo);
+        reinyectadas.push(deFabricaEn!);
       }
     }
   }

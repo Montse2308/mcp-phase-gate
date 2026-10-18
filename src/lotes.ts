@@ -21,9 +21,11 @@ import { datosDeCommit, ramaActual, resolverCommit, sonConsecutivos, tieneGit, t
 import { estaDentroReal, leerTextoAcotado, taskFolderPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
-import { GENERADO_POR, celda, escribirRecibo, etiquetaDeLote, leerRecibo, loteDelNombre, nombreDeRecibo, parsearRecibo } from "./recibos.js";
+import { GENERADO_POR, celda, escribirRecibo, etiquetaDeLote, frontmatterDeRecibo, leerRecibo, loteDelNombre, nombreDeRecibo, parsearRecibo } from "./recibos.js";
 import type { Ancla, EstadoLote, Recibo, TituloCondicional } from "./recibos.js";
 import { resolverRepo } from "./repos.js";
+import { VOCABULARIO, lotesDelFrontmatter, vocabulario } from "./vocabulario.js";
+import type { Idioma } from "./vocabulario.js";
 
 // ─── La tarea y su plan ─────────────────────────────────────────────────────
 export type FaseDeLotes = {
@@ -35,16 +37,17 @@ export type FaseDeLotes = {
   recibos: string; // su subcarpeta
   documento: string | null; // su documento, el que la cierra
   plan: string; // el documento de la fase anterior (el plan técnico)
+  idioma: Idioma; // el del proyecto: en él se escriben los recibos y el índice (§8.2)
 };
 
-export function faseEnCarpeta(carpetaTarea: string, phases: Map<number, PhaseFile>, nombreDelProyecto = ""): FaseDeLotes {
+export function faseEnCarpeta(carpetaTarea: string, phases: Map<number, PhaseFile>, nombreDelProyecto = "", idioma: Idioma = "es"): FaseDeLotes {
   const taskName = path.basename(carpetaTarea);
   const conRecibos = [...phases.entries()].sort((a, b) => a[0] - b[0]).find(([, datos]) => datos.recibos);
   if (!conRecibos) throw new Error(`Ninguna fase ${nombreDelProyecto ? `de ${nombreDelProyecto} ` : ""}declara una subcarpeta de recibos (\`recibos:\` en su frontmatter): no hay lotes que registrar.`);
   const [numero, datos] = conRecibos;
   const anterior = [...phases.entries()].filter(([n, d]) => n < numero && d.documento).sort((a, b) => b[0] - a[0])[0];
   if (!anterior) throw new Error(`La Fase ${numero} no tiene una fase anterior con documento: no hay plan del que leer los lotes.`);
-  return { taskName, carpetaTarea, phases, numero, titulo: datos.title, recibos: datos.recibos!, documento: datos.documento ?? null, plan: anterior[1].documento! };
+  return { taskName, carpetaTarea, phases, numero, titulo: datos.title, recibos: datos.recibos!, documento: datos.documento ?? null, plan: anterior[1].documento!, idioma };
 }
 
 export function faseDeLotes(carpetaProyecto: string, taskName: string): FaseDeLotes {
@@ -64,7 +67,7 @@ function textoDelPlan(fase: FaseDeLotes): string {
 // H3: el número de lotes sale SOLO del frontmatter del plan, nunca de su tabla.
 export function lotesDelPlan(fase: FaseDeLotes): number {
   const texto = textoDelPlan(fase);
-  const valor = separarFrontmatter(texto).meta.lotes;
+  const valor = lotesDelFrontmatter(separarFrontmatter(texto).meta);
   if (valor === undefined || valor.trim() === "") {
     // La tabla no decide el número (H3), pero sí sirve para proponérselo a la persona.
     const filas = leerTablaDeLotes(texto)?.size ?? 0;
@@ -78,9 +81,9 @@ export function lotesDelPlan(fase: FaseDeLotes): number {
   return n;
 }
 
-// La tabla de lotes del plan (§3.5.1): la que empieza por `| Lote | Repo |`, y sus filas `L\d\d`. Solo
-// informa (el objetivo de un lote que se descarta, las columnas de get_batch_status): el número de lotes
-// nunca sale de aquí. null si no hay tabla o no se entiende.
+// La tabla de lotes del plan (§3.5.1): la que empieza por `| Lote | Repo |` (o `| Batch | Repo |`), y sus
+// filas `L\d\d`. Solo informa (el objetivo de un lote que se descarta, las columnas de get_batch_status):
+// el número de lotes nunca sale de aquí. null si no hay tabla o no se entiende.
 export type FilaDelPlan = { repo: string; objetivo: string; commitPropuesto: string };
 
 export function leerTablaDeLotes(texto: string): Map<number, FilaDelPlan> | null {
@@ -88,11 +91,13 @@ export function leerTablaDeLotes(texto: string): Map<number, FilaDelPlan> | null
   const partir = (linea: string): string[] =>
     linea.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
 
-  const inicio = lineas.findIndex((linea) => /^\|\s*Lote\s*\|\s*Repo\s*\|/i.test(linea.trim()));
+  const inicio = lineas.findIndex((linea) => /^\|\s*(?:Lote|Batch)\s*\|\s*Repo\s*\|/i.test(linea.trim()));
   if (inicio === -1) return null;
   const cabecera = partir(lineas[inicio]!).map((c) => c.normalize("NFC").toLowerCase());
-  const columna = (nombre: string) => cabecera.indexOf(nombre);
-  const [cRepo, cObjetivo, cCommit] = [columna("repo"), columna("objetivo"), columna("commit propuesto")];
+  // La columna en el idioma de la tabla, o en el otro.
+  const columna = (de: "columnaObjetivo" | "columnaCommit" | null): number =>
+    de === null ? cabecera.indexOf("repo") : Math.max(cabecera.indexOf(VOCABULARIO.es.plan[de]), cabecera.indexOf(VOCABULARIO.en.plan[de]));
+  const [cRepo, cObjetivo, cCommit] = [columna(null), columna("columnaObjetivo"), columna("columnaCommit")];
   if (cObjetivo === -1) return null;
 
   const filas = new Map<number, FilaDelPlan>();
@@ -169,12 +174,12 @@ function enumerar(elementos: string[]): string {
   return `${elementos.slice(0, -1).join(", ")} y ${elementos[elementos.length - 1]}`;
 }
 
-function anclaEnIndice(recibo: Recibo): string {
+function anclaEnIndice(recibo: Recibo, idioma: Idioma): string {
   if (recibo.estado === "descartado") return "—";
   const ancla = recibo.ancla;
   if (ancla.tipo === "commit") return `commit \`${ancla.corto}\``;
   if (ancla.tipo === "sha256") return `sha256 \`${ancla.sha256.slice(0, 8)}…\``;
-  return ancla.tipo === "nota" ? "nota" : "pendiente";
+  return ancla.tipo === "nota" ? vocabulario(idioma).indice.anclaNota : vocabulario(idioma).indice.anclaPendiente;
 }
 
 function primeraLinea(texto: string): string {
@@ -185,58 +190,70 @@ function primeraLinea(texto: string): string {
 // más tarde, no la hora del ensamblado.
 export type ReciboConNombre = { recibo: Recibo; nombre: string };
 
-export function textoDelIndice(fase: FaseDeLotes, total: number, conNombre: Map<number, ReciboConNombre>): string {
-  const lotes = [...Array(total).keys()].map((i) => i + 1);
+// En el idioma del proyecto (§8.2): claves del frontmatter, encabezados, tablas y valores.
+export function textoDelIndice(fase: FaseDeLotes, total: number, conNombre: Map<number, ReciboConNombre>, idioma: Idioma = fase.idioma): string {
+  const v = vocabulario(idioma);
+  const i = v.indice;
+  const lotes = [...Array(total).keys()].map((n) => n + 1);
   const recibos = new Map([...conNombre].map(([n, { recibo }]) => [n, recibo]));
   const presentes = lotes.map((n) => recibos.get(n)).filter((r): r is Recibo => r !== undefined);
   const conRepo = presentes.some((r) => r.repo);
 
   const ramas = new Set(presentes.filter((r) => r.ancla.tipo === "commit").map((r) => r.rama ?? ""));
-  const rama = ramas.size === 0 ? "—" : ramas.size === 1 ? [...ramas][0] || "—" : "varias (ver lotes)";
+  const rama = ramas.size === 0 ? "—" : ramas.size === 1 ? [...ramas][0] || "—" : i.variasRamas;
   const ultimo = [...presentes].sort((a, b) => (a.registrado || a.fecha).localeCompare(b.registrado || b.fecha)).pop();
 
   const espera = presentes.flatMap((r) => r.esperaAlUsuario.map((fila) => ({ lote: r.lote, ...fila })));
   const abiertos = presentes.filter((r) => r.estado === "con pendientes" || r.estado === "fallido");
   const descartados = presentes.filter((r) => r.estado === "descartado").length;
   const limpio = presentes.every((r) => r.estado === "verificado" || r.estado === "descartado") && espera.length === 0;
-  let estado = limpio ? "Fase cerrada sin pendientes" : "Fase cerrada con pendientes (ver abajo)";
-  if (descartados) estado += ` · ${plural(descartados, "lote descartado", "lotes descartados")}`;
+  let estado = limpio ? i.cerradaSinPendientes : i.cerradaConPendientes;
+  if (descartados) estado += ` · ${i.descartados(descartados)}`;
 
-  const cabecera = conRepo ? "| Lote | Repo | Objetivo | Estado | Ancla | Recibo |\n|---|---|---|---|---|---|" : "| Lote | Objetivo | Estado | Ancla | Recibo |\n|---|---|---|---|---|";
+  const columnas = conRepo ? i.tablaLotes : i.tablaLotesSinRepo;
+  const cabecera = `| ${columnas.join(" | ")} |\n|${columnas.map(() => "---").join("|")}|`;
   const filas = lotes.map((n) => {
     const r = recibos.get(n);
     const celdas = r
-      ? [etiquetaDeLote(n), ...(conRepo ? [r.repo ?? "—"] : []), celda(r.titulo), r.estado, anclaEnIndice(r), `\`${fase.recibos}/${conNombre.get(n)!.nombre}\``]
-      : [etiquetaDeLote(n), ...(conRepo ? ["—"] : []), "—", "sin recibo", "—", "—"];
+      ? [etiquetaDeLote(n), ...(conRepo ? [r.repo ?? "—"] : []), celda(r.titulo), v.recibo.estados[r.estado], anclaEnIndice(r, idioma), `\`${fase.recibos}/${conNombre.get(n)!.nombre}\``]
+      : [etiquetaDeLote(n), ...(conRepo ? ["—"] : []), "—", i.sinRecibo, "—", "—"];
     return `| ${celdas.join(" | ")} |`;
   });
 
+  const k = v.recibo.claves;
   const partes = [
-    `---\nlotes: ${total}\ngenerado_por: ${GENERADO_POR}\n---`,
+    `---\n${k.lotes}: ${total}\n${k.generado_por}: ${GENERADO_POR}\n---`,
     `# ${fase.titulo} — ${fase.taskName}`,
-    `- **Plan:** \`${fase.plan}\` · **Rama:** ${rama} · **Cierre:** ${ultimo?.fecha || "—"}\n- **Estado:** ${estado}`,
-    `## Lotes\n${cabecera}\n${filas.join("\n")}`,
+    `- **${i.plan}:** \`${fase.plan}\` · **${i.rama}:** ${rama} · **${i.cierre}:** ${ultimo?.fecha || "—"}\n- **${i.estado}:** ${estado}`,
+    `## ${i.lotes}\n${cabecera}\n${filas.join("\n")}`,
   ];
   if (espera.length) {
+    const columnasEspera = i.tablaEspera;
     partes.push(
-      `## Espera al usuario\n| Lote | Prueba | Resultado esperado |\n|---|---|---|\n${espera.map((f) => `| ${etiquetaDeLote(f.lote)} | ${celda(f.prueba)} | ${celda(f.esperado)} |`).join("\n")}`
+      `## ${i.esperaAlUsuario}\n| ${columnasEspera.join(" | ")} |\n|---|---|---|\n${espera.map((f) => `| ${etiquetaDeLote(f.lote)} | ${celda(f.prueba)} | ${celda(f.esperado)} |`).join("\n")}`
     );
   }
   if (abiertos.length) {
     partes.push(
-      `## Validaciones pendientes\n${abiertos.map((r) => `- ${etiquetaDeLote(r.lote)} (${r.estado}): ${primeraLinea(r.verificacion) || "sin verificación registrada"}.`).join("\n")}`
+      `## ${v.encabezados.validacionesPendientes}\n${abiertos.map((r) => `- ${etiquetaDeLote(r.lote)} (${v.recibo.estados[r.estado]}): ${primeraLinea(r.verificacion) || i.sinVerificacion}.`).join("\n")}`
     );
   }
   return `${partes.join("\n\n")}\n`;
 }
 
 // El índice de una tarea tal como lo escribiría hoy el servidor, leyendo sus recibos.
-export function ensamblarIndice(carpetaTarea: string, fases: Map<number, PhaseFile>): string {
-  const fase = faseEnCarpeta(carpetaTarea, fases);
+export function ensamblarIndice(carpetaTarea: string, fases: Map<number, PhaseFile>, idioma: Idioma = "es"): string {
+  const fase = faseEnCarpeta(carpetaTarea, fases, "", idioma);
   const total = lotesDelPlan(fase);
   const recibos = new Map<number, ReciboConNombre>();
   for (const [lote, deEste] of recibosDeLaTarea(fase)) if (lote <= total && deEste.length === 1) recibos.set(lote, deEste[0]!);
-  return textoDelIndice(fase, total, recibos);
+  return textoDelIndice(fase, total, recibos, idioma);
+}
+
+// Un documento de fase que generó el servidor (el índice, o el recibo de un solo lote): `generado_por` o
+// `generated_by`.
+export function generadoPorElServidor(texto: string): boolean {
+  return frontmatterDeRecibo(texto).meta.generado_por === GENERADO_POR;
 }
 
 // ─── Registrar un lote ──────────────────────────────────────────────────────
@@ -516,7 +533,7 @@ async function prepararLote(
   if (estado === "fallido" || estado === "descartado") {
     if (entrada.commit !== undefined) throw new Error(`Un lote ${estado} no se commitea: registra lo que pasó con \`verification_note\`, sin \`commit\`.`);
     if (entrada.artifact_path !== undefined) throw new Error(`Un lote ${estado} no se sella: registra lo que pasó con \`verification_note\`.`);
-    ancla = { tipo: "nota", texto: entrada.verification_note ?? `no aplica (lote ${estado})` };
+    ancla = { tipo: "nota", texto: entrada.verification_note ?? vocabulario(fase.idioma).recibo.notaPorDefecto(vocabulario(fase.idioma).recibo.estados[estado]) };
   } else if (conGit) {
     if (entrada.artifact_path !== undefined || entrada.verification_note !== undefined) {
       throw new Error(
@@ -591,12 +608,12 @@ async function prepararLote(
 }
 
 // El recibo de un lote que se cierra sin hacerse (cerrar_fase), con el objetivo que le dio el plan.
-function reciboDescartado(lote: number, total: number, motivo: string, fila: FilaDelPlan | undefined, ids: string[], momento: Date): Recibo {
+function reciboDescartado(lote: number, total: number, motivo: string, fila: FilaDelPlan | undefined, ids: string[], momento: Date, idioma: Idioma): Recibo {
   const repo = fila && ids.includes(fila.repo) ? fila.repo : null;
   return {
     lote,
     de: total,
-    titulo: fila?.objetivo || `Lote ${lote}`,
+    titulo: fila?.objetivo || vocabulario(idioma).recibo.tituloPorDefecto(lote),
     repo,
     rama: null,
     estado: "descartado",
@@ -604,7 +621,7 @@ function reciboDescartado(lote: number, total: number, motivo: string, fila: Fil
     fecha: fechaLocal(momento),
     registrado: momento.toISOString(),
     origen: "servidor",
-    queSeHizo: "No se hizo: se descartó al cerrar la fase.",
+    queSeHizo: vocabulario(idioma).recibo.descartadoAlCerrar,
     archivos: [],
     verificacion: "",
     esperaAlUsuario: [],
@@ -693,7 +710,7 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
       const tabla = leerTablaDeLotes(textoDelPlan(fase)) ?? new Map<number, FilaDelPlan>();
       const ids = reposDeLaTarea(configuracionDe(carpetaProyecto, fase.carpetaTarea)).map((repo) => repo.id);
       for (const lote of faltan) {
-        const recibo = reciboDescartado(lote, total, entrada.motivo_descarte!, tabla.get(lote), ids, ahora());
+        const recibo = reciboDescartado(lote, total, entrada.motivo_descarte!, tabla.get(lote), ids, ahora(), fase.idioma);
         descartes.push(recibo);
         finales.set(lote, recibo);
         nombres.set(lote, nombreDeRecibo(lote, recibo.titulo));
@@ -730,14 +747,14 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   let archivoNuevo = descartes.length > 0;
   if (preparado) {
     const ruta = path.join(carpeta, preparado.nombre);
-    escribirAtomico(ruta, escribirRecibo(preparado.recibo));
+    escribirAtomico(ruta, escribirRecibo(preparado.recibo, { idioma: fase.idioma }));
     // Si cambió el título, el archivo cambia de nombre. En Windows y macOS un cambio solo de mayúsculas es
     // el mismo archivo, que el renombrado ya reemplazó: borrarlo borraría el nuevo.
     const viejo = preparado.existente;
     if (viejo && viejo.nombre !== preparado.nombre && fs.existsSync(viejo.ruta) && !mismoArchivo(viejo.ruta, ruta)) borrarArchivo(viejo.ruta);
     archivoNuevo ||= !viejo || viejo.nombre !== preparado.nombre;
   }
-  for (const recibo of descartes) escribirAtomico(rutaDe(recibo.lote, recibo.titulo), escribirRecibo(recibo));
+  for (const recibo of descartes) escribirAtomico(rutaDe(recibo.lote, recibo.titulo), escribirRecibo(recibo, { idioma: fase.idioma }));
 
   // ─── Cierre: todos los lotes con ancla, y ninguno fallido; o cerrar_fase ───
   let documentoDeFase: string | null = null;
@@ -746,7 +763,7 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
     comprobarDentro(fase, destino);
     if (total === 1) {
       // H2: con un solo lote, su recibo se mueve y pasa a ser el documento de la fase.
-      escribirAtomico(destino, escribirRecibo(finales.get(1)!, { comoDocumento: true }));
+      escribirAtomico(destino, escribirRecibo(finales.get(1)!, { comoDocumento: true, idioma: fase.idioma }));
       borrarArchivo(path.join(carpeta, nombres.get(1)!));
       try {
         fs.rmdirSync(carpeta); // solo si quedó vacía
@@ -889,8 +906,8 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
   // Solo el ancla cambia; "Verificación del commit" dice la comparación del commit nuevo y guarda el
   // historial de reanclajes, con una línea más.
   const momento = ahora();
-  const linea = `Reanclado el ${fechaLocal(momento)}: \`${etiquetaDeAncla(viejo)}\` → \`${etiquetaDeAncla(nueva)}\``;
-  const historial = (existente.recibo.verificacionDelCommit ?? "").split("\n").filter((l) => l.startsWith("Reanclado el "));
+  const linea = `${vocabulario(fase.idioma).recibo.reanclado}${fechaLocal(momento)}: \`${etiquetaDeAncla(viejo)}\` → \`${etiquetaDeAncla(nueva)}\``;
+  const historial = (existente.recibo.verificacionDelCommit ?? "").split("\n").filter((l) => l.startsWith(VOCABULARIO.es.recibo.reanclado) || l.startsWith(VOCABULARIO.en.recibo.reanclado));
   const recibo: Recibo = {
     ...existente.recibo,
     repo,
@@ -906,11 +923,11 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
   contexto.antesDeEscribir?.();
   const indiceRehecho = await conCandado(fase.carpetaTarea, () => {
     if (fs.statSync(existente.ruta, { throwIfNoEntry: false })?.mtimeMs !== existente.mtimeMs) throw new Error(OTRO_PROCESO);
-    escribirAtomico(existente.ruta, escribirRecibo(recibo, { comoDocumento: esElDocumento }));
+    escribirAtomico(existente.ruta, escribirRecibo(recibo, { comoDocumento: esElDocumento, idioma: fase.idioma }));
 
     // Con la fase cerrada y varios lotes, el índice que generó el servidor se rehace con el ancla nueva. Uno
     // escrito a mano (una tarea de la 2.x) no se toca: doctor lo marcará como desincronizado.
-    if (!esElDocumento && hayDocumento && total > 1 && separarFrontmatter(leerTextoAcotado(documento)).meta.generado_por === GENERADO_POR) {
+    if (!esElDocumento && hayDocumento && total > 1 && generadoPorElServidor(leerTextoAcotado(documento))) {
       const conNombre = new Map<number, ReciboConNombre>();
       for (const [lote, recibos] of recibosDeLaTarea(fase)) if (lote <= total && recibos.length === 1) conNombre.set(lote, recibos[0]!);
       comprobarDentro(fase, documento);

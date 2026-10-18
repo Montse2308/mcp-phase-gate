@@ -433,7 +433,7 @@ function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string,
 //   fase-cerrada  el `registrado` más reciente de los recibos, si la fase tiene su documento.
 // Una escritura con confirmación (force o elicitation) no deja rastro propio en el disco —un recibo de la
 // escotilla solo queda con `origen: manual`, igual que uno de la 2.x—, así que no aparece.
-const REANCLADO = /^Reanclado el (\d{4}-\d{2}-\d{2}): (.*)$/;
+const REANCLADO = /^(?:Reanclado el|Re-anchored on) (\d{4}-\d{2}-\d{2}): (.*)$/;
 
 async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespuesta> {
   const carpeta = proyectoDe(crudoP);

@@ -19,7 +19,8 @@ import { log } from "./log.js";
 import { claveDeNombre, findProjectFolder, leerTextoAcotado, requireProjectFolder, tasksRootPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
-import { cabeceraDeRecibo, loteDelNombre } from "./recibos.js";
+import { cabeceraDeRecibo, frontmatterDeRecibo, loteDelNombre } from "./recibos.js";
+import { ENCABEZADOS_DE_PENDIENTES, FORMAS_DE_VACIO, estadoCanonico, lotesDelFrontmatter } from "./vocabulario.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
 // Forma del archivo: { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" }
@@ -119,7 +120,7 @@ export function progresoDeLotes(folderPath: string, plan: string | null, recibos
   let total: number | null = null;
   if (plan) {
     try {
-      const valor = (separarFrontmatter(leerTextoAcotado(path.join(folderPath, plan))).meta.lotes ?? "").trim();
+      const valor = (lotesDelFrontmatter(separarFrontmatter(leerTextoAcotado(path.join(folderPath, plan))).meta) ?? "").trim();
       if (/^\d+$/.test(valor) && Number(valor) >= 1 && Number(valor) <= 99) total = Number(valor);
     } catch {
       total = null;
@@ -568,19 +569,11 @@ export function bloqueDeRecibos(
 // compuerta de algo escrito por el modelo. Esto no bloquea ni cambia la fase: solo señala.
 const ENCABEZADO_PENDIENTES = "## Validaciones pendientes";
 
-// Lo que se escribe por costumbre en una sección que no tiene nada: no es un pendiente.
-const SECCION_VACIA = new Set([
-  "",
-  "ninguna",
-  "ninguno",
-  "ninguna pendiente",
-  "nada",
-  "sin pendientes",
-  "no hay pendientes",
-  "fase cerrada sin pendientes",
-  "n/a",
-  "no aplica",
-]);
+// Lo que se escribe por costumbre en una sección que no tiene nada, en los dos idiomas: no es un pendiente.
+const SECCION_VACIA = FORMAS_DE_VACIO;
+
+// "## Validaciones pendientes" o "## Pending validations", sin distinguir mayúsculas (§8.2).
+const ENCABEZADOS_BUSCADOS = new Set(ENCABEZADOS_DE_PENDIENTES.map((titulo) => `## ${titulo}`.normalize("NFC").toLowerCase()));
 
 // La sección reducida a su texto: sin viñetas ni numeración, sin énfasis de Markdown (_ * `),
 // sin puntos suspensivos ni punto final, en una línea y en minúsculas. Así "- Ninguna.",
@@ -604,9 +597,9 @@ const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
 // existe y tiene algo que no sea una forma de decir "ninguna".
 export function tieneValidacionesPendientes(texto: string): boolean {
   const lineas = separarFrontmatter(texto).cuerpo.split("\n");
-  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale.
-  const buscado = ENCABEZADO_PENDIENTES.toLowerCase();
-  const inicio = lineas.findIndex((linea) => linea.trimEnd().normalize("NFC").toLowerCase() === buscado);
+  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale, y en
+  // inglés, "## Pending validations".
+  const inicio = lineas.findIndex((linea) => ENCABEZADOS_BUSCADOS.has(linea.trimEnd().normalize("NFC").toLowerCase()));
   if (inicio === -1) return false;
 
   const resto = lineas.slice(inicio + 1);
@@ -664,8 +657,8 @@ export function avisoDePendientes(
       const ruta = path.join(estado.folderPath, ...relativo.split("/"));
       if (!fs.existsSync(ruta)) continue;
       const texto = leerSinFallar(ruta);
-      const valor = texto === null ? "" : (separarFrontmatter(texto).meta.estado ?? "").trim().toLowerCase();
-      if (ESTADOS_PENDIENTES.has(valor)) lineas.push(`- \`${relativo}\`: estado \`${valor}\`.`);
+      const valor = texto === null ? "" : (frontmatterDeRecibo(texto).meta.estado ?? "").trim().toLowerCase();
+      if (ESTADOS_PENDIENTES.has(estadoCanonico(valor) ?? "")) lineas.push(`- \`${relativo}\`: estado \`${valor}\`.`);
     }
   }
 

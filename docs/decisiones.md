@@ -12,6 +12,51 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-18 — Los textos de los que depende el código viven en un vocabulario bilingüe; se escribe en el idioma del proyecto y se lee en los dos
+
+**Decisión.** `src/vocabulario.ts` es el único lugar con los textos que el código busca o escribe con una
+forma fija, en español y en inglés: los encabezados (`## Validaciones pendientes` / `## Pending validations`,
+`BASE DE CADA DECISIÓN` / `BASIS OF EACH DECISION`…), las claves y los valores del frontmatter de recibos,
+índices y planes (`lote`/`batch`, `estado: verificado`/`status: verified`, `lotes: N`/`batches: N`), las
+secciones de un recibo, la cabecera de la tabla de lotes (`| Lote | Repo |` / `| Batch | Repo |`), las
+frases que cuentan como sección vacía, las claves del frontmatter de los prompts (`documento`/`document`,
+`documento_inicial`/`initial_document`, `recibos`/`receipts`) y de los presets (`descripcion`/`description`,
+`lotes`/`batches`), las palabras de los marcadores (`ranura`/`slot`, `bloque`/`block`) y sus modos
+(`despues`/`after`), y la carpeta de los comandos (`comandos/`/`commands/`).
+
+- **Se escribe en el idioma del proyecto:** `escribirRecibo` y `textoDelIndice` reciben el idioma (en este
+  lote, siempre `es`; la resolución por proyecto llega en el lote siguiente).
+- **Se lee en los dos:** `parsearRecibo`, `cabeceraDeRecibo` y `frontmatterDeRecibo` devuelven las claves y
+  los valores **canónicos** (los de siempre, en español), así que el resto del código no cambia: un recibo en
+  inglés y su gemelo en español dan el mismo objeto, y de uno se escribe el otro sin perder nada (probado con
+  los cuatro tipos de ancla por los cuatro estados). Igual el plan (`batches: N` y su tabla), los pendientes
+  (`## Pending validations`, "None."), los bloques, las ranuras, el frontmatter de prompts y presets, los
+  comandos y la línea "Re-anchored on" del historial de reanclajes (también en la Bitácora del Studio).
+- **Los identificadores no se traducen:** `L01…L99`, los ids de ranura, los SHA, las rutas, las tools y los
+  presets. Cada ranura tiene un **alias inglés** (`phase-3/tests` → `fase-3/pruebas`): el parser de bloques,
+  el de ranuras y `eject` lo aceptan y lo resuelven al id canónico, así que la procedencia y los avisos
+  hablan siempre del mismo id.
+- **Test de contrato** (`test/vocabulario.test.ts`): cada juego de `prompts/<idioma>/` tiene las secciones
+  esqueleto, los nombres de documento, las claves del frontmatter, la cabecera de la tabla de lotes y los
+  comandos de su idioma, y las mismas 27 ranuras que el español.
+
+**Por qué.** Traducir un prompt sin esto habría roto en silencio la detección de pendientes (el servidor
+buscaba `## Validaciones pendientes`) o la lectura de recibos (`estado:`), y nada lo habría avisado.
+
+**Qué se descartó.**
+
+- Traducir las claves al leer con un diccionario por archivo: con un vocabulario único, el test de contrato
+  sabe qué buscar en cada prompt.
+- Guardar los recibos siempre en español aunque el proyecto sea en inglés: el recibo lo lee una persona.
+- Que el alias de una ranura fuera solo de los bloques: en un prompt en inglés, `<!-- slot: tests -->` es
+  lo que espera leer quien lo abre.
+
+**Riesgo aceptado.** Las secciones de un recibo cuentan como vacías con "nada/ninguna/ninguno/n/a/no
+aplica" y "none/nothing/not applicable", no con "sin pendientes": así un recibo que escribió el servidor
+sigue dando los mismos bytes al leerlo y escribirlo otra vez.
+
+---
+
 ## 2026-10-17 — El export estático publica la demo y nunca datos reales sin confirmación
 
 **Decisión.** `mcp-phase-gate ui --export-static <dir>` (`src/studio/exportar.ts`) no arranca ningún

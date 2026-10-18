@@ -8,18 +8,22 @@ import { capasDesdeRutas, ensamblarConCapas, ensamblarFase } from "./capas.js";
 import { promptsLayers } from "./config.js";
 import { log } from "./log.js";
 import { claveDeNombre, validarSegmento } from "./paths.js";
+import { CARPETAS_DE_COMANDOS, valorDePrompt } from "./vocabulario.js";
 
 // Las reglas globales se anteponen a cada fase.
 export const GLOBAL_RULES_FILE = "global-rules.md";
 
-// Comando de cada fase (`/fN`): `comandos/fN.md` dentro de una capa de prompts. Gana la capa más
-// alta que lo tenga, igual que las fases; sin ninguno, la fase usa un texto genérico.
+// Comando de cada fase (`/fN`): `comandos/fN.md` dentro de una capa de prompts (`commands/fN.md` en una
+// capa en inglés; dentro de una misma capa gana `comandos/`). Gana la capa más alta que lo tenga, igual
+// que las fases; sin ninguno, la fase usa un texto genérico.
 export const CARPETA_COMANDOS = "comandos";
 
 export function resolveCommandFile(numero: number, capas: string[] = promptsLayers()): string | null {
   for (const base of [...capas].reverse()) {
-    const ruta = path.join(base, CARPETA_COMANDOS, `f${numero}.md`);
-    if (tipoDe(ruta) === "archivo") return ruta;
+    for (const carpeta of CARPETAS_DE_COMANDOS) {
+      const ruta = path.join(base, carpeta, `f${numero}.md`);
+      if (tipoDe(ruta) === "archivo") return ruta;
+    }
   }
   return null;
 }
@@ -73,7 +77,8 @@ function aLF(texto: string): string {
 //   <!-- /ranura -->
 // Solo cuenta un marcador que ocupa su propia línea, y la línea se quita entera. Un marcador con
 // texto detrás, o dos en la misma línea, no se toca: lo avisa loadPhasePrompt.
-export const MARCADOR_RANURA = /^[ \t]*<!--[ \t]*\/?ranura(?:[ \t]*:[ \t]*[\w-]+)?[ \t]*-->[ \t]*\r?$\n?/gm;
+// En inglés el marcador es `<!-- slot: tests -->` (§8.2).
+export const MARCADOR_RANURA = /^[ \t]*<!--[ \t]*\/?(?:ranura|slot)(?:[ \t]*:[ \t]*[\w-]+)?[ \t]*-->[ \t]*\r?$\n?/gm;
 
 export function quitarMarcadores(texto: string): string {
   return texto.replace(MARCADOR_RANURA, "");
@@ -81,7 +86,7 @@ export function quitarMarcadores(texto: string): string {
 
 // Lo que parece un marcador de ranura y sobrevivió a quitarMarcadores: mal escrito (con acento,
 // en mayúsculas, con texto detrás). Llegaría tal cual al modelo, así que queda en el log.
-const RESTO_DE_MARCADOR = /<!--[^\n]*?ranura/i;
+const RESTO_DE_MARCADOR = /<!--[^\n]*?(?:ranura|\bslot\b)/i;
 
 export function entregable(texto: string, archivo: string): string {
   const limpio = quitarMarcadores(texto);
@@ -197,9 +202,10 @@ export function discoverPhases(capas: string[] = promptsLayers()): Map<number, P
       deEstaCapa.set(phaseNumber, {
         file: fullPath,
         title: readPhaseTitle(cuerpo, file),
-        documento: meta.documento || undefined,
-        documentoInicial: meta.documento_inicial || undefined,
-        recibos: leerRecibos(meta.recibos, fullPath),
+        // En el idioma del prompt: `documento` o `document`, `recibos` o `receipts` (§8.2).
+        documento: valorDePrompt(meta, "documento"),
+        documentoInicial: valorDePrompt(meta, "documentoInicial"),
+        recibos: leerRecibos(valorDePrompt(meta, "recibos"), fullPath),
       });
     }
 
