@@ -18,6 +18,7 @@ import * as fs from "fs";
 
 import type { Capa } from "./capas.js";
 import type { Hallazgo } from "./diagnostico.js";
+import { mensaje } from "./i18n/mensajes.js";
 import { leerPromptNormalizado } from "./phases.js";
 import { archivoCanonico, modoCanonico, nombreCanonicoDeRanura } from "./vocabulario.js";
 
@@ -67,7 +68,7 @@ export function parsearBloques(texto: string, archivo: string, capa: Capa): { bl
   const vistos = new Set<string>();
   const malFormado = (linea: number, motivo: string): { bloques: Bloque[]; avisos: Hallazgo[] } => ({
     bloques: [],
-    avisos: [aviso("BLOQUE-MAL-FORMADO", `${archivo}:${linea}: ${motivo}. Se ignora el archivo entero.`)],
+    avisos: [aviso("BLOQUE-MAL-FORMADO", mensaje("BLOQUE-MAL-FORMADO", { archivo, linea, motivo }))],
   });
 
   let abierto: { archivo: string; ranura: string; modo: ModoBloque; linea: number; desde: number } | null = null;
@@ -78,7 +79,7 @@ export function parsearBloques(texto: string, archivo: string, capa: Capa): { bl
     const cierre = CIERRE.test(linea);
 
     if (apertura) {
-      if (abierto) return malFormado(n, `un bloque se abre dentro de otro (el de la línea ${abierto.linea})`);
+      if (abierto) return malFormado(n, mensaje("BLOQUE-TXT-ANIDADO", { linea: abierto.linea }));
       abierto = {
         archivo: archivoCanonico(apertura[1]!),
         ranura: nombreCanonicoDeRanura(apertura[2]!),
@@ -90,10 +91,10 @@ export function parsearBloques(texto: string, archivo: string, capa: Capa): { bl
     }
 
     if (cierre) {
-      if (!abierto) return malFormado(n, "cierre de bloque sin apertura");
+      if (!abierto) return malFormado(n, mensaje("BLOQUE-TXT-CIERRE-SUELTO"));
       const id = `${abierto.archivo}/${abierto.ranura}`;
       if (vistos.has(id)) {
-        avisos.push(aviso("BLOQUE-DUPLICADO", `${archivo}:${abierto.linea}: el bloque «${id}» ya aparece antes en el archivo; vale el primero.`));
+        avisos.push(aviso("BLOQUE-DUPLICADO", mensaje("BLOQUE-DUPLICADO", { archivo, linea: abierto.linea, id })));
       } else {
         vistos.add(id);
         bloques.push({
@@ -109,10 +110,10 @@ export function parsearBloques(texto: string, archivo: string, capa: Capa): { bl
       continue;
     }
 
-    if (PARECE_MARCADOR.test(linea)) return malFormado(n, "marcador de bloque mal escrito");
+    if (PARECE_MARCADOR.test(linea)) return malFormado(n, mensaje("BLOQUE-TXT-MARCADOR-MAL-ESCRITO"));
   }
 
-  if (abierto) return malFormado(abierto.linea, "bloque sin cerrar");
+  if (abierto) return malFormado(abierto.linea, mensaje("BLOQUE-TXT-SIN-CERRAR"));
   return { bloques, avisos };
 }
 
@@ -122,8 +123,8 @@ export function leerBloques(archivo: string, capa: Capa): { bloques: Bloque[]; a
   try {
     return parsearBloques(leerPromptNormalizado(archivo), archivo, capa);
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : String(error);
-    return { bloques: [], avisos: [aviso("BLOQUE-MAL-FORMADO", `${archivo}: no se pudo leer (${mensaje}).`)] };
+    const detalle = error instanceof Error ? error.message : String(error);
+    return { bloques: [], avisos: [aviso("BLOQUE-MAL-FORMADO", mensaje("BLOQUE-MAL-FORMADO", { archivo, error: detalle }))] };
   }
 }
 

@@ -84,8 +84,22 @@ function mensajeDe(error: unknown): string {
 
 // El estado de un error que no es un ErrorHttp, por su mensaje: así las funciones de dominio no saben
 // nada de HTTP.
+// Desde la Etapa 6 los errores llevan su código (ErrorConCodigo) y su texto puede estar en inglés: se mira
+// primero el código. El texto queda de respaldo para un error que no lo tenga.
+const POR_CODIGO: [RegExp, number][] = [
+  [/^(?:RUTA-PROYECTO-NO-EXISTE|RECURSO-[A-Z-]*NO-EXISTE|RECURSO-SIN-SUBCARPETA-DE-RECIBOS|EJECT-[A-Z-]*NO-EXISTE|LOTE-TAREA-NO-EXISTE)$/, 404],
+  [/^(?:RUTA-FUERA-[A-Z-]+|RUTA-GIT-POR-ENLACE|RUTA-ENTRA-EN-GIT|REPOS-PATH-FUERA|REPOS-PATH-GIT-POR-ENLACE|REPOS-PATH-EN-GIT|RECURSO-FUERA-DE-TAREA)$/, 403],
+  [/^(?:RUTA-SEGMENTO-INVALIDO|RUTA-NOMBRE-CON-PUNTO|RECURSO-CON-PUNTO)$/, 400],
+  [/^(?:RUTA-DEMASIADO-GRANDE|RUTA-CRECIO|RUTA-BINARIO|RUTA-ES-CARPETA|RUTA-NO-ES-ARCHIVO-NORMAL|MANIFIESTO-TXT-[A-Z-]+|MAQUINA-TXT-[A-Z-]+)$/, 422],
+];
+
 function estadoDe(error: unknown): number {
   if (error instanceof ErrorHttp) return error.estado;
+  const codigo = (error as { codigo?: unknown })?.codigo;
+  if (typeof codigo === "string") {
+    const encontrado = POR_CODIGO.find(([patron]) => patron.test(codigo));
+    if (encontrado) return encontrado[1];
+  }
   const texto = error instanceof Error ? error.message : String(error);
   if (/^No existe/.test(texto) || /no existe en ninguna capa/.test(texto)) return 404;
   if (/^Acceso denegado/.test(texto)) return 403;

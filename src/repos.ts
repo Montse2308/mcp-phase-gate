@@ -7,29 +7,25 @@
 import * as path from "path";
 
 import { git, gitSincrono } from "./git.js";
+import { fallo, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import { manifiestoDe, resolverRepos } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
 import { esSegmentoDeGit, estaDentroReal, leerTextoAcotado, rutaReal, validarSegmento } from "./paths.js";
+import type { Idioma } from "./vocabulario.js";
 
 export function resolverRepo(carpetaProyecto: string, id: string): RepoResuelto {
   const manifiesto = manifiestoDe(carpetaProyecto);
   const ids = manifiesto?.repos.map((repo) => repo.id) ?? [];
   if (!manifiesto || ids.length === 0) {
-    throw new Error(
-      `El proyecto ${carpetaProyecto} no declara repos en su phase-gate.json. Para leer cualquier carpeta de ` +
-        `PHASE_GATE_REPOS_PATH, usa read_cross_repo.`
-    );
+    throw fallo("REPOS-SIN-REPOS", { proyecto: carpetaProyecto });
   }
   const repo = manifiesto.repos.find((r) => r.id === id);
-  if (!repo) throw new Error(`No existe el repo "${id}" en el phase-gate.json de ${carpetaProyecto}. Los repos son: ${ids.join(", ")}.`);
+  if (!repo) throw fallo("REPOS-NO-EXISTE", { id, proyecto: carpetaProyecto, ids });
 
   const [resuelto] = resolverRepos(carpetaProyecto, [repo]);
-  if (!resuelto!.ruta) throw new Error(`No se pudo resolver la ruta del repo "${id}": ${resuelto!.error}`);
+  if (!resuelto!.ruta) throw fallo("REPOS-SIN-RUTA", { id, error: resuelto!.error });
   if (!resuelto!.existe) {
-    throw new Error(
-      `El repo "${id}" de ${carpetaProyecto} apunta a "${resuelto!.ruta}", que no existe en este equipo. Corrige su ` +
-        `dir en phase-gate.json, o su ruta en machine.json ("${carpetaProyecto}/${id}").`
-    );
+    throw fallo("REPOS-RUTA-NO-EXISTE", { id, proyecto: carpetaProyecto, ruta: resuelto!.ruta });
   }
   return resuelto!;
 }
@@ -40,21 +36,21 @@ const esDeGit = esSegmentoDeGit;
 
 export function rutaDeArchivoDeRepo(rutaDelRepo: string, relativa: string): string {
   if (path.win32.isAbsolute(relativa) || path.posix.isAbsolute(relativa)) {
-    throw new Error(`\`path\` no puede ser una ruta absoluta ("${relativa}"): es relativa a la raíz del repo.`);
+    throw fallo("REPOS-PATH-ABSOLUTA", { relativa });
   }
   const segmentos = relativa.split(/[\\/]/);
   for (const segmento of segmentos) {
     validarSegmento(segmento, "path");
-    if (esDeGit(segmento)) throw new Error(`\`path\` no puede entrar en .git ni leer archivos de git ("${relativa}").`);
+    if (esDeGit(segmento)) throw fallo("REPOS-PATH-EN-GIT", { relativa });
   }
 
   const ruta = path.join(rutaDelRepo, ...segmentos);
-  if (!estaDentroReal(rutaDelRepo, ruta)) throw new Error(`Acceso denegado: \`path\` "${relativa}" queda fuera del repositorio.`);
+  if (!estaDentroReal(rutaDelRepo, ruta)) throw fallo("REPOS-PATH-FUERA", { relativa });
 
   // La misma regla sobre la ruta ya resuelta: un enlace dentro del repo que apunte a .git (o un
   // nombre corto 8.3 como GIT~1 en Windows) no puede llevar a .git/config.
   const real = path.relative(rutaReal(rutaDelRepo), rutaReal(ruta));
-  if (real.split(/[\\/]/).some(esDeGit)) throw new Error(`Acceso denegado: \`path\` "${relativa}" lleva a .git a través de un enlace.`);
+  if (real.split(/[\\/]/).some(esDeGit)) throw fallo("REPOS-PATH-GIT-POR-ENLACE", { relativa });
 
   return ruta;
 }
@@ -184,30 +180,35 @@ export async function estadosConPlazo(repos: readonly RepoResuelto[], plazoMs: n
 // Para el chat: "`api`: rama feat/x · a1b2c3d · 2 adelante · árbol limpio".
 export function lineaDeEstado(e: EstadoDeRepo): string {
   const nombre = `\`${e.id}\``;
-  if (!e.ruta) return `${nombre}: sin ruta (${e.error ?? "no se pudo resolver"})`;
-  if (!e.existe) return `${nombre}: \`${e.ruta}\` no existe en este equipo`;
+  if (!e.ruta) return mensaje("REPOS-LINEA-SIN-RUTA", { nombre, error: e.error });
+  if (!e.existe) return mensaje("REPOS-LINEA-NO-EXISTE", { nombre, ruta: e.ruta });
   if (e.error) return `${nombre}: ${e.error}`;
-  if (!e.esGit) return `${nombre}: \`${e.ruta}\` no es un repositorio de git`;
+  if (!e.esGit) return mensaje("REPOS-LINEA-NO-ES-GIT", { nombre, ruta: e.ruta });
 
-  const partes = [e.separado ? "separado (detached)" : `rama ${e.rama}`, e.head ?? "sin commits"];
-  if (e.adelante) partes.push(`${e.adelante} adelante`);
-  if (e.atras) partes.push(`${e.atras} atrás`);
+  const partes = [
+    e.separado ? mensaje("REPOS-LINEA-SEPARADO") : mensaje("REPOS-LINEA-RAMA", { rama: e.rama }),
+    e.head ?? mensaje("REPOS-LINEA-SIN-COMMITS"),
+  ];
+  if (e.adelante) partes.push(mensaje("REPOS-LINEA-ADELANTE", { n: e.adelante }));
+  if (e.atras) partes.push(mensaje("REPOS-LINEA-ATRAS", { n: e.atras }));
   if (e.limpio) {
-    partes.push("árbol limpio");
+    partes.push(mensaje("REPOS-ARBOL-LIMPIO"));
   } else {
-    if (e.cambios) partes.push(`${e.cambios} ${e.cambios === 1 ? "cambio" : "cambios"} sin commit`);
-    if (e.sinSeguimiento) partes.push(`${e.sinSeguimiento} sin seguimiento`);
+    if (e.cambios) partes.push(mensaje("REPOS-CAMBIOS-SIN-COMMIT", { n: e.cambios }));
+    if (e.sinSeguimiento) partes.push(mensaje("REPOS-LINEA-SIN-SEGUIMIENTO", { n: e.sinSeguimiento }));
   }
   return `${nombre}: ${partes.join(" · ")}`;
 }
 
 // La columna de git del bloque CONFIGURACIÓN DEL PROYECTO: " · git · rama `feat/x` · árbol limpio".
 // null si no se sabe (error, o no llegó a tiempo): la columna se omite.
-export function columnaDeConfiguracion(e: EstadoDeRepo): string | null {
+// Va dentro de un prompt, así que se escribe en el idioma del PROYECTO. Sin `idioma`, el de la llamada,
+// que en get_phase_prompt ya es el del proyecto (el servidor lo fija al resolverlo).
+export function columnaDeConfiguracion(e: EstadoDeRepo, idioma: Idioma = idiomaDeMensajes()): string | null {
   if (e.error || !e.existe) return null;
-  if (!e.esGit) return " · sin git";
-  const donde = e.separado ? `separado en \`${e.head ?? "?"}\`` : `rama \`${e.rama}\``;
+  if (!e.esGit) return mensaje("REPOS-COLUMNA-SIN-GIT", {}, idioma);
+  const donde = e.separado ? mensaje("REPOS-COLUMNA-SEPARADO", { head: e.head ?? "?" }, idioma) : mensaje("REPOS-COLUMNA-RAMA", { rama: e.rama }, idioma);
   const total = e.cambios + e.sinSeguimiento;
-  const arbol = e.limpio ? "árbol limpio" : `${total} ${total === 1 ? "cambio" : "cambios"} sin commit`;
+  const arbol = e.limpio ? mensaje("REPOS-ARBOL-LIMPIO", {}, idioma) : mensaje("REPOS-CAMBIOS-SIN-COMMIT", { n: total }, idioma);
   return ` · git · ${donde} · ${arbol}`;
 }

@@ -143,7 +143,8 @@ describe("idioma del proyecto: conflictos", () => {
     assert.deepEqual(hallazgos.map((h) => [h.codigo, h.severidad]), [["IDIOMA-CON-TAREAS", "error"]]);
   });
 
-  it("IDIOMA-CON-TAREAS: get_phase_prompt se niega con el mismo texto", async () => {
+  // El texto sale en el idioma del proyecto (aquí, "en"): la llamada lo resolvió (§8.5).
+  it("IDIOMA-CON-TAREAS: get_phase_prompt se niega con el mismo texto, en el idioma del proyecto", async () => {
     const { docs } = instalacion();
     crearTarea(docs, "P", "vieja", ES);
     manifiesto(docs, { idioma: "en" });
@@ -152,7 +153,7 @@ describe("idioma del proyecto: conflictos", () => {
     try {
       const r = await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 2, project: "P" } });
       assert.equal(r.isError, true);
-      assert.match(textoDe(r), /tiene documentos en "es"/);
+      assert.match(textoDe(r), /the task «vieja» has documents in "es".*\(IDIOMA-CON-TAREAS\)$/);
     } finally {
       await cerrar();
     }

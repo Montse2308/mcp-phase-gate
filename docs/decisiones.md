@@ -12,6 +12,62 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-18 — Mensajes y descripciones en dos idiomas; los nombres de las tools no se traducen
+
+> **Reemplaza** la nota de la 2.x "la interfaz del servidor está en inglés": solo lo estaban los nombres de
+> las tools y de casi todos sus parámetros; las descripciones y los mensajes estaban en español.
+
+**Decisión.** Todo texto que el servidor dirige a una persona o al modelo tiene un **código** y un texto en
+español y en inglés: los errores y las respuestas de las tools, las preguntas de confirmación, las líneas de
+`doctor` (y el texto de cada hallazgo, con el código del propio hallazgo), `--help` y la salida de `init` y
+`eject`, los bloques que el servidor añade a un prompt y las descripciones de las tools, de sus parámetros, de
+los recursos y de los MCP Prompts `/fN`. Son 620 códigos en seis catálogos (`src/i18n/textos/`), que junta
+`src/i18n/mensajes.ts` con `mensaje(codigo, parametros, idioma?)` y `fallo(...)`, un `Error` que guarda su
+`codigo`.
+
+**En qué idioma sale cada cosa:**
+
+| Qué | Idioma |
+|---|---|
+| Lo que se escribe en la carpeta del proyecto (recibos, índice, la comparación de "Verificación del commit") y los bloques que se añaden a un prompt (ARCHIVOS DE ESTA TAREA, la compuerta, los pendientes, los recibos que existen, CONFIGURACIÓN DEL PROYECTO, COMMITS DE LA FASE 4, la nota de un bloque huérfano) | El del **proyecto**, siempre explícito |
+| Errores y respuestas de una tool | El del proyecto si la llamada lo resuelve; si no, `PHASE_GATE_LANG`; si no, el del sistema |
+| Descripciones y títulos de tools, parámetros, recursos y `/fN`; los mensajes de validación de zod | Los de **arranque**: `PHASE_GATE_LANG` o, si no, el del sistema. Son estáticos desde la Etapa 2 |
+| `doctor`, `--help`, `init`, `eject` | Como los mensajes, sin proyecto |
+
+El servidor abre un contexto por llamada (`AsyncLocalStorage`) y lo fija en cuanto resuelve el proyecto, así
+que el error que lanza un módulo de abajo sale en su idioma sin pasar el idioma a cada función.
+
+- **Los nombres de las tools no cambian** (`start_task`, `record_batch`…), ni los de sus parámetros, salvo
+  `crear_proyecto`, que gana el alias `create_project` (los dos valen; con valores distintos, error).
+- **Los valores que el código interpreta tampoco**, pero `record_batch` acepta además `estado` en inglés
+  (`verified`, `with pending items`, `failed`, `discarded`) y los títulos de `condicionales` en inglés, y los
+  normaliza al canónico: los prompts en inglés los nombran así.
+- El Studio asigna el estado HTTP de un error por su **código** y ya no por su texto en español.
+- `--help` documenta `PHASE_GATE_LANG`. Recomendación en los README para quien trabaje en español:
+  `PHASE_GATE_LANG=es` en el bloque `env` del cliente (el sistema es el último recurso).
+
+**Test** (`test/mensajes.test.ts`): todo código tiene los dos idiomas, del mismo tipo y con los mismos
+parámetros, y no se repite; ningún texto fijo en inglés es el español; todo código que pide el código fuente
+existe; el idioma de una llamada sale de donde dice la tabla; `PHASE_GATE_LANG` cambia los títulos y las
+descripciones de las tools y de cada parámetro (los nombres no); un error de un proyecto en inglés sale en
+inglés aunque `PHASE_GATE_LANG` diga `es`; `create_project` funciona. Todos los textos en español siguen
+siendo los mismos byte a byte: la suite entera, que los afirma, no cambió salvo donde el comportamiento
+cambia a propósito (el error de `IDIOMA-CON-TAREAS` sale en el idioma del proyecto).
+
+**Qué se descartó.**
+
+- Traducir los nombres de las tools o de sus parámetros: son la API que usan los prompts, los comandos de
+  quien ya los copió y los clientes; un cambio de nombre rompe todo eso por un beneficio de lectura.
+- Pasar el idioma como parámetro a cada función que puede lanzar un error: más de cien firmas tocadas para
+  lo que hace un contexto por llamada.
+- Descripciones de tools según el proyecto de cada llamada: el cliente pide la lista de tools una vez, al
+  conectar, y no sabe de proyectos.
+
+**Riesgo aceptado.** Un error que se produce antes de resolver el proyecto (un argumento mal formado, un
+proyecto que no existe) sale en el idioma del equipo, no en el del proyecto: todavía no se sabe cuál es.
+
+---
+
 ## 2026-10-18 — El idioma es del proyecto y se deduce primero del disco; la redacción puede ser de la tarea
 
 **Decisión.** Dos conceptos distintos:

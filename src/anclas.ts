@@ -10,16 +10,16 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { DOCS, requireBasePath } from "./config.js";
+import { fallo, mensaje } from "./i18n/mensajes.js";
 import { archivosDeCommit, datosDeCommit, esAncestroDeHead, ramaActual, ramasQueContienen, resolverCommit } from "./git.js";
 import { esSegmentoDeGit, estaDentroReal, rutaReal, validarSegmento } from "./paths.js";
 import { etiquetaDeLote } from "./recibos.js";
 import type { Ancla, Recibo } from "./recibos.js";
 import { resolverRepo } from "./repos.js";
+import type { Idioma } from "./vocabulario.js";
 
 type AnclaCommit = Extract<Ancla, { tipo: "commit" }>;
 type AnclaSha256 = Extract<Ancla, { tipo: "sha256" }>;
-
-const lista = (elementos: string[]): string => elementos.map((e) => `\`${e}\``).join(", ");
 
 // ─── Commit ─────────────────────────────────────────────────────────────────
 // Una ruta de la tabla Archivos tal como la escribe una persona o un modelo: con comillas de código,
@@ -33,70 +33,62 @@ export function normalizarArchivo(declarado: string, raizRepo: string): string {
   return ruta.replace(/^(?:\.\/)+/, "").normalize("NFC");
 }
 
-// Es un aviso, no un bloqueo (decisión H5): queda escrito en el recibo y lo audita la Fase 5.
-export function compararArchivos(delCommit: string[], declarados: string[], raizRepo: string): { texto: string; coinciden: boolean } {
+// Es un aviso, no un bloqueo (decisión H5): queda escrito en el recibo y lo audita la Fase 5. Por eso va
+// en el idioma del proyecto, el del recibo.
+export function compararArchivos(delCommit: string[], declarados: string[], raizRepo: string, idioma: Idioma = "es"): { texto: string; coinciden: boolean } {
   const enCommit = new Set(delCommit.map((archivo) => archivo.normalize("NFC")));
   const enRecibo = new Set(declarados.map((archivo) => normalizarArchivo(archivo, raizRepo)).filter(Boolean));
   const deMas = [...enCommit].filter((archivo) => !enRecibo.has(archivo)).sort();
   const deMenos = [...enRecibo].filter((archivo) => !enCommit.has(archivo)).sort();
 
   if (deMas.length === 0 && deMenos.length === 0) {
-    const n = enCommit.size;
-    const texto =
-      n === 0
-        ? "El commit no toca ningún archivo y el recibo no declara ninguno."
-        : n === 1
-          ? "El commit toca exactamente el archivo declarado."
-          : `El commit toca exactamente los ${n} archivos declarados.`;
-    return { texto, coinciden: true };
+    return { texto: mensaje("ANCLA-COINCIDE", { n: enCommit.size }, idioma), coinciden: true };
   }
 
   const lineas: string[] = [];
-  if (deMas.length) lineas.push(`En el commit y no en el recibo: ${lista(deMas)}.`);
-  if (deMenos.length) lineas.push(`En el recibo y no en el commit: ${lista(deMenos)}.`);
+  if (deMas.length) lineas.push(mensaje("ANCLA-DE-MAS", { archivos: deMas }, idioma));
+  if (deMenos.length) lineas.push(mensaje("ANCLA-DE-MENOS", { archivos: deMenos }, idioma));
   return { texto: lineas.join("\n"), coinciden: false };
 }
 
 export type OtroLote = { lote: number; sha: string };
 
+// `idioma`: el del proyecto, en el que se escribe la comparación de archivos ("Verificación del commit").
+// Los errores salen en el de la llamada.
 export async function anclarCommit(
   proyecto: string,
   repoId: string,
   sha: string,
   archivosDeclarados: string[],
   otros: OtroLote[] = [],
-  ahora: () => Date = () => new Date()
+  ahora: () => Date = () => new Date(),
+  idioma: Idioma = "es"
 ): Promise<{ ancla: AnclaCommit; verificacionDelCommit: string; coinciden: boolean }> {
   const repo = resolverRepo(proyecto, repoId);
   const dir = repo.ruta!;
 
   const resuelto = await resolverCommit(dir, sha);
   if (!resuelto.ok) {
-    if (resuelto.motivo === "formato") throw new Error("El commit tiene que ser un hash de 7 a 40 caracteres hexadecimales.");
-    if (resuelto.motivo === "ambiguo") throw new Error(`El hash \`${sha}\` es ambiguo en \`${repoId}\`; usa más caracteres.`);
-    throw new Error(`El commit \`${sha}\` no existe en el repo \`${repoId}\` (\`${dir}\`). ¿Se hizo en otro repositorio o todavía no se ha hecho?`);
+    if (resuelto.motivo === "formato") throw fallo("ANCLA-FORMATO");
+    if (resuelto.motivo === "ambiguo") throw fallo("ANCLA-AMBIGUO", { sha, repo: repoId });
+    throw fallo("ANCLA-NO-EXISTE", { sha, repo: repoId, dir });
   }
   const completo = resuelto.sha;
   const corto = completo.slice(0, 7);
 
   // Un commit, un lote. Un recibo manual de la 2.x puede guardar solo el hash corto.
   const repetido = otros.find((otro) => otro.sha && completo.startsWith(otro.sha.toLowerCase()));
-  if (repetido) throw new Error(`El commit \`${corto}\` ya es el ancla de ${etiquetaDeLote(repetido.lote)}. Cada lote es un commit.`);
+  if (repetido) throw fallo("ANCLA-REPETIDO", { corto, lote: etiquetaDeLote(repetido.lote) });
 
   const rama = await ramaActual(dir);
   const ancestro = await esAncestroDeHead(dir, completo);
   if (ancestro.resultado === "no") {
-    const ramas = await ramasQueContienen(dir, completo);
-    const donde = ramas.length ? lista(ramas) : "ninguna rama local";
-    throw new Error(
-      `El commit \`${corto}\` existe pero no está en la rama actual (\`${rama ?? "HEAD separado"}\`); está en: ${donde}. ` +
-        "Cambia a la rama del trabajo o registra el commit correcto."
-    );
+    throw fallo("ANCLA-OTRA-RAMA", { corto, rama, ramas: await ramasQueContienen(dir, completo) });
   }
-  if (ancestro.resultado === "error") throw new Error(`No se pudo comprobar si \`${corto}\` está en la rama actual de \`${repoId}\`: ${ancestro.salida}`);
+  if (ancestro.resultado === "error") throw fallo("ANCLA-NO-COMPROBADO", { corto, repo: repoId, salida: ancestro.salida });
 
   const datos = await datosDeCommit(dir, completo);
-  const comparacion = compararArchivos(await archivosDeCommit(dir, completo), archivosDeclarados, dir);
+  const comparacion = compararArchivos(await archivosDeCommit(dir, completo), archivosDeclarados, dir, idioma);
 
   return {
     ancla: { tipo: "commit", repo: repoId, sha: completo, corto: datos.corto || corto, asunto: datos.asunto, rama: rama ?? "", verificado: ahora().toISOString() },
@@ -113,17 +105,17 @@ export const TOPE_DE_ARTEFACTO = 256 * 1024 * 1024;
 // lo pedido ni en la ruta real (un enlace o un nombre corto 8.3 como GIT~1), y dentro de la base real.
 export function rutaDeArtefacto(base: string, relativa: string): { ruta: string; segmentos: string[] } {
   if (path.win32.isAbsolute(relativa) || path.posix.isAbsolute(relativa)) {
-    throw new Error(`\`artifact_path\` no puede ser una ruta absoluta ("${relativa}"): es relativa a la raíz del repo o del proyecto.`);
+    throw fallo("ANCLA-ARTEFACTO-ABSOLUTO", { ruta: relativa });
   }
   const segmentos = relativa.split(/[\\/]/);
   for (const segmento of segmentos) {
     validarSegmento(segmento, "artifact_path");
-    if (esSegmentoDeGit(segmento)) throw new Error(`\`artifact_path\` no puede entrar en .git ni sellar archivos de git ("${relativa}").`);
+    if (esSegmentoDeGit(segmento)) throw fallo("ANCLA-ARTEFACTO-GIT", { ruta: relativa });
   }
   const ruta = path.join(base, ...segmentos);
-  if (!estaDentroReal(base, ruta)) throw new Error(`Acceso denegado: \`artifact_path\` "${relativa}" queda fuera de su carpeta.`);
+  if (!estaDentroReal(base, ruta)) throw fallo("ANCLA-ARTEFACTO-FUERA", { ruta: relativa });
   const real = path.relative(rutaReal(base), rutaReal(ruta));
-  if (real.split(/[\\/]/).some(esSegmentoDeGit)) throw new Error(`Acceso denegado: \`artifact_path\` "${relativa}" lleva a .git a través de un enlace.`);
+  if (real.split(/[\\/]/).some(esSegmentoDeGit)) throw fallo("ANCLA-ARTEFACTO-ENLACE-GIT", { ruta: relativa });
   return { ruta, segmentos };
 }
 
@@ -199,23 +191,23 @@ export async function sha256DeArchivo(ruta: string, conversion: Conversion = "ni
   try {
     descriptor = fs.openSync(ruta, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
   } catch (error: any) {
-    if (error?.code === "ENOENT") throw new Error(`El artefacto \`${mostrar}\` no existe.`);
-    if (error?.code === "EISDIR") throw new Error(`\`${mostrar}\` es una carpeta: solo se sellan archivos.`);
+    if (error?.code === "ENOENT") throw fallo("ANCLA-ARTEFACTO-NO-EXISTE", { ruta: mostrar });
+    if (error?.code === "EISDIR") throw fallo("ANCLA-ARTEFACTO-CARPETA", { ruta: mostrar });
     throw error;
   }
 
   const stream = fs.createReadStream(ruta, { fd: descriptor, autoClose: true });
   try {
     const info = fs.fstatSync(descriptor);
-    if (!info.isFile()) throw new Error(`\`${mostrar}\` no es un archivo normal: solo se sellan archivos.`);
-    if (info.size > TOPE_DE_ARTEFACTO) throw new Error(textoDeTope(info.size));
+    if (!info.isFile()) throw fallo("ANCLA-ARTEFACTO-NO-NORMAL", { ruta: mostrar });
+    if (info.size > TOPE_DE_ARTEFACTO) throw fallo("ANCLA-ARTEFACTO-TOPE", { bytes: info.size });
 
     const hash = crypto.createHash("sha256");
     const convertir = convertidor(conversion);
     let bytes = 0;
     for await (const trozo of stream as AsyncIterable<Buffer>) {
       bytes += trozo.length;
-      if (bytes > TOPE_DE_ARTEFACTO) throw new Error(textoDeTope(bytes));
+      if (bytes > TOPE_DE_ARTEFACTO) throw fallo("ANCLA-ARTEFACTO-TOPE", { bytes });
       hash.update(convertir.trozo(trozo));
     }
     hash.update(convertir.fin());
@@ -223,10 +215,6 @@ export async function sha256DeArchivo(ruta: string, conversion: Conversion = "ni
   } finally {
     stream.destroy();
   }
-}
-
-function textoDeTope(bytes: number): string {
-  return `El artefacto pesa ${(bytes / 1_048_576).toFixed(1)} MB (${bytes} bytes); el máximo para sellarlo es 256 MB.`;
 }
 
 // La base de un artefacto: la raíz real del repo, o la carpeta del proyecto en la Documentación.
@@ -254,53 +242,51 @@ export function partirRutaDeArtefacto(guardada: string): { repo: string | null; 
 // Para get_batch_status y la Fase 5: ¿el ancla sigue valiendo hoy?
 // `sha`: el commit completo, cuando el ancla es un commit y sigue vigente (el bloque de la Fase 5 lo usa
 // sin volver a preguntárselo a git).
-export async function reverificar(proyecto: string, recibo: Recibo): Promise<{ vigente: boolean; texto: string; sha?: string }> {
+// `idioma`: el del texto; sin él, el de la llamada (get_batch_status, doctor). El bloque de la Fase 5 pasa
+// el del proyecto. Un error de git o del disco sale con su propio texto, en el de la llamada.
+export async function reverificar(proyecto: string, recibo: Recibo, idioma?: Idioma): Promise<{ vigente: boolean; texto: string; sha?: string }> {
   const ancla = recibo.ancla;
   try {
-    if (ancla.tipo === "commit") return await reverificarCommit(proyecto, recibo, ancla);
-    if (ancla.tipo === "sha256") return await reverificarArtefacto(proyecto, ancla);
+    if (ancla.tipo === "commit") return await reverificarCommit(proyecto, recibo, ancla, idioma);
+    if (ancla.tipo === "sha256") return await reverificarArtefacto(proyecto, ancla, idioma);
   } catch (error) {
     return { vigente: false, texto: error instanceof Error ? error.message : String(error) };
   }
-  return { vigente: true, texto: "Sin nada que comprobar." };
+  return { vigente: true, texto: mensaje("ANCLA-SIN-NADA-QUE-COMPROBAR", {}, idioma) };
 }
 
-async function reverificarCommit(proyecto: string, recibo: Recibo, ancla: AnclaCommit): Promise<{ vigente: boolean; texto: string; sha?: string }> {
+async function reverificarCommit(proyecto: string, recibo: Recibo, ancla: AnclaCommit, idioma?: Idioma): Promise<{ vigente: boolean; texto: string; sha?: string }> {
   const repoId = ancla.repo || recibo.repo;
-  if (!repoId) return { vigente: false, texto: "El recibo no dice en qué repo está su commit." };
+  if (!repoId) return { vigente: false, texto: mensaje("ANCLA-RECIBO-SIN-REPO", {}, idioma) };
   const dir = resolverRepo(proyecto, repoId).ruta!;
   const corto = ancla.corto || ancla.sha.slice(0, 7);
 
   const resuelto = await resolverCommit(dir, ancla.sha);
-  if (!resuelto.ok) return { vigente: false, texto: `El commit \`${corto}\` ya no existe en \`${repoId}\`. Vuelve a anclar el lote.` };
+  if (!resuelto.ok) return { vigente: false, texto: mensaje("ANCLA-YA-NO-EXISTE", { corto, repo: repoId }, idioma) };
 
   const rama = await ramaActual(dir);
   const ancestro = await esAncestroDeHead(dir, resuelto.sha);
-  if (ancestro.resultado === "si") return { vigente: true, texto: `El commit \`${corto}\` sigue en la rama actual (\`${rama ?? "HEAD separado"}\`).`, sha: resuelto.sha };
-  if (ancestro.resultado === "error") return { vigente: false, texto: `No se pudo comprobar \`${corto}\`: ${ancestro.salida}` };
-  return {
-    vigente: false,
-    texto: `El commit \`${corto}\` ya no está en la rama actual (\`${rama ?? "HEAD separado"}\`). ¿Rebase o squash? Vuelve a anclar el lote.`,
-  };
+  if (ancestro.resultado === "si") return { vigente: true, texto: mensaje("ANCLA-SIGUE-EN-LA-RAMA", { corto, rama }, idioma), sha: resuelto.sha };
+  if (ancestro.resultado === "error") return { vigente: false, texto: mensaje("ANCLA-NO-SE-PUDO-COMPROBAR", { corto, salida: ancestro.salida }, idioma) };
+  return { vigente: false, texto: mensaje("ANCLA-FUERA-DE-LA-RAMA", { corto, rama }, idioma) };
 }
 
-async function reverificarArtefacto(proyecto: string, ancla: AnclaSha256): Promise<{ vigente: boolean; texto: string }> {
+async function reverificarArtefacto(proyecto: string, ancla: AnclaSha256, idioma?: Idioma): Promise<{ vigente: boolean; texto: string }> {
   const partes = partirRutaDeArtefacto(ancla.ruta);
-  if (!partes) return { vigente: false, texto: `No se entiende la ruta del artefacto («${ancla.ruta}»).` };
+  if (!partes) return { vigente: false, texto: mensaje("ANCLA-RUTA-ILEGIBLE", { ruta: ancla.ruta }, idioma) };
   const { ruta } = rutaDeArtefacto(baseDeArtefacto(proyecto, partes.repo), partes.relativa);
 
   const actual = await sha256DeArchivo(ruta, "ninguna", ancla.ruta);
-  if (actual.sha256 === ancla.sha256) return { vigente: true, texto: `El artefacto \`${ancla.ruta}\` no cambió.` };
+  if (actual.sha256 === ancla.sha256) return { vigente: true, texto: mensaje("ANCLA-ARTEFACTO-SIN-CAMBIOS", { ruta: ancla.ruta }, idioma) };
 
   // El hash es de los bytes, y un archivo de texto en un repo con core.autocrlf tiene otros bytes en
   // Windows que en Linux o macOS (§6.1). Se prueba en las dos direcciones, y solo con texto.
-  if (!(await pareceTexto(ruta))) {
-    return { vigente: false, texto: `El artefacto \`${ancla.ruta}\` cambió desde que se selló (sha256 \`${ancla.sha256.slice(0, 12)}…\`, ahora \`${actual.sha256.slice(0, 12)}…\`).` };
-  }
+  const cambio = { vigente: false, texto: mensaje("ANCLA-ARTEFACTO-CAMBIO", { ruta: ancla.ruta, antes: ancla.sha256.slice(0, 12), ahora: actual.sha256.slice(0, 12) }, idioma) };
+  if (!(await pareceTexto(ruta))) return cambio;
   for (const conversion of ["crlf-a-lf", "lf-a-crlf"] as const) {
     if ((await sha256DeArchivo(ruta, conversion)).sha256 === ancla.sha256) {
-      return { vigente: true, texto: `El artefacto \`${ancla.ruta}\` es idéntico salvo finales de línea.` };
+      return { vigente: true, texto: mensaje("ANCLA-ARTEFACTO-FINALES-DE-LINEA", { ruta: ancla.ruta }, idioma) };
     }
   }
-  return { vigente: false, texto: `El artefacto \`${ancla.ruta}\` cambió desde que se selló (sha256 \`${ancla.sha256.slice(0, 12)}…\`, ahora \`${actual.sha256.slice(0, 12)}…\`).` };
+  return cambio;
 }

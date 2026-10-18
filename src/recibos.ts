@@ -12,6 +12,7 @@
 
 import * as path from "path";
 
+import { fallo, mensaje } from "./i18n/mensajes.js";
 import { leerTextoAcotado, validarSegmento } from "./paths.js";
 import {
   FORMAS_DE_VACIO_EN_RECIBO as FORMAS_DE_VACIO,
@@ -103,9 +104,9 @@ export function slugDe(titulo: string): string {
 
 export function nombreDeRecibo(lote: number, titulo: string): string {
   if (!Number.isInteger(lote) || lote < 1 || lote > 99) {
-    throw new Error(`El número de lote tiene que ser un entero de 1 a 99 (llegó ${lote}).`);
+    throw fallo("RECIBOS-LOTE-FUERA-DE-RANGO", { lote });
   }
-  return validarSegmento(`${etiquetaDeLote(lote)} - ${slugDe(titulo)}.md`, "el nombre del recibo");
+  return validarSegmento(`${etiquetaDeLote(lote)} - ${slugDe(titulo)}.md`, mensaje("RECIBOS-CAMPO-NOMBRE"));
 }
 
 // El lote de un nombre de recibo ("L02 - x.md" -> 2), o null si no lo es.

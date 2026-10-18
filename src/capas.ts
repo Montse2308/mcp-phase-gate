@@ -20,6 +20,7 @@ import { aplicarBloques, leerBloques, omitirRanuraVacia, ranurasDe } from "./blo
 import type { Bloque, Procedencia } from "./bloques.js";
 import { DOCS, IDIOMA_POR_DEFECTO, carpetaPromptsGlobal, defaultPromptsPath, idiomaDeEtiqueta, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
+import { fallo, mensaje } from "./i18n/mensajes.js";
 import { PRESET_POR_DEFECTO, describirPresets, idiomaDelProyecto, manifiestoDe, maquinaDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
 import type { Manifiesto, OrigenDelIdioma, PoliticaCommit, Preset, RepoResuelto } from "./manifiesto.js";
 import { leerTextoAcotado } from "./paths.js";
@@ -35,7 +36,7 @@ import {
   separarFrontmatter,
 } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
-import { VOCABULARIO, vocabulario } from "./vocabulario.js";
+import { VOCABULARIO, esIdioma, vocabulario } from "./vocabulario.js";
 import type { Idioma } from "./vocabulario.js";
 
 export type EtiquetaCapa = "fábrica" | "preset" | "reglas" | "global" | "proyecto";
@@ -148,7 +149,11 @@ export function configuracionDe(carpetaProyecto: string | null, carpetaTarea?: s
   const presets = presetsDisponibles(idioma);
   const preset = presets.get(nombre);
   if (!preset) {
-    throw new Error(`No existe el preset "${nombre}" (${origenPreset}). Los disponibles son: ${describirPresets(presets)}.`);
+    throw fallo("CAPA-TXT-PRESET-DESCONOCIDO", {
+      nombre,
+      origen: mensaje("CAPA-TXT-ORIGEN-PRESET", { origen: origenPreset }),
+      disponibles: describirPresets(presets),
+    });
   }
 
   const regla = <T>(delProyecto: T | undefined, delPreset: T | null, deFabrica: T): [T, OrigenDeRegla] =>
@@ -208,29 +213,36 @@ export function bloqueDeConfiguracion(
   repos: RepoResuelto[] = reposDeLaTarea(config),
   estado: (repo: RepoResuelto) => string | null = () => null
 ): string {
+  // En el idioma del proyecto: es un bloque del prompt. Los valores (preset, política de commits, ids)
+  // no se traducen; los orígenes y el sí/no, solo al escribirlos aquí.
+  const idioma = config.idioma;
+  const v = vocabulario(idioma);
   const m = config.manifiesto;
-  const origen = config.origenPreset === "por defecto" ? "por defecto; este proyecto no tiene phase-gate.json" : config.origenPreset;
+  const origen =
+    config.origenPreset === "por defecto"
+      ? mensaje("CAPA-TXT-ORIGEN-SIN-MANIFIESTO", {}, idioma)
+      : mensaje("CAPA-TXT-ORIGEN-PRESET", { origen: config.origenPreset }, idioma);
   const lineas = [
-    m ? "## CONFIGURACIÓN DEL PROYECTO (la declara phase-gate.json)" : "## CONFIGURACIÓN DEL PROYECTO",
+    `## ${m ? v.encabezados.configuracionDelManifiesto : v.encabezados.configuracionDelProyecto}`,
     "",
-    `- Preset: \`${config.preset.nombre}\` (${origen}) · Idioma: ${config.idioma}`,
-    `- Lotes: ${config.reglas.lotes ? "sí" : "no"} · Commits: ${config.reglas.commits}`,
+    mensaje("CAPA-TXT-CONFIG-PRESET", { nombre: config.preset.nombre, origen, idioma: config.idioma }, idioma),
+    mensaje("CAPA-TXT-CONFIG-LOTES", { lotes: config.reglas.lotes, commits: config.reglas.commits }, idioma),
   ];
 
   if (repos.length) {
-    lineas.push("- Repositorios de esta tarea:");
+    lineas.push(mensaje("CAPA-TXT-CONFIG-REPOS", {}, idioma));
     for (const repo of repos) {
       const rol = repo.rol ? ` (${repo.rol})` : "";
-      const donde = repo.ruta ? `\`${repo.ruta}\`` : `sin ruta (${repo.error ?? "no se pudo resolver"})`;
-      const extra = repo.ruta && !repo.existe ? " · no existe en este equipo" : (estado(repo) ?? "");
+      const donde = repo.ruta ? `\`${repo.ruta}\`` : mensaje("CAPA-TXT-CONFIG-SIN-RUTA", { error: repo.error ?? null }, idioma);
+      const extra = repo.ruta && !repo.existe ? mensaje("CAPA-TXT-CONFIG-REPO-NO-EXISTE", {}, idioma) : (estado(repo) ?? "");
       lineas.push(`  - \`${repo.id}\`${rol}: ${donde}${extra}`);
     }
   }
   if (m?.reglas.verificacion?.length) {
-    lineas.push(`- Comandos de verificación del proyecto: ${m.reglas.verificacion.map((c) => `\`${c}\``).join(", ")}`);
+    lineas.push(mensaje("CAPA-TXT-CONFIG-VERIFICACION", { comandos: m.reglas.verificacion.map((c) => `\`${c}\``).join(", ") }, idioma));
   }
-  if (m?.fase5.prPorRepo) lineas.push("- Una descripción de PR por repositorio (fase5.prPorRepo).");
-  if (repos.length) lineas.push("", "Usa `read_repo_file` y `repo_status` con estos ids.");
+  if (m?.fase5.prPorRepo) lineas.push(mensaje("CAPA-TXT-CONFIG-PR-POR-REPO", {}, idioma));
+  if (repos.length) lineas.push("", mensaje("CAPA-TXT-CONFIG-USA-IDS", {}, idioma));
 
   return lineas.join("\n");
 }
@@ -266,17 +278,29 @@ export function bloquesDe(capas: Capa[]): { bloques: Bloque[]; avisos: Hallazgo[
   return { bloques, avisos };
 }
 
+// Los datos de cada aviso de huérfano, para que notaDeHuerfano lo vuelva a escribir en el idioma del
+// proyecto: el texto del aviso va en el de la llamada.
+type DatosDeHuerfano = { id: string; archivo: string; linea: number };
+const DATOS_DE_HUERFANO = new WeakMap<Hallazgo, DatosDeHuerfano>();
+
 function avisoDeHuerfano(bloque: Bloque): Hallazgo {
-  return {
+  const datos: DatosDeHuerfano = { id: bloque.id, archivo: bloque.origen.archivo, linea: bloque.origen.linea };
+  const aviso: Hallazgo = {
     severidad: "aviso",
     codigo: "BLOQUE-HUERFANO",
-    texto: `El bloque «${bloque.id}» de ${bloque.origen.archivo}:${bloque.origen.linea} no encaja en ninguna ranura y se ignoró.`,
+    texto: mensaje("BLOQUE-HUERFANO", datos),
   };
+  DATOS_DE_HUERFANO.set(aviso, datos);
+  return aviso;
 }
 
-// La línea que get_phase_prompt antepone por cada bloque huérfano de la fase que entrega.
-export function notaDeHuerfano(aviso: Hallazgo): string {
-  return `> Nota del servidor: ${aviso.texto.replace(/^El bloque/, "el bloque")}`;
+// La línea que get_phase_prompt antepone por cada bloque huérfano de la fase que entrega, en el idioma
+// del proyecto. Un aviso que no salió de aquí (sin sus datos) se cita con el texto que trae. Con algo que
+// no es un idioma (el índice de un `.map(notaDeHuerfano)`), en español.
+export function notaDeHuerfano(aviso: Hallazgo, idioma: Idioma = "es"): string {
+  const enIdioma: Idioma = esIdioma(idioma) ? idioma : "es";
+  const datos = DATOS_DE_HUERFANO.get(aviso);
+  return datos ? mensaje("CAPA-TXT-NOTA-HUERFANO", datos, enIdioma) : mensaje("CAPA-TXT-NOTA-DEL-SERVIDOR", { texto: aviso.texto }, enIdioma);
 }
 
 // Cómo se dice de dónde sale el contenido por defecto de una ranura: "fábrica", o el archivo y la
@@ -350,21 +374,19 @@ export function ensamblarReglasGlobales(capas: Capa[], bloques: Bloque[]): Regla
 }
 
 export type PromptEnsamblado = { texto: string; procedencia: Procedencia[]; avisos: Hallazgo[] };
-export type OpcionesDeEnsamblado = { incluirConfigProyecto?: boolean };
+// `idioma`: el del proyecto, en el que se escriben los bloques que añade el servidor (ARCHIVOS DE ESTA
+// TAREA). Sin él, español.
+export type OpcionesDeEnsamblado = { incluirConfigProyecto?: boolean; idioma?: Idioma };
 
 // El ensamblado con una lista de capas concreta. Lanza si la fase no existe en ninguna.
-export function ensamblarConCapas(fase: number, capas: Capa[], _opciones: OpcionesDeEnsamblado = {}): PromptEnsamblado {
+export function ensamblarConCapas(fase: number, capas: Capa[], opciones: OpcionesDeEnsamblado = {}): PromptEnsamblado {
   const rutas = rutasDeCuerpos(capas);
   const phases: Map<number, PhaseFile> = discoverPhases(rutas);
   const entrada = phases.get(fase);
 
   if (!entrada) {
     const lista = [...phases.keys()].sort((a, b) => a - b).join(", ");
-    throw new Error(
-      lista
-        ? `Fase no válida. Las fases disponibles son: ${lista}.`
-        : `No se encontró ningún prompt de fase en ${rutas.join(", ")}. Verifica que la carpeta 'prompts/es' exista junto al build.`
-    );
+    throw lista ? fallo("CAPA-TXT-FASE-NO-VALIDA", { lista }) : fallo("CAPA-TXT-SIN-PROMPTS", { rutas: rutas.join(", ") });
   }
 
   const { bloques, avisos } = bloquesDe(capas);
@@ -382,7 +404,7 @@ export function ensamblarConCapas(fase: number, capas: Capa[], _opciones: Opcion
   );
   partes.push(entregable(cuerpo.texto, entrada.file));
 
-  const archivos = describePhaseFiles(phases, fase);
+  const archivos = describePhaseFiles(phases, fase, opciones.idioma ?? "es");
   if (archivos) partes.push(archivos);
 
   // Huérfanos de lo que se entrega: los de las reglas globales y los de esta fase.
@@ -400,12 +422,7 @@ export function ensamblarConCapas(fase: number, capas: Capa[], _opciones: Opcion
 }
 
 export function textoDeReinyeccion(archivo: string, reinyectadas: string[]): string {
-  return (
-    `Tu global-rules.md (${archivo}) sustituye al de fábrica y no tiene ` +
-    `${reinyectadas.map((titulo) => `"## ${titulo}"`).join(" ni ")}: se añaden al final las de fábrica. ` +
-    "La forma recomendada de cambiar las reglas globales es un bloques.md con `global/cero-rupturas`, " +
-    "`global/evidencia` o `global/extra`."
-  );
+  return mensaje("GLOBAL-REINYECTADO", { archivo, titulos: reinyectadas });
 }
 
 // El prompt de una fase tal como lo recibe el modelo en un proyecto (o sin proyecto, con null). Con
@@ -419,7 +436,7 @@ export function ensamblarFase(
   opciones: OpcionesDeEnsamblado & { estadoDeRepo?: (repo: RepoResuelto) => string | null } = {}
 ): PromptEnsamblado {
   const config = configuracionDe(carpetaProyecto, carpetaTarea);
-  const ensamblado = ensamblarConCapas(fase, capasConConfiguracion(config), opciones);
+  const ensamblado = ensamblarConCapas(fase, capasConConfiguracion(config), { ...opciones, idioma: config.idioma });
   // Una tarea que se redacta en otro idioma que el de su proyecto lo dice al final, en el del proyecto.
   const redaccion = config.tarea?.redaccion && config.tarea.redaccion !== config.idioma ? vocabulario(config.idioma).lineaDeRedaccion[config.tarea.redaccion] : null;
   const conRedaccion = (texto: string): string => (redaccion ? `${texto}\n\n${redaccion}` : texto);

@@ -11,7 +11,7 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import { parseEnv } from "util";
 
-import type { Idioma } from "./vocabulario.js";
+import { fallo, mensaje } from "./i18n/mensajes.js";
 
 // Carpeta de este módulo. Sirve para localizar el .env y el package.json de la raíz del repo.
 export const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -26,7 +26,11 @@ export const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // El bloque "env" del cliente sigue ganando: solo se asignan las claves que no estén ya en el
 // entorno, igual que hacía dotenv.
 const clavesCargadas = new Set<string>();
-let errorDeCarga: string | null = null;
+// El error se guarda como código y datos, y se redacta al leerlo: la carga corre al importar este módulo,
+// cuando todavía no hay llamada (ni idioma de llamada), y el texto tiene que salir en el idioma de quien
+// lo lee.
+type ErrorDeCarga = { codigo: "ENV-TXT-ILEGIBLE" | "ENV-TXT-UTF16" | "ENV-TXT-NO-INTERPRETABLE"; parametros: Record<string, string> };
+let errorDeCarga: ErrorDeCarga | null = null;
 
 export function envPorDefecto(): string {
   return path.join(MODULE_DIR, "..", ".env");
@@ -39,7 +43,7 @@ export function clavesDeEnv(): ReadonlySet<string> {
 
 // Error guardado de la última carga (por ejemplo, UTF-16), o null.
 export function errorDeEnv(): string | null {
-  return errorDeCarga;
+  return errorDeCarga ? mensaje(errorDeCarga.codigo, errorDeCarga.parametros) : null;
 }
 
 // Solo para tests: borra del entorno las claves que vinieron del .env, vacía clavesDeEnv() y el
@@ -60,7 +64,7 @@ export function cargarEnv(archivo: string = envPorDefecto()): void {
     bytes = fs.readFileSync(archivo);
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return; // sin .env, todo sale del entorno
-    errorDeCarga = `No se pudo leer el .env (${archivo}): ${error instanceof Error ? error.message : String(error)}`;
+    errorDeCarga = { codigo: "ENV-TXT-ILEGIBLE", parametros: { archivo, detalle: error instanceof Error ? error.message : String(error) } };
     return;
   }
 
@@ -68,7 +72,7 @@ export function cargarEnv(archivo: string = envPorDefecto()): void {
   // texto en UTF-8 no hay ningún NUL, y en UTF-16 los hay en casi cada carácter.
   const conBom16 = bytes.length >= 2 && ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff));
   if (conBom16 || bytes.subarray(0, 512).includes(0)) {
-    errorDeCarga = `El .env está en UTF-16 y no se cargó (${archivo}). Guárdalo como UTF-8 (sin BOM).`;
+    errorDeCarga = { codigo: "ENV-TXT-UTF16", parametros: { archivo } };
     return;
   }
 
@@ -78,7 +82,7 @@ export function cargarEnv(archivo: string = envPorDefecto()): void {
   try {
     valores = parseEnv(texto) as Record<string, string>;
   } catch (error) {
-    errorDeCarga = `No se pudo interpretar el .env (${archivo}): ${error instanceof Error ? error.message : String(error)}`;
+    errorDeCarga = { codigo: "ENV-TXT-NO-INTERPRETABLE", parametros: { archivo, detalle: error instanceof Error ? error.message : String(error) } };
     return;
   }
 
@@ -166,11 +170,10 @@ export function leerVariable(logica: NombreLogico): LecturaVariable {
       return esRuta && recortado ? path.resolve(recortado) : recortado;
     };
     if (comparable(process.env[usada]!) !== comparable(process.env[ignorada]!)) {
-      const motivo = fuenteDe(usada) !== fuenteDe(ignorada) ? " (el entorno del cliente gana al .env)" : "";
-      discrepancia = `${ignorada} difiere de ${usada}; se usa ${usada}${motivo}.`;
+      discrepancia = mensaje("CONFIG-VAR-DIFIERE", { ignorada, usada, clienteGana: fuenteDe(usada) !== fuenteDe(ignorada) });
     }
   } else if (esRuta && alias && usada === alias && process.env[principal] !== undefined) {
-    discrepancia = `${principal} está vacía; se usa ${alias}.`;
+    discrepancia = mensaje("CONFIG-VAR-VACIA", { principal, alias });
   }
 
   return {
@@ -185,7 +188,7 @@ export function leerVariable(logica: NombreLogico): LecturaVariable {
 // Cómo se nombra una variable en un mensaje: la principal, y el alias entre paréntesis.
 export function nombrarVariable(logica: NombreLogico): string {
   const { principal, alias } = VARIABLES[logica];
-  return alias ? `${principal} (o su alias ${alias})` : principal;
+  return alias ? mensaje("CONFIG-VAR-CON-ALIAS", { principal, alias }) : principal;
 }
 
 // Paths absolutos del entorno. Se configuran por variable de entorno (vía .env o el bloque
@@ -195,16 +198,22 @@ export function nombrarVariable(logica: NombreLogico): string {
 // quien escribió el código: en cualquier otro dispositivo el servidor arrancaba "bien" y el
 // error salía mucho después, dentro de una tool, disfrazado de "no encontré el archivo" y
 // sin mencionar que lo que faltaba era configurar una variable.
+//
+// `apuntaA` es un getter: el texto se redacta al leerlo, en el idioma de la llamada.
 export type RutaRequerida = { logica: NombreLogico; apuntaA: string };
 
 export const DOCS: RutaRequerida = {
   logica: "DOCS_PATH",
-  apuntaA: "la carpeta raíz de la Documentación Central",
+  get apuntaA() {
+    return mensaje("CONFIG-APUNTA-A-DOCS");
+  },
 };
 
 export const REPOS: RutaRequerida = {
   logica: "REPOS_PATH",
-  apuntaA: "la carpeta que contiene tus repositorios de código",
+  get apuntaA() {
+    return mensaje("CONFIG-APUNTA-A-REPOS");
+  },
 };
 
 // Se resuelve y valida en cada llamada, no una vez al arrancar. Así el servidor se queda en
@@ -215,11 +224,7 @@ export function requireBasePath({ logica, apuntaA }: RutaRequerida): string {
 
   if (!valor || !usada) {
     // Si el .env no se pudo cargar, esa es casi seguro la causa: se dice antes que nada.
-    const delEnv = errorDeCarga ? ` ${errorDeCarga}` : "";
-    throw new Error(
-      `Falta ${nombrarVariable(logica)}, que debe apuntar a ${apuntaA}. Defínela en el archivo ` +
-        `.env de la raíz del repo, o en el bloque "env" del mcp.json de tu cliente.${delEnv}`
-    );
+    throw fallo("CONFIG-FALTA-VARIABLE", { variable: nombrarVariable(logica), apuntaA, delEnv: errorDeEnv() });
   }
 
   const ruta = path.resolve(valor);
@@ -228,15 +233,11 @@ export function requireBasePath({ logica, apuntaA }: RutaRequerida): string {
   // existencia se comprueba aquí. El BOM y el UTF-16 ya los resuelve cargarEnv; un .env guardado
   // en ANSI todavía rompe los acentos sin que se pueda detectar con certeza.
   if (!fs.existsSync(ruta)) {
-    throw new Error(
-      `${usada} apunta a "${ruta}", que no existe en este equipo. Corrige la ruta en el .env. ` +
-        `Si lleva acentos, revisa que el .env esté guardado en UTF-8: en otra codificación los ` +
-        `acentos llegan rotos y la carpeta parece no existir.`
-    );
+    throw fallo("CONFIG-RUTA-NO-EXISTE", { variable: usada, ruta });
   }
 
   if (!fs.statSync(ruta).isDirectory()) {
-    throw new Error(`${usada} apunta a "${ruta}", que es un archivo y no una carpeta.`);
+    throw fallo("CONFIG-RUTA-ES-ARCHIVO", { variable: usada, ruta });
   }
 
   return ruta;
@@ -272,32 +273,10 @@ export function tasksSubdir(): string {
 // sigue teniendo sus fase-N-*.md en la raíz.
 export const IDIOMA_POR_DEFECTO = "es";
 
-// ─── Idioma del entorno y del sistema (§8.3, pasos 4 a 6) ───────────────────
-// PHASE_GATE_LANG, si dice "es" o "en" (también "es-MX" o "en_US.UTF-8"). Otro valor no cuenta: doctor lo
-// avisa.
-export function idiomaDelEntorno(): Idioma | null {
-  return idiomaDeEtiqueta(leerVariable("LANG").valor ?? "");
-}
-
-export function idiomaDeEtiqueta(valor: string): Idioma | null {
-  const base = valor.trim().toLowerCase().split(/[-_.@]/)[0];
-  return base === "es" || base === "en" ? base : null;
-}
-
-// El idioma del sistema es el ÚLTIMO recurso: en Linux sigue a LANG y LC_ALL, que los clientes MCP no
-// pasan al servidor (entorno reducido), y en Windows sigue a la configuración regional e ignora LANG
-// (validación V9). Un sistema en español da "es"; cualquier otro, "en".
-let sistemaFijado: string | null = null;
-
-export function idiomaDelSistema(): Idioma {
-  const locale = sistemaFijado ?? Intl.DateTimeFormat().resolvedOptions().locale;
-  return idiomaDeEtiqueta(locale) === "es" ? "es" : "en";
-}
-
-// Solo para tests: el locale que diría el sistema. null vuelve al de verdad.
-export function fijarLocaleDelSistema(locale: string | null): void {
-  sistemaFijado = locale;
-}
+// ─── Idioma del entorno y del sistema (§8.3, pasos 4 y 5) ───────────────────
+// Viven en i18n/idioma.ts, sin dependencias: los mensajes los necesitan y este módulo escribe mensajes al
+// cargarse (el .env).
+export { fijarLocaleDelSistema, idiomaDeEtiqueta, idiomaDelEntorno, idiomaDelSistema } from "./i18n/idioma.js";
 
 // La raíz del paquete: la carpeta que tiene al lado build/, prompts/ y presets/. Los tests corren
 // desde build-test/, que no tiene esas carpetas al lado; la apuntan al repo con fijarRaizDelPaquete

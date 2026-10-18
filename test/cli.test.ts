@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AVISO_TERMINAL, ejecutarCli } from "../src/cli.js";
+import { avisoTerminal, ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
 import { SERVER_VERSION } from "../src/config.js";
 import { carpetaTemporal, limpiarEntorno } from "./helpers.js";
@@ -61,7 +61,7 @@ describe("ejecutarCli", () => {
 
     assert.deepEqual(ejecutarCli([], salida, true), { accion: "servidor" });
     assert.equal(salida.textoOut(), "");
-    assert.equal(salida.textoErr(), AVISO_TERMINAL);
+    assert.equal(salida.textoErr(), avisoTerminal());
   });
 
   it("--help y -h imprimen la ayuda, con doctor y las variables PHASE_GATE_*", () => {

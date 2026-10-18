@@ -8,10 +8,15 @@
 // SDK. El SDK genera con ellos el JSON Schema que ve el cliente —por eso cada campo lleva aquí su
 // descripción— y valida cada llamada antes del callback.
 //
-// Los mensajes de error van en cada campo, en español, porque el SDK los entrega tal cual detrás
-// de su prefijo en inglés ("Input validation error: Invalid arguments for tool …"). Sin ellos
-// llegaría el texto genérico de zod ("expected string, received undefined"), que no le dice al
+// Los mensajes de error van en cada campo, en el idioma del servidor (§8.5), porque el SDK los entrega
+// tal cual detrás de su prefijo en inglés ("Input validation error: Invalid arguments for tool …"). Sin
+// ellos llegaría el texto genérico de zod ("expected string, received undefined"), que no le dice al
 // modelo cómo corregir la llamada.
+//
+// Las descripciones y los mensajes se fijan al arrancar, en un idioma: `shapesDe(idioma)` construye los
+// shapes de entrada de ese idioma (una vez por idioma), y crearServidor los pide con el suyo. Los nombres
+// de siempre (startTaskShape…) siguen exportados: son los del idioma de los mensajes al usarlos, y se
+// construyen al primer uso, no al importar este módulo.
 //
 // Los opcionales son .nullish() y null cuenta como ausente: algunos clientes con modelos en
 // modo estricto mandan null en todo campo opcional. Un número en texto (phase: "3") no se
@@ -22,195 +27,298 @@ import { z } from "zod";
 
 import { NOMBRES_LOGICOS } from "./config.js";
 import type { NombreLogico } from "./config.js";
+import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
+import type { Idioma } from "./vocabulario.js";
 
-// Lo que se espera de cada tipo, dicho como se le diría al modelo para que corrija la llamada.
-// El único número es `phase`, de ahí el ejemplo.
-const TIPOS: Record<string, string> = {
-  string: "un texto",
-  number: "un número, por ejemplo 3",
-  int: "un número entero, por ejemplo 3",
-  boolean: "true o false",
-  object: "un objeto",
-  array: "una lista",
-};
+const ID_REPO = /^[a-z0-9][a-z0-9-]{0,39}$/;
+// Los valores canónicos y, desde la Etapa 6, también sus nombres en inglés (los usan los prompts en inglés).
+// record_batch los normaliza al canónico antes de usarlos (normalizarEntradaDeLote).
+const ESTADOS_DE_LOTE = ["verificado", "con pendientes", "fallido", "descartado", "verified", "with pending items", "failed", "discarded"] as const;
+const TITULOS_CONDICIONALES = [
+  "Lo que sigue igual",
+  "Reversión",
+  "Aviso a alguien más",
+  "Deuda anotada",
+  "What stays the same",
+  "Rollback",
+  "Heads-up to someone else",
+  "Debt noted",
+] as const;
 
-// El mensaje de un campo. null también es "falta": en un opcional se tolera antes de llegar aquí,
-// en un obligatorio es lo mismo que no venir.
-function mensaje(campo: string): (issue: z.core.$ZodRawIssue) => string {
-  const nombre = `\`${campo}\``;
-  return (issue) => {
-    if (issue.input === undefined || issue.input === null) return `Falta ${nombre}.`;
-    if (issue.code === "invalid_type") return `${nombre} debe ser ${TIPOS[issue.expected] ?? issue.expected}.`;
-    // El único máximo que puede saltar es el del entero seguro de `phase`.
-    if (issue.code === "too_big") return `${nombre} es demasiado grande.`;
-    return `${nombre} no es válido.`;
+// ─── Shapes de entrada, en un idioma ────────────────────────────────────────
+function construirShapes(idioma: Idioma) {
+  const t = (codigo: string, parametros: Record<string, unknown> = {}): string => mensaje(codigo, parametros, idioma);
+
+  // El mensaje de un campo. null también es "falta": en un opcional se tolera antes de llegar aquí,
+  // en un obligatorio es lo mismo que no venir.
+  const errorDe =
+    (campo: string) =>
+    (issue: z.core.$ZodRawIssue): string => {
+      if (issue.input === undefined || issue.input === null) return t("TOOL-ARG-FALTA", { campo });
+      if (issue.code === "invalid_type") return t("TOOL-ARG-TIPO", { campo, esperado: issue.expected });
+      // El único máximo que puede saltar es el del entero seguro de `phase`.
+      if (issue.code === "too_big") return t("TOOL-ARG-DEMASIADO-GRANDE", { campo });
+      return t("TOOL-ARG-NO-VALIDO", { campo });
+    };
+
+  const texto = (campo: string) => z.string({ error: errorDe(campo) });
+
+  // `recortar` quita los espacios ANTES de exigir el mínimo: "   " cuenta como que falta.
+  const obligatorio = (campo: string, opciones: { recortar?: boolean } = {}) => {
+    const base = opciones.recortar ? texto(campo).trim() : texto(campo);
+    return base.min(1, t("TOOL-ARG-FALTA", { campo }));
+  };
+
+  const booleano = (campo: string) => z.boolean({ error: errorDe(campo) });
+
+  // ─── Descripciones ────────────────────────────────────────────────────────
+  // Son estáticas: no nombran proyectos ni fases concretas. Antes se armaban al arrancar con la
+  // lista de proyectos y de fases, y se quedaban viejas en cuanto alguien creaba una carpeta con el
+  // cliente abierto, porque la lista de tools no se vuelve a pedir. Lo que cambia vive ahora en los
+  // recursos phase-gate://estado y phase-gate://fases, que sí avisan cuando cambian.
+  const PROYECTO = t("DESC-ARG-PROYECTO");
+  // Donde el proyecto se puede deducir de la carpeta abierta (MCP Roots, Etapa 3).
+  const DEDUCIBLE = t("DESC-ARG-DEDUCIBLE");
+  const FASE = t("DESC-ARG-FASE");
+  const TAREA = t("DESC-ARG-TAREA");
+  const ARCHIVO = t("DESC-ARG-ARCHIVO");
+  const PROJECT_NO_VACIO = t("TOOL-ARG-PROJECT-VACIO");
+  const REPO_ID = t("TOOL-ARG-REPO-ID");
+
+  const startTask = {
+    project: texto("project").trim().min(1, PROJECT_NO_VACIO).nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+    task_name: obligatorio("task_name").describe(t("DESC-ARG-START-TASK-NAME")),
+    initial_context: obligatorio("initial_context").describe(t("DESC-ARG-START-INITIAL-CONTEXT")),
+    crear_proyecto: booleano("crear_proyecto").nullish().describe(t("DESC-ARG-START-CREAR-PROYECTO")),
+    // El mismo parámetro con su nombre en inglés: vale cualquiera de los dos (si vienen los dos, iguales).
+    create_project: booleano("create_project").nullish().describe(t("DESC-ARG-START-CREATE-PROJECT")),
+    repos: z
+      .array(texto("repos"), { error: errorDe("repos") })
+      .nullish()
+      .describe(t("DESC-ARG-START-REPOS")),
+    preset: texto("preset").nullish().describe(t("DESC-ARG-START-PRESET")),
+    redaccion: z
+      .enum(["es", "en"], { error: () => t("TOOL-ARG-REDACCION") })
+      .nullish()
+      .describe(t("DESC-ARG-START-REDACCION")),
+  };
+
+  const getPhasePrompt = {
+    phase: z.number({ error: errorDe("phase") }).int({ error: errorDe("phase") }).describe(FASE),
+    // Un texto propio: aquí, sin proyecto la tool no falla, entrega el prompt sin configuración de
+    // proyecto (hallazgo 8 de la auditoría de la Etapa 3).
+    project: texto("project").nullish().describe(t("DESC-ARG-PROMPT-PROJECT")),
+    task_name: texto("task_name").nullish().describe(t("DESC-ARG-PROMPT-TASK-NAME")),
+  };
+
+  const getActiveTask = {
+    project: texto("project")
+      .nullish()
+      .describe(`${PROYECTO}${t("DESC-ARG-ACTIVA-SUFIJO")}`),
+  };
+
+  const listTasks = {
+    project: texto("project").nullish().describe(`${PROYECTO}${t("DESC-ARG-LISTAR-SUFIJO")}`),
+  };
+
+  const switchTask = {
+    project: texto("project").trim().min(1, PROJECT_NO_VACIO).nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+    task_name: obligatorio("task_name").describe(t("DESC-ARG-CAMBIAR-TASK-NAME")),
+  };
+
+  // Los cuatro son opcionales por separado: qué combinación vale lo decide resolveDocPath.
+  const readCentralDoc = {
+    project: texto("project").nullish().describe(`${PROYECTO}${t("DESC-ARG-LEER-SUFIJO")}${DEDUCIBLE}`),
+    task_name: texto("task_name").nullish().describe(TAREA),
+    file_name: texto("file_name").nullish().describe(ARCHIVO),
+    file_path: texto("file_path").nullish().describe(t("DESC-ARG-LEER-FILE-PATH")),
+  };
+
+  const writeCentralDoc = {
+    ...readCentralDoc,
+    file_path: texto("file_path").nullish().describe(t("DESC-ARG-ESCRIBIR-FILE-PATH")),
+    content: texto("content").describe(t("DESC-ARG-ESCRIBIR-CONTENT")),
+    force: booleano("force").nullish().describe(t("DESC-ARG-ESCRIBIR-FORCE")),
+  };
+
+  const readCrossRepo = {
+    repo_name: obligatorio("repo_name").describe(t("DESC-ARG-CROSS-REPO-NAME")),
+    file_path: obligatorio("file_path").describe(t("DESC-ARG-CROSS-FILE-PATH")),
+  };
+
+  // ─── Repos de un proyecto (Etapa 3) ───────────────────────────────────────
+  const REPO = t("DESC-ARG-REPO");
+
+  const readRepoFile = {
+    project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+    repo: texto("repo").regex(ID_REPO, REPO_ID).describe(REPO),
+    path: obligatorio("path").describe(t("DESC-ARG-REPO-FILE-PATH")),
+  };
+
+  const repoStatus = {
+    project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+    repo: texto("repo")
+      .regex(ID_REPO, REPO_ID)
+      .nullish()
+      .describe(`${REPO}${t("DESC-ARG-REPO-STATUS-SUFIJO")}`),
+  };
+
+  // ─── Lotes de la Fase 4 (Etapa 4) ─────────────────────────────────────────
+  const textoNoVacio = (campo: string) => texto(campo).trim().min(1, t("TOOL-ARG-NO-VACIO", { campo }));
+
+  const FILA_ARCHIVO = z
+    .object({ archivo: textoNoVacio("archivo"), cambio: textoNoVacio("cambio") }, { error: errorDe("archivos") })
+    .strict();
+  const FILA_ESPERA = z
+    .object({ prueba: textoNoVacio("prueba"), esperado: textoNoVacio("esperado") }, { error: errorDe("espera_al_usuario") })
+    .strict();
+  const CONDICIONAL = z
+    .object(
+      {
+        titulo: z.enum(TITULOS_CONDICIONALES, { error: () => t("TOOL-ARG-TITULO-CONDICIONAL", { titulos: TITULOS_CONDICIONALES.join(", ") }) }),
+        texto: textoNoVacio("texto"),
+      },
+      { error: errorDe("condicionales") }
+    )
+    .strict();
+
+  const PROYECTO_QUE_ESCRIBE = `${PROYECTO}${t("DESC-ARG-QUE-ESCRIBE")}`;
+  const LOTE_RANGO = t("TOOL-ARG-LOTE-RANGO");
+
+  const recordBatch = {
+    project: texto("project").nullish().describe(PROYECTO_QUE_ESCRIBE),
+    task_name: texto("task_name").nullish().describe(t("DESC-ARG-LOTE-TASK-NAME")),
+    lote: z
+      .number({ error: errorDe("lote") })
+      .int({ error: errorDe("lote") })
+      .min(1, LOTE_RANGO)
+      .max(99, LOTE_RANGO)
+      .describe(t("DESC-ARG-LOTE")),
+    // El contenido: obligatorio al crear el recibo; se omite al solo anclar un recibo pendiente.
+    titulo: textoNoVacio("titulo")
+      .max(120, t("TOOL-ARG-MAX-CARACTERES", { campo: "titulo", max: 120 }))
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-TITULO")),
+    repo: texto("repo")
+      .regex(ID_REPO, REPO_ID)
+      .nullish()
+      .describe(`${REPO}${t("DESC-ARG-LOTE-REPO-SUFIJO")}`),
+    estado: z
+      .enum(ESTADOS_DE_LOTE, { error: () => t("TOOL-ARG-ESTADO") })
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-ESTADO")),
+    que_se_hizo: textoNoVacio("que_se_hizo").nullish().describe(t("DESC-ARG-LOTE-QUE-SE-HIZO")),
+    archivos: z
+      .array(FILA_ARCHIVO, { error: errorDe("archivos") })
+      .max(200, t("TOOL-ARG-MAX-FILAS", { campo: "archivos", max: 200 }))
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-ARCHIVOS")),
+    verificacion: textoNoVacio("verificacion").nullish().describe(t("DESC-ARG-LOTE-VERIFICACION")),
+    espera_al_usuario: z
+      .array(FILA_ESPERA, { error: errorDe("espera_al_usuario") })
+      .max(50, t("TOOL-ARG-MAX-FILAS", { campo: "espera_al_usuario", max: 50 }))
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-ESPERA")),
+    desvios: texto("desvios").nullish().describe(t("DESC-ARG-LOTE-DESVIOS")),
+    decisiones: texto("decisiones").nullish().describe(t("DESC-ARG-LOTE-DECISIONES")),
+    condicionales: z
+      .array(CONDICIONAL, { error: errorDe("condicionales") })
+      .max(4, t("TOOL-ARG-MAX-SECCIONES", { campo: "condicionales", max: 4 }))
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-CONDICIONALES")),
+    // El ancla: como mucho una de las tres.
+    commit: texto("commit").nullish().describe(t("DESC-ARG-LOTE-COMMIT")),
+    artifact_path: texto("artifact_path").nullish().describe(t("DESC-ARG-LOTE-ARTIFACT")),
+    verification_note: textoNoVacio("verification_note")
+      .max(2000, t("TOOL-ARG-MAX-CARACTERES", { campo: "verification_note", max: 2000 }))
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-NOTE")),
+    // El cierre de la fase.
+    cerrar_fase: booleano("cerrar_fase").nullish().describe(t("DESC-ARG-LOTE-CERRAR")),
+    motivo_descarte: textoNoVacio("motivo_descarte")
+      .max(500, t("TOOL-ARG-MAX-CARACTERES", { campo: "motivo_descarte", max: 500 }))
+      .nullish()
+      .describe(t("DESC-ARG-LOTE-MOTIVO")),
+    // El sellado.
+    reanclar: booleano("reanclar").nullish().describe(t("DESC-ARG-LOTE-REANCLAR")),
+    force: booleano("force").nullish().describe(t("DESC-ARG-LOTE-FORCE")),
+  };
+
+  const getBatchStatus = {
+    project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
+    task_name: texto("task_name").nullish().describe(t("DESC-ARG-LOTE-TASK-NAME")),
+    reverificar: booleano("reverificar").nullish().describe(t("DESC-ARG-REVERIFICAR")),
+  };
+
+  return {
+    startTask,
+    getPhasePrompt,
+    getActiveTask,
+    listTasks,
+    switchTask,
+    readCentralDoc,
+    writeCentralDoc,
+    readCrossRepo,
+    // get_orchestrator_status no recibe nada.
+    getOrchestratorStatus: {},
+    readRepoFile,
+    repoStatus,
+    recordBatch,
+    getBatchStatus,
   };
 }
 
-function texto(campo: string) {
-  return z.string({ error: mensaje(campo) });
+export type ShapesDeEntrada = ReturnType<typeof construirShapes>;
+
+const porIdioma = new Map<Idioma, ShapesDeEntrada>();
+
+// Los shapes de entrada de todas las tools, con descripciones y mensajes en `idioma`. Se construyen una
+// vez por idioma: dos servidores en el mismo idioma comparten los mismos objetos.
+export function shapesDe(idioma: Idioma): ShapesDeEntrada {
+  let shapes = porIdioma.get(idioma);
+  if (!shapes) {
+    shapes = construirShapes(idioma);
+    porIdioma.set(idioma, shapes);
+  }
+  return shapes;
 }
 
-// `recortar` quita los espacios ANTES de exigir el mínimo: "   " cuenta como que falta.
-function obligatorio(campo: string, opciones: { recortar?: boolean } = {}) {
-  const base = opciones.recortar ? texto(campo).trim() : texto(campo);
-  return base.min(1, `Falta \`${campo}\`.`);
+// Un shape de entrada con el nombre de siempre, en el idioma de los mensajes al usarlo. Se resuelve al
+// primer acceso (no al importar: los mensajes no se piden al cargar un módulo) y se comporta como el
+// objeto de verdad para leer sus campos, recorrerlo o pasarlo a z.object.
+function perezoso<K extends keyof ShapesDeEntrada>(clave: K): ShapesDeEntrada[K] {
+  const real = (): object => shapesDe(idiomaDeMensajes())[clave];
+  return new Proxy(
+    {},
+    {
+      get: (_, propiedad) => Reflect.get(real(), propiedad),
+      has: (_, propiedad) => Reflect.has(real(), propiedad),
+      ownKeys: () => Reflect.ownKeys(real()),
+      getOwnPropertyDescriptor: (_, propiedad) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(real(), propiedad);
+        return descriptor ? { ...descriptor, configurable: true } : undefined;
+      },
+    }
+  ) as ShapesDeEntrada[K];
 }
 
-function booleano(campo: string) {
-  return z.boolean({ error: mensaje(campo) });
-}
-
-// ─── Descripciones ──────────────────────────────────────────────────────────
-// Son estáticas: no nombran proyectos ni fases concretas. Antes se armaban al arrancar con la
-// lista de proyectos y de fases, y se quedaban viejas en cuanto alguien creaba una carpeta con el
-// cliente abierto, porque la lista de tools no se vuelve a pedir. Lo que cambia vive ahora en los
-// recursos phase-gate://estado y phase-gate://fases, que sí avisan cuando cambian.
-const PROYECTO =
-  "Proyecto: el nombre de una carpeta de proyecto de la Documentación Central. Si no existe, la " +
-  "tool te devuelve los que hay. También los listan `list_tasks`, `get_orchestrator_status` y el recurso " +
-  "`phase-gate://estado`.";
-
-// Donde el proyecto se puede deducir de la carpeta abierta (MCP Roots, Etapa 3).
-const DEDUCIBLE = " Si lo omites, se deduce de la carpeta que tienes abierta, si tu cliente la anuncia; si no se puede, la tool te lo pide.";
-
-const FASE =
-  "Número de fase. Con los prompts de fábrica son 1 a 5; `get_orchestrator_status` y el recurso " +
-  "`phase-gate://fases` listan las disponibles con su título y documento.";
-
-const TAREA = "Nombre de la carpeta de la tarea.";
-
-const ARCHIVO =
-  "Nombre (o ruta relativa) del archivo dentro de la carpeta de la tarea (ej. '01 - Análisis Técnico.md').";
-
-// ─── Shapes ─────────────────────────────────────────────────────────────────
-export const startTaskShape = {
-  project: texto("project").trim().min(1, "`project` no puede ir vacío: omítelo para deducirlo de la carpeta abierta.").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
-  task_name: obligatorio("task_name").describe("Nombre de la tarea (creará una carpeta con este nombre)."),
-  initial_context: obligatorio("initial_context").describe("El contexto, correo o requerimiento inicial completo."),
-  crear_proyecto: booleano("crear_proyecto")
-    .nullish()
-    .describe(
-      "Solo para ESTRENAR un proyecto que todavía no existe. Déjalo sin poner salvo que el usuario te haya " +
-        "dicho explícitamente que quiere crear un proyecto nuevo: sirve para que un nombre mal escrito no cree " +
-        "una carpeta suelta en la Documentación."
-    ),
-  repos: z
-    .array(texto("repos"), { error: mensaje("repos") })
-    .nullish()
-    .describe(
-      "Solo si la tarea toca algunos de los repos que declara el phase-gate.json del proyecto, no todos: sus ids " +
-        "(ej. ['api', 'web']). Sin esto, la tarea usa todos. Un id que no existe devuelve los válidos."
-    ),
-  preset: texto("preset")
-    .nullish()
-    .describe(
-      "Solo si esta tarea usa un preset distinto del de su proyecto (ej. 'ai-agent-ops' para el mantenimiento de " +
-        "un agente). Si no existe, la tool devuelve los disponibles."
-    ),
-  redaccion: z
-    .enum(["es", "en"], { error: () => "`redaccion` debe ser \"es\" o \"en\"." })
-    .nullish()
-    .describe(
-      "Solo si el contenido de los documentos de esta tarea se escribe en otro idioma que el del proyecto ('es' o " +
-        "'en'). No cambia la estructura: los nombres de los documentos, los encabezados y las claves siguen siendo los " +
-        "del idioma del proyecto."
-    ),
-};
-
-export const getPhasePromptShape = {
-  phase: z.number({ error: mensaje("phase") }).int({ error: mensaje("phase") }).describe(FASE),
-  // Un texto propio: aquí, sin proyecto la tool no falla, entrega el prompt sin configuración de
-  // proyecto (hallazgo 8 de la auditoría de la Etapa 3).
-  project: texto("project")
-    .nullish()
-    .describe(
-      "Proyecto: el nombre de una carpeta de proyecto de la Documentación Central. Pásalo siempre que lo sepas " +
-        "—lo sabes por el repositorio que tienes abierto—: con él, el prompt sale con el preset, las reglas y la " +
-        "configuración de ese proyecto, y se comprueba que no te saltas una fase (con su tarea activa). Si lo " +
-        "omites, se deduce de la carpeta abierta si tu cliente la anuncia. Si no se puede deducir, o el proyecto no " +
-        "existe, el prompt llega igual pero sin la configuración de ningún proyecto, y una nota al principio lo dice."
-    ),
-  task_name: texto("task_name")
-    .nullish()
-    .describe("Solo si quieres comprobar contra una tarea distinta de la activa del proyecto. Normalmente se omite."),
-};
-
-export const getActiveTaskShape = {
-  project: texto("project")
-    .nullish()
-    .describe(`${PROYECTO} Si lo omites, se devuelve la tarea activa de cada proyecto.`),
-};
-
-export const listTasksShape = {
-  project: texto("project").nullish().describe(`${PROYECTO} Si lo omites, se listan todos.`),
-};
-
-export const switchTaskShape = {
-  project: texto("project").trim().min(1, "`project` no puede ir vacío: omítelo para deducirlo de la carpeta abierta.").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
-  task_name: obligatorio("task_name").describe(
-    "Nombre de la carpeta de la tarea a activar. Si no existe, la tool te devuelve las que sí."
-  ),
-};
-
-// Los cuatro son opcionales por separado: qué combinación vale lo decide resolveDocPath.
-export const readCentralDocShape = {
-  project: texto("project").nullish().describe(`${PROYECTO} Úsalo junto con task_name y file_name.${DEDUCIBLE}`),
-  task_name: texto("task_name").nullish().describe(TAREA),
-  file_name: texto("file_name").nullish().describe(ARCHIVO),
-  file_path: texto("file_path")
-    .nullish()
-    .describe(
-      "ALTERNATIVA: ruta relativa dentro de la Documentación Central (ej. " +
-        "'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Solo si no usas project+task_name."
-    ),
-};
-
-export const writeCentralDocShape = {
-  ...readCentralDocShape,
-  file_path: texto("file_path")
-    .nullish()
-    .describe(
-      "ALTERNATIVA: ruta relativa dentro de la Documentación Central, que tiene que caer dentro de la carpeta " +
-        "de una tarea que ya existe (ej. 'PROYECTO-A/Proyectos/tarea/01 - Análisis Técnico.md'). Los archivos " +
-        "del proyecto no se escriben con esta tool. Solo si no usas project+task_name."
-    ),
-  content: texto("content").describe("Contenido a escribir."),
-  force: booleano("force")
-    .nullish()
-    .describe(
-      "Permite reescribir un documento congelado o el contexto inicial. Solo se usa si tu cliente no puede " +
-        "pedirle la confirmación al usuario directamente. Nunca lo pongas sin que el usuario lo haya confirmado en el chat."
-    ),
-};
-
-export const readCrossRepoShape = {
-  repo_name: obligatorio("repo_name").describe("Nombre del repositorio (ej. 'repo-a', 'repo-b')."),
-  file_path: obligatorio("file_path").describe("Ruta relativa del archivo dentro del repositorio (ej. 'src/main.ts')."),
-};
-
-// get_orchestrator_status no recibe nada.
+// ─── Shapes de entrada con su nombre de siempre ─────────────────────────────
+export const startTaskShape = perezoso("startTask");
+export const getPhasePromptShape = perezoso("getPhasePrompt");
+export const getActiveTaskShape = perezoso("getActiveTask");
+export const listTasksShape = perezoso("listTasks");
+export const switchTaskShape = perezoso("switchTask");
+export const readCentralDocShape = perezoso("readCentralDoc");
+export const writeCentralDocShape = perezoso("writeCentralDoc");
+export const readCrossRepoShape = perezoso("readCrossRepo");
 export const getOrchestratorStatusShape = {};
+export const readRepoFileShape = perezoso("readRepoFile");
+export const repoStatusShape = perezoso("repoStatus");
+export const recordBatchShape = perezoso("recordBatch");
+export const getBatchStatusShape = perezoso("getBatchStatus");
 
-// ─── Repos de un proyecto (Etapa 3) ─────────────────────────────────────────
-const ID_REPO = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const REPO =
-  "Id del repo, tal como lo declara el phase-gate.json del proyecto (ej. 'api'). Los de la tarea salen en el " +
-  "bloque CONFIGURACIÓN DEL PROYECTO de get_phase_prompt.";
-
-export const readRepoFileShape = {
-  project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
-  repo: texto("repo").regex(ID_REPO, "`repo` es el id de un repo: minúsculas, números y guiones (ej. 'api').").describe(REPO),
-  path: obligatorio("path").describe("Ruta relativa del archivo dentro del repo (ej. 'src/main.ts'). No puede entrar en .git."),
-};
-
-export const repoStatusShape = {
-  project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
-  repo: texto("repo")
-    .regex(ID_REPO, "`repo` es el id de un repo: minúsculas, números y guiones (ej. 'api').")
-    .nullish()
-    .describe(`${REPO} Si lo omites, se devuelven los repos de la tarea activa.`),
-};
+// ─── Salidas ────────────────────────────────────────────────────────────────
+// No llevan descripciones: su estructura es la misma en los dos idiomas.
 
 // Salida de repo_status: el estado de cada repo, campo por campo (EstadoDeRepo de repos.ts).
 export const repoStatusSalidaShape = {
@@ -232,114 +340,6 @@ export const repoStatusSalidaShape = {
       error: z.string().nullable(),
     })
   ),
-};
-
-// ─── Lotes de la Fase 4 (Etapa 4) ───────────────────────────────────────────
-const ESTADOS_DE_LOTE = ["verificado", "con pendientes", "fallido", "descartado"] as const;
-const TITULOS_CONDICIONALES = ["Lo que sigue igual", "Reversión", "Aviso a alguien más", "Deuda anotada"] as const;
-
-const textoNoVacio = (campo: string) => texto(campo).trim().min(1, `\`${campo}\` no puede ir vacío.`);
-
-const FILA_ARCHIVO = z
-  .object({ archivo: textoNoVacio("archivo"), cambio: textoNoVacio("cambio") }, { error: mensaje("archivos") })
-  .strict();
-const FILA_ESPERA = z
-  .object({ prueba: textoNoVacio("prueba"), esperado: textoNoVacio("esperado") }, { error: mensaje("espera_al_usuario") })
-  .strict();
-const CONDICIONAL = z
-  .object(
-    {
-      titulo: z.enum(TITULOS_CONDICIONALES, { error: () => `\`titulo\` es uno de: ${TITULOS_CONDICIONALES.join(", ")}.` }),
-      texto: textoNoVacio("texto"),
-    },
-    { error: mensaje("condicionales") }
-  )
-  .strict();
-
-const PROYECTO_QUE_ESCRIBE = `${PROYECTO} Si lo omites, se deduce de la carpeta que tienes abierta, si tu cliente la anuncia y la coincidencia es firme; si no, la tool te lo pide.`;
-
-export const recordBatchShape = {
-  project: texto("project").nullish().describe(PROYECTO_QUE_ESCRIBE),
-  task_name: texto("task_name").nullish().describe("Nombre de la carpeta de la tarea. Si lo omites, la tarea activa del proyecto."),
-  lote: z
-    .number({ error: mensaje("lote") })
-    .int({ error: mensaje("lote") })
-    .min(1, "`lote` va de 1 a 99.")
-    .max(99, "`lote` va de 1 a 99.")
-    .describe("Número del lote, el de la tabla de lotes del plan (L02 es 2)."),
-  // El contenido: obligatorio al crear el recibo; se omite al solo anclar un recibo pendiente.
-  titulo: textoNoVacio("titulo").max(120, "`titulo` no puede pasar de 120 caracteres.").nullish().describe("El objetivo del lote, en una frase. Da el nombre del recibo."),
-  repo: texto("repo")
-    .regex(ID_REPO, "`repo` es el id de un repo: minúsculas, números y guiones (ej. 'api').")
-    .nullish()
-    .describe(`${REPO} Si la tarea tiene un solo repo, se omite.`),
-  estado: z
-    .enum(ESTADOS_DE_LOTE, { error: () => "`estado` es verificado, con pendientes, fallido o descartado." })
-    .nullish()
-    .describe("Cómo quedó el lote tras su verificación."),
-  que_se_hizo: textoNoVacio("que_se_hizo").nullish().describe("Una o dos frases, con el número que importe."),
-  archivos: z
-    .array(FILA_ARCHIVO, { error: mensaje("archivos") })
-    .max(200, "`archivos` no puede tener más de 200 filas.")
-    .nullish()
-    .describe("Los archivos del lote, relativos a la raíz del repo, y qué cambió en cada uno. El servidor los compara con los del commit."),
-  verificacion: textoNoVacio("verificacion").nullish().describe("Lo que ejecutaste para verificar el lote, con su resultado en números."),
-  espera_al_usuario: z
-    .array(FILA_ESPERA, { error: mensaje("espera_al_usuario") })
-    .max(50, "`espera_al_usuario` no puede tener más de 50 filas.")
-    .nullish()
-    .describe("Las pruebas que solo puede hacer el usuario, con su resultado esperado."),
-  desvios: texto("desvios").nullish().describe("Lo que no salió como decía el plan. Vacío si no hubo."),
-  decisiones: texto("decisiones").nullish().describe("Las decisiones D<n> nuevas de este lote, cada una con su Base. Vacío si no hubo."),
-  condicionales: z
-    .array(CONDICIONAL, { error: mensaje("condicionales") })
-    .max(4, "`condicionales` no puede tener más de 4 secciones.")
-    .nullish()
-    .describe("Las secciones condicionales del recibo que apliquen (Lo que sigue igual, Reversión, Aviso a alguien más, Deuda anotada)."),
-  // El ancla: como mucho una de las tres.
-  commit: texto("commit")
-    .nullish()
-    .describe("El hash del commit del lote (de 7 a 40 caracteres hexadecimales), cuando exista. Sin él, el lote queda con el commit pendiente."),
-  artifact_path: texto("artifact_path")
-    .nullish()
-    .describe("Sin git: el archivo que cambió, relativo a la raíz del repo del lote o, sin repo, a la carpeta del proyecto. El servidor lo sella con su sha256."),
-  verification_note: textoNoVacio("verification_note")
-    .max(2000, "`verification_note` no puede pasar de 2000 caracteres.")
-    .nullish()
-    .describe("Sin git y sin archivo que sellar, o en un lote fallido o descartado: qué se comprobó o qué pasó."),
-  // El cierre de la fase.
-  cerrar_fase: booleano("cerrar_fase")
-    .nullish()
-    .describe(
-      "Solo si el usuario decidió cerrar la Fase 4 sin hacer los lotes que faltan, o con lotes fallidos. Los que no tienen " +
-        "recibo quedan descartados con `motivo_descarte`. Pide confirmación al usuario. Al anclar el último lote, la fase se " +
-        "cierra sola: no hace falta."
-    ),
-  motivo_descarte: textoNoVacio("motivo_descarte")
-    .max(500, "`motivo_descarte` no puede pasar de 500 caracteres.")
-    .nullish()
-    .describe("Con `cerrar_fase`: por qué se descartan los lotes que faltan, dicho por el usuario."),
-  // El sellado.
-  reanclar: booleano("reanclar")
-    .nullish()
-    .describe(
-      "Solo para cambiar el ancla de un recibo sellado, por ejemplo cuando un rebase o un squash cambió el SHA: con `lote` " +
-        "y el `commit` nuevo (o `artifact_path`). El contenido del lote no cambia. Pide confirmación al usuario."
-    ),
-  force: booleano("force")
-    .nullish()
-    .describe(
-      "Solo si tu cliente no puede pedirle la confirmación al usuario directamente y el usuario la dio en el chat. " +
-        "Nunca lo pongas sin esa confirmación."
-    ),
-};
-
-export const getBatchStatusShape = {
-  project: texto("project").nullish().describe(`${PROYECTO}${DEDUCIBLE}`),
-  task_name: texto("task_name").nullish().describe("Nombre de la carpeta de la tarea. Si lo omites, la tarea activa del proyecto."),
-  reverificar: booleano("reverificar")
-    .nullish()
-    .describe("Repite la verificación de cada ancla: que su commit siga en la rama actual (tras un rebase o un squash) y que el sha256 de cada artefacto siga igual."),
 };
 
 const FILA_DE_ESTADO = z.object({

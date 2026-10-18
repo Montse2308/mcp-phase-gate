@@ -22,6 +22,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { diagnosticarSinBloquear, fasesConCapa, formatearDiagnostico, informeDeConfiguracion } from "./diagnostico.js";
+import { ErrorConCodigo, fallo, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import {
   discoverProjects,
   estaDentroReal,
@@ -35,6 +36,7 @@ import { contextoInicialDe, fasesDe } from "./capas.js";
 import { esCarpeta } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { listarTareas, tareaActiva } from "./tasks.js";
+import type { Idioma } from "./vocabulario.js";
 
 export const URI_ESTADO = "phase-gate://estado";
 export const URI_FASES = "phase-gate://fases";
@@ -81,15 +83,21 @@ function dentroDeLaTarea(carpetaTarea: string, ruta: string): boolean {
 // URI o lo que apunta no es válido, y -32603 solo para un fallo de E/S inesperado.
 const RECURSO_NO_ENCONTRADO = -32002;
 
+// "No existe" se reconoce por el código del mensaje, que no depende del idioma. El texto en español
+// queda para los errores de otros módulos que todavía lleguen sin código.
+const CODIGOS_NO_ENCONTRADO = new Set(["RUTA-PROYECTO-NO-EXISTE", "RECURSO-TAREA-NO-EXISTE", "RECURSO-ARCHIVO-NO-EXISTE", "RECURSO-SIN-SUBCARPETA-DE-RECIBOS"]);
+
 function conCodigo<T>(leerRecurso: () => T): T {
   try {
     return leerRecurso();
   } catch (error) {
     if (error instanceof McpError) throw error;
-    const mensaje = error instanceof Error ? error.message : String(error);
-    if (/^No existe/.test(mensaje)) throw new McpError(RECURSO_NO_ENCONTRADO, mensaje);
-    if (typeof (error as NodeJS.ErrnoException)?.code === "string") throw new McpError(ErrorCode.InternalError, mensaje);
-    throw new McpError(ErrorCode.InvalidParams, mensaje);
+    const texto = error instanceof Error ? error.message : String(error);
+    if ((error instanceof ErrorConCodigo && CODIGOS_NO_ENCONTRADO.has(error.codigo)) || /^No existe/.test(texto)) {
+      throw new McpError(RECURSO_NO_ENCONTRADO, texto);
+    }
+    if (typeof (error as NodeJS.ErrnoException)?.code === "string") throw new McpError(ErrorCode.InternalError, texto);
+    throw new McpError(ErrorCode.InvalidParams, texto);
   }
 }
 
@@ -101,7 +109,7 @@ function variable(variables: Variables, nombre: string): string {
   try {
     return decodeURIComponent(valor);
   } catch {
-    throw new Error(`URI mal codificada: la parte "${nombre}" (${valor}) no es una codificación porcentual válida.`);
+    throw fallo("RECURSO-URI-MAL-CODIFICADA", { nombre, valor });
   }
 }
 
@@ -114,21 +122,21 @@ export function archivoDeTarea(proyecto: string, tarea: string, partes: string[]
   for (const parte of partes) validarSegmento(parte, "documento");
 
   if (tarea.startsWith(".") || partes.some((parte) => parte.startsWith("."))) {
-    throw new Error("Los archivos y carpetas que empiezan por punto no se exponen como recursos.");
+    throw fallo("RECURSO-CON-PUNTO");
   }
 
   const carpetaProyecto = requireProjectFolder(proyecto);
   const carpetaTarea = taskFolderPath(carpetaProyecto, tarea);
   if (!esCarpeta(carpetaTarea)) {
-    throw new Error(`No existe la tarea "${tarea}" en ${carpetaProyecto}.`);
+    throw fallo("RECURSO-TAREA-NO-EXISTE", { tarea, proyecto: carpetaProyecto });
   }
 
   const ruta = path.join(carpetaTarea, ...partes);
   if (!estaDentroReal(carpetaTarea, ruta)) {
-    throw new Error(`Acceso denegado: el recurso queda fuera de la carpeta de la tarea ${carpetaTarea}.`);
+    throw fallo("RECURSO-FUERA-DE-TAREA", { carpetaTarea });
   }
   if (!esArchivo(ruta)) {
-    throw new Error(`No existe "${partes.join("/")}" en la tarea "${tarea}" de ${carpetaProyecto}.`);
+    throw fallo("RECURSO-ARCHIVO-NO-EXISTE", { archivo: partes.join("/"), tarea, proyecto: carpetaProyecto });
   }
 
   return { ruta, tarea: carpetaTarea };
@@ -233,7 +241,7 @@ function listarConfiguraciones(): Resource[] {
     return [...discoverProjects().values()].sort().map((proyecto) => ({
       uri: uriDeConfiguracion(proyecto),
       name: `configuracion/${proyecto}`,
-      title: `Configuración de ${proyecto}`,
+      title: mensaje("RECURSO-CONFIGURACION-DE", { proyecto }),
       mimeType: MIME,
       annotations: { audience: AUDIENCIA },
     }));
@@ -308,10 +316,10 @@ function celda(texto: string): string {
 
 export function tablaDeFases(): string {
   const fases = fasesConCapa();
-  if (fases.length === 0) return "No se encontró ningún prompt de fase.";
+  if (fases.length === 0) return mensaje("RECURSO-SIN-FASES");
 
   return [
-    "| Fase | Título | Documento | Recibos | Capa | Archivo |",
+    mensaje("RECURSO-TABLA-DE-FASES"),
     "|---|---|---|---|---|---|",
     ...fases.map(
       (fase) =>
@@ -322,13 +330,16 @@ export function tablaDeFases(): string {
 }
 
 // ─── Registro ───────────────────────────────────────────────────────────────
-export function registrarRecursos(mcp: McpServer): void {
+// Los títulos y descripciones se fijan al registrar, en el idioma del arranque (el de crearServidor).
+export function registrarRecursos(mcp: McpServer, idioma: Idioma = idiomaDeMensajes()): void {
+  const texto = (codigo: string): string => mensaje(codigo, {}, idioma);
+
   mcp.registerResource(
     "estado",
     URI_ESTADO,
     {
-      title: "Estado de mcp-phase-gate",
-      description: "Radiografía de la instalación: variables, prompts, proyectos con su tarea activa y avisos.",
+      title: texto("RECURSO-ESTADO-TITULO"),
+      description: texto("RECURSO-ESTADO-DESCRIPCION"),
       mimeType: MIME,
       annotations: { audience: AUDIENCIA },
     },
@@ -339,8 +350,8 @@ export function registrarRecursos(mcp: McpServer): void {
     "fases",
     URI_FASES,
     {
-      title: "Fases disponibles",
-      description: "Número, título, documento, subcarpeta de recibos y archivo de prompt que gana en cada fase.",
+      title: texto("RECURSO-FASES-TITULO"),
+      description: texto("RECURSO-FASES-DESCRIPCION"),
       mimeType: MIME,
       annotations: { audience: AUDIENCIA },
     },
@@ -355,8 +366,8 @@ export function registrarRecursos(mcp: McpServer): void {
       complete: { proyecto: completarProyecto },
     }),
     {
-      title: "Configuración de un proyecto",
-      description: "El manifiesto efectivo de un proyecto, de dónde sale cada valor (preset, reglas) y el estado de sus repos en este equipo.",
+      title: texto("RECURSO-CONFIGURACION-TITULO"),
+      description: texto("RECURSO-CONFIGURACION-DESCRIPCION"),
       mimeType: MIME,
     },
     async (uri, variables) => {
@@ -378,8 +389,8 @@ export function registrarRecursos(mcp: McpServer): void {
       complete: { proyecto: completarProyecto, tarea: completarTarea, recibo: completarRecibo },
     }),
     {
-      title: "Recibo de lote",
-      description: "Un recibo de lote de la Fase 4, en la subcarpeta que declara su prompt.",
+      title: texto("RECURSO-RECIBO-TITULO"),
+      description: texto("RECURSO-RECIBO-DESCRIPCION"),
       mimeType: MIME,
     },
     async (uri, variables) =>
@@ -388,7 +399,7 @@ export function registrarRecursos(mcp: McpServer): void {
         const proyecto = variable(variables, "proyecto");
         validarSegmento(proyecto, "proyecto");
         const subcarpeta = subcarpetaDeRecibos(fasesDe(requireProjectFolder(proyecto)));
-        if (!subcarpeta) throw new Error("No existe ninguna fase que declare una subcarpeta de recibos.");
+        if (!subcarpeta) throw fallo("RECURSO-SIN-SUBCARPETA-DE-RECIBOS");
         const { ruta } = archivoDeTarea(proyecto, variable(variables, "tarea"), [
           subcarpeta,
           variable(variables, "recibo"),
@@ -404,8 +415,8 @@ export function registrarRecursos(mcp: McpServer): void {
       complete: { proyecto: completarProyecto, tarea: completarTarea, documento: completarDocumento },
     }),
     {
-      title: "Documento de una tarea",
-      description: "Un archivo de la carpeta de una tarea: el contexto inicial o el documento de una fase.",
+      title: texto("RECURSO-DOCUMENTO-TITULO"),
+      description: texto("RECURSO-DOCUMENTO-DESCRIPCION"),
       mimeType: MIME,
     },
     async (uri, variables) =>

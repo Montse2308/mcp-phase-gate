@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { DOCS, IDIOMA_POR_DEFECTO, REPOS, configDir, idiomaDelEntorno, idiomaDelSistema, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
+import { ErrorConCodigo, mensaje } from "./i18n/mensajes.js";
 import { tasksRootPath, validarSegmento } from "./paths.js";
 import { leerPromptNormalizado, separarFrontmatter } from "./phases.js";
 import { IDIOMAS, VOCABULARIO, valorDePreset } from "./vocabulario.js";
@@ -30,7 +31,8 @@ const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 export const RepoManifiesto = z
   .object({
-    id: z.string().regex(ID, "El id de un repo va en minúsculas, números y guiones (ej. 'api', 'front-web')."),
+    // El mensaje es una función: se redacta al validar, en el idioma de la llamada.
+    id: z.string().regex(ID, { error: () => mensaje("MANIFIESTO-TXT-ID-DE-REPO") }),
     dir: z.string().min(1), // relativo a PHASE_GATE_REPOS_PATH; ver leerManifiesto
     rol: z.string().max(60).optional(),
   })
@@ -71,7 +73,7 @@ export const MaquinaConfig = z
         z
           .string()
           .min(1)
-          .refine((ruta) => path.win32.isAbsolute(ruta) || path.posix.isAbsolute(ruta), "tiene que ser una ruta absoluta")
+          .refine((ruta) => path.win32.isAbsolute(ruta) || path.posix.isAbsolute(ruta), { error: () => mensaje("MAQUINA-TXT-RUTA-ABSOLUTA") })
       )
       .default({}),
     presetPorDefecto: z.string().optional(), // para proyectos sin manifiesto; si falta, "software"
@@ -92,7 +94,7 @@ export const URL_ESQUEMA_MAQUINA = "https://unpkg.com/mcp-phase-gate@3/schema/ma
 export function rutaDeError(ruta: readonly PropertyKey[]): string {
   let texto = "";
   for (const parte of ruta) texto += typeof parte === "number" ? `[${parte}]` : `${texto ? "." : ""}${String(parte)}`;
-  return texto || "(raíz)";
+  return texto || mensaje("MANIFIESTO-TXT-RAIZ");
 }
 
 // El valor que había en esa ruta del archivo: zod no lo guarda en el error, y sin él no se distingue
@@ -107,23 +109,23 @@ function valorEn(crudo: unknown, ruta: readonly PropertyKey[]): unknown {
 }
 
 function mensajeDe(issue: z.core.$ZodIssue, crudo: unknown): string {
-  if ((issue.code === "invalid_type" || issue.code === "invalid_value") && valorEn(crudo, issue.path) === undefined) return "falta";
+  if ((issue.code === "invalid_type" || issue.code === "invalid_value") && valorEn(crudo, issue.path) === undefined) return mensaje("MANIFIESTO-TXT-FALTA");
   const i = issue as z.core.$ZodIssue & { keys?: string[]; values?: unknown[]; expected?: string; minimum?: number | bigint; maximum?: number | bigint; origin?: string };
   switch (i.code) {
     case "unrecognized_keys":
-      return `clave desconocida ${(i.keys ?? []).map((clave) => `"${clave}"`).join(", ")}`;
+      return mensaje("MANIFIESTO-TXT-CLAVE-DESCONOCIDA", { claves: i.keys ?? [] });
     case "invalid_type":
-      return `debe ser de tipo ${i.expected}`;
+      return mensaje("MANIFIESTO-TXT-TIPO", { tipo: i.expected });
     case "invalid_key":
-      return `la clave no tiene la forma "<PROYECTO>/<id del repo>" (el id, en minúsculas, números y guiones)`;
+      return mensaje("MANIFIESTO-TXT-CLAVE-MAQUINA");
     case "invalid_value":
-      return `debe ser ${(i.values ?? []).map((valor) => JSON.stringify(valor)).join(" o ")}`;
+      return mensaje("MANIFIESTO-TXT-VALOR", { valores: i.values ?? [] });
     case "too_small":
-      return i.origin === "string" && Number(i.minimum) === 1 ? "no puede estar vacío" : `es demasiado corto (mínimo ${String(i.minimum)})`;
+      return i.origin === "string" && Number(i.minimum) === 1 ? mensaje("MANIFIESTO-TXT-VACIO") : mensaje("MANIFIESTO-TXT-CORTO", { minimo: String(i.minimum) });
     case "too_big":
-      return `es demasiado largo (máximo ${String(i.maximum)})`;
+      return mensaje("MANIFIESTO-TXT-LARGO", { maximo: String(i.maximum) });
     case "invalid_format":
-      return /^Invalid/.test(i.message) ? "no tiene el formato esperado" : i.message;
+      return /^Invalid/.test(i.message) ? mensaje("MANIFIESTO-TXT-FORMATO") : i.message;
     default:
       return i.message;
   }
@@ -195,7 +197,7 @@ export function presetsDisponibles(idioma: string = IDIOMA_POR_DEFECTO): Map<str
   const presets = new Map<string, Preset>();
   presets.set(PRESET_POR_DEFECTO, {
     nombre: PRESET_POR_DEFECTO,
-    descripcion: "Los prompts de fábrica, sin bloques: código con o sin suite de pruebas.",
+    descripcion: mensaje("MANIFIESTO-TXT-PRESET-SOFTWARE"),
     lotes: true,
     commits: "agente-commitea-con-OK",
     ruta: null,
@@ -225,7 +227,7 @@ export function rutaManifiesto(carpetaProyecto: string): string {
 // sitio está machine.json, que es de cada equipo.
 function errorDeDir(dir: string): string | null {
   if (path.win32.isAbsolute(dir) || path.posix.isAbsolute(dir)) {
-    return "no puede ser una ruta absoluta: es relativo a PHASE_GATE_REPOS_PATH (para otra ubicación, usa machine.json)";
+    return mensaje("MANIFIESTO-TXT-DIR-ABSOLUTO");
   }
   try {
     for (const segmento of dir.split(/[\\/]/)) validarSegmento(segmento, "dir");
@@ -243,14 +245,14 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
     estado: "invalido",
     ruta,
     codigo,
-    error: `${ARCHIVO_MANIFIESTO} de ${carpetaProyecto} no es válido (${ruta}): ${error}`,
+    error: mensaje("MANIFIESTO-TXT-INVALIDO", { archivo: ARCHIVO_MANIFIESTO, proyecto: carpetaProyecto, ruta, error }),
   });
 
   let crudo: unknown;
   try {
     crudo = leerJson(ruta);
   } catch (error) {
-    return invalido(`no es un JSON válido (${error instanceof Error ? error.message : String(error)}).`);
+    return invalido(mensaje("MANIFIESTO-TXT-JSON-INVALIDO", { detalle: error instanceof Error ? error.message : String(error) }));
   }
 
   const leido = Manifiesto.safeParse(crudo);
@@ -260,7 +262,7 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
   // Lo que zod no expresa.
   const vistos = new Set<string>();
   for (const [i, repo] of manifiesto.repos.entries()) {
-    if (vistos.has(repo.id)) return invalido(`repos[${i}].id: el id "${repo.id}" está repetido.`);
+    if (vistos.has(repo.id)) return invalido(mensaje("MANIFIESTO-TXT-ID-REPETIDO", { i, id: repo.id }));
     vistos.add(repo.id);
     const problema = errorDeDir(repo.dir);
     if (problema) return invalido(`repos[${i}].dir: ${problema}`);
@@ -268,7 +270,7 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
 
   const presets = presetsDisponibles(idiomaDelProyecto(carpetaProyecto, manifiesto).idioma);
   if (!presets.has(manifiesto.preset)) {
-    return invalido(`preset: no existe el preset "${manifiesto.preset}". Los disponibles son: ${describirPresets(presets)}.`, "PRESET-NO-EXISTE");
+    return invalido(mensaje("MANIFIESTO-TXT-PRESET-NO-EXISTE", { preset: manifiesto.preset, disponibles: describirPresets(presets) }), "PRESET-NO-EXISTE");
   }
 
   return { estado: "valido", ruta, manifiesto };
@@ -278,7 +280,7 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
 // problema si está mal escrito.
 export function manifiestoDe(carpetaProyecto: string): Manifiesto | null {
   const lectura = leerManifiesto(carpetaProyecto);
-  if (lectura.estado === "invalido") throw new Error(lectura.error);
+  if (lectura.estado === "invalido") throw new ErrorConCodigo("MANIFIESTO-TXT-INVALIDO", lectura.error);
   return lectura.estado === "valido" ? lectura.manifiesto : null;
 }
 
@@ -379,25 +381,24 @@ export function conflictoDeIdioma(carpetaProyecto: string, resuelto: IdiomaResue
   const otro: Idioma = resuelto.idioma === "es" ? "en" : "es";
   const delOtro = resuelto.enDisco[otro];
   if (delOtro.documentos === 0) return null;
-  const tareas = delOtro.tareas.map((t) => `«${t}»`).join(", ");
-  const una = delOtro.tareas.length === 1;
   if (resuelto.origen === "del proyecto") {
     return {
       severidad: "error",
       codigo: "IDIOMA-CON-TAREAS",
-      texto:
-        `${carpetaProyecto} declara "idioma": "${resuelto.idioma}" en su ${ARCHIVO_MANIFIESTO}, pero ${una ? "la tarea" : "las tareas"} ${tareas} ` +
-        `${una ? "tiene" : "tienen"} documentos en "${otro}": la deducción ${una ? "la daría" : "las daría"} por sin documentos. ` +
-        `Devuelve el manifiesto a "${otro}" o renombra esas carpetas a mano.`,
+      texto: mensaje("IDIOMA-CON-TAREAS", { proyecto: carpetaProyecto, idioma: resuelto.idioma, archivo: ARCHIVO_MANIFIESTO, tareas: delOtro.tareas, otro }),
     };
   }
   if (resuelto.origen === "de sus documentos") {
     return {
       severidad: "error",
       codigo: "IDIOMA-MIXTO",
-      texto:
-        `${carpetaProyecto} tiene documentos en los dos idiomas (${resuelto.enDisco.es.documentos} en "es", ${resuelto.enDisco.en.documentos} en "en"): ` +
-        `se usa "${resuelto.idioma}", el que más tiene. Fija "idioma" en su ${ARCHIVO_MANIFIESTO}.`,
+      texto: mensaje("IDIOMA-MIXTO", {
+        proyecto: carpetaProyecto,
+        es: resuelto.enDisco.es.documentos,
+        en: resuelto.enDisco.en.documentos,
+        idioma: resuelto.idioma,
+        archivo: ARCHIVO_MANIFIESTO,
+      }),
     };
   }
   return null;
@@ -432,13 +433,18 @@ export function leerMaquina(): LecturaMaquina {
   const vacia = { config: null, repos: new Map<string, string>(), avisos: [] };
   if (!fs.existsSync(ruta)) return { estado: "ausente", ruta, error: null, ...vacia };
 
-  const invalido = (error: string): LecturaMaquina => ({ estado: "invalido", ruta, error: `${ARCHIVO_MAQUINA} no es válido (${ruta}): ${error}`, ...vacia });
+  const invalido = (error: string): LecturaMaquina => ({
+    estado: "invalido",
+    ruta,
+    error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error }),
+    ...vacia,
+  });
 
   let crudo: unknown;
   try {
     crudo = leerJson(ruta);
   } catch (error) {
-    return invalido(`no es un JSON válido (${error instanceof Error ? error.message : String(error)}).`);
+    return invalido(mensaje("MANIFIESTO-TXT-JSON-INVALIDO", { detalle: error instanceof Error ? error.message : String(error) }));
   }
 
   const leido = MaquinaConfig.safeParse(crudo);
@@ -453,7 +459,7 @@ export function leerMaquina(): LecturaMaquina {
       avisos.push({
         severidad: "aviso",
         codigo: "MAQUINA-CLAVE-DUPLICADA",
-        texto: `${ruta}: la clave "${clave}" coincide con otra anterior sin distinguir mayúsculas en el proyecto; vale la primera.`,
+        texto: mensaje("MAQUINA-CLAVE-DUPLICADA", { ruta, clave }),
       });
       continue;
     }
@@ -466,7 +472,7 @@ export function leerMaquina(): LecturaMaquina {
 // Para quien necesita machine.json para trabajar: un archivo inválido es un error, no un "no hay".
 export function maquinaDe(): LecturaMaquina {
   const lectura = leerMaquina();
-  if (lectura.estado === "invalido") throw new Error(lectura.error!);
+  if (lectura.estado === "invalido") throw new ErrorConCodigo("MAQUINA-TXT-INVALIDA", lectura.error!);
   return lectura;
 }
 

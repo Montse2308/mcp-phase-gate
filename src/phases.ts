@@ -6,9 +6,11 @@ import * as fs from "fs";
 import * as path from "path";
 import { capasDesdeRutas, ensamblarConCapas, ensamblarFase } from "./capas.js";
 import { promptsLayers } from "./config.js";
+import { fallo, mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
 import { claveDeNombre, validarSegmento } from "./paths.js";
-import { CARPETAS_DE_COMANDOS, valorDePrompt } from "./vocabulario.js";
+import { CARPETAS_DE_COMANDOS, valorDePrompt, vocabulario } from "./vocabulario.js";
+import type { Idioma } from "./vocabulario.js";
 
 // Las reglas globales se anteponen a cada fase.
 export const GLOBAL_RULES_FILE = "global-rules.md";
@@ -91,7 +93,7 @@ const RESTO_DE_MARCADOR = /<!--[^\n]*?(?:ranura|\bslot\b)/i;
 export function entregable(texto: string, archivo: string): string {
   const limpio = quitarMarcadores(texto);
   if (RESTO_DE_MARCADOR.test(limpio)) {
-    log("warning", `${archivo} tiene un marcador de ranura que no se reconoce: llega tal cual al modelo.`);
+    log("warning", mensaje("FASE-TXT-MARCADOR-NO-RECONOCIDO", { archivo }));
   }
   return limpio.trim();
 }
@@ -103,10 +105,10 @@ function leerRecibos(valor: string | undefined, archivo: string): string | undef
   if (!valor) return undefined;
   try {
     const segmento = validarSegmento(valor, "recibos");
-    if (segmento.startsWith(".")) throw new Error("no puede empezar por punto.");
+    if (segmento.startsWith(".")) throw fallo("FASE-TXT-RECIBOS-CON-PUNTO");
     return segmento;
   } catch (error: any) {
-    log("warning", `Se ignora el frontmatter recibos de ${archivo}: ${error.message}`);
+    log("warning", mensaje("FASE-TXT-RECIBOS-IGNORADO", { archivo, motivo: error.message }));
     return undefined;
   }
 }
@@ -124,11 +126,7 @@ function descartarRecibosQueChocan(phases: Map<number, PhaseFile>): void {
 
   for (const datos of phases.values()) {
     if (datos.recibos && documentos.has(claveDeNombre(datos.recibos))) {
-      log(
-        "warning",
-        `Se ignora el frontmatter recibos de ${datos.file}: ` +
-          `"${datos.recibos}" es el nombre de un documento de fase.`
-      );
+      log("warning", mensaje("FASE-TXT-RECIBOS-CHOCAN", { archivo: datos.file, recibos: datos.recibos }));
       datos.recibos = undefined;
     }
   }
@@ -265,23 +263,23 @@ export function leerPromptNormalizado(ruta: string): string {
 // recibos de la fase que la declare. Va aquí y no en el
 // comando del cliente para que el nombre viva en un solo sitio; así afinar un prompt no obliga
 // a editar además un comando en cada dispositivo.
-export function describePhaseFiles(available: Map<number, PhaseFile>, phase: number): string {
+// Se escribe en el idioma del proyecto (`idioma`), como todo bloque que el servidor añade a un prompt.
+export function describePhaseFiles(available: Map<number, PhaseFile>, phase: number, idioma: Idioma = "es"): string {
   const propio = available.get(phase)?.documento;
 
   const previos = [...available.entries()]
     .filter(([numero, datos]) => numero < phase && datos.documento)
     .sort((a, b) => a[0] - b[0])
-    .map(([numero, datos]) => {
-      const recibos = datos.recibos ? ` (recibos de lote en \`${datos.recibos}/\`)` : "";
-      return `- Fase ${numero}: \`${datos.documento}\`${recibos}`;
-    });
+    .map(([numero, datos]) =>
+      mensaje("FASE-TXT-DOCUMENTO-PREVIO", { numero, documento: datos.documento, recibos: datos.recibos ?? null }, idioma)
+    );
 
   if (!propio && previos.length === 0) return "";
 
-  const lineas = ["## ARCHIVOS DE ESTA TAREA (nombres exactos)"];
+  const lineas = [`## ${vocabulario(idioma).encabezados.archivosDeLaTarea}`];
 
   if (previos.length) {
-    lineas.push("", "Documentos de las fases anteriores, léelos con `read_central_doc`:", ...previos);
+    lineas.push("", mensaje("FASE-TXT-LEE-PREVIOS", {}, idioma), ...previos);
   }
 
   if (propio) {
@@ -292,22 +290,15 @@ export function describePhaseFiles(available: Map<number, PhaseFile>, phase: num
     if (recibos) {
       lineas.push(
         "",
-        `El documento de esta fase se llama exactamente \`${propio}\`. Lo genera \`record_batch\` al ` +
-          "cerrar el último lote: no lo escribas con `write_central_doc`.",
+        mensaje("FASE-TXT-DOCUMENTO-DE-LOTES", { documento: propio }, idioma),
         "",
-        `Los recibos de lote van en la subcarpeta \`${recibos}/\`, uno por lote: ` +
-          `\`${recibos}/L01 - <slug>.md\`. Los escribe \`record_batch\`, también con un solo lote ` +
-          "mientras está abierto."
+        mensaje("FASE-TXT-RECIBOS-DE-LOTE", { recibos }, idioma)
       );
     } else {
-      lineas.push(
-        "",
-        `El documento de esta fase se llama exactamente \`${propio}\`. Guárdalo con ` +
-          "`write_central_doc` en la carpeta de la tarea activa, con ese nombre y sin cambiarlo."
-      );
+      lineas.push("", mensaje("FASE-TXT-DOCUMENTO-PROPIO", { documento: propio }, idioma));
     }
   } else {
-    lineas.push("", "Esta fase no deja documento en la Documentación Central: su salida va en el chat.");
+    lineas.push("", mensaje("FASE-TXT-SIN-DOCUMENTO", {}, idioma));
   }
 
   return lineas.join("\n");

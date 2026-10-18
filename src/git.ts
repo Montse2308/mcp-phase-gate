@@ -19,6 +19,8 @@ import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
+import { fallo, mensaje } from "./i18n/mensajes.js";
+
 export const ESPERA_DE_GIT_MS = 10_000;
 const SALIDA_MAXIMA = 1_048_576;
 
@@ -37,17 +39,13 @@ export class ErrorDeGit extends Error {
 export type FalloDeEjecucion = { code?: string | number | null | undefined; killed?: boolean | undefined; message: string };
 
 export function traducirError(error: FalloDeEjecucion, stderr: string, dir: string): ErrorDeGit {
-  if (error.code === "ENOENT") return new ErrorDeGit("git no está instalado o no está en el PATH de este equipo.", "no-instalado");
-  if (error.killed) return new ErrorDeGit(`git no respondió en ${ESPERA_DE_GIT_MS / 1000} s en ${dir}.`, "tiempo");
+  if (error.code === "ENOENT") return new ErrorDeGit(mensaje("GITX-NO-INSTALADO"), "no-instalado");
+  if (error.killed) return new ErrorDeGit(mensaje("GITX-TIEMPO", { segundos: ESPERA_DE_GIT_MS / 1000, dir }), "tiempo");
   if (/dubious ownership/i.test(stderr)) {
-    return new ErrorDeGit(
-      `git se niega a leer ${dir} porque la carpeta es de otro usuario ("dubious ownership"). Si confías en ella, ` +
-        `márcala como segura con: git config --global --add safe.directory "${dir.replace(/\\/g, "/")}"`,
-      "propiedad-dudosa"
-    );
+    return new ErrorDeGit(mensaje("GITX-PROPIEDAD-DUDOSA", { dir, seguro: dir.replace(/\\/g, "/") }), "propiedad-dudosa");
   }
-  if (/not a git repository/i.test(stderr)) return new ErrorDeGit(`${dir} no es un repositorio de git.`, "no-es-repo");
-  return new ErrorDeGit(`git falló en ${dir}: ${stderr.trim() || error.message}`, "otro");
+  if (/not a git repository/i.test(stderr)) return new ErrorDeGit(mensaje("GITX-NO-ES-REPO", { dir }), "no-es-repo");
+  return new ErrorDeGit(mensaje("GITX-FALLO", { dir, detalle: stderr.trim() || error.message }), "otro");
 }
 
 // Las mismas opciones para las dos variantes: es lo que hace de esto una sola puerta.
@@ -83,7 +81,7 @@ export function anularFiltros(salidaDeConfig: string, dir: string): string[] {
   const args: string[] = [];
   for (const nombre of nombres) {
     // Un nombre que no se puede escribir en un -c sin ambigüedad no se puede anular: se falla cerrado.
-    if (!nombre || /[=\s]/.test(nombre)) throw new ErrorDeGit(`${dir} define un filtro de git con un nombre raro ("${nombre}") que no se puede desactivar; no se consulta.`, "otro");
+    if (!nombre || /[=\s]/.test(nombre)) throw new ErrorDeGit(mensaje("GITX-FILTRO-RARO", { dir, nombre }), "otro");
     for (const variable of ["clean", "smudge", "process"]) args.push("-c", `filter.${nombre}.${variable}=`);
     args.push("-c", `filter.${nombre}.required=false`);
   }
@@ -95,7 +93,7 @@ const sinCoincidencias = (codigo: unknown): boolean => codigo === 1;
 
 // Con un cwd que no existe, execFile da ENOENT y se confundiría con "git no está instalado".
 function siNoEsCarpeta(dir: string): ErrorDeGit | null {
-  return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? null : new ErrorDeGit(`${dir} no existe o no es una carpeta.`, "otro");
+  return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? null : new ErrorDeGit(mensaje("GITX-NO-ES-CARPETA", { dir }), "otro");
 }
 
 // `aceptados`: los códigos de salida que son una respuesta y no un error (merge-base --is-ancestor
@@ -235,9 +233,9 @@ export const MARCA_DE_DEMO = ".demo-mcp-phase-gate";
 
 export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string[], cuando: { fecha: string; nombre: string; correo: string }): string {
   const marca = path.join(raizDemo, MARCA_DE_DEMO);
-  if (!fs.statSync(marca, { throwIfNoEntry: false })?.isFile()) throw new Error(`${raizDemo} no es una carpeta de demo: no se escribe en git fuera de una.`);
+  if (!fs.statSync(marca, { throwIfNoEntry: false })?.isFile()) throw fallo("GITX-DEMO-NO-MARCADA", { raiz: raizDemo });
   const relativa = path.relative(path.resolve(raizDemo), path.resolve(dir));
-  if (!relativa || relativa.startsWith("..") || path.isAbsolute(relativa)) throw new Error(`${dir} no está dentro de la carpeta de la demo.`);
+  if (!relativa || relativa.startsWith("..") || path.isAbsolute(relativa)) throw fallo("GITX-DEMO-FUERA", { dir });
   // Ninguna GIT_* de quien la genera (GIT_DIR, GIT_TEMPLATE_DIR, GIT_CONFIG_PARAMETERS…): solo las de aquí.
   const heredado = Object.fromEntries(Object.entries(process.env).filter(([clave]) => !clave.toUpperCase().startsWith("GIT_")));
   const env = {

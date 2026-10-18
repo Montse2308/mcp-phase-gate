@@ -16,6 +16,7 @@ import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import { leerVariable } from "./config.js";
+import { mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
 
 export type Confirmacion = "confirmada" | "rechazada" | "no-disponible";
@@ -49,22 +50,10 @@ function sesionDe(mcp: McpServer): Sesion {
   return sesion;
 }
 
-const NOTA_OFF =
-  "Si tu cliente no te mostró la confirmación, regístralo con PHASE_GATE_ELICITATION=off y la confirmación " +
-  "volverá a pedirse en el chat.";
-
-const NOTA_SIN_RESPUESTA =
-  "Tu cliente no respondió a dos confirmaciones seguidas, así que esta vez tampoco se escribe nada; durante el " +
-  "resto de la sesión la confirmación vuelve a pedirse en el chat (con force).";
-
-const NOTA_CANCELADA = "El cliente canceló la llamada antes de que el usuario respondiera.";
+// Las notas (CONFIRMACION-NOTA-*) se redactan al devolverlas, en el idioma de la llamada.
 
 // Valores de PHASE_GATE_ELICITATION que apagan las confirmaciones directas.
 const APAGADO = new Set(["off", "false", "0", "no"]);
-
-const NOTA_NO_IMPLEMENTA =
-  "Tu cliente anuncia confirmaciones directas pero no las implementa: durante el resto de la sesión la " +
-  "confirmación vuelve a pedirse en el chat (con force).";
 
 export async function pedirConfirmacion(
   mcp: McpServer,
@@ -89,7 +78,7 @@ export async function pedirConfirmacion(
             confirmar: {
               type: "boolean",
               title: pregunta.etiqueta,
-              description: "Marca la casilla y acepta para confirmar.",
+              description: mensaje("CONFIRMACION-CASILLA"),
               default: false,
             },
           },
@@ -104,11 +93,11 @@ export async function pedirConfirmacion(
     sesion.vencimientosSeguidos = 0;
     return { estado: respuesta.action === "accept" && respuesta.content?.confirmar === true ? "confirmada" : "rechazada" };
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : String(error);
+    const detalle = error instanceof Error ? error.message : String(error);
 
     // Una cancelación del cliente no dice nada de si muestra o no el formulario: no cuenta como
     // vencimiento ni cambia la sesión.
-    if (extra.signal.aborted) return { estado: "rechazada", nota: NOTA_CANCELADA };
+    if (extra.signal.aborted) return { estado: "rechazada", nota: mensaje("CONFIRMACION-NOTA-CANCELADA") };
 
     if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
       sesion.vencimientosSeguidos++;
@@ -116,22 +105,22 @@ export async function pedirConfirmacion(
         // Desde la siguiente llamada decide force; ESTA falla cerrada. Si no, una persona ausente
         // dos veces más un force puesto por el modelo acabarían escribiendo sin que nadie confirmara.
         sesion.noDisponible = true;
-        log("warning", "El cliente dejó vencer dos confirmaciones seguidas; se desactivan para el resto de la sesión.");
-        return { estado: "rechazada", nota: NOTA_SIN_RESPUESTA };
+        log("warning", mensaje("CONFIRMACION-LOG-VENCIDAS"));
+        return { estado: "rechazada", nota: mensaje("CONFIRMACION-NOTA-SIN-RESPUESTA") };
       }
-      return { estado: "rechazada", nota: NOTA_OFF };
+      return { estado: "rechazada", nota: mensaje("CONFIRMACION-NOTA-OFF") };
     }
 
     sesion.vencimientosSeguidos = 0;
 
-    if ((error instanceof McpError && error.code === ErrorCode.MethodNotFound) || /does not support/i.test(mensaje)) {
+    if ((error instanceof McpError && error.code === ErrorCode.MethodNotFound) || /does not support/i.test(detalle)) {
       sesion.noDisponible = true;
-      log("warning", `El cliente anuncia elicitation pero no la implementa (${mensaje}); se desactiva para la sesión.`);
-      return { estado: "no-disponible", nota: NOTA_NO_IMPLEMENTA };
+      log("warning", mensaje("CONFIRMACION-LOG-NO-IMPLEMENTA", { detalle }));
+      return { estado: "no-disponible", nota: mensaje("CONFIRMACION-NOTA-NO-IMPLEMENTA") };
     }
 
     // Ante lo desconocido se falla cerrado: no se escribe nada y la persona puede repetirlo.
-    log("warning", `La confirmación falló y se trata como un no: ${mensaje}`);
+    log("warning", mensaje("CONFIRMACION-LOG-FALLO", { detalle }));
     return { estado: "rechazada" };
   }
 }

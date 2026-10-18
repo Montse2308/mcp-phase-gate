@@ -45,6 +45,8 @@ import { reverificar } from "./anclas.js";
 import { ensamblarIndice, faseEnCarpeta, lotesDelPlan, recibosDeLaTarea } from "./lotes.js";
 import type { FaseDeLotes, ReciboEnDisco } from "./lotes.js";
 import { GENERADO_POR, etiquetaDeLote, frontmatterDeRecibo } from "./recibos.js";
+import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
+import type { Idioma } from "./vocabulario.js";
 
 export type Severidad = "error" | "aviso" | "info";
 export type Hallazgo = { severidad: Severidad; codigo: string; texto: string };
@@ -211,8 +213,7 @@ function configuracionDelProyecto(
     hallar(
       "aviso",
       "MANIFIESTO-CONFLICTO",
-      `En la carpeta de ${nombre} hay ${conflictos.map((c) => `"${c}"`).join(", ")}, que parece${conflictos.length === 1 ? "" : "n"} una copia en ` +
-        "conflicto de phase-gate.json (OneDrive la deja al editar en dos equipos). Solo se lee phase-gate.json: compáralas y borra la que sobre."
+      mensaje("MANIFIESTO-CONFLICTO", { proyecto: nombre, copias: conflictos })
     );
   }
 
@@ -226,7 +227,7 @@ function configuracionDelProyecto(
   const sinPresetPropio = tareas.filter((tarea) => {
     const declarado = contexto ? frontmatterDeTarea(tarea.folderPath, contexto).preset : null;
     if (declarado && !ctx.presets.has(declarado)) {
-      hallar("error", "PRESET-NO-EXISTE", `La tarea "${tarea.taskName}" de ${nombre} declara el preset "${declarado}", que no existe. Los disponibles son: ${describirPresets(ctx.presets)}.`);
+      hallar("error", "PRESET-NO-EXISTE", mensaje("PRESET-NO-EXISTE", { tarea: tarea.taskName, proyecto: nombre, preset: declarado, disponibles: describirPresets(ctx.presets) }));
     }
     return !declarado;
   });
@@ -235,9 +236,7 @@ function configuracionDelProyecto(
     hallar(
       "aviso",
       "PRESET-IMPLICITO",
-      `${nombre} no tiene phase-gate.json ni hay presetPorDefecto en machine.json: ${sinPresetPropio.length === 1 ? "su tarea usa" : `sus ${sinPresetPropio.length} tareas usan`} ` +
-        "el preset `software`. Si se crearon con el flujo de la réplica (el de antes de la 3.0), consérvalo con `init --migrate` o con " +
-        "\"presetPorDefecto\": \"software-replica\" en machine.json."
+      mensaje("PRESET-IMPLICITO", { proyecto: nombre, tareas: sinPresetPropio.length })
     );
   }
 
@@ -263,23 +262,24 @@ function configuracionDelProyecto(
       let esGit = false;
       let rama: string | null = null;
       if (repo.ruta && !repo.existe) {
-        hallar("aviso", "REPO-NO-EXISTE", `El repo \`${repo.id}\` de ${nombre} apunta a "${repo.ruta}" (${repo.origenRuta}), que no existe en este equipo.`);
+        hallar("aviso", "REPO-NO-EXISTE", mensaje("REPO-NO-EXISTE", { repo: repo.id, proyecto: nombre, ruta: repo.ruta, origen: repo.origenRuta }));
       } else if (repo.existe && !ctx.estado.gitAusente) {
         const estado = ctx.estados ? (ctx.estados.get(`${nombre}/${repo.id}`) ?? null) : estadoDeRepoSincrono(repo);
         if (!estado) {
           if (!ctx.estado.gitLento) {
             ctx.estado.gitLento = true;
-            hallar("info", "GIT-LENTO", `git no respondió en ${PLAZO_DE_ESTADOS_MS / 1000} s en algún repo; su rama no se muestra. repo_status lo intenta sin ese plazo.`);
+            hallar("info", "GIT-LENTO", mensaje("GIT-LENTO", { segundos: PLAZO_DE_ESTADOS_MS / 1000 }));
           }
           repos.push({ id: repo.id, ruta: repo.ruta, origen: repo.origenRuta, existe: repo.existe, esGit: false, rama: null });
           continue;
         }
-        if (estado.error && /no está instalado/.test(estado.error)) {
+        // El texto viene de git.ts, en el idioma de la llamada: se reconoce en los dos.
+        if (estado.error && /no está instalado|not installed/i.test(estado.error)) {
           ctx.estado.gitAusente = true;
-          hallar("aviso", "GIT-NO-INSTALADO", `${estado.error} repo_status y el estado de los repos no estarán disponibles.`);
+          hallar("aviso", "GIT-NO-INSTALADO", mensaje("GIT-NO-INSTALADO", { error: estado.error }));
         }
         esGit = estado.esGit;
-        rama = estado.separado ? `(separado en ${estado.head})` : estado.rama;
+        rama = estado.separado ? mensaje("DOCTOR-RAMA-SEPARADA", { head: estado.head }) : estado.rama;
       }
       repos.push({ id: repo.id, ruta: repo.ruta, origen: repo.origenRuta, existe: repo.existe, esGit, rama });
     }
@@ -335,10 +335,6 @@ export async function diagnosticarSinBloquear(opciones: Omit<OpcionesDeDiagnosti
 // índice que ya no es el que el servidor ensamblaría con los recibos de hoy.
 type Hallar = (severidad: Severidad, codigo: string, texto: string) => void;
 
-function enumerar(elementos: string[]): string {
-  return elementos.length <= 1 ? elementos.join("") : `${elementos.slice(0, -1).join(", ")} y ${elementos[elementos.length - 1]}`;
-}
-
 function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<number, PhaseFile>, hallar: Hallar): void {
   const idioma = idiomaDelProyecto(nombre).idioma;
   for (const tarea of tareas) {
@@ -354,7 +350,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
     try {
       porLote = recibosDeLaTarea(fase);
     } catch (error) {
-      hallar("aviso", "RECIBO-ILEGIBLE", `${quien}: ${mensajeDe(error)}`);
+      hallar("aviso", "RECIBO-ILEGIBLE", mensaje("RECIBO-ILEGIBLE", { quien, error: mensajeDe(error) }));
       continue;
     }
     let total: number | null = null;
@@ -368,7 +364,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
       for (const [lote, recibos] of [...porLote.entries()].sort((a, b) => a[0] - b[0])) {
         if (lote <= total) continue;
         for (const r of recibos) {
-          hallar("aviso", "RECIBO-FUERA-DE-PLAN", `${quien}: \`${fase.recibos}/${r.nombre}\` es de un lote que el plan no declara (declara ${total}).`);
+          hallar("aviso", "RECIBO-FUERA-DE-PLAN", mensaje("RECIBO-FUERA-DE-PLAN", { quien, archivo: `${fase.recibos}/${r.nombre}`, total }));
         }
       }
     }
@@ -381,8 +377,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
       hallar(
         "info",
         "RECIBO-MANUAL",
-        `${quien}: ${manuales.length === 1 ? `el recibo de ${manuales[0]} se escribió` : `los recibos de ${enumerar(manuales)} se escribieron`} a mano ` +
-          "(sin `origen: servidor`). record_batch los lee igual y get_batch_status los marca como manuales."
+        mensaje("RECIBO-MANUAL", { quien, lotes: manuales })
       );
     }
 
@@ -395,8 +390,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
           hallar(
             "aviso",
             "INDICE-DESINCRONIZADO",
-            `${quien}: \`${fase.documento}\` no coincide con lo que el servidor ensamblaría hoy con sus recibos (¿se cambió a mano, después del cierre, ` +
-              "el título, el estado, el ancla o lo que espera al usuario de algún recibo, o el propio índice?)."
+            mensaje("INDICE-DESINCRONIZADO", { quien, documento: fase.documento })
           );
         }
       } catch {
@@ -467,7 +461,7 @@ export async function anclasNoVigentes(): Promise<Hallazgo[]> {
         for (const { recibo } of recibos) {
           if (recibo.ancla.tipo !== "commit" && recibo.ancla.tipo !== "sha256") continue;
           const { vigente, texto } = await reverificar(nombre, recibo);
-          if (!vigente) hallazgos.push({ severidad: "aviso", codigo: "ANCLA-NO-VIGENTE", texto: `${nombre}/${tarea.taskName}, ${etiquetaDeLote(lote)}: ${texto}` });
+          if (!vigente) hallazgos.push({ severidad: "aviso", codigo: "ANCLA-NO-VIGENTE", texto: mensaje("ANCLA-NO-VIGENTE", { quien: `${nombre}/${tarea.taskName}`, lote: etiquetaDeLote(lote), texto }) });
         }
       }
     }
@@ -499,7 +493,7 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
 
   const rutas = { docs: estadoRuta(DOCS), repos: estadoRuta(REPOS) };
   for (const estado of [rutas.docs, rutas.repos]) {
-    if (!estado.existe) hallar("error", "VAR-FALTA", estado.error ?? "Falta una variable obligatoria.");
+    if (!estado.existe) hallar("error", "VAR-FALTA", estado.error ?? mensaje("VAR-FALTA"));
   }
 
   // Estado local.
@@ -518,8 +512,7 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
     hallar(
       "aviso",
       "ESTADO-ILEGIBLE",
-      `${archivoEstado} no es un JSON con la forma esperada: se ignora y la tarea activa de cada proyecto se deduce. ` +
-        `Un switch_task lo vuelve a escribir.`
+      mensaje("ESTADO-ILEGIBLE", { archivo: archivoEstado })
     );
   }
 
@@ -534,13 +527,13 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
         hallar(
           "aviso",
           "CAPA-NO-ES-CARPETA",
-          `${usada} apunta a "${capa.ruta}", que no es una carpeta: se usan solo los prompts de fábrica.`
+          mensaje("CAPA-NO-ES-CARPETA", { variable: usada, ruta: capa.ruta })
         );
       } else {
         hallar(
           "aviso",
           "CAPA-NO-EXISTE",
-          `${usada} apunta a "${capa.ruta}", que no existe: se usan solo los prompts de fábrica.`
+          mensaje("CAPA-NO-EXISTE", { variable: usada, ruta: capa.ruta })
         );
       }
     }
@@ -573,9 +566,7 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
       hallar(
         "aviso",
         "GLOBAL-SIN-BASE",
-        `Tu global-rules.md (${archivoGlobales}) sustituye al de fábrica y no tiene ` +
-          `${sinReinyectar.map((seccion) => `"## ${seccion}"`).join(", ")}. Las fases citan esas secciones: ` +
-          `cópialas desde el de fábrica.`
+        mensaje("GLOBAL-SIN-BASE", { archivo: archivoGlobales, secciones: sinReinyectar })
       );
     }
   }
@@ -587,7 +578,7 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
   try {
     phases = discoverPhases(rutasCapas);
   } catch (error) {
-    hallar("error", "PROMPTS-ILEGIBLES", `No se pudieron leer las carpetas de prompts: ${mensajeDe(error)}`);
+    hallar("error", "PROMPTS-ILEGIBLES", mensaje("PROMPTS-ILEGIBLES", { error: mensajeDe(error) }));
   }
   const fases = fasesConCapa(capas, phases);
 
@@ -596,36 +587,35 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
       hallar(
         "aviso",
         "FASE-SIN-DOC",
-        `La Fase ${fase.numero} (${fase.titulo}) no declara \`documento\` en su cabecera: no se puede deducir su avance.`
+        mensaje("FASE-SIN-DOC", { fase: fase.numero, titulo: fase.titulo })
       );
     }
     if (!fase.comando) {
       hallar(
         "info",
         "FASE-SIN-COMANDO",
-        `La Fase ${fase.numero} (${fase.titulo}) no tiene \`comandos/f${fase.numero}.md\` en ninguna capa de ` +
-          `prompts: su comando /f${fase.numero} usa el texto genérico.`
+        mensaje("FASE-SIN-COMANDO", { fase: fase.numero, titulo: fase.titulo })
       );
     }
   }
 
   // Configuración local: machine.json y los presets disponibles.
   const maquina = leerMaquina();
-  if (maquina.estado === "invalido") hallar("error", "MAQUINA-INVALIDA", `${maquina.error} Mientras no se corrija, fallan los prompts de los proyectos sin manifiesto (y sin proyecto), que necesitan su presetPorDefecto, y todo lo que resuelve repos.`);
+  if (maquina.estado === "invalido") hallar("error", "MAQUINA-INVALIDA", mensaje("MAQUINA-INVALIDA", { error: maquina.error }));
   for (const aviso of maquina.avisos) hallar(aviso.severidad, aviso.codigo, aviso.texto);
 
   let presets = new Map<string, Preset>();
   try {
     presets = presetsDisponibles();
   } catch (error) {
-    hallar("error", "PRESETS-ILEGIBLES", `No se pudieron leer los presets: ${mensajeDe(error)}`);
+    hallar("error", "PRESETS-ILEGIBLES", mensaje("PRESETS-ILEGIBLES", { error: mensajeDe(error) }));
   }
   const presetPorDefecto = maquina.config?.presetPorDefecto ?? null;
   if (presetPorDefecto && !presets.has(presetPorDefecto)) {
     hallar(
       "error",
       "PRESET-NO-EXISTE",
-      `El presetPorDefecto de ${maquina.ruta} es "${presetPorDefecto}", que no existe. Los disponibles son: ${describirPresets(presets)}.`
+      mensaje("PRESET-NO-EXISTE", { maquina: maquina.ruta, preset: presetPorDefecto, disponibles: describirPresets(presets) })
     );
   }
   const configuracion: Diagnostico["configuracion"] = {
@@ -659,8 +649,7 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
           hallar(
             "info",
             "ROOTS-AMBIGUO",
-            `Las carpetas abiertas en el cliente coinciden con varios proyectos (${resolucion.candidatos.join(", ")}): ` +
-              "las tools no pueden deducir el proyecto e indican que se pase `project`."
+            mensaje("ROOTS-AMBIGUO", { candidatos: resolucion.candidatos })
           );
         }
       }
@@ -691,27 +680,24 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
         hallar(
           "aviso",
           "RUTA-LARGA",
-          `${largas.cuenta} ${largas.cuenta === 1 ? "ruta" : "rutas"} de la Documentación ${largas.cuenta === 1 ? "pasa" : "pasan"} de ${LARGO_DE_RUTA} caracteres; ` +
-            `la más larga (${largas.mas_larga!.length}): \`${largas.mas_larga}\`. Cerca de 255 o 260, OneDrive y muchas herramientas de Windows ` +
-            `dejan de abrir el archivo: acorta el nombre del proyecto, de la tarea o de la carpeta de la Documentación.` +
-            (largas.recortado ? ` (Se revisaron las primeras ${TOPE_DE_ENTRADAS} entradas.)` : "")
+          mensaje("RUTA-LARGA", { cuenta: largas.cuenta, largo: LARGO_DE_RUTA, masLarga: largas.mas_larga!, tope: largas.recortado ? TOPE_DE_ENTRADAS : null })
         );
       }
 
       for (const [clave, tarea] of Object.entries(punteros)) {
         const carpeta = findProjectFolder(clave);
         if (!carpeta) {
-          hallar("info", "PUNTERO-HUERFANO", `Hay un puntero guardado para el proyecto "${clave}", que ya no existe.`);
+          hallar("info", "PUNTERO-HUERFANO", mensaje("PUNTERO-HUERFANO", { proyecto: clave }));
         } else if (!listarTareas(carpeta, fasesDelProyecto(carpeta, phases)).some((t) => t.taskName === tarea)) {
           hallar(
             "info",
             "PUNTERO-HUERFANO",
-            `El puntero de ${carpeta} apunta a la tarea "${tarea}", que ya no existe: se toma la más reciente.`
+            mensaje("PUNTERO-HUERFANO", { carpeta, tarea })
           );
         }
       }
     } catch (error) {
-      hallar("error", "DOCS-ILEGIBLE", `No se pudo leer la Documentación Central: ${mensajeDe(error)}`);
+      hallar("error", "DOCS-ILEGIBLE", mensaje("DOCS-ILEGIBLE", { error: mensajeDe(error) }));
     }
   }
 
@@ -740,24 +726,41 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
 
 // ─── Formato ────────────────────────────────────────────────────────────────
 // Texto para la terminal (doctor) y Markdown para el chat (la tool y el recurso). Las dos salen
-// del mismo objeto y tienen las mismas secciones, en el mismo orden.
+// del mismo objeto y tienen las mismas secciones, en el mismo orden. En el idioma de la llamada; los
+// valores de los enums (severidad, capa, origen…) siguen canónicos en el objeto y se traducen aquí.
+
+type Textos = {
+  t: (codigo: string, parametros?: Record<string, unknown>) => string;
+  valor: (valor: string) => string;
+  columnas: (codigo: string) => string[];
+};
+
+function textos(idioma: Idioma = idiomaDeMensajes()): Textos {
+  const t = (codigo: string, parametros: Record<string, unknown> = {}): string => mensaje(codigo, parametros, idioma);
+  return { t, valor: (valor) => t("DOCTOR-VALOR", { valor }), columnas: (codigo) => t(codigo).split("|") };
+}
+
+// El ancho de la columna de severidad: la más larga más dos (7 en español, como siempre).
+function anchoDeSeveridad(x: Textos): number {
+  return Math.max(...(["error", "aviso", "info"] as Severidad[]).map((s) => x.valor(s).length)) + 2;
+}
 
 type FilaVariable = { nombre: NombreLogico; marca: string; valor: string; origen: string };
 
-function filasDeVariables(d: Diagnostico): FilaVariable[] {
+function filasDeVariables(d: Diagnostico, { t }: Textos): FilaVariable[] {
   return d.variables.map((lectura) => {
-    const origen = lectura.usada ? `${lectura.usada} · ${lectura.fuente}` : "";
+    const origen = lectura.usada ? t("DOCTOR-ORIGEN-VARIABLE", { usada: lectura.usada, fuente: lectura.fuente }) : "";
     const nombre = lectura.logica;
 
     if (nombre === "DOCS_PATH" || nombre === "REPOS_PATH") {
       const ruta = nombre === "DOCS_PATH" ? d.rutas.docs : d.rutas.repos;
-      return { nombre, marca: ruta.existe ? "✓" : "✗", valor: ruta.ruta ?? "sin definir", origen };
+      return { nombre, marca: ruta.existe ? "✓" : "✗", valor: ruta.ruta ?? t("DOCTOR-SIN-DEFINIR"), origen };
     }
 
     if (lectura.valor === undefined || (lectura.valor === "" && nombre !== "TASKS_SUBDIR")) {
-      if (nombre === "TASKS_SUBDIR") return { nombre, marca: "·", valor: TASKS_SUBDIR_POR_DEFECTO, origen: "(por defecto)" };
-      if (nombre === "STATE_PATH") return { nombre, marca: "·", valor: `sin definir → ${path.dirname(d.estado.archivo)}`, origen };
-      return { nombre, marca: "·", valor: "sin definir", origen };
+      if (nombre === "TASKS_SUBDIR") return { nombre, marca: "·", valor: TASKS_SUBDIR_POR_DEFECTO, origen: t("DOCTOR-ORIGEN-POR-DEFECTO") };
+      if (nombre === "STATE_PATH") return { nombre, marca: "·", valor: t("DOCTOR-SIN-DEFINIR-ESTADO", { carpeta: path.dirname(d.estado.archivo) }), origen };
+      return { nombre, marca: "·", valor: t("DOCTOR-SIN-DEFINIR"), origen };
     }
 
     if (nombre === "PROMPTS_PATH") {
@@ -767,7 +770,7 @@ function filasDeVariables(d: Diagnostico): FilaVariable[] {
     }
 
     if (nombre === "TASKS_SUBDIR" && lectura.valor === "") {
-      return { nombre, marca: "·", valor: "(vacía: las tareas cuelgan del proyecto)", origen };
+      return { nombre, marca: "·", valor: t("DOCTOR-SUBDIR-VACIA"), origen };
     }
 
     const valor = nombre === "STATE_PATH" ? path.dirname(d.estado.archivo) : lectura.valor;
@@ -775,57 +778,58 @@ function filasDeVariables(d: Diagnostico): FilaVariable[] {
   });
 }
 
-function lineaDeCliente(cliente: NonNullable<Diagnostico["cliente"]>): string {
-  const si = (valor: boolean): string => (valor ? "sí" : "no");
-  return (
-    `${cliente.nombre} ${cliente.version} · elicitation: ${si(cliente.capacidades.elicitation)} · ` +
-    `roots: ${si(cliente.capacidades.roots)}`
-  );
+function lineaDeCliente(cliente: NonNullable<Diagnostico["cliente"]>, { t }: Textos): string {
+  return t("DOCTOR-LINEA-CLIENTE", {
+    nombre: cliente.nombre,
+    version: cliente.version,
+    elicitation: cliente.capacidades.elicitation,
+    roots: cliente.capacidades.roots,
+  });
 }
 
-function archivosDeFase(fase: Diagnostico["fases"][number]): string {
-  if (!fase.documento) return "sin documento";
+function archivosDeFase(fase: Diagnostico["fases"][number], { t }: Textos): string {
+  if (!fase.documento) return t("DOCTOR-SIN-DOCUMENTO");
   return fase.recibos ? `${fase.documento} + ${fase.recibos}/` : fase.documento;
 }
 
-function lineaDeProyecto(proyecto: Diagnostico["proyectos"][number]): string {
-  const tareas = `${proyecto.tareas} ${proyecto.tareas === 1 ? "tarea" : "tareas"}`;
-  if (!proyecto.activa) return tareas;
-  return `${tareas} · activa: ${proyecto.activa.tarea} (${proyecto.activa.origen}) · ${proyecto.activa.fase}`;
+function lineaDeProyecto(proyecto: Diagnostico["proyectos"][number], { t }: Textos): string {
+  return t("DOCTOR-LINEA-PROYECTO", { tareas: proyecto.tareas, activa: proyecto.activa });
 }
 
-function lineaDeConfiguracion(proyecto: Diagnostico["proyectos"][number]): string {
-  const manifiesto = proyecto.manifiesto.startsWith("inválido") ? "manifiesto inválido" : `manifiesto ${proyecto.manifiesto}`;
-  const preset = proyecto.preset ? `preset ${proyecto.preset.nombre} (${proyecto.preset.origen})` : "preset sin resolver";
-  const reglas = proyecto.reglas ? ` · lotes ${proyecto.reglas.lotes ? "sí" : "no"} · commits ${proyecto.reglas.commits}` : "";
-  const raiz = proyecto.roots?.fuerza ? ` · carpeta abierta: coincidencia ${proyecto.roots.fuerza}` : "";
-  return `${manifiesto} · ${preset}${reglas}${raiz}`;
+function lineaDeConfiguracion(proyecto: Diagnostico["proyectos"][number], { t }: Textos): string {
+  return t("DOCTOR-LINEA-CONFIGURACION", {
+    manifiesto: proyecto.manifiesto,
+    preset: proyecto.preset,
+    reglas: proyecto.reglas,
+    fuerza: proyecto.roots?.fuerza ?? null,
+  });
 }
 
-function lineaDeRepo(repo: Diagnostico["proyectos"][number]["repos"][number]): string {
-  if (!repo.ruta) return `${repo.id}: sin ruta`;
-  const estado = !repo.existe ? "no existe" : repo.esGit ? `git · ${repo.rama ?? "sin rama"}` : "sin git";
-  return `${repo.id}: ${repo.ruta} (${repo.origen}) · ${estado}`;
+function lineaDeRepo(repo: Diagnostico["proyectos"][number]["repos"][number], { t }: Textos): string {
+  return t("DOCTOR-LINEA-REPO", repo);
 }
 
-function lineaDeMaquina(c: Diagnostico["configuracion"]): string {
-  if (!c.maquina.existe) return "todavía no existe";
-  if (!c.maquina.valido) return "inválido (ver hallazgos)";
-  const preset = c.maquina.presetPorDefecto ? ` · presetPorDefecto ${c.maquina.presetPorDefecto}` : "";
-  return `válido · ${c.maquina.overrides} ${c.maquina.overrides === 1 ? "override" : "overrides"} de repo${preset}`;
+function lineaDeMaquina(c: Diagnostico["configuracion"], { t }: Textos): string {
+  return t("DOCTOR-LINEA-MAQUINA", {
+    existe: c.maquina.existe,
+    valido: c.maquina.valido,
+    overrides: c.maquina.overrides,
+    presetPorDefecto: c.maquina.presetPorDefecto,
+  });
 }
 
-function formatearTexto(d: Diagnostico): string {
+function formatearTexto(d: Diagnostico, x: Textos): string {
+  const { t, valor } = x;
   const lineas: string[] = [];
   const columna = (texto: string, ancho: number): string => texto.padEnd(ancho);
 
-  lineas.push(`${SERVER_NAME} ${d.paquete.version} · vía ${d.paquete.via}`);
-  lineas.push(`${columna("Paquete", 13)}${d.paquete.ruta}`);
+  lineas.push(t("DOCTOR-CABECERA", { servidor: SERVER_NAME, version: d.paquete.version, via: d.paquete.via }));
+  lineas.push(`${columna(t("DOCTOR-ETIQUETA-PAQUETE"), 13)}${d.paquete.ruta}`);
   lineas.push(`${columna("Node", 13)}${d.node.version} · ${d.node.plataforma}`);
-  if (d.cliente) lineas.push(`${columna("Cliente", 13)}${lineaDeCliente(d.cliente)}`);
+  if (d.cliente) lineas.push(`${columna(t("DOCTOR-ETIQUETA-CLIENTE"), 13)}${lineaDeCliente(d.cliente, x)}`);
 
-  lineas.push("", "Variables");
-  const filas = filasDeVariables(d);
+  lineas.push("", t("DOCTOR-TITULO-VARIABLES"));
+  const filas = filasDeVariables(d, x);
   const anchoNombre = Math.max(...filas.map((fila) => fila.nombre.length)) + 2;
   const anchoValor = Math.max(...filas.map((fila) => fila.valor.length)) + 4;
   for (const fila of filas) {
@@ -833,51 +837,50 @@ function formatearTexto(d: Diagnostico): string {
     lineas.push(`  ${columna(fila.nombre, anchoNombre)}${fila.marca} ${resto}`.trimEnd());
   }
 
-  const punteros = `${d.estado.punteros} ${d.estado.punteros === 1 ? "puntero" : "punteros"}`;
-  lineas.push("", `${columna("Estado", 15)}${d.estado.archivo} · ${d.estado.existe ? punteros : "todavía no existe"}`);
+  const punteros = t("DOCTOR-PUNTEROS", { n: d.estado.punteros });
+  lineas.push("", `${columna(t("DOCTOR-TITULO-ESTADO"), 15)}${d.estado.archivo} · ${d.estado.existe ? punteros : t("DOCTOR-NO-EXISTE-TODAVIA")}`);
 
-  lineas.push("", `${columna("Configuración", 15)}${d.configuracion.configDir}`);
-  lineas.push(`  ${columna("machine.json", 14)}${lineaDeMaquina(d.configuracion)}`);
-  lineas.push(`  ${columna("presets", 14)}${d.configuracion.presets.map((p) => `${p.nombre} (${p.origen})`).join(", ") || "ninguno"}`);
+  lineas.push("", `${columna(t("DOCTOR-TITULO-CONFIGURACION"), 15)}${d.configuracion.configDir}`);
+  lineas.push(`  ${columna("machine.json", 14)}${lineaDeMaquina(d.configuracion, x)}`);
+  lineas.push(`  ${columna("presets", 14)}${d.configuracion.presets.map((p) => `${p.nombre} (${valor(p.origen)})`).join(", ") || t("DOCTOR-NINGUNO")}`);
 
-  lineas.push("", "Prompts (de menor a mayor prioridad)");
+  lineas.push("", t("DOCTOR-TITULO-PROMPTS-PRIORIDAD"));
   for (const capa of d.capas) {
-    lineas.push(`  ${columna(capa.etiqueta, 13)}${capa.ruta}${capa.existe ? "" : "  (no existe)"}`);
+    lineas.push(`  ${columna(valor(capa.etiqueta), 13)}${capa.ruta}${capa.existe ? "" : `  ${t("DOCTOR-NO-EXISTE-MARCA")}`}`);
   }
-  if (d.reglasGlobales.archivo) {
-    const faltan = d.reglasGlobales.faltan.length ? `  (le faltan: ${d.reglasGlobales.faltan.join(", ")})` : "";
-    lineas.push(`  reglas globales  ← ${d.reglasGlobales.capa ?? "desconocida"}${faltan}`);
-  } else {
-    lineas.push("  reglas globales  (ninguna)");
-  }
-  const anchoFase = Math.max(0, ...d.fases.map((fase) => `Fase ${fase.numero} ${fase.titulo}`.length)) + 3;
+  lineas.push(
+    `  ${t("DOCTOR-TEXTO-REGLAS-GLOBALES", { hay: Boolean(d.reglasGlobales.archivo), capa: d.reglasGlobales.capa, faltan: d.reglasGlobales.faltan })}`
+  );
+  const nombreDeFase = (fase: Diagnostico["fases"][number]): string => t("DOCTOR-FASE", { numero: fase.numero, titulo: fase.titulo });
+  const anchoFase = Math.max(0, ...d.fases.map((fase) => nombreDeFase(fase).length)) + 3;
   for (const fase of d.fases) {
-    const comando = fase.comando ? ` · /f${fase.numero}` : ` · /f${fase.numero} (texto genérico)`;
+    const comando = fase.comando ? ` · /f${fase.numero}` : ` · ${t("DOCTOR-COMANDO-GENERICO", { numero: fase.numero })}`;
     lineas.push(
-      `  ${columna(`Fase ${fase.numero} ${fase.titulo}`, anchoFase)}← ${columna(fase.capa, 9)}· ${archivosDeFase(fase)}${comando}`
+      `  ${columna(nombreDeFase(fase), anchoFase)}← ${columna(valor(fase.capa), 9)}· ${archivosDeFase(fase, x)}${comando}`
     );
   }
 
-  lineas.push("", "Proyectos");
+  lineas.push("", t("DOCTOR-TITULO-PROYECTOS"));
   if (!d.rutas.docs.existe) {
-    lineas.push("  (no se pueden listar sin DOCS_PATH)");
+    lineas.push(`  ${t("DOCTOR-PROYECTOS-SIN-DOCS-TEXTO")}`);
   } else if (d.proyectos.length === 0) {
-    lineas.push("  (ninguno todavía)");
+    lineas.push(`  ${t("DOCTOR-PROYECTOS-NINGUNO-TEXTO")}`);
   } else {
     const anchoProyecto = Math.max(...d.proyectos.map((p) => p.nombre.length)) + 3;
     for (const proyecto of d.proyectos) {
-      lineas.push(`  ${columna(proyecto.nombre, anchoProyecto)}${lineaDeProyecto(proyecto)}`);
-      lineas.push(`  ${columna("", anchoProyecto)}${lineaDeConfiguracion(proyecto)}`);
-      for (const repo of proyecto.repos) lineas.push(`  ${columna("", anchoProyecto)}  repo ${lineaDeRepo(repo)}`);
+      lineas.push(`  ${columna(proyecto.nombre, anchoProyecto)}${lineaDeProyecto(proyecto, x)}`);
+      lineas.push(`  ${columna("", anchoProyecto)}${lineaDeConfiguracion(proyecto, x)}`);
+      for (const repo of proyecto.repos) lineas.push(`  ${columna("", anchoProyecto)}  repo ${lineaDeRepo(repo, x)}`);
     }
   }
 
-  lineas.push("", "Hallazgos");
+  lineas.push("", t("DOCTOR-TITULO-HALLAZGOS"));
   if (d.hallazgos.length === 0) {
-    lineas.push("  ninguno");
+    lineas.push(`  ${t("DOCTOR-NINGUNO")}`);
   } else {
+    const anchoSeveridad = anchoDeSeveridad(x);
     const anchoCodigo = Math.max(...d.hallazgos.map((h) => h.codigo.length)) + 2;
-    for (const h of d.hallazgos) lineas.push(`  ${columna(h.severidad, 7)}${columna(h.codigo, anchoCodigo)}${h.texto}`);
+    for (const h of d.hallazgos) lineas.push(`  ${columna(valor(h.severidad), anchoSeveridad)}${columna(h.codigo, anchoCodigo)}${h.texto}`);
   }
 
   return lineas.join("\n");
@@ -900,93 +903,96 @@ function tabla(encabezados: string[], filas: string[][]): string[] {
   ];
 }
 
-function formatearMarkdown(d: Diagnostico): string {
+function formatearMarkdown(d: Diagnostico, x: Textos): string {
+  const { t, valor, columnas } = x;
   const lineas: string[] = [];
 
-  lineas.push(`### ${SERVER_NAME} ${d.paquete.version} · vía ${d.paquete.via}`, "");
-  lineas.push(`- **Paquete:** ${codigo(d.paquete.ruta)}`);
+  lineas.push(`### ${t("DOCTOR-CABECERA", { servidor: SERVER_NAME, version: d.paquete.version, via: d.paquete.via })}`, "");
+  lineas.push(`- **${t("DOCTOR-ETIQUETA-PAQUETE")}:** ${codigo(d.paquete.ruta)}`);
   lineas.push(`- **Node:** ${d.node.version} · ${d.node.plataforma}`);
-  if (d.cliente) lineas.push(`- **Cliente:** ${celda(lineaDeCliente(d.cliente))}`);
+  if (d.cliente) lineas.push(`- **${t("DOCTOR-ETIQUETA-CLIENTE")}:** ${celda(lineaDeCliente(d.cliente, x))}`);
 
-  lineas.push("", "### Variables", "");
+  lineas.push("", `### ${t("DOCTOR-TITULO-VARIABLES")}`, "");
   lineas.push(
     ...tabla(
-      ["Variable", "", "Valor", "Nombre usado · fuente"],
-      filasDeVariables(d).map((fila) => [fila.nombre, fila.marca, codigo(fila.valor), celda(fila.origen)])
+      columnas("DOCTOR-TABLA-VARIABLES"),
+      filasDeVariables(d, x).map((fila) => [fila.nombre, fila.marca, codigo(fila.valor), celda(fila.origen)])
     )
   );
 
-  const punteros = `${d.estado.punteros} ${d.estado.punteros === 1 ? "puntero" : "punteros"}`;
-  lineas.push("", "### Estado", "", `${codigo(d.estado.archivo)} · ${d.estado.existe ? punteros : "todavía no existe"}`);
+  const punteros = t("DOCTOR-PUNTEROS", { n: d.estado.punteros });
+  lineas.push("", `### ${t("DOCTOR-TITULO-ESTADO")}`, "", `${codigo(d.estado.archivo)} · ${d.estado.existe ? punteros : t("DOCTOR-NO-EXISTE-TODAVIA")}`);
 
-  lineas.push("", "### Configuración", "");
-  lineas.push(`- **Carpeta:** ${codigo(d.configuracion.configDir)}`);
-  lineas.push(`- **machine.json:** ${codigo(d.configuracion.maquina.archivo)} · ${celda(lineaDeMaquina(d.configuracion))}`);
-  lineas.push(`- **Presets:** ${d.configuracion.presets.map((p) => `\`${p.nombre}\` (${p.origen})`).join(", ") || "ninguno"}`);
+  lineas.push("", `### ${t("DOCTOR-TITULO-CONFIGURACION")}`, "");
+  lineas.push(`- **${t("DOCTOR-ETIQUETA-CARPETA")}:** ${codigo(d.configuracion.configDir)}`);
+  lineas.push(`- **machine.json:** ${codigo(d.configuracion.maquina.archivo)} · ${celda(lineaDeMaquina(d.configuracion, x))}`);
+  lineas.push(`- **Presets:** ${d.configuracion.presets.map((p) => `\`${p.nombre}\` (${valor(p.origen)})`).join(", ") || t("DOCTOR-NINGUNO")}`);
 
-  lineas.push("", "### Prompts", "", "Capas, de menor a mayor prioridad:", "");
+  lineas.push("", `### ${t("DOCTOR-TITULO-PROMPTS")}`, "", t("DOCTOR-CAPAS-PRIORIDAD"), "");
   lineas.push(
     ...tabla(
-      ["Capa", "Ruta", "Existe"],
-      d.capas.map((capa) => [capa.etiqueta, codigo(capa.ruta), capa.existe ? "sí" : "no"])
+      columnas("DOCTOR-TABLA-CAPAS"),
+      d.capas.map((capa) => [valor(capa.etiqueta), codigo(capa.ruta), t("DOCTOR-SI-NO", { valor: capa.existe })])
     )
   );
-  const faltan = d.reglasGlobales.faltan.length ? ` · le faltan: ${d.reglasGlobales.faltan.join(", ")}` : "";
   lineas.push(
     "",
-    d.reglasGlobales.archivo
-      ? `Reglas globales: ${codigo(d.reglasGlobales.archivo)} (${d.reglasGlobales.capa ?? "desconocida"})${faltan}`
-      : "Reglas globales: ninguna",
+    t("DOCTOR-MD-REGLAS-GLOBALES", {
+      archivo: d.reglasGlobales.archivo ? codigo(d.reglasGlobales.archivo) : null,
+      capa: d.reglasGlobales.capa,
+      faltan: d.reglasGlobales.faltan,
+    }),
     ""
   );
   lineas.push(
     ...tabla(
-      ["Fase", "Título", "Capa", "Documento", "Recibos", "Comando", "Archivo"],
+      columnas("DOCTOR-TABLA-FASES"),
       d.fases.map((fase) => [
         String(fase.numero),
         celda(fase.titulo),
-        fase.capa,
+        valor(fase.capa),
         codigo(fase.documento ?? ""),
         codigo(fase.recibos ? `${fase.recibos}/` : ""),
-        fase.comando ? `/f${fase.numero}` : `/f${fase.numero} (texto genérico)`,
+        fase.comando ? `/f${fase.numero}` : t("DOCTOR-COMANDO-GENERICO", { numero: fase.numero }),
         codigo(fase.archivo),
       ])
     )
   );
 
-  lineas.push("", "### Proyectos", "");
+  lineas.push("", `### ${t("DOCTOR-TITULO-PROYECTOS")}`, "");
   if (!d.rutas.docs.existe) {
-    lineas.push("No se pueden listar sin `DOCS_PATH`.");
+    lineas.push(t("DOCTOR-PROYECTOS-SIN-DOCS-MD"));
   } else if (d.proyectos.length === 0) {
-    lineas.push("Ninguno todavía.");
+    lineas.push(t("DOCTOR-PROYECTOS-NINGUNO-MD"));
   } else {
     lineas.push(
       ...tabla(
-        ["Proyecto", "Tareas", "Tarea activa", "Fase", "Configuración", "Repos"],
+        columnas("DOCTOR-TABLA-PROYECTOS"),
         d.proyectos.map((p) => [
           celda(p.nombre),
           String(p.tareas),
-          p.activa ? `${celda(p.activa.tarea)} (${p.activa.origen})` : "",
+          p.activa ? `${celda(p.activa.tarea)} (${valor(p.activa.origen)})` : "",
           p.activa ? celda(p.activa.fase) : "",
-          celda(lineaDeConfiguracion(p)),
-          celda(p.repos.map(lineaDeRepo).join("; ")),
+          celda(lineaDeConfiguracion(p, x)),
+          celda(p.repos.map((repo) => lineaDeRepo(repo, x)).join("; ")),
         ])
       )
     );
   }
 
-  lineas.push("", "### Hallazgos", "");
+  lineas.push("", `### ${t("DOCTOR-TITULO-HALLAZGOS")}`, "");
   if (d.hallazgos.length === 0) {
-    lineas.push("Ninguno.");
+    lineas.push(t("DOCTOR-NINGUNO-PUNTO"));
   } else {
-    lineas.push(...tabla(["Severidad", "Código", "Detalle"], d.hallazgos.map((h) => [h.severidad, h.codigo, celda(h.texto)])));
+    lineas.push(...tabla(columnas("DOCTOR-TABLA-HALLAZGOS"), d.hallazgos.map((h) => [valor(h.severidad), h.codigo, celda(h.texto)])));
   }
 
   return lineas.join("\n");
 }
 
 export function formatearDiagnostico(d: Diagnostico, formato: "texto" | "markdown"): string {
-  return formato === "texto" ? formatearTexto(d) : formatearMarkdown(d);
+  const x = textos();
+  return formato === "texto" ? formatearTexto(d, x) : formatearMarkdown(d, x);
 }
 
 // ─── Procedencia de una fase (doctor --fase N --proyecto P) ─────────────────
@@ -1018,17 +1024,28 @@ export function procedenciaDeFase(fase: number, proyecto: string | null): Inform
 }
 
 export function formatearProcedencia(informe: InformeDeProcedencia): string {
-  const donde = informe.proyecto ? ` · ${informe.proyecto}${informe.tarea ? ` · tarea activa: ${informe.tarea}` : ""}` : " · sin proyecto";
-  const lineas = [`Fase ${informe.fase}${donde} · preset ${informe.preset.nombre} (${informe.preset.origen})`, ""];
+  const x = textos();
+  const { t, valor } = x;
+  const lineas = [
+    t("DOCTOR-PROCEDENCIA-CABECERA", {
+      fase: informe.fase,
+      proyecto: informe.proyecto,
+      tarea: informe.tarea,
+      preset: informe.preset.nombre,
+      origen: informe.preset.origen,
+    }),
+    "",
+  ];
   const ancho = Math.max(6, ...informe.procedencia.map((p) => p.ranura.length)) + 3;
-  lineas.push(`  ${"Ranura".padEnd(ancho)}Gana`);
+  lineas.push(`  ${t("DOCTOR-PROCEDENCIA-RANURA").padEnd(ancho)}${t("DOCTOR-PROCEDENCIA-GANA")}`);
   for (const p of informe.procedencia) {
     const modos = p.modos.length ? `  + ${p.modos.join(", ")}` : "";
     lineas.push(`  ${p.ranura.padEnd(ancho)}${p.contenidoDe}${modos}`);
   }
   if (informe.avisos.length) {
-    lineas.push("", "Avisos");
-    for (const h of informe.avisos) lineas.push(`  ${h.severidad.padEnd(7)}${h.codigo}  ${h.texto}`);
+    lineas.push("", t("DOCTOR-PROCEDENCIA-AVISOS"));
+    const anchoSeveridad = anchoDeSeveridad(x);
+    for (const h of informe.avisos) lineas.push(`  ${valor(h.severidad).padEnd(anchoSeveridad)}${h.codigo}  ${h.texto}`);
   }
   return lineas.join("\n");
 }
@@ -1049,34 +1066,35 @@ export async function informeDeConfiguracion(carpetaProyecto: string): Promise<s
 }
 
 function textoDeConfiguracion(carpetaProyecto: string, estados: Map<string, EstadoDeRepo | null>): string {
+  const { t, valor, columnas } = textos();
+  const siNo = (si: boolean): string => t("DOCTOR-SI-NO", { valor: si });
   const lectura = leerManifiesto(carpetaProyecto);
-  const lineas = [`### Configuración de ${carpetaProyecto}`, ""];
-  const estadoManifiesto = lectura.estado === "valido" ? "válido" : lectura.estado === "ausente" ? "no existe" : `inválido: ${celda(lectura.error)}`;
-  lineas.push(`- **Manifiesto:** ${codigo(lectura.ruta)} · ${estadoManifiesto}`);
+  const lineas = [t("DOCTOR-CONFIG-TITULO", { proyecto: carpetaProyecto }), ""];
+  lineas.push(
+    t("DOCTOR-CONFIG-MANIFIESTO", { ruta: codigo(lectura.ruta), estado: lectura.estado, error: lectura.estado === "invalido" ? celda(lectura.error) : "" })
+  );
 
   let config: ConfiguracionProyecto | null = null;
   try {
     config = configuracionDe(carpetaProyecto);
   } catch (error) {
-    lineas.push("", `No se pudo resolver la configuración: ${celda(mensajeDe(error))}`);
+    lineas.push("", t("DOCTOR-CONFIG-SIN-RESOLVER", { error: celda(mensajeDe(error)) }));
     return lineas.join("\n");
   }
 
   const m = config.manifiesto;
-  const delManifiesto = (definido: boolean): string => (definido ? "phase-gate.json" : "por defecto");
+  const delManifiesto = (definido: boolean): string => (definido ? "phase-gate.json" : valor("por defecto"));
+  const [preset = "", idioma = "", lotes = "", commits = "", verificacion = "", prPorRepo = ""] = columnas("DOCTOR-CONFIG-FILAS");
   lineas.push(
     "",
-    ...tabla(
-      ["Valor", "Efectivo", "De dónde sale"],
-      [
-        ["Preset", codigo(config.preset.nombre), config.origenPreset],
-        ["Idioma", config.idioma, config.origenIdioma],
-        ["Lotes", config.reglas.lotes ? "sí" : "no", config.reglas.origen.lotes],
-        ["Commits", codigo(config.reglas.commits), config.reglas.origen.commits],
-        ["Verificación", m?.reglas.verificacion?.map(codigo).join(", ") || "—", delManifiesto(Boolean(m?.reglas.verificacion))],
-        ["PR por repo", m?.fase5.prPorRepo ? "sí" : "no", delManifiesto(m?.fase5.prPorRepo !== undefined)],
-      ]
-    )
+    ...tabla(columnas("DOCTOR-TABLA-CONFIG"), [
+      [preset, codigo(config.preset.nombre), valor(config.origenPreset)],
+      [idioma, config.idioma, valor(config.origenIdioma)],
+      [lotes, siNo(config.reglas.lotes), valor(config.reglas.origen.lotes)],
+      [commits, codigo(config.reglas.commits), valor(config.reglas.origen.commits)],
+      [verificacion, m?.reglas.verificacion?.map(codigo).join(", ") || "—", delManifiesto(Boolean(m?.reglas.verificacion))],
+      [prPorRepo, siNo(Boolean(m?.fase5.prPorRepo)), delManifiesto(m?.fase5.prPorRepo !== undefined)],
+    ])
   );
 
   if (m?.repos.length) {
@@ -1086,17 +1104,17 @@ function textoDeConfiguracion(carpetaProyecto: string, estados: Map<string, Esta
       const git = !repo.existe
         ? "—"
         : !estado
-          ? `sin respuesta en ${PLAZO_DE_ESTADOS_MS / 1000} s`
+          ? t("DOCTOR-SIN-RESPUESTA", { segundos: PLAZO_DE_ESTADOS_MS / 1000 })
           : estado.error
             ? celda(estado.error)
             : estado.esGit
-              ? `${estado.separado ? "separado" : estado.rama} · ${estado.limpio ? "limpio" : "con cambios"}`
-              : "sin git";
-      return [codigo(repo.id), celda(repo.rol ?? ""), repo.ruta ? codigo(repo.ruta) : celda(repo.error ?? ""), repo.origenRuta ?? "—", repo.existe ? "sí" : "no", git];
+              ? t("DOCTOR-GIT-ESTADO", { rama: estado.rama, separado: estado.separado, limpio: estado.limpio })
+              : t("DOCTOR-SIN-GIT");
+      return [codigo(repo.id), celda(repo.rol ?? ""), repo.ruta ? codigo(repo.ruta) : celda(repo.error ?? ""), repo.origenRuta ?? "—", siNo(repo.existe), git];
     });
-    lineas.push(...tabla(["Id", "Rol", "Ruta en este equipo", "Origen de la ruta", "Existe", "Git"], filas));
+    lineas.push(...tabla(columnas("DOCTOR-TABLA-REPOS"), filas));
   } else {
-    lineas.push("", "El proyecto no declara repos.");
+    lineas.push("", t("DOCTOR-CONFIG-SIN-REPOS"));
   }
 
   return lineas.join("\n");

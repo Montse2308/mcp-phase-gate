@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { CANDADO_DE_PUSH, MARCA_DE_COMANDO, diffDeLineas, ejecutaPhaseGate, ejecutarInit, quitarComentarios, registroEnClaude } from "../src/init.js";
+import { MARCA_DE_COMANDO, candadoDePush, diffDeLineas, ejecutaPhaseGate, ejecutarInit, quitarComentarios, registroEnClaude } from "../src/init.js";
 import type { EntornoInit, Ejecucion, OpcionesInit } from "../src/init.js";
 import { carpetaTemporal, configTemporal, crearProyecto, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
@@ -124,7 +124,7 @@ describe("init: registrar en los clientes", () => {
       "--env", `PHASE_GATE_DOCS_PATH=${r.docs}`, "--env", `PHASE_GATE_REPOS_PATH=${r.repos}`,
       "--", "npx", "-y", "mcp-phase-gate",
     ]);
-    assert.ok(p.texto().includes(CANDADO_DE_PUSH));
+    assert.ok(p.texto().includes(candadoDePush()));
     assert.match(p.texto(), /mcp-phase-gate \d+\.\d+\.\d+.* · vía /, "termina con doctor");
   });
 

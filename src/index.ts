@@ -9,6 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { DOCS, NOMBRES_LOGICOS, REPOS, SERVER_NAME, errorDeEnv, leerVariable, requireBasePath } from "./config.js";
 import { SALIDA_DE_PROCESO, doctorReverificando, ejecutarCli, ejecutarUi } from "./cli.js";
+import { mensaje } from "./i18n/mensajes.js";
 import { ejecutarInit, entornoDelProceso } from "./init.js";
 import { log } from "./log.js";
 import { crearServidor } from "./servidor.js";
@@ -24,7 +25,7 @@ function reportarRutas(): void {
       const ruta = requireBasePath(requerida);
       log("info", `${leerVariable(requerida.logica).usada} = ${ruta}`);
     } catch (error) {
-      log("error", `SIN CONFIGURAR: ${error instanceof Error ? error.message : String(error)}`);
+      log("error", mensaje("CONFIG-ARRANQUE-SIN-CONFIGURAR", { detalle: error instanceof Error ? error.message : String(error) }));
     }
   }
 

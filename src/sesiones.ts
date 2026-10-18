@@ -21,6 +21,7 @@ import * as path from "path";
 import { z } from "zod";
 
 import { stateDir } from "./config.js";
+import { mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
 import { alRecibirRaices, resolverPorRaices } from "./roots.js";
 
@@ -91,7 +92,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
 
   const nombreDelCliente = (): string => {
     const version = mcp.server.getClientVersion();
-    return (version ? `${version.name} ${version.version}` : "cliente sin nombre").slice(0, 200);
+    return (version ? `${version.name} ${version.version}` : mensaje("SESION-CLIENTE-SIN-NOMBRE")).slice(0, 200);
   };
 
   const volcar = (): void => {
@@ -104,13 +105,13 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
     try {
       ruta ??= path.join(carpetaDeSesiones(), `${pid}.json`);
     } catch (error) {
-      if (!avisado) log("warning", `No se pudo registrar la sesión para el Studio: ${error instanceof Error ? error.message : String(error)}`);
+      if (!avisado) log("warning", mensaje("SESION-NO-REGISTRADA", { detalle: error instanceof Error ? error.message : String(error) }));
       avisado = true;
       return;
     }
     escribir(ruta, `${JSON.stringify(datos, null, 2)}\n`).catch((error: unknown) => {
       // Una vez: el servidor sigue igual, y el Studio solo dejará de ver esta sesión.
-      if (!avisado) log("warning", `No se pudo registrar la sesión para el Studio: ${error instanceof Error ? error.message : String(error)}`);
+      if (!avisado) log("warning", mensaje("SESION-NO-REGISTRADA", { detalle: error instanceof Error ? error.message : String(error) }));
       avisado = true;
     });
   };

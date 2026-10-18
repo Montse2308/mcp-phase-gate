@@ -9,7 +9,11 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const CODIGO = /"([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)"/g;
+// Desde la Etapa 6 los textos también tienen código (`mensaje("RUTA-FUERA")`, `fallo("LOTE-…")`, y `t("…")`, el
+// atajo de diagnostico.ts): esos no
+// son hallazgos y no cuentan. El texto de un hallazgo usa su mismo código, que sigue apareciendo donde se
+// arma el hallazgo (`codigo: "X"`, `hallar("aviso", "X", …)`).
+const CODIGO = /(?<!\b(?:mensaje|fallo|t|columnas|ErrorConCodigo)\()"([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)"/g;
 
 function codigosDe(...archivos: string[]): Set<string> {
   const codigos = new Set<string>();

@@ -20,6 +20,7 @@ import { ARCHIVO_BLOQUES, capasDe, capasDeCuerpos, carpetaPromptsDeProyecto, con
 import type { Capa } from "./capas.js";
 import type { Salida } from "./cli.js";
 import { carpetaPromptsGlobal, configDir } from "./config.js";
+import { mensaje } from "./i18n/mensajes.js";
 import { carpetaPresetsDelUsuario, describirPresets, idiomaDelEquipo, idiomaDelProyecto, presetsDisponibles } from "./manifiesto.js";
 import { requireProjectFolder } from "./paths.js";
 import { PHASE_FILE_PATTERN, discoverPhases, leerPromptNormalizado, resolveCommandFile } from "./phases.js";
@@ -39,7 +40,7 @@ export type Objetivo =
 // Lo que se pidió, o el error que se le dice a la persona.
 export function parsearObjetivo(texto: string): Objetivo | string {
   if (/^global-rules(\.md)?$/i.test(texto)) {
-    return "global-rules entero no se puede ejectar: su forma soportada son sus ranuras (global/cero-rupturas, global/evidencia, global/extra).";
+    return mensaje("EJECT-GLOBAL-RULES");
   }
   // `phase-3` y `phase-3/tests` valen igual que `fase-3` y `fase-3/pruebas` (§8.2): se resuelven al id canónico.
   let m = texto.match(/^(?:fase|phase)-(\d+)$/);
@@ -54,7 +55,7 @@ export function parsearObjetivo(texto: string): Objetivo | string {
   if (m) return { tipo: "comando", numero: Number(m[1]) };
   m = texto.match(/^preset:([a-z0-9][a-z0-9-]{0,39})$/);
   if (m) return { tipo: "preset", nombre: m[1]! };
-  return `"${texto}" no es un objetivo válido: fase-N, fase-N/<ranura>, global/<ranura>, comando-fN o preset:<nombre>.`;
+  return mensaje("EJECT-OBJETIVO-INVALIDO", { texto });
 }
 
 type Destino = { carpeta: string; proyecto: string | null; etiqueta: string };
@@ -67,14 +68,14 @@ function idiomaDelDestino(destino: Destino): Idioma {
 function destinoDe(valor: string | null): Destino | string {
   if (valor === "global") {
     const carpeta = carpetaPromptsGlobal() ?? path.join(configDir(), "prompts");
-    return { carpeta, proyecto: null, etiqueta: "la capa global" };
+    return { carpeta, proyecto: null, etiqueta: mensaje("EJECT-ETIQUETA-GLOBAL") };
   }
   const m = valor?.match(/^proyecto:(.+)$/);
   if (m) {
     const proyecto = requireProjectFolder(m[1]!.trim());
-    return { carpeta: carpetaPromptsDeProyecto(proyecto), proyecto, etiqueta: `la capa del proyecto ${proyecto}` };
+    return { carpeta: carpetaPromptsDeProyecto(proyecto), proyecto, etiqueta: mensaje("EJECT-ETIQUETA-PROYECTO", { proyecto }) };
   }
-  return "Falta --a global o --a proyecto:<NOMBRE>: dónde copiarlo.";
+  return mensaje("EJECT-FALTA-DESTINO");
 }
 
 export class ErrorDeEject extends Error {
@@ -111,7 +112,7 @@ export function escribirEject(plan: PlanDeEject, ahora: Date = new Date()): stri
 }
 
 function siExisteSinFuerza(existe: boolean, que: string, fuerza: boolean): void {
-  if (existe && !fuerza) throw new ErrorDeEject(`${que} ya existe. No se toca; con --fuerza se reemplaza dejando copia.`, 1);
+  if (existe && !fuerza) throw new ErrorDeEject(mensaje("EJECT-YA-EXISTE", { que }), 1);
 }
 
 type Plan = { archivo: string; texto: string; reemplaza: boolean };
@@ -120,7 +121,7 @@ type Plan = { archivo: string; texto: string; reemplaza: boolean };
 function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
   const [fabrica] = capasDeCuerpos(destino.proyecto);
   const entrada = discoverPhases([fabrica!.ruta]).get(numero);
-  if (!entrada) throw new ErrorDeEject(`La fase ${numero} no existe en los prompts de fábrica.`, 2);
+  if (!entrada) throw new ErrorDeEject(mensaje("EJECT-FASE-NO-EXISTE", { numero }), 2);
 
   const nombre = path.basename(entrada.file);
   const archivo = path.join(destino.carpeta, nombre);
@@ -129,7 +130,7 @@ function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
   const otros = fs.existsSync(destino.carpeta)
     ? fs.readdirSync(destino.carpeta).filter((n) => n !== nombre && n.toLowerCase().endsWith(".md") && Number(n.match(PHASE_FILE_PATTERN)?.[1]) === numero)
     : [];
-  if (otros.length) throw new ErrorDeEject(`En ${destino.carpeta} ya hay otro archivo de la fase ${numero} (${otros.join(", ")}): bórralo o renómbralo primero.`, 1);
+  if (otros.length) throw new ErrorDeEject(mensaje("EJECT-OTRO-ARCHIVO-DE-FASE", { carpeta: destino.carpeta, numero, otros }), 1);
   siExisteSinFuerza(fs.existsSync(archivo), archivo, fuerza);
 
   return { archivo, texto: leerPromptNormalizado(entrada.file), reemplaza: fs.existsSync(archivo) };
@@ -158,8 +159,8 @@ function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: 
     const disponibles = ranurasDisponibles(capas, objetivo.archivo);
     throw new ErrorDeEject(
       disponibles.length
-        ? `${objetivo.archivo} no tiene la ranura "${objetivo.ranura}". Las que tiene: ${disponibles.join(", ")}.`
-        : `No existe ${objetivo.archivo === "global" ? "global-rules.md" : `la ${objetivo.archivo}`} en ninguna capa.`,
+        ? mensaje("EJECT-RANURA-NO-EXISTE", { archivo: objetivo.archivo, ranura: objetivo.ranura, disponibles })
+        : mensaje("EJECT-ARCHIVO-NO-EXISTE", { archivo: objetivo.archivo }),
       2
     );
   }
@@ -167,7 +168,7 @@ function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: 
   const archivo = path.join(destino.carpeta, ARCHIVO_BLOQUES);
   const actual = fs.existsSync(archivo) ? leerPromptNormalizado(archivo) : "";
   const yaEsta = actual.split("\n").some((l) => idDeAperturaDeBloque(l) === objetivo.id);
-  siExisteSinFuerza(yaEsta, `El bloque «${objetivo.id}» de ${archivo}`, fuerza);
+  siExisteSinFuerza(yaEsta, mensaje("EJECT-BLOQUE-DE", { id: objetivo.id, archivo }), fuerza);
 
   // En el idioma del destino (§8.2): `<!-- block: phase-3/tests -->` para un proyecto en inglés. El parser
   // lee los dos, así que un archivo de bloques puede mezclarlos.
@@ -181,7 +182,7 @@ function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: 
 function planDeComando(numero: number, destino: Destino, fuerza: boolean): Plan {
   const rutas = rutasDeCuerpos(capasDeCuerpos(destino.proyecto));
   const fase = discoverPhases(rutas).get(numero);
-  if (!fase) throw new ErrorDeEject(`La fase ${numero} no existe: no hay /f${numero} que copiar.`, 2);
+  if (!fase) throw new ErrorDeEject(mensaje("EJECT-COMANDO-SIN-FASE", { numero }), 2);
   const origen = resolveCommandFile(numero, rutas);
   const texto = origen ? leerPromptNormalizado(origen) : `${textoGenerico(numero, fase.title)}\n`;
 
@@ -193,11 +194,11 @@ function planDeComando(numero: number, destino: Destino, fuerza: boolean): Plan 
 function planDePreset(nombre: string, fuerza: boolean): Plan {
   const presets = presetsDisponibles();
   const preset = presets.get(nombre);
-  if (!preset) throw new ErrorDeEject(`No existe el preset "${nombre}". Los disponibles son: ${describirPresets(presets)}.`, 2);
-  if (!preset.ruta) throw new ErrorDeEject(`"${nombre}" no tiene archivo: son los prompts de fábrica, sin bloques.`, 2);
+  if (!preset) throw new ErrorDeEject(mensaje("EJECT-PRESET-NO-EXISTE", { nombre, disponibles: describirPresets(presets) }), 2);
+  if (!preset.ruta) throw new ErrorDeEject(mensaje("EJECT-PRESET-SIN-ARCHIVO", { nombre }), 2);
 
   const archivo = path.join(carpetaPresetsDelUsuario(), `${nombre}.md`);
-  if (path.resolve(preset.ruta) === path.resolve(archivo)) throw new ErrorDeEject(`El preset "${nombre}" ya es tuyo: está en ${archivo}.`, 1);
+  if (path.resolve(preset.ruta) === path.resolve(archivo)) throw new ErrorDeEject(mensaje("EJECT-PRESET-YA-ES-TUYO", { nombre, archivo }), 1);
   siExisteSinFuerza(fs.existsSync(archivo), archivo, fuerza);
   return { archivo, texto: leerPromptNormalizado(preset.ruta), reemplaza: fs.existsSync(archivo) };
 }
@@ -231,24 +232,24 @@ export function ejecutarEject(textoObjetivo: string, opciones: OpcionesEject, sa
 
   try {
     if (opciones.dryRun) {
-      salida.out(`[dry-run] Se escribiría ${plan.archivo}:\n${plan.texto}`);
+      salida.out(mensaje("EJECT-DRY-RUN", { archivo: plan.archivo, texto: plan.texto }));
       return 0;
     }
     const copia = escribirEject(plan);
-    if (copia) salida.out(`Copia de lo anterior: ${copia}`);
+    if (copia) salida.out(mensaje("EJECT-COPIA-DE-LO-ANTERIOR", { copia }));
 
     const { objetivo } = plan;
     if (objetivo.tipo === "preset") {
-      salida.out(`Copiado a ${plan.archivo}. Edítalo ahí: con el mismo nombre, el tuyo gana al del paquete.`);
+      salida.out(mensaje("EJECT-COPIADO-PRESET", { archivo: plan.archivo }));
       return 0;
     }
     const fase = objetivo.tipo === "ranura" ? objetivo.archivo.replace("fase-", "") : String(objetivo.numero);
     const comprobar = plan.proyecto ? `doctor --fase ${fase === "global" ? 1 : fase} --proyecto ${plan.proyecto}` : `doctor --fase ${fase === "global" ? 1 : fase}`;
-    salida.out(`Copiado a ${plan.archivo} (${plan.etiqueta}). Edítalo ahí; \`${comprobar}\` te mostrará que gana.`);
+    salida.out(mensaje("EJECT-COPIADO", { archivo: plan.archivo, etiqueta: plan.etiqueta, comprobar }));
 
     if (objetivo.tipo === "ranura") {
       const ahora = contenidoEfectivoDeRanura(capasDe(plan.proyecto), objetivo.id);
-      if (ahora) salida.out(`Procedencia de ${objetivo.id}: ${ahora.procedencia.contenidoDe}${ahora.procedencia.modos.length ? ` + ${ahora.procedencia.modos.join(", ")}` : ""}`);
+      if (ahora) salida.out(mensaje("EJECT-PROCEDENCIA", { id: objetivo.id, contenidoDe: ahora.procedencia.contenidoDe, modos: ahora.procedencia.modos }));
     }
     return 0;
   } catch (error) {

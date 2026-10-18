@@ -25,6 +25,7 @@ import type { Idioma } from "./vocabulario.js";
 import { discoverProjects } from "./paths.js";
 import { leerPromptNormalizado, resolveCommandFile } from "./phases.js";
 import { textoGenerico } from "./prompts-mcp.js";
+import { fallo, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 
 export const CLIENTES = ["claude-code", "cursor", "vscode"] as const;
 export type Cliente = (typeof CLIENTES)[number];
@@ -86,18 +87,18 @@ function lanzar(comando: string, args: string[], opciones: { verbatim?: boolean 
 export async function ejecutarComando(comando: string, args: string[]): Promise<Ejecucion> {
   const directo = await lanzar(comando, args);
   if (!directo.noEncontrado || process.platform !== "win32") {
-    if (directo.noEncontrado) throw new Error(`${comando} no está instalado o no está en el PATH.`);
+    if (directo.noEncontrado) throw fallo("INIT-NO-INSTALADO", { comando });
     return directo;
   }
   // Dentro de cmd.exe /c, un % se expande aunque vaya entre comillas, y una comilla rompe la cita: no
   // hay forma fiable de pasarlos. Antes que arriesgar otro comando, se pide hacerlo a mano.
   if (args.some((arg) => /[%"]/.test(arg))) {
-    throw new Error(`no se puede lanzar ${comando}.cmd con seguridad: algún argumento lleva % o comillas. Ejecuta el comando a mano.`);
+    throw fallo("INIT-CMD-INSEGURO", { comando });
   }
   const linea = [`${comando}.cmd`, ...args].map(citarParaCmd).join(" ");
   const porCmd = await lanzar(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${linea}"`], { verbatim: true });
   if (porCmd.codigo !== 0 && /no se reconoce|is not recognized/i.test(porCmd.stderr)) {
-    throw new Error(`${comando} no está instalado o no está en el PATH.`);
+    throw fallo("INIT-NO-INSTALADO", { comando });
   }
   return porCmd;
 }
@@ -181,7 +182,7 @@ export function leerJsonTolerante(archivo: string): LecturaJson {
   try {
     const datos: unknown = JSON.parse(limpio);
     if (!datos || typeof datos !== "object" || Array.isArray(datos)) {
-      return { estado: "roto", datos: {}, comentarios, error: "no es un objeto JSON" };
+      return { estado: "roto", datos: {}, comentarios, error: mensaje("INIT-JSON-NO-OBJETO") };
     }
     return { estado: "valido", datos: datos as Record<string, unknown>, comentarios };
   } catch (error) {
@@ -244,10 +245,13 @@ function fallar(ctx: Contexto, texto: string): void {
   ctx.entorno.salida.err(texto);
 }
 
+// En inglés se pregunta (y/N) y se acepta y o yes; en español, (s/N) y s o sí, como siempre.
 async function confirmar(ctx: Contexto, pregunta: string): Promise<boolean> {
   if (ctx.opciones.yes) return true;
   if (ctx.opciones.dryRun || !ctx.entorno.esTerminal) return false;
-  return /^s[ií]?$/i.test((await ctx.entorno.preguntar(`${pregunta} (s/N) `)).trim());
+  const idioma = idiomaDeMensajes();
+  const respuesta = (await ctx.entorno.preguntar(mensaje("INIT-CONFIRMAR", { pregunta }, idioma))).trim();
+  return (idioma === "en" ? /^y(es)?$/i : /^s[ií]?$/i).test(respuesta);
 }
 
 // Escribe con copia: si el archivo ya tenía contenido, primero <archivo>.bak-<AAAAMMDD-HHMMSS>.
@@ -264,16 +268,17 @@ function escribirConCopia(ctx: Contexto, archivo: string, texto: string): string
 }
 
 // ─── 1. Rutas ───────────────────────────────────────────────────────────────
-async function rutaPedida(ctx: Contexto, valor: string | null, logica: "DOCS_PATH" | "REPOS_PATH", que: string): Promise<string | null> {
+async function rutaPedida(ctx: Contexto, valor: string | null, logica: "DOCS_PATH" | "REPOS_PATH"): Promise<string | null> {
+  const que = mensaje(logica === "DOCS_PATH" ? "INIT-RUTA-DOCS" : "INIT-RUTA-REPOS");
   let crudo = valor ?? leerVariable(logica).valor ?? null;
-  if (!crudo && ctx.entorno.esTerminal) crudo = (await ctx.entorno.preguntar(`Ruta de ${que}: `)).trim() || null;
+  if (!crudo && ctx.entorno.esTerminal) crudo = (await ctx.entorno.preguntar(mensaje("INIT-PREGUNTA-RUTA", { que }))).trim() || null;
   if (!crudo) {
-    ctx.entorno.salida.err(`Falta la ruta de ${que}: pásala con ${logica === "DOCS_PATH" ? "--docs" : "--repos"} o define PHASE_GATE_${logica}.`);
+    ctx.entorno.salida.err(mensaje("INIT-FALTA-RUTA", { que, bandera: logica === "DOCS_PATH" ? "--docs" : "--repos", logica }));
     return null;
   }
   const ruta = path.resolve(crudo);
   if (!existeCarpeta(ruta)) {
-    ctx.entorno.salida.err(`La ruta de ${que} no existe o no es una carpeta: ${ruta}`);
+    ctx.entorno.salida.err(mensaje("INIT-RUTA-NO-EXISTE", { que, ruta }));
     return null;
   }
   return ruta;
@@ -446,43 +451,42 @@ async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", r
   const { nombre, archivo, seccion, clave } = plan;
 
   if (plan.estado === "roto") {
-    fallar(ctx, `${nombre}: no se pudo leer ${archivo} (${plan.error}). No se toca. Para registrarlo a mano, añade:\n` + plan.paraPegar);
+    fallar(ctx, mensaje("INIT-ARCHIVO-ROTO", { nombre, archivo, error: plan.error, paraPegar: plan.paraPegar }));
     return;
   }
   if (plan.estado === "forma-rara") {
-    fallar(ctx, `${nombre}: en ${archivo}, "${seccion}" o el "env" de alguna entrada no es un objeto. No se toca. Para registrarlo a mano, añade:\n` + plan.paraPegar);
+    fallar(ctx, mensaje("INIT-ARCHIVO-FORMA-RARA", { nombre, archivo, seccion, paraPegar: plan.paraPegar }));
     return;
   }
   if (plan.estado === "clave-ocupada") {
-    fallar(ctx, `${nombre}: la clave «${clave}» ya la usa otro servidor en ${archivo}. Elige otra con --clave.`);
+    fallar(ctx, mensaje("INIT-CLAVE-OCUPADA", { nombre, clave, archivo }));
     return;
   }
 
   const conserva = plan.estado === "sin-cambios" ? (plan.claveFinal !== clave ? plan.claveFinal : null) : plan.conserva;
   if (conserva) {
-    decir(ctx, `${nombre}: ya estaba registrado como «${conserva}»; se actualiza esa entrada y se conserva su clave (cambiarla cambiaría el nombre de las tools y los prompts, y los permisos concedidos).`);
+    decir(ctx, mensaje("INIT-CONSERVA-CLAVE", { nombre, clave: conserva }));
   } else if (plan.estado !== "sin-cambios" && plan.renombra) {
-    decir(ctx, `${nombre}: ya estaba registrado como «${plan.renombra}»; --clave pide renombrarlo a «${clave}». Ojo: cambia el nombre de todas las tools y prompts, y los permisos concedidos.`);
+    decir(ctx, mensaje("INIT-RENOMBRA-CLAVE", { nombre, antes: plan.renombra, clave }));
   }
 
   if (plan.estado === "sin-cambios") {
-    ctx.entorno.salida.out(`${nombre}: sin cambios (${archivo}, «${plan.claveFinal}»).`);
+    ctx.entorno.salida.out(mensaje("INIT-SIN-CAMBIOS", { nombre, archivo, clave: plan.claveFinal }));
     return;
   }
 
   // Cambiar algo que ya existía (o perder comentarios) se confirma; añadir una entrada nueva, no.
   const yaRegistrada = plan.estado === "actualiza";
   const cambiaAlgo = yaRegistrada || plan.comentarios;
-  if (yaRegistrada) ctx.entorno.salida.out(`${nombre}: cambios en «${plan.claveFinal}» (${archivo}):\n${plan.diff}`);
-  if (plan.comentarios) ctx.entorno.salida.out(`${nombre}: ${archivo} tiene comentarios; al reescribirlo se perderán (queda la copia .bak).`);
-  if (cambiaAlgo && !ctx.opciones.dryRun && !(await confirmar(ctx, `¿Aplicar los cambios en ${archivo}?`))) {
-    fallar(ctx, `${nombre}: no se aplicó. Repite con --yes, o en una terminal para confirmarlo.`);
+  if (yaRegistrada) ctx.entorno.salida.out(mensaje("INIT-DIFF", { nombre, clave: plan.claveFinal, archivo, diff: plan.diff }));
+  if (plan.comentarios) ctx.entorno.salida.out(mensaje("INIT-COMENTARIOS", { nombre, archivo }));
+  if (cambiaAlgo && !ctx.opciones.dryRun && !(await confirmar(ctx, mensaje("INIT-PREGUNTA-APLICAR", { archivo })))) {
+    fallar(ctx, mensaje("INIT-NO-APLICADO", { nombre }));
     return;
   }
 
   const copia = escribirConCopia(ctx, archivo, plan.texto);
-  const accion = yaRegistrada ? "actualizado" : "registrado";
-  decir(ctx, `${nombre}: ${accion} como «${plan.claveFinal}» en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
+  decir(ctx, mensaje("INIT-REGISTRADO-ARCHIVO", { nombre, actualizado: yaRegistrada, clave: plan.claveFinal, archivo, copia }));
 }
 
 // `claude mcp list` imprime una línea por servidor: "<clave>: <comando o URL> - <estado>".
@@ -517,18 +521,18 @@ export async function planDeClaude(rutas: Rutas, claveDada: string | null, entor
   try {
     lista = await entorno.ejecutar("claude", ["mcp", "list"]);
   } catch (error) {
-    return { cliente: "claude-code", estado: "sin-lista", mensaje: `no se pudo ejecutar claude mcp list (${error instanceof Error ? error.message : String(error)}).` };
+    return { cliente: "claude-code", estado: "sin-lista", mensaje: mensaje("INIT-CLAUDE-SIN-LISTA", { error: error instanceof Error ? error.message : String(error) }) };
   }
   // Sin la lista no se puede saber si ya está registrado: añadirlo podría duplicarlo.
   if (lista.codigo !== 0) {
-    return { cliente: "claude-code", estado: "sin-lista", mensaje: `claude mcp list falló (${lista.stderr.trim() || `código ${lista.codigo}`}); no se registra para no duplicarlo.` };
+    return { cliente: "claude-code", estado: "sin-lista", mensaje: mensaje("INIT-CLAUDE-LISTA-FALLO", { stderr: lista.stderr.trim(), codigo: lista.codigo }) };
   }
 
   // `mcp list` no enseña las variables de un registro, así que uno que ya existe no se toca: se dice
   // cómo actualizarlo a mano, con su misma clave.
   const existente = registroEnClaude(lista.stdout);
   if (existente) {
-    return { cliente: "claude-code", estado: "existente", existente, comando: `claude mcp remove ${existente}  y después  ${mostrarComando(comandoDeClaude(existente, rutas))}` };
+    return { cliente: "claude-code", estado: "existente", existente, comando: mensaje("INIT-CLAUDE-COMANDO-EXISTENTE", { existente, comando: mostrarComando(comandoDeClaude(existente, rutas)) }) };
   }
   const clave = claveDada ?? CLAVE_POR_DEFECTO;
   const args = comandoDeClaude(clave, rutas);
@@ -542,21 +546,21 @@ async function registrarEnClaude(ctx: Contexto, rutas: Rutas): Promise<void> {
     return;
   }
   if (plan.estado === "existente") {
-    ctx.entorno.salida.out(`Claude Code: ya está registrado como «${plan.existente}»; no se toca. Para cambiar sus rutas: ${plan.comando}`);
+    ctx.entorno.salida.out(mensaje("INIT-CLAUDE-EXISTENTE", { existente: plan.existente, comando: plan.comando }));
     return;
   }
 
   const { clave, args } = plan;
   if (ctx.opciones.dryRun) {
-    decir(ctx, `Claude Code: se ejecutaría ${plan.comando}`);
+    decir(ctx, mensaje("INIT-CLAUDE-SE-EJECUTARIA", { comando: plan.comando }));
     return;
   }
   const resultado = await ctx.entorno.ejecutar("claude", args).catch((error: unknown) => ({ codigo: 1, stdout: "", stderr: String(error) }));
   if (resultado.codigo !== 0) {
-    fallar(ctx, `Claude Code: claude mcp add falló (${resultado.stderr.trim() || `código ${resultado.codigo}`}).`);
+    fallar(ctx, mensaje("INIT-CLAUDE-ADD-FALLO", { stderr: resultado.stderr.trim(), codigo: resultado.codigo }));
     return;
   }
-  decir(ctx, `Claude Code: registrado como «${clave}» (ámbito user).`);
+  decir(ctx, mensaje("INIT-CLAUDE-REGISTRADO", { clave }));
 }
 
 // ─── 3. Comandos ────────────────────────────────────────────────────────────
@@ -599,23 +603,23 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
   if (clientes.includes("claude-code")) destinos.push(["claude-code", "Claude Code"]);
   if (clientes.includes("cursor")) destinos.push(["cursor", "Cursor"]);
   if (destinos.length === 0) {
-    ctx.entorno.salida.out("--comandos: ninguno de los clientes elegidos lee comandos de archivo (Claude Code o Cursor).");
+    ctx.entorno.salida.out(mensaje("INIT-COMANDOS-SIN-CLIENTE"));
     return;
   }
 
   for (const [cliente, nombre] of destinos) {
     for (const { numero, archivo, texto: contenido, estado } of planDeComandos(cliente, ctx.entorno)) {
       if (estado === "carpeta") {
-        fallar(ctx, `${nombre}: ${archivo} es una carpeta; no se toca.`);
+        fallar(ctx, mensaje("INIT-COMANDO-CARPETA", { nombre, archivo }));
         continue;
       }
       // Un archivo sin la marca es de la persona: no se pisa sin --yes.
       if (estado === "ajeno" && !ctx.opciones.yes) {
-        ctx.entorno.salida.out(`${nombre}: ${archivo} es tuyo (no lo generó init); no se toca. Con --yes se reemplaza, con copia.`);
+        ctx.entorno.salida.out(mensaje("INIT-COMANDO-AJENO", { nombre, archivo }));
         continue;
       }
       if (estado === "sin-cambios") {
-        ctx.entorno.salida.out(`${nombre}: /f${numero} sin cambios.`);
+        ctx.entorno.salida.out(mensaje("INIT-COMANDO-SIN-CAMBIOS", { nombre, numero }));
         continue;
       }
 
@@ -627,7 +631,7 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
         fs.mkdirSync(path.dirname(archivo), { recursive: true });
         fs.writeFileSync(archivo, contenido, "utf-8");
       }
-      decir(ctx, `${nombre}: /f${numero} ${estado === "nuevo" ? "copiado" : "actualizado"} en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
+      decir(ctx, mensaje("INIT-COMANDO-COPIADO", { nombre, numero, nuevo: estado === "nuevo", archivo, copia }));
     }
   }
 }
@@ -651,7 +655,7 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   const preset = ctx.opciones.preset ?? "software-replica";
   const presets = presetsDisponibles();
   if (!presets.has(preset)) {
-    ctx.entorno.salida.err(`No existe el preset "${preset}". Los disponibles son: ${describirPresets(presets)}.`);
+    ctx.entorno.salida.err(mensaje("INIT-PRESET-NO-EXISTE", { preset, disponibles: describirPresets(presets) }));
     return false;
   }
 
@@ -659,22 +663,22 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
     const archivo = rutaMaquina();
     const lectura = leerMaquina();
     if (lectura.estado === "invalido") {
-      fallar(ctx, `${lectura.error} No se toca.`);
+      fallar(ctx, mensaje("INIT-NO-SE-TOCA", { error: lectura.error }));
       return true;
     }
     const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined; idiomaPorDefecto?: string | undefined } = lectura.config ?? { version: 1 };
     const idioma = ctx.opciones.idioma ?? null;
     if (actual.presetPorDefecto === preset && (!idioma || actual.idiomaPorDefecto === idioma)) {
-      ctx.entorno.salida.out(`machine.json: presetPorDefecto ya es "${preset}"${idioma ? ` e idiomaPorDefecto "${idioma}"` : ""}; sin cambios.`);
+      ctx.entorno.salida.out(mensaje("INIT-MAQUINA-SIN-CAMBIOS", { preset, idioma }));
       return true;
     }
     const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...actual, presetPorDefecto: preset, ...(idioma ? { idiomaPorDefecto: idioma } : {}) };
-    if (actual.presetPorDefecto && !ctx.opciones.dryRun && !(await confirmar(ctx, `machine.json ya tiene presetPorDefecto "${actual.presetPorDefecto}". ¿Cambiarlo a "${preset}"?`))) {
-      fallar(ctx, "machine.json: no se cambió. Repite con --yes, o en una terminal para confirmarlo.");
+    if (actual.presetPorDefecto && !ctx.opciones.dryRun && !(await confirmar(ctx, mensaje("INIT-PREGUNTA-CAMBIAR-PRESET", { actual: actual.presetPorDefecto, preset })))) {
+      fallar(ctx, mensaje("INIT-MAQUINA-NO-CAMBIADA"));
       return true;
     }
     const copia = escribirConCopia(ctx, archivo, `${json(nuevo)}\n`);
-    decir(ctx, `machine.json: presetPorDefecto "${preset}" en ${archivo}. Los proyectos sin manifiesto de este equipo lo usan.${copia ? ` Copia: ${copia}` : ""}`);
+    decir(ctx, mensaje("INIT-MAQUINA-ESCRITA", { preset, archivo, copia }));
     return true;
   }
 
@@ -688,7 +692,7 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
     const delEquipo = idiomaDelEquipo().idioma;
     elegido = delEquipo;
     if (ctx.entorno.esTerminal && !ctx.opciones.yes) {
-      const respuesta = (await ctx.entorno.preguntar(`Idioma de ${sinDocumentos.join(", ")} (es/en) [${delEquipo}]: `)).trim().toLowerCase();
+      const respuesta = (await ctx.entorno.preguntar(mensaje("INIT-PREGUNTA-IDIOMA", { proyectos: sinDocumentos, delEquipo }))).trim().toLowerCase();
       if (respuesta === "es" || respuesta === "en") elegido = respuesta;
     }
   }
@@ -697,38 +701,35 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
     const archivo = path.join(docs, proyecto, ARCHIVO_MANIFIESTO);
     const idioma = idiomaParaManifiesto(proyecto, elegido ?? "es");
     if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, manifiestoNuevo(preset, idioma), "utf-8");
-    decir(ctx, `--migrate: ${archivo} con "preset": "${preset}" e "idioma": "${idioma}".`);
+    decir(ctx, mensaje("INIT-MIGRATE-CREADO", { archivo, preset, idioma }));
     creados++;
   }
-  if (creados === 0) ctx.entorno.salida.out("--migrate: todos los proyectos ya tienen phase-gate.json; nada que crear.");
+  if (creados === 0) ctx.entorno.salida.out(mensaje("INIT-MIGRATE-NADA"));
   return true;
 }
 
 // ─── 6. El candado de git push ──────────────────────────────────────────────
-export const CANDADO_DE_PUSH = `Candado opcional para git push (init no lo instala; de menos a más firme):
-  1. Claude Code: reglas deny en ~/.claude/settings.json, para las dos herramientas de terminal:
-       "permissions": { "deny": ["Bash(git push *)", "PowerShell(git push *)"] }
-     La de PowerShell hace falta en Windows. No son una frontera de seguridad: \`git -C . push\` las esquiva.
-  2. Un hook pre-push de git que rechace el push. Más firme, aunque \`git push --no-verify\` lo salta (y el
-     prompt de la Fase 4 prohíbe usarlo).
-  3. La única frontera real está en el remoto: protección de ramas (en GitHub, un ruleset), o que el entorno
-     del agente no tenga credenciales para hacer push.`;
+// En el idioma de los mensajes: una función, porque se calcula al usarlo.
+export function candadoDePush(): string {
+  return mensaje("INIT-CANDADO-DE-PUSH");
+}
 
 // ─── init ───────────────────────────────────────────────────────────────────
 export async function ejecutarInit(opciones: OpcionesInit, entorno: EntornoInit): Promise<number> {
   const ctx: Contexto = { opciones, entorno, fallos: 0 };
 
-  const docs = await rutaPedida(ctx, opciones.docs, "DOCS_PATH", "la Documentación Central");
+  const docs = await rutaPedida(ctx, opciones.docs, "DOCS_PATH");
   if (!docs) return 2;
-  const repos = await rutaPedida(ctx, opciones.repos, "REPOS_PATH", "la carpeta de repositorios");
+  const repos = await rutaPedida(ctx, opciones.repos, "REPOS_PATH");
   if (!repos) return 2;
   const rutas = { docs, repos };
 
   const clientes = opciones.clientes ?? (await detectarClientes(entorno));
   if (clientes.length === 0) {
     entorno.salida.out(
-      "No encontré ningún cliente MCP (Claude Code, Cursor ni VS Code). Para registrarlo a mano, en el mcp.json de tu cliente:\n" +
-        bloqueParaPegar("mcpServers", opciones.clave ?? CLAVE_POR_DEFECTO, entradaDelServidor("claude-code", rutas, entorno.plataforma))
+      mensaje("INIT-SIN-CLIENTES", {
+        bloque: bloqueParaPegar("mcpServers", opciones.clave ?? CLAVE_POR_DEFECTO, entradaDelServidor("claude-code", rutas, entorno.plataforma)),
+      })
     );
   }
   for (const cliente of clientes) {
@@ -739,9 +740,9 @@ export async function ejecutarInit(opciones: OpcionesInit, entorno: EntornoInit)
   if (opciones.comandos) await copiarComandos(ctx, clientes);
   if (opciones.migrate && !(await migrar(ctx, docs))) return 2;
 
-  entorno.salida.out(`\n${CANDADO_DE_PUSH}`);
+  entorno.salida.out(`\n${candadoDePush()}`);
   entorno.salida.out(`\n${formatearDiagnostico(diagnosticar(), "texto")}`);
-  if (opciones.dryRun) entorno.salida.out("\n--dry-run: no se escribió nada.");
+  if (opciones.dryRun) entorno.salida.out(`\n${mensaje("INIT-DRY-RUN-FIN")}`);
 
   return ctx.fallos ? 1 : 0;
 }

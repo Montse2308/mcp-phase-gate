@@ -8,6 +8,10 @@
 // Cada tool se registra con su shape de schemas.ts: el SDK valida los argumentos antes del
 // callback y convierte en `isError` tanto un fallo de validación como un Error lanzado aquí. Por
 // eso los callbacks lanzan Error con el mensaje para el modelo, y no arman respuestas de error.
+//
+// Idiomas (§8.5): los títulos y las descripciones de las tools y de sus parámetros se fijan al crear el
+// servidor, en el idioma de arranque. Cada llamada abre su propio contexto de mensajes y lo fija al idioma
+// de su proyecto en cuanto lo sabe: sus errores y su respuesta salen en ese idioma.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -17,6 +21,7 @@ import * as path from "path";
 import { DOCS, SERVER_NAME, SERVER_VERSION, requireBasePath, stateFile } from "./config.js";
 import { diagnosticarSinBloquear, formatearDiagnostico } from "./diagnostico.js";
 import { pedirConfirmacion } from "./confirmacion.js";
+import { conContextoDeMensajes, enIdioma, fallo, fijarIdiomaDeMensajes, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import { conectarLog, log } from "./log.js";
 import {
   describeProjects,
@@ -38,6 +43,8 @@ import { conflictoDeIdioma, describirPresets, idiomaDelProyecto, manifiestoDe, p
 import type { RepoResuelto } from "./manifiesto.js";
 import { bloqueDeCommitsConPlazo, estadoDeLotes, registrarLote } from "./lotes.js";
 import { comoManual } from "./recibos.js";
+import type { EstadoLote, TituloCondicional } from "./recibos.js";
+import { condicionalCanonica, estadoCanonico } from "./vocabulario.js";
 import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
@@ -45,23 +52,11 @@ import { errorSinProyecto, iniciarRoots, lineaDeDeduccion, proyectoPorRaices, ra
 import type { PhaseFile } from "./phases.js";
 import {
   diagnosticoShape,
-  getActiveTaskShape,
   getBatchStatusSalidaShape,
-  getBatchStatusShape,
-  getOrchestratorStatusShape,
-  getPhasePromptShape,
-  listTasksShape,
-  readCentralDocShape,
-  readCrossRepoShape,
-  readRepoFileShape,
   recordBatchSalidaShape,
-  recordBatchShape,
   repoStatusSalidaShape,
-  repoStatusShape,
+  shapesDe,
   sinNulos,
-  startTaskShape,
-  switchTaskShape,
-  writeCentralDocShape,
 } from "./schemas.js";
 import {
   avisoDeCompuerta,
@@ -76,6 +71,7 @@ import {
   tareaActiva,
 } from "./tasks.js";
 import type { EstadoTarea } from "./tasks.js";
+import type { Idioma } from "./vocabulario.js";
 
 function responder(texto: string): CallToolResult {
   return { content: [{ type: "text", text: texto }] };
@@ -83,6 +79,17 @@ function responder(texto: string): CallToolResult {
 
 function mensajeDe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// La llamada ya sabe su proyecto, y existe: sus errores y su respuesta, en el idioma de ese proyecto. Un
+// manifiesto que no se puede leer no cambia qué error se lanza: el idioma se queda como estaba.
+function fijarIdiomaDelProyecto(carpetaProyecto: string | null | undefined): void {
+  if (!carpetaProyecto) return;
+  try {
+    fijarIdiomaDeMensajes(idiomaDelProyecto(carpetaProyecto).idioma);
+  } catch {
+    // El error de verdad, si lo hay, lo dará quien lea el proyecto.
+  }
 }
 
 // El proyecto de una llamada que lo necesita: el que se indica o, si no, el que deducen las raíces
@@ -97,13 +104,15 @@ async function proyectoDeLaLlamada(
   project: string | undefined,
   uso: "lee" | "escribe"
 ): Promise<{ nombre: string; deducido: string | null }> {
-  if (project) return { nombre: project, deducido: null };
+  if (project) {
+    fijarIdiomaDelProyecto(proyectoSiExiste(project));
+    return { nombre: project, deducido: null };
+  }
   const porRaices = await proyectoPorRaices(mcp);
   if (porRaices.tipo !== "unico") throw errorSinProyecto(porRaices);
+  fijarIdiomaDelProyecto(porRaices.carpetaProyecto);
   if (uso === "escribe" && porRaices.fuerza === "debil") {
-    throw new Error(
-      `La carpeta abierta solo contiene un repo de ${porRaices.carpetaProyecto} (${porRaices.motivo}): para escribir, indica \`project\`.`
-    );
+    throw fallo("SERVIDOR-ESCRIBIR-COINCIDENCIA-DEBIL", { carpetaProyecto: porRaices.carpetaProyecto, motivo: porRaices.motivo });
   }
   return { nombre: porRaices.carpetaProyecto, deducido: lineaDeDeduccion(porRaices) };
 }
@@ -111,21 +120,34 @@ async function proyectoDeLaLlamada(
 // Para read_central_doc y write_central_doc: solo hace falta proyecto cuando se usa la forma
 // recomendada (task_name + file_name) sin project; con file_path, no.
 async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args: T, uso: "lee" | "escribe"): Promise<{ args: T; deducido: string | null }> {
+  if (args.project) fijarIdiomaDelProyecto(proyectoSiExiste(args.project));
   if (args.project || args.file_path || !args.task_name || !args.file_name) return { args, deducido: null };
   const { nombre, deducido } = await proyectoDeLaLlamada(mcp, undefined, uso);
   return { args: { ...args, project: nombre }, deducido };
 }
 
+// Con file_path, el proyecto sale de la ruta: si cae en la carpeta de una tarea, sus mensajes van en el
+// idioma de ese proyecto.
+function fijarIdiomaDeLaRuta(rutaAbsoluta: string): void {
+  try {
+    fijarIdiomaDelProyecto(ubicarEnTarea(rutaAbsoluta)?.carpetaProyecto);
+  } catch {
+    // Una ruta que no se puede ubicar no cambia el idioma.
+  }
+}
+
 function notaSinProyecto(pedido: string | undefined): string {
   let preset = "software";
+  let origen: string | null = null;
   try {
     const config = configuracionDe(null);
-    preset = `${config.preset.nombre}\` (${config.origenPreset}`;
+    preset = config.preset.nombre;
+    origen = config.origenPreset;
   } catch {
-    preset = "software` (por defecto";
+    preset = "software";
+    origen = null;
   }
-  const porQue = pedido ? `no existe el proyecto «${pedido.replace(/\s+/g, " ").trim()}»` : "no se indicó `project` ni se pudo deducir de la carpeta abierta";
-  return `> Nota del servidor: ${porQue}, así que este prompt usa el preset \`${preset}) y no lleva la configuración de ningún proyecto. Pasa \`project\` para recibir la de tu proyecto.`;
+  return mensaje("SERVIDOR-NOTA-SIN-PROYECTO", { pedido: pedido ? pedido.replace(/\s+/g, " ").trim() : null, preset, origen });
 }
 
 // Un proyecto que no existe no impide entregar un prompt: se entrega sin su configuración, y la
@@ -153,24 +175,18 @@ function cabeceraDeTarea(
   if (repos && repos.length) {
     const validos = manifiesto?.repos.map((repo) => repo.id) ?? [];
     if (validos.length === 0) {
-      throw new Error(
-        `El proyecto ${carpetaProyecto} no declara repos en su phase-gate.json, así que la tarea no puede elegir ` +
-          `entre ellos. Quita \`repos\`, o decláralos primero en el manifiesto.`
-      );
+      throw fallo("TOOL-START-SIN-REPOS-DECLARADOS", { carpetaProyecto });
     }
     const desconocidos = repos.filter((id) => !validos.includes(id));
     if (desconocidos.length) {
-      throw new Error(
-        `${desconocidos.map((id) => `"${id}"`).join(", ")} no ${desconocidos.length === 1 ? "es un repo" : "son repos"} ` +
-          `del phase-gate.json de ${carpetaProyecto}. Los válidos son: ${validos.join(", ")}.`
-      );
+      throw fallo("TOOL-START-REPOS-DESCONOCIDOS", { desconocidos, carpetaProyecto, validos });
     }
     lineas.push(`repos: ${[...new Set(repos)].join(", ")}`);
   }
 
   if (preset) {
     const presets = presetsDisponibles(idiomaDelProyecto(estrenado ? null : carpetaProyecto, manifiesto).idioma);
-    if (!presets.has(preset)) throw new Error(`No existe el preset "${preset}". Los disponibles son: ${describirPresets(presets)}.`);
+    if (!presets.has(preset)) throw fallo("TOOL-START-PRESET-NO-EXISTE", { preset, disponibles: describirPresets(presets) });
     lineas.push(`preset: ${preset}`);
   }
 
@@ -180,8 +196,20 @@ function cabeceraDeTarea(
   return lineas.length ? `---\n${lineas.join("\n")}\n---\n` : "";
 }
 
+// `estado` y los títulos de `condicionales` pueden llegar en inglés (los prompts en inglés los usan así): el
+// motor de lotes trabaja con los valores canónicos (§8.2).
+export function normalizarEntradaDeLote<T extends { estado?: string | undefined; condicionales?: { titulo: string; texto: string }[] | undefined }>(
+  entrada: T
+): Omit<T, "estado" | "condicionales"> & { estado?: EstadoLote | undefined; condicionales?: { titulo: TituloCondicional; texto: string }[] | undefined } {
+  return {
+    ...entrada,
+    estado: entrada.estado === undefined ? undefined : (estadoCanonico(entrada.estado) ?? undefined),
+    condicionales: entrada.condicionales?.map((c) => ({ ...c, titulo: condicionalCanonica(c.titulo) ?? (c.titulo as TituloCondicional) })),
+  };
+}
+
 function siCancelada(extra: { signal: AbortSignal }): void {
-  if (extra.signal.aborted) throw new Error("El cliente canceló la llamada antes de escribir. No se escribió nada.");
+  if (extra.signal.aborted) throw fallo("SERVIDOR-CANCELADA");
 }
 
 // Las fases de un proyecto para un listado. Si se pidió ese proyecto, un manifiesto inválido es un
@@ -191,7 +219,7 @@ function fasesDelListado(carpetaProyecto: string, pedido: boolean, bloques: stri
     return fasesDe(carpetaProyecto);
   } catch (error) {
     if (pedido) throw error;
-    bloques.push(`${carpetaProyecto}: no se pudo leer su configuración. ${mensajeDe(error)}`);
+    bloques.push(mensaje("SERVIDOR-LISTADO-CONFIG-ILEGIBLE", { carpetaProyecto, error: mensajeDe(error) }));
     return null;
   }
 }
@@ -213,7 +241,9 @@ function anotaciones(
   return { title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint: false };
 }
 
-export function crearServidor(): McpServer {
+// `idioma`: el de los títulos y las descripciones de las tools, sus parámetros, los /fN y los recursos.
+// Por defecto, el de los mensajes al arrancar (PHASE_GATE_LANG o, si no, el del sistema).
+export function crearServidor(idioma: Idioma = idiomaDeMensajes()): McpServer {
   const mcp = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
     { capabilities: { logging: {} } }
@@ -221,12 +251,12 @@ export function crearServidor(): McpServer {
 
   conectarLog(mcp);
   iniciarRoots(mcp);
-  registrarTools(mcp);
-  registrarRecursos(mcp);
+  registrarTools(mcp, idioma);
+  enIdioma(idioma, () => registrarRecursos(mcp));
 
   // Los /fN se registran ya, antes de conectar, y se vuelven a sincronizar tras cada tool y
   // cuando cambia una capa de prompts.
-  sincronizarPrompts(mcp);
+  sincronizarPrompts(mcp, idioma);
   asegurarCapacidadDePrompts(mcp);
   const dejarDeVigilar = vigilarCapas(mcp);
   const alCerrar = mcp.server.onclose;
@@ -238,17 +268,22 @@ export function crearServidor(): McpServer {
   return mcp;
 }
 
-function registrarTools(mcp: McpServer): void {
-  // Tras cada llamada a una tool se sincronizan los prompts /fN. Leer las carpetas de prompts
-  // cuesta milisegundos, y es lo único que garantiza que una fase nueva aparezca en OneDrive,
-  // donde fs.watch no avisa.
+function registrarTools(mcp: McpServer, idioma: Idioma): void {
+  const shapes = shapesDe(idioma);
+  // El título y la descripción de una tool, en el idioma del servidor.
+  const titulo = (codigo: string): string => mensaje(`${codigo}-TITULO`, {}, idioma);
+  const descripcion = (codigo: string): string => mensaje(codigo, {}, idioma);
+
+  // Cada llamada abre su contexto de mensajes (el idioma de su proyecto, en cuanto lo sepa), y tras ella
+  // se sincronizan los prompts /fN. Leer las carpetas de prompts cuesta milisegundos, y es lo único que
+  // garantiza que una fase nueva aparezca en OneDrive, donde fs.watch no avisa.
   const sincronizandoTras =
     <A extends unknown[], R>(callback: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
       try {
-        return await callback(...args);
+        return await conContextoDeMensajes(() => callback(...args));
       } finally {
-        sincronizarPrompts(mcp);
+        sincronizarPrompts(mcp, idioma);
       }
     };
 
@@ -256,21 +291,26 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "start_task",
     {
-      title: "Iniciar tarea",
-      description:
-        "Inicia una tarea NUEVA creando su carpeta en la Documentación Central y guardando el contexto inicial. " +
-        "Para volver a una tarea que ya existe usa 'switch_task': start_task reescribiría su contexto inicial.",
-      inputSchema: startTaskShape,
-      annotations: anotaciones("Iniciar tarea", false, false, false),
+      title: titulo("DESC-TOOL-START-TASK"),
+      description: descripcion("DESC-TOOL-START-TASK"),
+      inputSchema: shapes.startTask,
+      annotations: anotaciones(titulo("DESC-TOOL-START-TASK"), false, false, false),
     },
     sincronizandoTras(async (entrada, extra) => {
       const args = sinNulos(entrada);
       const taskName = args.task_name;
 
+      // `create_project` es `crear_proyecto` con su nombre en inglés: vale cualquiera, y los dos a la vez
+      // solo si dicen lo mismo.
+      if (args.crear_proyecto !== undefined && args.create_project !== undefined && args.crear_proyecto !== args.create_project) {
+        throw fallo("TOOL-START-ALIAS-DISCREPA");
+      }
+      const crearProyecto = args.crear_proyecto ?? args.create_project;
+
       // Sin project, el de la carpeta abierta. Un proyecto nuevo no se deduce: estrenarlo exige
       // decir su nombre.
-      if (!args.project && args.crear_proyecto === true) {
-        throw new Error("Para estrenar un proyecto, indica su nombre en `project`.");
+      if (!args.project && crearProyecto === true) {
+        throw fallo("TOOL-START-CREAR-SIN-NOMBRE");
       }
       const { nombre: proj, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe"); // el schema ya le quitó los espacios
 
@@ -280,12 +320,8 @@ function registrarTools(mcp: McpServer): void {
       let estrenado = false;
 
       if (!carpetaProyecto) {
-        if (args.crear_proyecto !== true) {
-          throw new Error(
-            `No existe el proyecto "${proj}". Los proyectos disponibles son: ${describeProjects()}. ` +
-              `Si el usuario te confirmó que quiere estrenar el proyecto "${proj.toUpperCase()}", ` +
-              `vuelve a llamar a start_task con crear_proyecto: true.`
-          );
+        if (crearProyecto !== true) {
+          throw fallo("TOOL-START-PROYECTO-NO-EXISTE", { proyecto: proj, disponibles: describeProjects(), mayusculas: proj.toUpperCase() });
         }
         // El nombre se vuelve carpeta tal cual: "../evil" la creaba fuera de la Documentación.
         validarSegmento(proj, "project");
@@ -301,7 +337,7 @@ function registrarTools(mcp: McpServer): void {
 
       const docsBase = requireBasePath(DOCS);
       if (!estaDentroReal(docsBase, carpetaTarea)) {
-        throw new Error(`Acceso denegado: la carpeta de la tarea queda fuera de ${docsBase}.`);
+        throw fallo("TOOL-ACCESO-DENEGADO-TAREA", { docsBase });
       }
 
       // Estrenar un proyecto se le confirma a la persona si el cliente puede preguntarle. Sin
@@ -309,11 +345,11 @@ function registrarTools(mcp: McpServer): void {
       // invitaría a aceptar un typo con un clic.
       if (estrenado) {
         const { estado, nota } = await pedirConfirmacion(mcp, extra, {
-          mensaje: `¿Estrenar el proyecto «${carpetaProyecto}»? Se creará la carpeta \`${path.join(docsBase, carpetaProyecto)}\`.`,
-          etiqueta: `Crear el proyecto ${carpetaProyecto}`,
+          mensaje: mensaje("TOOL-START-CONFIRMAR", { carpetaProyecto, ruta: path.join(docsBase, carpetaProyecto) }),
+          etiqueta: mensaje("TOOL-START-CONFIRMAR-ETIQUETA", { carpetaProyecto }),
         });
         if (estado === "rechazada") {
-          throw new Error(`El usuario no confirmó el proyecto nuevo. No se creó nada.${nota ? ` ${nota}` : ""}`);
+          throw fallo("TOOL-START-RECHAZADO", { nota });
         }
       }
 
@@ -321,11 +357,7 @@ function registrarTools(mcp: McpServer): void {
       // que ya existe borraba el requerimiento original — el único documento que no se puede
       // regenerar leyendo el código. Retomar una tarea es switch_task, que no toca archivos.
       if (fs.existsSync(contextoInicial)) {
-        throw new Error(
-          `La tarea "${taskName}" ya existe en ${carpetaProyecto} y start_task reescribiría su ` +
-            `contexto inicial. Si quieres retomarla, usa switch_task. Si de verdad quieres ` +
-            `empezar de cero, borra o renombra la carpeta primero: ${carpetaTarea}`
-        );
+        throw fallo("TOOL-START-TAREA-YA-EXISTE", { taskName, carpetaProyecto, carpetaTarea });
       }
 
       siCancelada(extra);
@@ -341,24 +373,17 @@ function registrarTools(mcp: McpServer): void {
       // Cambia la tarea activa, y con ella qué documentos se listan como recursos.
       mcp.sendResourceListChanged();
 
-      const aviso = estrenado ? `\nProyecto "${carpetaProyecto}" estrenado.` : "";
-
-      return responder(
-        `Tarea '${taskName}' inicializada correctamente. Archivo guardado en: ${contextoInicial}\n` +
-          `Tarea activa de ${carpetaProyecto}: ${taskName}.${aviso}${deducido ? `\n${deducido}` : ""}`
-      );
+      return responder(mensaje("TOOL-START-OK", { taskName, contextoInicial, carpetaProyecto, estrenado, deducido }));
     })
   );
 
   mcp.registerTool(
     "get_phase_prompt",
     {
-      title: "Prompt de fase",
-      description:
-        "Obtiene el prompt maestro de comportamiento de una fase. Comprueba además que no te estés saltando una " +
-        "fase: si faltan documentos anteriores, el prompt llega con un aviso al principio.",
-      inputSchema: getPhasePromptShape,
-      annotations: anotaciones("Prompt de fase", true, false, true),
+      title: titulo("DESC-TOOL-GET-PHASE-PROMPT"),
+      description: descripcion("DESC-TOOL-GET-PHASE-PROMPT"),
+      inputSchema: shapes.getPhasePrompt,
+      annotations: anotaciones(titulo("DESC-TOOL-GET-PHASE-PROMPT"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice ensamblarFase.
@@ -376,6 +401,7 @@ function registrarTools(mcp: McpServer): void {
           deducido = `> ${lineaDeDeduccion(porRaices)}`;
         }
       }
+      fijarIdiomaDelProyecto(carpetaProyecto);
       return responder(await textoDelPromptDeFase(phase, { project, task_name, carpetaProyecto, deducido }));
     })
   );
@@ -383,12 +409,10 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "get_active_task",
     {
-      title: "Tarea activa",
-      description:
-        "Devuelve la tarea activa y en qué fase va, deducida de los documentos que ya tiene. Úsalo al iniciar un " +
-        "chat nuevo o si perdiste el contexto. Sin 'project' devuelve la activa de CADA proyecto.",
-      inputSchema: getActiveTaskShape,
-      annotations: anotaciones("Tarea activa", true, false, true),
+      title: titulo("DESC-TOOL-GET-ACTIVE-TASK"),
+      description: descripcion("DESC-TOOL-GET-ACTIVE-TASK"),
+      inputSchema: shapes.getActiveTask,
+      annotations: anotaciones(titulo("DESC-TOOL-GET-ACTIVE-TASK"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const pedido = sinNulos(entrada).project ?? "";
@@ -396,10 +420,11 @@ function registrarTools(mcp: McpServer): void {
       // Con proyecto: la suya. Sin proyecto: la de cada uno. Antes había un único puntero
       // global y responder "la activa" a secas obligaba a adivinar cuál de dos ventanas
       // preguntaba; listar todas es la respuesta honesta cuando no se sabe.
+      if (pedido) fijarIdiomaDelProyecto(proyectoSiExiste(pedido));
       const proyectos = pedido ? [requireProjectFolder(pedido)] : [...discoverProjects().values()].sort();
 
       if (proyectos.length === 0) {
-        return responder("No hay ningún proyecto en la Documentación Central todavía.");
+        return responder(mensaje("TOOL-ACTIVA-SIN-PROYECTOS"));
       }
 
       const bloques: string[] = [];
@@ -410,39 +435,37 @@ function registrarTools(mcp: McpServer): void {
         const activa = tareaActiva(carpetaProyecto, phases);
 
         if (!activa) {
-          bloques.push(`${carpetaProyecto}: sin tareas todavía.`);
+          bloques.push(mensaje("TOOL-ACTIVA-SIN-TAREAS", { carpetaProyecto }));
           continue;
         }
 
-        const nota =
-          activa.origen === "deducida"
-            ? " (deducida por ser la más reciente: no había puntero guardado, confírmalo antes de escribir)"
-            : "";
-
         bloques.push(
-          `${carpetaProyecto}: ${activa.estado.taskName}${nota}\n` +
-            `  Fase: ${describeEstado(activa.estado, phases)}\n` +
-            `  Carpeta: ${activa.estado.folderPath}`
+          mensaje("TOOL-ACTIVA-BLOQUE", {
+            carpetaProyecto,
+            taskName: activa.estado.taskName,
+            deducida: activa.origen === "deducida",
+            fase: describeEstado(activa.estado, phases),
+            carpeta: activa.estado.folderPath,
+          })
         );
       }
 
-      return responder(`${bloques.join("\n\n")}\n\nPunteros guardados en: ${stateFile()}`);
+      return responder(`${bloques.join("\n\n")}\n\n${mensaje("TOOL-ACTIVA-PUNTEROS", { archivo: stateFile() })}`);
     })
   );
 
   mcp.registerTool(
     "list_tasks",
     {
-      title: "Listar tareas",
-      description:
-        "Lista las tareas que existen y la fase en la que va cada una. Úsalo para retomar una tarea vieja o para " +
-        "saber qué hay pendiente.",
-      inputSchema: listTasksShape,
-      annotations: anotaciones("Listar tareas", true, false, true),
+      title: titulo("DESC-TOOL-LIST-TASKS"),
+      description: descripcion("DESC-TOOL-LIST-TASKS"),
+      inputSchema: shapes.listTasks,
+      annotations: anotaciones(titulo("DESC-TOOL-LIST-TASKS"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const pedido = sinNulos(entrada).project ?? "";
 
+      if (pedido) fijarIdiomaDelProyecto(proyectoSiExiste(pedido));
       const proyectos = pedido ? [requireProjectFolder(pedido)] : [...discoverProjects().values()].sort();
 
       const bloques: string[] = [];
@@ -454,19 +477,19 @@ function registrarTools(mcp: McpServer): void {
         const activa = tareaActiva(carpetaProyecto, phases);
 
         if (tareas.length === 0) {
-          bloques.push(`${carpetaProyecto}: sin tareas.`);
+          bloques.push(mensaje("TOOL-LISTAR-SIN-TAREAS", { carpetaProyecto }));
           continue;
         }
 
         const lineas = tareas.map((tarea) => {
-          const marca = tarea.taskName === activa?.estado.taskName ? " [activa]" : "";
+          const marca = tarea.taskName === activa?.estado.taskName ? mensaje("TOOL-LISTAR-MARCA-ACTIVA") : "";
           return `${lineaDeTarea(tarea, phases)}${marca}`;
         });
 
-        bloques.push(`${carpetaProyecto} (${tareas.length}), de la más reciente a la más antigua:\n${lineas.join("\n")}`);
+        bloques.push(mensaje("TOOL-LISTAR-BLOQUE", { carpetaProyecto, total: tareas.length, lineas: lineas.join("\n") }));
       }
 
-      return responder(bloques.join("\n\n") || "No hay proyectos todavía.");
+      return responder(bloques.join("\n\n") || mensaje("TOOL-LISTAR-SIN-PROYECTOS"));
     })
   );
 
@@ -474,12 +497,10 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "switch_task",
     {
-      title: "Cambiar de tarea activa",
-      description:
-        "Cambia cuál es la tarea activa de un proyecto, sin tocar ningún archivo. Es la forma correcta de " +
-        "retomar una tarea que ya existe.",
-      inputSchema: switchTaskShape,
-      annotations: anotaciones("Cambiar de tarea activa", false, false, true),
+      title: titulo("DESC-TOOL-SWITCH-TASK"),
+      description: descripcion("DESC-TOOL-SWITCH-TASK"),
+      inputSchema: shapes.switchTask,
+      annotations: anotaciones(titulo("DESC-TOOL-SWITCH-TASK"), false, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
@@ -492,19 +513,14 @@ function registrarTools(mcp: McpServer): void {
       const encontrada = tareas.find((tarea) => tarea.taskName === taskName);
 
       if (!encontrada) {
-        const disponibles = tareas.length ? tareas.map((tarea) => `"${tarea.taskName}"`).join(", ") : "(ninguna)";
-        throw new Error(
-          `No existe la tarea "${taskName}" en ${carpetaProyecto}. Las que hay son: ${disponibles}. ` +
-            `Si es una tarea nueva, créala con start_task.`
-        );
+        throw fallo("TOOL-CAMBIAR-NO-EXISTE", { taskName, carpetaProyecto, disponibles: tareas.map((tarea) => tarea.taskName) });
       }
 
       guardarPuntero(carpetaProyecto, taskName);
       mcp.sendResourceListChanged();
 
       return responder(
-        `Tarea activa de ${carpetaProyecto}: ${taskName}.\nFase: ${describeEstado(encontrada, phases)}\n` +
-          `Carpeta: ${encontrada.folderPath}${deducido ? `\n${deducido}` : ""}`
+        mensaje("TOOL-CAMBIAR-OK", { carpetaProyecto, taskName, fase: describeEstado(encontrada, phases), carpeta: encontrada.folderPath, deducido })
       );
     })
   );
@@ -512,21 +528,19 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "read_central_doc",
     {
-      title: "Leer documento",
-      description:
-        "Lee un archivo de la Documentación Central. RECOMENDADO: pasa 'project' + 'task_name' + 'file_name' y el " +
-        "servidor arma la ruta correcta automáticamente (<PROYECTO>/<subcarpeta de tareas>/<tarea>/<archivo>). " +
-        "Alternativamente puedes pasar 'file_path' relativo a la Documentación Central.",
-      inputSchema: readCentralDocShape,
-      annotations: anotaciones("Leer documento", true, false, true),
+      title: titulo("DESC-TOOL-READ-CENTRAL-DOC"),
+      description: descripcion("DESC-TOOL-READ-CENTRAL-DOC"),
+      inputSchema: shapes.readCentralDoc,
+      annotations: anotaciones(titulo("DESC-TOOL-READ-CENTRAL-DOC"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const docsBase = requireBasePath(DOCS);
       const { args, deducido } = await conProyecto(mcp, sinNulos(entrada), "lee");
       const fullPath = resolveDocPath(args);
+      if (!args.project) fijarIdiomaDeLaRuta(fullPath);
 
       if (!estaDentroReal(docsBase, fullPath)) {
-        throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
+        throw fallo("TOOL-ACCESO-DENEGADO-RUTA", { docsBase });
       }
 
       // La línea de la deducción va aparte, para no mezclarla con el contenido del documento.
@@ -541,14 +555,10 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "write_central_doc",
     {
-      title: "Escribir documento",
-      description:
-        "Escribe o sobrescribe un archivo en la Documentación Central. RECOMENDADO: pasa 'project' + 'task_name' + " +
-        "'file_name' y el servidor arma la ruta correcta automáticamente " +
-        "(<PROYECTO>/<subcarpeta de tareas>/<tarea>/<archivo>). Alternativamente puedes pasar 'file_path' relativo " +
-        "a la Documentación Central.",
-      inputSchema: writeCentralDocShape,
-      annotations: anotaciones("Escribir documento", false, true, true),
+      title: titulo("DESC-TOOL-WRITE-CENTRAL-DOC"),
+      description: descripcion("DESC-TOOL-WRITE-CENTRAL-DOC"),
+      inputSchema: shapes.writeCentralDoc,
+      annotations: anotaciones(titulo("DESC-TOOL-WRITE-CENTRAL-DOC"), false, true, true),
     },
     sincronizandoTras(async (entrada, extra) => {
       const docsBase = requireBasePath(DOCS);
@@ -556,18 +566,15 @@ function registrarTools(mcp: McpServer): void {
       const fullPath = resolveDocPath(args);
 
       if (!estaDentroReal(docsBase, fullPath)) {
-        throw new Error(`Acceso denegado: la ruta queda fuera de ${docsBase}.`);
+        throw fallo("TOOL-ACCESO-DENEGADO-RUTA", { docsBase });
       }
 
       // Antes del mkdir: con una tarea mal escrita, el mkdir recursivo creaba su carpeta.
       const ubicacion = ubicarEnTarea(fullPath);
       if (!ubicacion) {
-        throw new Error(
-          "write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe " +
-            "(<DOCS>/<PROYECTO>/<subcarpeta de tareas>/<tarea>/). Los archivos del proyecto, como " +
-            "phase-gate.json, no se escriben con esta tool. Para una tarea nueva, usa start_task."
-        );
+        throw fallo("TOOL-ESCRIBIR-FUERA-DE-TAREA");
       }
+      fijarIdiomaDelProyecto(ubicacion.carpetaProyecto);
 
       // Con los nombres de documento de SU proyecto: uno que sustituye una fase con otro documento
       // protege ese.
@@ -589,36 +596,21 @@ function registrarTools(mcp: McpServer): void {
         const deLotes = esMotivoDeLotes(motivo);
         const { estado, nota } = await pedirConfirmacion(mcp, extra, {
           mensaje: deLotes
-            ? `\`${archivo}\` de la tarea «${ubicacion.taskName}» lo escribe record_batch. ¿${existia ? "Reescribirlo" : "Crearlo"} a mano de todos modos, para reparar un archivo dañado?`
-            : `\`${archivo}\` de la tarea «${ubicacion.taskName}» está protegido: ${motivo.replace(/\.$/, "")}. ` + (existia ? "¿Reescribirlo?" : "¿Crearlo?"),
-          etiqueta: `${existia ? "Reescribir" : "Crear"} ${archivo}`,
+            ? mensaje("TOOL-ESCRIBIR-CONFIRMAR-LOTES", { archivo, taskName: ubicacion.taskName, existia })
+            : mensaje("TOOL-ESCRIBIR-CONFIRMAR-PROTEGIDO", { archivo, taskName: ubicacion.taskName, motivo: motivo.replace(/\.$/, ""), existia }),
+          etiqueta: mensaje("TOOL-ESCRIBIR-CONFIRMAR-ETIQUETA", { archivo, existia }),
         });
-        const conNota = nota ? ` ${nota}` : "";
 
         if (estado === "rechazada") {
-          const accion = existia ? "la reescritura" : "la escritura";
-          throw new Error(`El usuario no confirmó ${accion} de \`${archivo}\`. No se escribió nada.${conNota}`);
+          throw fallo("TOOL-ESCRIBIR-RECHAZADO", { archivo, existia, nota });
         }
         if (estado === "no-disponible" && args.force !== true) {
-          throw new Error(
-            deLotes
-              ? `${motivo} Usa record_batch. Solo para reparar a mano un archivo dañado, pídele al usuario confirmación ` +
-                  `explícita y vuelve a llamar con force: true.${conNota}`
-              : `${motivo} Si de verdad hay que reescribirlo, pídele al usuario confirmación explícita ` +
-                  `y vuelve a llamar con force: true.${conNota}`
-          );
+          throw fallo(deLotes ? "TOOL-ESCRIBIR-PIDE-FORCE-LOTES" : "TOOL-ESCRIBIR-PIDE-FORCE", { motivo, nota });
         }
 
         // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
-        sufijo =
-          estado === "confirmada"
-            ? existia
-              ? " (reescrito con confirmación del usuario)"
-              : " (creado con confirmación del usuario)"
-            : existia
-              ? " (sobrescrito con force)"
-              : " (creado con force)";
-        if (deLotes) sufijo += "\nEscrito a mano con confirmación; get_batch_status lo marcará como manual.";
+        sufijo = mensaje("TOOL-ESCRIBIR-SUFIJO", { confirmada: estado === "confirmada", existia });
+        if (deLotes) sufijo += mensaje("TOOL-ESCRIBIR-SUFIJO-MANUAL");
         if (nota) sufijo += `\n${nota}`;
       }
 
@@ -632,7 +624,7 @@ function registrarTools(mcp: McpServer): void {
       // uno que ya existía no cambia la lista.
       if (!existia) mcp.sendResourceListChanged();
 
-      return responder(`Archivo escrito exitosamente en ${fullPath}${sufijo}${deducido ? `\n${deducido}` : ""}`);
+      return responder(mensaje("TOOL-ESCRIBIR-OK", { ruta: fullPath, sufijo, deducido }));
     })
   );
 
@@ -641,16 +633,11 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "record_batch",
     {
-      title: "Registrar lote",
-      description:
-        "Registra un lote de la Fase 4 en su recibo, que escribe el servidor. Se llama dos veces por lote cuando hay " +
-        "git: ANTES del commit, con el contenido (titulo, estado, que_se_hizo, archivos, verificacion…), y el lote " +
-        "queda con el commit pendiente; DESPUÉS del commit, con `lote` y `commit`, para anclarlo. El servidor comprueba " +
-        "que el commit exista, esté en la rama actual y qué archivos toca. Sin git, una sola llamada con " +
-        "`artifact_path` (se sella con su sha256) o `verification_note`. Nunca escribas recibos con write_central_doc.",
-      inputSchema: recordBatchShape,
+      title: titulo("DESC-TOOL-RECORD-BATCH"),
+      description: descripcion("DESC-TOOL-RECORD-BATCH"),
+      inputSchema: shapes.recordBatch,
       outputSchema: recordBatchSalidaShape,
-      annotations: anotaciones("Registrar lote", false, false, false),
+      annotations: anotaciones(titulo("DESC-TOOL-RECORD-BATCH"), false, false, false),
     },
     sincronizandoTras(async (entrada, extra) => {
       const args = sinNulos(entrada);
@@ -663,13 +650,13 @@ function registrarTools(mcp: McpServer): void {
       if (!taskName) {
         const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
         if (!activa || activa.origen !== "puntero") {
-          throw new Error(`No hay tarea activa guardada en ${carpetaProyecto}: indica \`task_name\` (o actívala con switch_task).`);
+          throw fallo("TOOL-LOTE-SIN-TAREA-ACTIVA", { carpetaProyecto });
         }
         taskName = activa.estado.taskName;
       }
 
       const { project: _proyecto, task_name: _tarea, ...delLote } = args;
-      const resultado = await registrarLote(carpetaProyecto, taskName, delLote, {
+      const resultado = await registrarLote(carpetaProyecto, taskName, normalizarEntradaDeLote(delLote), {
         antesDeEscribir: () => siCancelada(extra),
         confirmar: (pregunta) => pedirConfirmacion(mcp, extra, pregunta),
       });
@@ -686,14 +673,11 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "get_batch_status",
     {
-      title: "Estado de los lotes",
-      description:
-        "Cruza el plan de la Fase 3 con los recibos de la Fase 4: qué lote toca, cuál espera su commit, qué ancla tiene " +
-        "cada uno y de dónde salió el recibo (servidor o a mano). Con `reverificar`, comprueba que cada commit siga en la " +
-        "rama actual y que cada artefacto sellado no haya cambiado. Solo lee.",
-      inputSchema: getBatchStatusShape,
+      title: titulo("DESC-TOOL-GET-BATCH-STATUS"),
+      description: descripcion("DESC-TOOL-GET-BATCH-STATUS"),
+      inputSchema: shapes.getBatchStatus,
       outputSchema: getBatchStatusSalidaShape,
-      annotations: anotaciones("Estado de los lotes", true, false, true),
+      annotations: anotaciones(titulo("DESC-TOOL-GET-BATCH-STATUS"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
@@ -704,9 +688,9 @@ function registrarTools(mcp: McpServer): void {
       let nota: string | null = null;
       if (!taskName) {
         const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
-        if (!activa) throw new Error(`${carpetaProyecto} no tiene tareas todavía.`);
+        if (!activa) throw fallo("TOOL-ESTADO-LOTES-SIN-TAREAS", { carpetaProyecto });
         taskName = activa.estado.taskName;
-        if (activa.origen === "deducida") nota = `(Tarea «${taskName}» deducida por ser la más reciente: no había tarea activa guardada.)`;
+        if (activa.origen === "deducida") nota = mensaje("TOOL-ESTADO-LOTES-DEDUCIDA", { taskName });
       }
 
       const { texto, salida } = await estadoDeLotes(carpetaProyecto, taskName, { reverificar: args.reverificar === true });
@@ -722,14 +706,11 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "get_orchestrator_status",
     {
-      title: "Estado de la instalación",
-      description:
-        "Radiografía de la instalación: versión y ruta del paquete, variables y de dónde salió cada una, qué " +
-        "archivo de prompt gana en cada fase, configuración (machine.json y presets), proyectos con su tarea activa, " +
-        "manifiesto, preset, reglas y repos, y avisos. Úsala cuando algo no se comporte como esperas.",
-      inputSchema: getOrchestratorStatusShape,
+      title: titulo("DESC-TOOL-GET-ORCHESTRATOR-STATUS"),
+      description: descripcion("DESC-TOOL-GET-ORCHESTRATOR-STATUS"),
+      inputSchema: shapes.getOrchestratorStatus,
       outputSchema: diagnosticoShape,
-      annotations: anotaciones("Estado de la instalación", true, false, true),
+      annotations: anotaciones(titulo("DESC-TOOL-GET-ORCHESTRATOR-STATUS"), true, false, true),
     },
     sincronizandoTras(async () => {
       const version = mcp.server.getClientVersion();
@@ -755,12 +736,10 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "read_cross_repo",
     {
-      title: "Leer archivo de repositorio",
-      description:
-        "Lee un archivo de cualquier carpeta dentro de PHASE_GATE_REPOS_PATH. Si el proyecto declara repos en " +
-        "phase-gate.json, usa read_repo_file.",
-      inputSchema: readCrossRepoShape,
-      annotations: anotaciones("Leer archivo de repositorio", true, false, true),
+      title: titulo("DESC-TOOL-READ-CROSS-REPO"),
+      description: descripcion("DESC-TOOL-READ-CROSS-REPO"),
+      inputSchema: shapes.readCrossRepo,
+      annotations: anotaciones(titulo("DESC-TOOL-READ-CROSS-REPO"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
@@ -771,17 +750,16 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "read_repo_file",
     {
-      title: "Leer archivo de un repo del proyecto",
-      description:
-        "Lee un archivo de uno de los repos que declara el phase-gate.json del proyecto, por su id, esté donde esté " +
-        "en este equipo. No lee nada de .git.",
-      inputSchema: readRepoFileShape,
-      annotations: anotaciones("Leer archivo de un repo del proyecto", true, false, true),
+      title: titulo("DESC-TOOL-READ-REPO-FILE"),
+      description: descripcion("DESC-TOOL-READ-REPO-FILE"),
+      inputSchema: shapes.readRepoFile,
+      annotations: anotaciones(titulo("DESC-TOOL-READ-REPO-FILE"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
       const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "lee");
-      const resultado = responder(leerArchivoDeRepo(requireProjectFolder(nombre), args.repo, args.path));
+      const carpetaProyecto = requireProjectFolder(nombre);
+      const resultado = responder(leerArchivoDeRepo(carpetaProyecto, args.repo, args.path));
       if (deducido) resultado.content.push({ type: "text", text: deducido });
       return resultado;
     })
@@ -790,13 +768,11 @@ function registrarTools(mcp: McpServer): void {
   mcp.registerTool(
     "repo_status",
     {
-      title: "Estado de git de los repos",
-      description:
-        "Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo del proyecto o de todos los " +
-        "de la tarea activa. Solo lee: no toma locks ni ejecuta comandos del repo (core.fsmonitor, filtros de .gitattributes).",
-      inputSchema: repoStatusShape,
+      title: titulo("DESC-TOOL-REPO-STATUS"),
+      description: descripcion("DESC-TOOL-REPO-STATUS"),
+      inputSchema: shapes.repoStatus,
       outputSchema: repoStatusSalidaShape,
-      annotations: anotaciones("Estado de git de los repos", true, false, true),
+      annotations: anotaciones(titulo("DESC-TOOL-REPO-STATUS"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
       const args = sinNulos(entrada);
@@ -804,24 +780,36 @@ function registrarTools(mcp: McpServer): void {
       const carpetaProyecto = requireProjectFolder(nombre);
 
       let repos: RepoResuelto[];
-      let titulo: string;
+      let tituloDelEstado: string;
       if (args.repo) {
         repos = [resolverRepo(carpetaProyecto, args.repo)];
-        titulo = `Repo \`${args.repo}\` de ${carpetaProyecto}:`;
+        tituloDelEstado = mensaje("TOOL-REPOS-TITULO-REPO", { repo: args.repo, carpetaProyecto });
       } else {
         const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
         repos = reposDeLaTarea(configuracionDe(carpetaProyecto, activa?.estado.folderPath ?? null));
         if (repos.length === 0) {
-          throw new Error(`El proyecto ${carpetaProyecto} no declara repos en su phase-gate.json.`);
+          throw fallo("TOOL-REPOS-SIN-REPOS", { carpetaProyecto });
         }
-        titulo = activa ? `Repos de la tarea «${activa.estado.taskName}» de ${carpetaProyecto}:` : `Repos de ${carpetaProyecto}:`;
+        tituloDelEstado = activa
+          ? mensaje("TOOL-REPOS-TITULO-TAREA", { taskName: activa.estado.taskName, carpetaProyecto })
+          : mensaje("TOOL-REPOS-TITULO-PROYECTO", { carpetaProyecto });
       }
 
       const estados = await Promise.all(repos.map((repo) => estadoDeRepo(repo)));
-      const texto = [titulo, ...estados.map((estado) => `- ${lineaDeEstado(estado)}`), ...(deducido ? ["", deducido] : [])].join("\n");
+      const texto = [tituloDelEstado, ...estados.map((estado) => `- ${lineaDeEstado(estado)}`), ...(deducido ? ["", deducido] : [])].join("\n");
       return { content: [{ type: "text", text: texto }], structuredContent: { proyecto: carpetaProyecto, repos: estados } };
     })
   );
+}
+
+// El idioma del proyecto para los bloques que el servidor añade al prompt. Si no se puede saber, el de
+// la llamada.
+function idiomaDelPrompt(carpetaProyecto: string | null): Idioma {
+  try {
+    return idiomaDelProyecto(carpetaProyecto).idioma;
+  } catch {
+    return idiomaDeMensajes();
+  }
 }
 
 // El texto que entrega get_phase_prompt, una vez resuelto el proyecto: `project` es el que se pidió (puede
@@ -848,8 +836,10 @@ export async function textoDelPromptDeFase(
 
     const resuelta = resolverTareaDelPrompt(fasesDe, opciones);
     if (resuelta && resuelta !== "ambigua") {
-      pendientes = avisoDePendientes(phase, resuelta.estado, resuelta.phases);
-      recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases);
+      // Los bloques que se añaden al prompt, en el idioma del proyecto de la tarea.
+      const idiomaDeLaTarea = idiomaDelPrompt(resuelta.carpetaProyecto);
+      pendientes = avisoDePendientes(phase, resuelta.estado, resuelta.phases, idiomaDeLaTarea);
+      recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases, idiomaDeLaTarea);
       // La tarea aporta su preset si declara uno en su contexto inicial.
       if (carpetaProyecto && resuelta.carpetaProyecto === carpetaProyecto) carpetaTarea = resuelta.estado.folderPath;
       // En la fase siguiente a la de los lotes (la 5), los commits ya verificados para el auditor.
@@ -857,7 +847,7 @@ export async function textoDelPromptDeFase(
       if (deLotes && phase === deLotes[0] + 1) commits = await bloqueDeCommitsConPlazo(resuelta.carpetaProyecto, resuelta.estado.folderPath, resuelta.phases);
     }
   } catch (error) {
-    log("warning", `No se pudo comprobar la compuerta: ${mensajeDe(error)}`);
+    log("warning", mensaje("SERVIDOR-COMPUERTA-FALLO", { error: mensajeDe(error) }));
   }
 
   // Un proyecto que declara un idioma y tiene tareas en el otro: la deducción las daría por sin
@@ -871,10 +861,11 @@ export async function textoDelPromptDeFase(
   // lugar sería el fallo silencioso que el manifiesto evita.
   const columnas = carpetaProyecto ? await columnasDeGit(carpetaProyecto, carpetaTarea) : new Map<string, string>();
   const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea, { estadoDeRepo: (repo) => columnas.get(repo.id) ?? null });
-  const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map(notaDeHuerfano);
+  const idiomaDelEnsamblado = idiomaDelPrompt(carpetaProyecto);
+  const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map((h) => notaDeHuerfano(h, idiomaDelEnsamblado));
   for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
   // Sin proyecto, el prompt no lleva la configuración de ninguno: se dice, para que el modelo no crea
-  // que tiene el preset de su proyecto (hallazgo 8 de la auditoría de la Etapa 3).
+  // que tiene el preset de su proyecto (hallazgo 8 de la auditoría de la Etapa 3). En el idioma de la llamada.
   if (!carpetaProyecto) notas.unshift(notaSinProyecto(project));
 
   // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
