@@ -34,8 +34,7 @@ import {
 } from "./paths.js";
 import type { ArgumentosDeDocumento } from "./paths.js";
 import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerfano, reposDeLaTarea } from "./capas.js";
-import { IDIOMA_POR_DEFECTO } from "./config.js";
-import { describirPresets, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
+import { conflictoDeIdioma, describirPresets, idiomaDelProyecto, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
 import { bloqueDeCommitsConPlazo, estadoDeLotes, registrarLote } from "./lotes.js";
 import { comoManual } from "./recibos.js";
@@ -141,7 +140,13 @@ function proyectoSiExiste(project: string): string | null {
 
 // La cabecera que start_task escribe en el contexto inicial cuando la tarea elige sus repos o su
 // preset. Se valida ANTES de crear nada: un id mal escrito no debe dejar media tarea creada.
-function cabeceraDeTarea(carpetaProyecto: string, estrenado: boolean, repos: string[] | undefined, preset: string | undefined): string {
+function cabeceraDeTarea(
+  carpetaProyecto: string,
+  estrenado: boolean,
+  repos: string[] | undefined,
+  preset: string | undefined,
+  redaccion: string | undefined
+): string {
   const manifiesto = estrenado ? null : manifiestoDe(carpetaProyecto);
   const lineas: string[] = [];
 
@@ -164,10 +169,13 @@ function cabeceraDeTarea(carpetaProyecto: string, estrenado: boolean, repos: str
   }
 
   if (preset) {
-    const presets = presetsDisponibles(manifiesto?.idioma ?? IDIOMA_POR_DEFECTO);
+    const presets = presetsDisponibles(idiomaDelProyecto(estrenado ? null : carpetaProyecto, manifiesto).idioma);
     if (!presets.has(preset)) throw new Error(`No existe el preset "${preset}". Los disponibles son: ${describirPresets(presets)}.`);
     lineas.push(`preset: ${preset}`);
   }
+
+  // El idioma en que se redacta la tarea, si se pidió (§8.3). Lo lee frontmatterDeTarea.
+  if (redaccion) lineas.push(`redaccion: ${redaccion}`);
 
   return lineas.length ? `---\n${lineas.join("\n")}\n---\n` : "";
 }
@@ -289,7 +297,7 @@ function registrarTools(mcp: McpServer): void {
       validarNombreVisible(taskName, "task_name");
       const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
       const contextoInicial = path.join(carpetaTarea, contextoInicialDe(carpetaProyecto));
-      const cabecera = cabeceraDeTarea(carpetaProyecto, estrenado, args.repos, args.preset);
+      const cabecera = cabeceraDeTarea(carpetaProyecto, estrenado, args.repos, args.preset, args.redaccion);
 
       const docsBase = requireBasePath(DOCS);
       if (!estaDentroReal(docsBase, carpetaTarea)) {
@@ -850,6 +858,13 @@ export async function textoDelPromptDeFase(
     }
   } catch (error) {
     log("warning", `No se pudo comprobar la compuerta: ${mensajeDe(error)}`);
+  }
+
+  // Un proyecto que declara un idioma y tiene tareas en el otro: la deducción las daría por sin
+  // documentos, así que el prompt no se entrega (IDIOMA-CON-TAREAS, §8.3), con el mismo texto que doctor.
+  if (carpetaProyecto) {
+    const conflicto = conflictoDeIdioma(carpetaProyecto);
+    if (conflicto?.codigo === "IDIOMA-CON-TAREAS") throw new Error(`${conflicto.texto} (${conflicto.codigo})`);
   }
 
   // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su

@@ -20,7 +20,8 @@ import { capasDeCuerpos, fasesDe, rutasDeCuerpos } from "./capas.js";
 import type { Salida } from "./cli.js";
 import { SERVER_NAME, SERVER_VERSION, leerVariable } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
-import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_MAQUINA, URL_ESQUEMA_PROYECTO, describirPresets, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_MAQUINA, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import type { Idioma } from "./vocabulario.js";
 import { discoverProjects } from "./paths.js";
 import { leerPromptNormalizado, resolveCommandFile } from "./phases.js";
 import { textoGenerico } from "./prompts-mcp.js";
@@ -40,6 +41,7 @@ export type OpcionesInit = {
   comandos: boolean;
   migrate: boolean;
   preset: string | null;
+  idioma?: Idioma | null; // --idioma: el de los proyectos sin documentos que lo digan (§8.3)
   soloEsteEquipo: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -631,10 +633,18 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
 }
 
 // ─── 4. Migración ───────────────────────────────────────────────────────────
-// El phase-gate.json que crea la migración (y "Crear phase-gate.json" en el Studio): solo $schema,
-// version y preset.
-export function manifiestoNuevo(preset: string): string {
-  return `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset })}\n`;
+// El phase-gate.json que crea la migración (y "Crear phase-gate.json" en el Studio): $schema, version,
+// preset e idioma. El idioma va siempre escrito: así el proyecto no cambia de idioma si mañana cambia el
+// del equipo (§8.3).
+export function manifiestoNuevo(preset: string, idioma?: Idioma): string {
+  return `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset, ...(idioma ? { idioma } : {}) })}\n`;
+}
+
+// El idioma de un manifiesto nuevo: el de los documentos del proyecto si los hay (paso 2 de §8.3, nunca el
+// del sistema), y si no, el elegido.
+export function idiomaParaManifiesto(carpetaProyecto: string, elegido: Idioma): Idioma {
+  const enDisco = idiomaDelProyecto(carpetaProyecto, null);
+  return enDisco.origen === "de sus documentos" ? enDisco.idioma : elegido;
 }
 
 async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
@@ -652,12 +662,13 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
       fallar(ctx, `${lectura.error} No se toca.`);
       return true;
     }
-    const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined } = lectura.config ?? { version: 1 };
-    if (actual.presetPorDefecto === preset) {
-      ctx.entorno.salida.out(`machine.json: presetPorDefecto ya es "${preset}"; sin cambios.`);
+    const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined; idiomaPorDefecto?: string | undefined } = lectura.config ?? { version: 1 };
+    const idioma = ctx.opciones.idioma ?? null;
+    if (actual.presetPorDefecto === preset && (!idioma || actual.idiomaPorDefecto === idioma)) {
+      ctx.entorno.salida.out(`machine.json: presetPorDefecto ya es "${preset}"${idioma ? ` e idiomaPorDefecto "${idioma}"` : ""}; sin cambios.`);
       return true;
     }
-    const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...actual, presetPorDefecto: preset };
+    const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...actual, presetPorDefecto: preset, ...(idioma ? { idiomaPorDefecto: idioma } : {}) };
     if (actual.presetPorDefecto && !ctx.opciones.dryRun && !(await confirmar(ctx, `machine.json ya tiene presetPorDefecto "${actual.presetPorDefecto}". ¿Cambiarlo a "${preset}"?`))) {
       fallar(ctx, "machine.json: no se cambió. Repite con --yes, o en una terminal para confirmarlo.");
       return true;
@@ -668,12 +679,25 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   }
 
   const proyectos = [...discoverProjects(docs).values()].sort();
+  const nuevos = proyectos.filter((proyecto) => !fs.existsSync(path.join(docs, proyecto, ARCHIVO_MANIFIESTO)));
+  // Para los proyectos cuyos documentos no dicen su idioma: --idioma, o se pregunta con el del equipo por
+  // defecto (pasos 3 a 5 de §8.3); sin terminal, el del equipo.
+  let elegido: Idioma | null = ctx.opciones.idioma ?? null;
+  const sinDocumentos = nuevos.filter((proyecto) => idiomaDelProyecto(proyecto, null).origen !== "de sus documentos");
+  if (!elegido && sinDocumentos.length) {
+    const delEquipo = idiomaDelEquipo().idioma;
+    elegido = delEquipo;
+    if (ctx.entorno.esTerminal && !ctx.opciones.yes) {
+      const respuesta = (await ctx.entorno.preguntar(`Idioma de ${sinDocumentos.join(", ")} (es/en) [${delEquipo}]: `)).trim().toLowerCase();
+      if (respuesta === "es" || respuesta === "en") elegido = respuesta;
+    }
+  }
   let creados = 0;
-  for (const proyecto of proyectos) {
+  for (const proyecto of nuevos) {
     const archivo = path.join(docs, proyecto, ARCHIVO_MANIFIESTO);
-    if (fs.existsSync(archivo)) continue; // solo crea, nunca sobrescribe
-    if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, manifiestoNuevo(preset), "utf-8");
-    decir(ctx, `--migrate: ${archivo} con "preset": "${preset}".`);
+    const idioma = idiomaParaManifiesto(proyecto, elegido ?? "es");
+    if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, manifiestoNuevo(preset, idioma), "utf-8");
+    decir(ctx, `--migrate: ${archivo} con "preset": "${preset}" e "idioma": "${idioma}".`);
     creados++;
   }
   if (creados === 0) ctx.entorno.salida.out("--migrate: todos los proyectos ya tienen phase-gate.json; nada que crear.");

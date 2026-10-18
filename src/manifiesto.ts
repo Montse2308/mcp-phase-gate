@@ -15,11 +15,12 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { DOCS, IDIOMA_POR_DEFECTO, REPOS, configDir, raizPaquete, requireBasePath } from "./config.js";
+import { DOCS, IDIOMA_POR_DEFECTO, REPOS, configDir, idiomaDelEntorno, idiomaDelSistema, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
-import { validarSegmento } from "./paths.js";
+import { tasksRootPath, validarSegmento } from "./paths.js";
 import { leerPromptNormalizado, separarFrontmatter } from "./phases.js";
-import { valorDePreset } from "./vocabulario.js";
+import { IDIOMAS, VOCABULARIO, valorDePreset } from "./vocabulario.js";
+import type { Idioma } from "./vocabulario.js";
 
 // ─── Shapes ─────────────────────────────────────────────────────────────────
 export const POLITICAS_COMMIT = ["agente-commitea-con-OK", "agente-propone", "auto", "ninguno"] as const;
@@ -40,7 +41,8 @@ export const Manifiesto = z
     $schema: z.string().optional(),
     version: z.literal(1),
     preset: z.string().regex(ID).default("software"),
-    idioma: z.enum(["es"]).default("es"), // "en" llega en la Etapa 6
+    // Sin `idioma`, el del proyecto se deduce: primero de sus documentos, después del equipo (§8.3).
+    idioma: z.enum(["es", "en"]).optional(),
     repos: z.array(RepoManifiesto).default([]),
     reglas: z
       .object({
@@ -73,6 +75,8 @@ export const MaquinaConfig = z
       )
       .default({}),
     presetPorDefecto: z.string().optional(), // para proyectos sin manifiesto; si falta, "software"
+    // Para proyectos que no declaran idioma ni tienen documentos que lo digan (§8.3, paso 3).
+    idiomaPorDefecto: z.enum(["es", "en"]).optional(),
   })
   .strict();
 
@@ -262,7 +266,7 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
     if (problema) return invalido(`repos[${i}].dir: ${problema}`);
   }
 
-  const presets = presetsDisponibles(manifiesto.idioma);
+  const presets = presetsDisponibles(idiomaDelProyecto(carpetaProyecto, manifiesto).idioma);
   if (!presets.has(manifiesto.preset)) {
     return invalido(`preset: no existe el preset "${manifiesto.preset}". Los disponibles son: ${describirPresets(presets)}.`, "PRESET-NO-EXISTE");
   }
@@ -289,6 +293,114 @@ export function copiasEnConflicto(carpetaProyecto: string): string[] {
   } catch {
     return [];
   }
+}
+
+// ─── Idioma del proyecto (§8.3) ─────────────────────────────────────────────
+// El idioma ESTRUCTURAL de un proyecto: la capa de fábrica (prompts/<idioma>/, presets/<idioma>/), los
+// nombres de los documentos y el vocabulario con que escribe el servidor. Es del proyecto, porque la
+// deducción de fase depende de los nombres de documento. En este orden:
+//   1. `idioma` del manifiesto;
+//   2. lo que ya hay en disco: el idioma de los documentos de sus tareas ("el disco es la verdad": un
+//      proyecto sin manifiesto, con tareas en español, no se ve de golpe sin fases hechas porque el
+//      sistema esté en inglés); con documentos de los dos, el que más tenga, y doctor da IDIOMA-MIXTO;
+//   3. `idiomaPorDefecto` de machine.json;
+//   4. PHASE_GATE_LANG;
+//   5. el idioma del sistema (es si su locale empieza por "es"; si no, en).
+export type OrigenDelIdioma = "del proyecto" | "de sus documentos" | "de machine.json" | "de PHASE_GATE_LANG" | "del sistema";
+export type DocumentosPorIdioma = Record<Idioma, { documentos: number; tareas: string[] }>;
+export type IdiomaResuelto = { idioma: Idioma; origen: OrigenDelIdioma; enDisco: DocumentosPorIdioma };
+
+function sinDocumentos(): DocumentosPorIdioma {
+  return { es: { documentos: 0, tareas: [] }, en: { documentos: 0, tareas: [] } };
+}
+
+// Cuántos documentos de fase con nombre de cada idioma tienen las tareas del proyecto, y en qué tareas.
+export function documentosPorIdioma(carpetaProyecto: string): DocumentosPorIdioma {
+  const cuenta = sinDocumentos();
+  let raiz: string;
+  let tareas: string[];
+  try {
+    raiz = tasksRootPath(carpetaProyecto);
+    tareas = fs
+      .readdirSync(raiz, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return cuenta; // sin Documentación o sin carpeta de tareas no hay nada que contar
+  }
+  for (const tarea of tareas) {
+    for (const idioma of IDIOMAS) {
+      const { contextoInicial, deFase } = VOCABULARIO[idioma].documentos;
+      const hay = [contextoInicial, ...deFase].filter((nombre) => fs.existsSync(path.join(raiz, tarea, nombre))).length;
+      if (hay) {
+        cuenta[idioma].documentos += hay;
+        cuenta[idioma].tareas.push(tarea);
+      }
+    }
+  }
+  return cuenta;
+}
+
+// Los pasos 3 a 5: el idioma de este equipo, sin proyecto. Un machine.json inválido no tumba nada aquí:
+// lo dice doctor, y quien lo necesite para trabajar lo lee con maquinaDe.
+export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelIdioma, "del proyecto" | "de sus documentos"> } {
+  const maquina = leerMaquina();
+  if (maquina.config?.idiomaPorDefecto) return { idioma: maquina.config.idiomaPorDefecto, origen: "de machine.json" };
+  const delEntorno = idiomaDelEntorno();
+  if (delEntorno) return { idioma: delEntorno, origen: "de PHASE_GATE_LANG" };
+  return { idioma: idiomaDelSistema(), origen: "del sistema" };
+}
+
+// `manifiesto` es para quien ya lo leyó (undefined: leerlo aquí; null: no tiene). Un manifiesto inválido
+// no impide saber el idioma: se sigue con el disco.
+export function idiomaDelProyecto(carpetaProyecto: string | null, manifiesto?: Manifiesto | null): IdiomaResuelto {
+  const enDisco = carpetaProyecto ? documentosPorIdioma(carpetaProyecto) : sinDocumentos();
+  let declarado: Idioma | undefined;
+  if (manifiesto === undefined && carpetaProyecto) {
+    const lectura = leerManifiesto(carpetaProyecto);
+    declarado = lectura.estado === "valido" ? lectura.manifiesto.idioma : undefined;
+  } else {
+    declarado = manifiesto?.idioma;
+  }
+  if (declarado) return { idioma: declarado, origen: "del proyecto", enDisco };
+  if (enDisco.es.documentos || enDisco.en.documentos) {
+    // Con los dos, el que más documentos tenga; a la par, el español (el de todos los proyectos de la 2.x).
+    return { idioma: enDisco.en.documentos > enDisco.es.documentos ? "en" : "es", origen: "de sus documentos", enDisco };
+  }
+  return { ...idiomaDelEquipo(), enDisco };
+}
+
+// Lo que no cuadra con el idioma del proyecto (doctor, y get_phase_prompt para IDIOMA-CON-TAREAS):
+//   IDIOMA-MIXTO       sin idioma declarado, hay documentos con nombres de los dos idiomas;
+//   IDIOMA-CON-TAREAS  el manifiesto declara un idioma y hay tareas con documentos del otro: la deducción
+//                      las daría por "sin documentos". Cambiar el idioma no renombra nada (P7).
+export function conflictoDeIdioma(carpetaProyecto: string, resuelto: IdiomaResuelto = idiomaDelProyecto(carpetaProyecto)): Hallazgo | null {
+  const otro: Idioma = resuelto.idioma === "es" ? "en" : "es";
+  const delOtro = resuelto.enDisco[otro];
+  if (delOtro.documentos === 0) return null;
+  const tareas = delOtro.tareas.map((t) => `«${t}»`).join(", ");
+  const una = delOtro.tareas.length === 1;
+  if (resuelto.origen === "del proyecto") {
+    return {
+      severidad: "error",
+      codigo: "IDIOMA-CON-TAREAS",
+      texto:
+        `${carpetaProyecto} declara "idioma": "${resuelto.idioma}" en su ${ARCHIVO_MANIFIESTO}, pero ${una ? "la tarea" : "las tareas"} ${tareas} ` +
+        `${una ? "tiene" : "tienen"} documentos en "${otro}": la deducción ${una ? "la daría" : "las daría"} por sin documentos. ` +
+        `Devuelve el manifiesto a "${otro}" o renombra esas carpetas a mano.`,
+    };
+  }
+  if (resuelto.origen === "de sus documentos") {
+    return {
+      severidad: "error",
+      codigo: "IDIOMA-MIXTO",
+      texto:
+        `${carpetaProyecto} tiene documentos en los dos idiomas (${resuelto.enDisco.es.documentos} en "es", ${resuelto.enDisco.en.documentos} en "en"): ` +
+        `se usa "${resuelto.idioma}", el que más tiene. Fija "idioma" en su ${ARCHIVO_MANIFIESTO}.`,
+    };
+  }
+  return null;
 }
 
 // ─── machine.json ───────────────────────────────────────────────────────────

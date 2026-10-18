@@ -32,7 +32,7 @@ import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder, leerTextoAcotado, requireProjectFolder } from "./paths.js";
 import { SECCIONES_ESQUELETO, capasDe, configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, frontmatterDeTarea, revisarBloques, textoDeReinyeccion } from "./capas.js";
 import type { ConfiguracionProyecto, Procedencia } from "./capas.js";
-import { copiasEnConflicto, describirPresets, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
+import { conflictoDeIdioma, copiasEnConflicto, describirPresets, idiomaDelProyecto, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
 import type { LecturaMaquina, Preset, RepoResuelto } from "./manifiesto.js";
 import { PLAZO_DE_ESTADOS_MS, estadoDeRepoSincrono, estadosConPlazo } from "./repos.js";
 import type { EstadoDeRepo } from "./repos.js";
@@ -340,10 +340,11 @@ function enumerar(elementos: string[]): string {
 }
 
 function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<number, PhaseFile>, hallar: Hallar): void {
+  const idioma = idiomaDelProyecto(nombre).idioma;
   for (const tarea of tareas) {
     let fase: FaseDeLotes;
     try {
-      fase = faseEnCarpeta(tarea.folderPath, phases);
+      fase = faseEnCarpeta(tarea.folderPath, phases, nombre, idioma);
     } catch {
       return; // ninguna fase del proyecto declara recibos
     }
@@ -390,7 +391,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
       const documento = path.join(tarea.folderPath, fase.documento);
       try {
         const texto = leerTextoAcotado(documento).replace(/\r\n/g, "\n");
-        if (frontmatterDeRecibo(texto).meta.generado_por === GENERADO_POR && texto !== ensamblarIndice(tarea.folderPath, phases)) {
+        if (frontmatterDeRecibo(texto).meta.generado_por === GENERADO_POR && texto !== ensamblarIndice(tarea.folderPath, phases, fase.idioma)) {
           hallar(
             "aviso",
             "INDICE-DESINCRONIZADO",
@@ -680,6 +681,9 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
           ...configuracionDelProyecto(nombre, tareas, { maquina, presets, presetPorDefecto, fuerzas, estado, estados: opciones.estadosDeRepos ?? null }, hallar),
         });
         revisarRecibos(nombre, tareas, delProyecto, hallar);
+        // §8.3: documentos de los dos idiomas sin idioma declarado, o tareas del otro idioma que el declarado.
+        const conflicto = conflictoDeIdioma(nombre);
+        if (conflicto) hallar(conflicto.severidad, conflicto.codigo, conflicto.texto);
       }
 
       const largas = rutasLargas(requireBasePath(DOCS));
@@ -1066,7 +1070,7 @@ function textoDeConfiguracion(carpetaProyecto: string, estados: Map<string, Esta
       ["Valor", "Efectivo", "De dónde sale"],
       [
         ["Preset", codigo(config.preset.nombre), config.origenPreset],
-        ["Idioma", config.idioma, delManifiesto(Boolean(m))],
+        ["Idioma", config.idioma, config.origenIdioma],
         ["Lotes", config.reglas.lotes ? "sí" : "no", config.reglas.origen.lotes],
         ["Commits", codigo(config.reglas.commits), config.reglas.origen.commits],
         ["Verificación", m?.reglas.verificacion?.map(codigo).join(", ") || "—", delManifiesto(Boolean(m?.reglas.verificacion))],

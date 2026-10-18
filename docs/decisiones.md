@@ -12,6 +12,59 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-18 — El idioma es del proyecto y se deduce primero del disco; la redacción puede ser de la tarea
+
+**Decisión.** Dos conceptos distintos:
+
+| Concepto | Dónde se declara | Qué decide |
+|---|---|---|
+| **Idioma del proyecto** | `idioma` en `phase-gate.json` (`"es"` o `"en"`) | La capa de fábrica (`prompts/<idioma>/`, `presets/<idioma>/`), los nombres de los documentos y el vocabulario con que escribe el servidor |
+| **Idioma de redacción** | `redaccion: en` en el frontmatter de `00 - …`, que escribe `start_task` con `redaccion` | Solo en qué idioma escribe el modelo el contenido. El prompt gana una línea al final, en el idioma del proyecto; nada más cambia |
+
+**El idioma de un proyecto** (`idiomaDelProyecto`, `src/manifiesto.ts`) sale, en este orden, de: (1) el
+manifiesto; (2) **los documentos que ya tiene en disco** (`01 - Análisis Técnico.md` frente a `01 - Technical
+Analysis.md`), con mayoría si hay de los dos y el español a la par; (3) `idiomaPorDefecto` de `machine.json`;
+(4) `PHASE_GATE_LANG` (`es`, `en`, también `es-MX` o `en_US.UTF-8`); (5) el del sistema: `es` si su locale
+empieza por `es`, si no `en`. El manifiesto deja de tener `"es"` por defecto (`schema/project.json` se
+regenera): sin `idioma`, se deduce.
+
+- **`doctor`** da `IDIOMA-MIXTO` (error) si, sin idioma declarado, hay documentos de los dos idiomas, e
+  `IDIOMA-CON-TAREAS` (error) si el manifiesto declara uno y hay tareas con documentos del otro.
+  `get_phase_prompt` se niega con ese mismo texto: la deducción daría esas tareas por "sin documentos".
+  Cambiar el idioma no renombra nada (P7).
+- **`init --migrate`** escribe siempre `idioma` en los manifiestos que crea: el de los documentos del
+  proyecto si los tiene (nunca el del sistema), y si no, `--idioma` o lo que se conteste a la pregunta (por
+  defecto, el del equipo; sin terminal o con `--yes`, el del equipo sin preguntar). Con `--solo-este-equipo`,
+  `--idioma` escribe `idiomaPorDefecto` en `machine.json`. "Crear phase-gate.json" del Studio hace lo mismo.
+- **`eject`** escribe el marcador del bloque y la carpeta de comandos en el idioma del destino
+  (`<!-- block: phase-3/tests -->`, `commands/`).
+- **`doctor`** enseña de dónde sale el idioma de cada proyecto (`del proyecto`, `de sus documentos`…).
+
+**Por qué el disco antes que el sistema.** Los proyectos de la 2.x no tienen manifiesto y están en español.
+Si el idioma del sistema decidiera antes que sus documentos, abrir el mismo proyecto en un equipo en inglés
+(o en una CI de Linux sin `LANG`) lo dejaría de golpe sin fases hechas (E6-R1). Y el sistema va el último
+porque los clientes MCP lanzan el servidor con un entorno reducido, sin `LANG`, y en Windows `Intl` sigue a
+la región e ignora `LANG` (validación V9).
+
+**Amplía** P7 y la ADR del manifiesto (Etapa 3): `idioma` acepta `"en"` y deja de tener valor por defecto.
+
+**Riesgos aceptados.**
+
+- Contar documentos recorre las carpetas de tarea del proyecto cada vez que se resuelve su idioma (unas
+  doce comprobaciones de existencia por tarea). Se hace solo con nombres de fábrica: una capa propia que
+  renombra los documentos no cuenta para la deducción, y conviene fijar `idioma` en el manifiesto.
+- La suite se escribió en español: `test/helpers.ts` fija `PHASE_GATE_LANG=es`, y el test que prueba otro
+  idioma lo cambia. El idioma del sistema se prueba con `fijarLocaleDelSistema` y no con `LANG`, que en
+  Windows no cuenta.
+
+**Qué se descartó.**
+
+- Un idioma por tarea para la estructura: la deducción de fase depende de los nombres de documento, y es
+  por proyecto (Etapa 3, G1). Un proyecto no mezcla nombres de dos idiomas.
+- Un comando de migración de idioma que renombre documentos: fuera de este plan.
+
+---
+
 ## 2026-10-18 — Los textos de los que depende el código viven en un vocabulario bilingüe; se escribe en el idioma del proyecto y se lee en los dos
 
 **Decisión.** `src/vocabulario.ts` es el único lugar con los textos que el código busca o escribe con una

@@ -47,7 +47,8 @@ init:
   --comandos             Copia /f1…/fN a ~/.claude/commands/ o ~/.cursor/commands/.
   --migrate              Crea phase-gate.json con "preset": "software-replica" en los proyectos sin él.
     --preset <nombre>    Otro preset para la migración.
-    --solo-este-equipo   En vez de manifiestos, presetPorDefecto en el machine.json de este equipo.
+    --idioma es|en       El de los proyectos cuyos documentos no lo dicen (si no, se pregunta).
+    --solo-este-equipo   En vez de manifiestos, presetPorDefecto (e idiomaPorDefecto) en el machine.json de este equipo.
   --dry-run              Dice lo que haría, sin escribir nada.
   --yes                  Confirma los cambios sobre lo que ya existe sin preguntar.
 
@@ -148,7 +149,7 @@ function invalido(salida: Salida, motivo?: string): ResultadoCli {
 // Qué banderas acepta cada subcomando: una bandera de init pasada a doctor es un error, no se ignora.
 const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
-  init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
+  init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "idioma", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
   ui: ["puerto", "no-abrir", "demo", "export-static", "incluir-datos-reales", "yes"],
 };
@@ -164,6 +165,7 @@ type Valores = {
   comandos?: boolean;
   migrate?: boolean;
   preset?: string;
+  idioma?: string;
   "solo-este-equipo"?: boolean;
   "dry-run"?: boolean;
   yes?: boolean;
@@ -189,8 +191,11 @@ function opcionesDeInit(valores: Valores): OpcionesInit | string {
   if (valores.clave !== undefined && !CLAVE_VALIDA.test(valores.clave)) {
     return `--clave "${valores.clave}" no es válida: letras, números, guiones y guiones bajos.`;
   }
-  if ((valores.preset !== undefined || valores["solo-este-equipo"]) && !valores.migrate) {
-    return "--preset y --solo-este-equipo solo valen junto con --migrate.";
+  if ((valores.preset !== undefined || valores.idioma !== undefined || valores["solo-este-equipo"]) && !valores.migrate) {
+    return "--preset, --idioma y --solo-este-equipo solo valen junto con --migrate.";
+  }
+  if (valores.idioma !== undefined && valores.idioma !== "es" && valores.idioma !== "en") {
+    return `--idioma "${valores.idioma}" no es válido: usa es o en.`;
   }
   return {
     clientes,
@@ -200,6 +205,7 @@ function opcionesDeInit(valores: Valores): OpcionesInit | string {
     comandos: Boolean(valores.comandos),
     migrate: Boolean(valores.migrate),
     preset: valores.preset ?? null,
+    idioma: (valores.idioma as "es" | "en" | undefined) ?? null,
     soloEsteEquipo: Boolean(valores["solo-este-equipo"]),
     dryRun: Boolean(valores["dry-run"]),
     yes: Boolean(valores.yes),
@@ -235,6 +241,7 @@ export function ejecutarCli(
         comandos: { type: "boolean" },
         migrate: { type: "boolean" },
         preset: { type: "string" },
+        idioma: { type: "string" },
         "solo-este-equipo": { type: "boolean" },
         "dry-run": { type: "boolean" },
         yes: { type: "boolean", short: "y" },

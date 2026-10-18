@@ -11,6 +11,8 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import { parseEnv } from "util";
 
+import type { Idioma } from "./vocabulario.js";
+
 // Carpeta de este módulo. Sirve para localizar el .env y el package.json de la raíz del repo.
 export const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -101,7 +103,8 @@ export type NombreLogico =
   | "PROMPTS_PATH"
   | "STATE_PATH"
   | "CONFIG_PATH"
-  | "ELICITATION";
+  | "ELICITATION"
+  | "LANG";
 
 type Nombres = { principal: string; alias: string | null; esRuta: boolean };
 
@@ -114,6 +117,9 @@ export const VARIABLES: Record<NombreLogico, Nombres> = {
   // Sin alias: nació con el nombre nuevo (Etapa 3), igual que ELICITATION.
   CONFIG_PATH: { principal: "PHASE_GATE_CONFIG_PATH", alias: null, esRuta: true },
   ELICITATION: { principal: "PHASE_GATE_ELICITATION", alias: null, esRuta: false },
+  // Etapa 6: el idioma de los proyectos que no lo declaran ni lo dicen sus documentos, y el de los
+  // mensajes cuando una llamada no resuelve proyecto (§8.3 y §8.5).
+  LANG: { principal: "PHASE_GATE_LANG", alias: null, esRuta: false },
 };
 
 export const NOMBRES_LOGICOS = Object.keys(VARIABLES) as NombreLogico[];
@@ -265,6 +271,33 @@ export function tasksSubdir(): string {
 // llegue al lado sin mover nada. Las capas propias no cambian: una carpeta de prompts del usuario
 // sigue teniendo sus fase-N-*.md en la raíz.
 export const IDIOMA_POR_DEFECTO = "es";
+
+// ─── Idioma del entorno y del sistema (§8.3, pasos 4 a 6) ───────────────────
+// PHASE_GATE_LANG, si dice "es" o "en" (también "es-MX" o "en_US.UTF-8"). Otro valor no cuenta: doctor lo
+// avisa.
+export function idiomaDelEntorno(): Idioma | null {
+  return idiomaDeEtiqueta(leerVariable("LANG").valor ?? "");
+}
+
+export function idiomaDeEtiqueta(valor: string): Idioma | null {
+  const base = valor.trim().toLowerCase().split(/[-_.@]/)[0];
+  return base === "es" || base === "en" ? base : null;
+}
+
+// El idioma del sistema es el ÚLTIMO recurso: en Linux sigue a LANG y LC_ALL, que los clientes MCP no
+// pasan al servidor (entorno reducido), y en Windows sigue a la configuración regional e ignora LANG
+// (validación V9). Un sistema en español da "es"; cualquier otro, "en".
+let sistemaFijado: string | null = null;
+
+export function idiomaDelSistema(): Idioma {
+  const locale = sistemaFijado ?? Intl.DateTimeFormat().resolvedOptions().locale;
+  return idiomaDeEtiqueta(locale) === "es" ? "es" : "en";
+}
+
+// Solo para tests: el locale que diría el sistema. null vuelve al de verdad.
+export function fijarLocaleDelSistema(locale: string | null): void {
+  sistemaFijado = locale;
+}
 
 // La raíz del paquete: la carpeta que tiene al lado build/, prompts/ y presets/. Los tests corren
 // desde build-test/, que no tiene esas carpetas al lado; la apuntan al repo con fijarRaizDelPaquete

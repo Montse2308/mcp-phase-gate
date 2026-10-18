@@ -126,7 +126,17 @@ export function limpiarEntorno(): void {
     if (alias) delete process.env[alias];
   }
   configTemporal();
+  idiomaDeLosTests();
 }
+
+// Desde la Etapa 6, un proyecto sin manifiesto ni documentos toma el idioma del equipo, y en último lugar
+// el del sistema: en Windows con la región en español da "es", en un Linux de CI sin LANG da "en". La
+// suite se escribió en español, así que fija PHASE_GATE_LANG=es (también para los procesos hijos, que
+// heredan el entorno); el test que pruebe otra cosa lo cambia o lo borra.
+export function idiomaDeLosTests(): void {
+  process.env.PHASE_GATE_LANG = "es";
+}
+idiomaDeLosTests();
 
 // Una PHASE_GATE_* que quien corre los tests tenga en su terminal ganaría a las ORQUESTADOR_* que
 // ponen los tests. Se limpia al importar, antes del primer test de cada archivo.

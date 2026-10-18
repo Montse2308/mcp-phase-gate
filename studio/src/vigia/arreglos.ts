@@ -36,6 +36,8 @@ export const ARREGLOS: Record<string, string> = {
   "RECIBO-MANUAL": "No hace falta nada: record_batch lo lee igual. Si quieres un recibo del servidor, regístralo con record_batch.",
   "INDICE-DESINCRONIZADO": "Si el cambio fue a propósito, déjalo; si no, vuelve a cerrar la fase con record_batch para regenerar el índice.",
   "ANCLA-NO-VIGENTE": "Si hubo un rebase o un squash, reancla el lote con record_batch y `reanclar: true`.",
+  "IDIOMA-MIXTO": "Fija \"idioma\" en el phase-gate.json del proyecto: el de las tareas que quieres seguir usando.",
+  "IDIOMA-CON-TAREAS": "Devuelve \"idioma\" del phase-gate.json al de esas tareas, o renombra sus documentos a mano.",
 };
 
 export const SIN_ARREGLO = "Lee el texto del hallazgo: dice qué pasa y dónde.";

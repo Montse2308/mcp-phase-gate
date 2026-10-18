@@ -359,10 +359,13 @@ describe("init --migrate", () => {
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true }), p.entorno), 0, p.errores());
     assert.equal(fs.readFileSync(path.join(r.docs, "PROYECTO-A", "phase-gate.json"), "utf-8"), suyo, "nunca sobrescribe");
+    // Desde la Etapa 6 lleva también el idioma: sin documentos que lo digan, el del equipo (aquí, el de los
+    // tests: PHASE_GATE_LANG=es).
     assert.deepEqual(leer(path.join(r.docs, "PROYECTO-B", "phase-gate.json")), {
       $schema: "https://unpkg.com/mcp-phase-gate@3/schema/project.json",
       version: 1,
       preset: "software-replica",
+      idioma: "es",
     });
 
     crearProyecto(r.docs, "PROYECTO-C");

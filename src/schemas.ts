@@ -108,6 +108,14 @@ export const startTaskShape = {
       "Solo si esta tarea usa un preset distinto del de su proyecto (ej. 'ai-agent-ops' para el mantenimiento de " +
         "un agente). Si no existe, la tool devuelve los disponibles."
     ),
+  redaccion: z
+    .enum(["es", "en"], { error: () => "`redaccion` debe ser \"es\" o \"en\"." })
+    .nullish()
+    .describe(
+      "Solo si el contenido de los documentos de esta tarea se escribe en otro idioma que el del proyecto ('es' o " +
+        "'en'). No cambia la estructura: los nombres de los documentos, los encabezados y las claves siguen siendo los " +
+        "del idioma del proyecto."
+    ),
 };
 
 export const getPhasePromptShape = {

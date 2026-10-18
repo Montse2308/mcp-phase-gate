@@ -120,7 +120,7 @@ describe("acciones: el manifiesto (preset, reglas, crear)", () => {
     const p = await planPosible(s, "crear-manifiesto", { proyecto: "Q", preset: "software" });
     assert.deepEqual(p.cambios.map((c) => c.tipo), ["crear"]);
     assert.equal((await aplicar(s, "crear-manifiesto", { proyecto: "Q", preset: "software" }, p.huella)).estado, 200);
-    assert.equal(fs.readFileSync(path.join(docs, "Q", "phase-gate.json"), "utf-8"), manifiestoNuevo("software"));
+    assert.equal(fs.readFileSync(path.join(docs, "Q", "phase-gate.json"), "utf-8"), manifiestoNuevo("software", "es"));
     assert.equal((await plan(s, "crear-manifiesto", { proyecto: "Q" })).posible, false, "ya existe");
     assert.equal((await plan(s, "crear-manifiesto", { proyecto: "P" })).posible, false);
 

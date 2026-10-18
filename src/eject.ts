@@ -20,12 +20,13 @@ import { ARCHIVO_BLOQUES, capasDe, capasDeCuerpos, carpetaPromptsDeProyecto, con
 import type { Capa } from "./capas.js";
 import type { Salida } from "./cli.js";
 import { carpetaPromptsGlobal, configDir } from "./config.js";
-import { carpetaPresetsDelUsuario, describirPresets, presetsDisponibles } from "./manifiesto.js";
+import { carpetaPresetsDelUsuario, describirPresets, idiomaDelEquipo, idiomaDelProyecto, presetsDisponibles } from "./manifiesto.js";
 import { requireProjectFolder } from "./paths.js";
 import { PHASE_FILE_PATTERN, discoverPhases, leerPromptNormalizado, resolveCommandFile } from "./phases.js";
 import { textoGenerico } from "./prompts-mcp.js";
 import { marcaDeTiempo } from "./init.js";
-import { idCanonicoDeRanura } from "./vocabulario.js";
+import { VOCABULARIO, idCanonicoDeRanura, idInglesDeRanura } from "./vocabulario.js";
+import type { Idioma } from "./vocabulario.js";
 
 export type OpcionesEject = { destino: string | null; dryRun: boolean; fuerza: boolean };
 
@@ -57,6 +58,11 @@ export function parsearObjetivo(texto: string): Objetivo | string {
 }
 
 type Destino = { carpeta: string; proyecto: string | null; etiqueta: string };
+
+// El idioma de la capa a la que se copia: el del proyecto, o el del equipo para la capa global.
+function idiomaDelDestino(destino: Destino): Idioma {
+  return destino.proyecto ? idiomaDelProyecto(destino.proyecto).idioma : idiomaDelEquipo().idioma;
+}
 
 function destinoDe(valor: string | null): Destino | string {
   if (valor === "global") {
@@ -163,7 +169,12 @@ function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: 
   const yaEsta = actual.split("\n").some((l) => idDeAperturaDeBloque(l) === objetivo.id);
   siExisteSinFuerza(yaEsta, `El bloque «${objetivo.id}» de ${archivo}`, fuerza);
 
-  const bloque = `<!-- bloque: ${objetivo.id} -->\n${efectivo.contenido}\n<!-- /bloque -->`;
+  // En el idioma del destino (§8.2): `<!-- block: phase-3/tests -->` para un proyecto en inglés. El parser
+  // lee los dos, así que un archivo de bloques puede mezclarlos.
+  const idioma = idiomaDelDestino(destino);
+  const v = VOCABULARIO[idioma].marcadores;
+  const id = idioma === "en" ? idInglesDeRanura(objetivo.id) : objetivo.id;
+  const bloque = `<!-- ${v.bloque}: ${id} -->\n${efectivo.contenido}\n<!-- /${v.bloque} -->`;
   return { archivo, texto: conBloque(actual, objetivo.id, bloque), reemplaza: yaEsta };
 }
 
@@ -174,7 +185,7 @@ function planDeComando(numero: number, destino: Destino, fuerza: boolean): Plan 
   const origen = resolveCommandFile(numero, rutas);
   const texto = origen ? leerPromptNormalizado(origen) : `${textoGenerico(numero, fase.title)}\n`;
 
-  const archivo = path.join(destino.carpeta, "comandos", `f${numero}.md`);
+  const archivo = path.join(destino.carpeta, VOCABULARIO[idiomaDelDestino(destino)].carpetaComandos, `f${numero}.md`);
   siExisteSinFuerza(fs.existsSync(archivo), archivo, fuerza);
   return { archivo, texto, reemplaza: fs.existsSync(archivo) };
 }

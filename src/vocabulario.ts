@@ -109,6 +109,9 @@ export type Vocabulario = {
   marcadores: { ranura: string; bloque: string; modos: Record<ModoDeBloque, string> };
   carpetaComandos: string;
   seccionesEsqueleto: [string, string]; // BASE y PENDIENTES de las reglas globales
+  // La línea que se añade al final del prompt cuando una tarea se redacta en otro idioma (§8.3), escrita
+  // en el idioma del proyecto, por idioma de redacción.
+  lineaDeRedaccion: Record<Idioma, string>;
   documentos: {
     contextoInicial: string;
     // Los nombres de los documentos de fase de fábrica, para reconocer en qué idioma están las tareas de
@@ -213,6 +216,10 @@ const ES: Vocabulario = {
   marcadores: { ranura: "ranura", bloque: "bloque", modos: { reemplazar: "reemplazar", antes: "antes", despues: "despues" } },
   carpetaComandos: "comandos",
   seccionesEsqueleto: ["BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"],
+  lineaDeRedaccion: {
+    es: "Escribe el contenido de los documentos de esta tarea en español. Los encabezados, nombres de archivo y claves se mantienen como están.",
+    en: "Escribe el contenido de los documentos de esta tarea en inglés. Los encabezados, nombres de archivo y claves se mantienen como están.",
+  },
   documentos: {
     contextoInicial: "00 - Contexto Inicial.md",
     deFase: ["01 - Análisis Técnico.md", "02 - Decisiones.md", "03 - Plan Técnico.md", "04 - Ejecución.md", "05 - Auditoría.md"],
@@ -315,6 +322,10 @@ const EN: Vocabulario = {
   marcadores: { ranura: "slot", bloque: "block", modos: { reemplazar: "replace", antes: "before", despues: "after" } },
   carpetaComandos: "commands",
   seccionesEsqueleto: ["BASIS OF EACH DECISION", "INHERITED PENDING ITEMS"],
+  lineaDeRedaccion: {
+    es: "Write the content of this task's documents in Spanish. Headings, file names and keys stay as they are.",
+    en: "Write the content of this task's documents in English. Headings, file names and keys stay as they are.",
+  },
   documentos: {
     contextoInicial: "00 - Initial Context.md",
     deFase: ["01 - Technical Analysis.md", "02 - Decisions.md", "03 - Technical Plan.md", "04 - Execution.md", "05 - Audit.md"],

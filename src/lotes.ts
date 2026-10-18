@@ -23,6 +23,7 @@ import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
 import { GENERADO_POR, celda, escribirRecibo, etiquetaDeLote, frontmatterDeRecibo, leerRecibo, loteDelNombre, nombreDeRecibo, parsearRecibo } from "./recibos.js";
 import type { Ancla, EstadoLote, Recibo, TituloCondicional } from "./recibos.js";
+import { idiomaDelProyecto } from "./manifiesto.js";
 import { resolverRepo } from "./repos.js";
 import { VOCABULARIO, lotesDelFrontmatter, vocabulario } from "./vocabulario.js";
 import type { Idioma } from "./vocabulario.js";
@@ -55,7 +56,7 @@ export function faseDeLotes(carpetaProyecto: string, taskName: string): FaseDeLo
   if (!fs.statSync(carpetaTarea, { throwIfNoEntry: false })?.isDirectory()) {
     throw new Error(`No existe la tarea "${taskName}" en ${carpetaProyecto}. Para una tarea nueva, usa start_task.`);
   }
-  return faseEnCarpeta(carpetaTarea, fasesDe(carpetaProyecto), carpetaProyecto);
+  return faseEnCarpeta(carpetaTarea, fasesDe(carpetaProyecto), carpetaProyecto, idiomaDelProyecto(carpetaProyecto).idioma);
 }
 
 function textoDelPlan(fase: FaseDeLotes): string {
@@ -1135,7 +1136,7 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
   let fase: FaseDeLotes;
   let total: number;
   try {
-    fase = faseEnCarpeta(carpetaTarea, phases);
+    fase = faseEnCarpeta(carpetaTarea, phases, carpetaProyecto, idiomaDelProyecto(carpetaProyecto).idioma);
     total = lotesDelPlan(fase);
   } catch {
     return null; // sin fase de lotes o sin plan con lotes no hay nada que listar

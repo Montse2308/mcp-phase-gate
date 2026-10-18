@@ -24,10 +24,10 @@ import { z } from "zod";
 import { DOCS, REPOS, carpetaPromptsGlobal, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
 import { carpetaPromptsDeProyecto } from "../capas.js";
 import { ErrorDeEject, planDeEject } from "../eject.js";
-import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, diffDeLineas, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
+import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
 import type { EntornoInit } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
-import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, leerManifiesto, presetsDisponibles, rutaManifiesto } from "../manifiesto.js";
+import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, presetsDisponibles, rutaManifiesto } from "../manifiesto.js";
 import { estaDentroReal, requireProjectFolder, rutaReal, ubicarEnTarea, validarSegmento } from "../paths.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 
@@ -117,7 +117,7 @@ function planDePreset(a: z.infer<(typeof ARGUMENTOS)["preset"]>): Plan {
   const proyecto = proyectoDe(a.proyecto);
   const m = manifiestoComoObjeto(proyecto);
   if ("motivo" in m) return { posible: false, motivo: m.motivo };
-  const presets = presetsDisponibles((m.objeto.idioma as string | undefined) ?? "es");
+  const presets = presetsDisponibles(idiomaDelProyecto(proyecto).idioma);
   if (!presets.has(a.preset)) return { posible: false, motivo: `No existe el preset "${a.preset}". Los disponibles son: ${[...presets.keys()].sort().join(", ")}.` };
   if (m.objeto.preset === a.preset) return { posible: false, motivo: `${proyecto} ya usa el preset "${a.preset}".` };
   // Asignar sobre la clave que ya existe la deja en su sitio; si no estaba, va al final.
@@ -159,12 +159,14 @@ function planDeReglas(a: z.infer<(typeof ARGUMENTOS)["reglas"]>): Plan {
 function planDeCrear(a: z.infer<(typeof ARGUMENTOS)["crear-manifiesto"]>): Plan {
   const proyecto = proyectoDe(a.proyecto);
   const preset = a.preset ?? "software-replica"; // el mismo valor por defecto que init --migrate
-  if (!presetsDisponibles().has(preset)) return { posible: false, motivo: `No existe el preset "${preset}".` };
+  // Con el idioma de sus documentos o, si no dicen nada, el del equipo: como init --migrate (§8.3).
+  const idioma = idiomaParaManifiesto(proyecto, idiomaDelEquipo().idioma);
+  if (!presetsDisponibles(idioma).has(preset)) return { posible: false, motivo: `No existe el preset "${preset}".` };
   const ruta = rutaManifiesto(proyecto);
   if (fs.existsSync(ruta)) return { posible: false, motivo: `${proyecto} ya tiene phase-gate.json: «Crear» solo crea, nunca sobrescribe.` };
   return {
     posible: true,
-    interno: { accion: "crear-manifiesto", resumen: `Crear el phase-gate.json de ${proyecto} con el preset "${preset}".`, escrituras: [{ ruta, antes: null, despues: manifiestoNuevo(preset), copia: false, exclusiva: true }], comandos: [], hecho: `Creado el phase-gate.json de ${proyecto}.` },
+    interno: { accion: "crear-manifiesto", resumen: `Crear el phase-gate.json de ${proyecto} con el preset "${preset}".`, escrituras: [{ ruta, antes: null, despues: manifiestoNuevo(preset, idioma), copia: false, exclusiva: true }], comandos: [], hecho: `Creado el phase-gate.json de ${proyecto}.` },
   };
 }
 

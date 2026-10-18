@@ -1,0 +1,223 @@
+// El idioma de cada proyecto y el de la redacción de cada tarea (§8.3 del plan maestro v3).
+//
+// El idioma del sistema se fija con fijarLocaleDelSistema y no con LANG: en Windows, Intl sigue a la
+// configuración regional e ignora LANG (validación V9), y así el mismo test vale en los dos sistemas.
+
+import { strict as assert } from "node:assert";
+import { afterEach, describe, it } from "node:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { ensamblarFase } from "../src/capas.js";
+import { fijarLocaleDelSistema, fijarRaizDelPaquete, idiomaDeEtiqueta, idiomaDelSistema } from "../src/config.js";
+import { diagnosticar } from "../src/diagnostico.js";
+import { idiomaParaManifiesto, manifiestoNuevo } from "../src/init.js";
+import { Manifiesto, conflictoDeIdioma, documentosPorIdioma, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto } from "../src/manifiesto.js";
+import { textoDelPromptDeFase } from "../src/servidor.js";
+import { conectar, textoDe } from "./cliente.js";
+import { configTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
+
+const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const ES = ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md"];
+const EN = ["00 - Initial Context.md", "01 - Technical Analysis.md", "02 - Decisions.md"];
+
+afterEach(() => {
+  limpiarEntorno();
+  fijarLocaleDelSistema(null);
+  fijarRaizDelPaquete(null);
+});
+
+function instalacion(): { docs: string; config: string } {
+  fijarRaizDelPaquete(RAIZ);
+  const docs = docsTemporales();
+  estadoTemporal();
+  const config = configTemporal();
+  crearProyecto(docs, "P");
+  return { docs, config };
+}
+
+function manifiesto(docs: string, contenido: Record<string, unknown>): void {
+  fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, ...contenido }), "utf-8");
+}
+
+describe("idioma del proyecto: los cinco pasos, en orden", () => {
+  it("1. el `idioma` del manifiesto gana a todo lo demás", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "t", ES);
+    manifiesto(docs, { idioma: "en" });
+    process.env.PHASE_GATE_LANG = "es";
+    assert.deepEqual(
+      (({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")),
+      { idioma: "en", origen: "del proyecto" }
+    );
+  });
+
+  it("2. sin manifiesto, los documentos en disco ganan al equipo y al sistema (E6-R1)", () => {
+    const { docs, config } = instalacion();
+    crearTarea(docs, "P", "vieja", ES);
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
+    process.env.PHASE_GATE_LANG = "en";
+    fijarLocaleDelSistema("en-US");
+    const r = idiomaDelProyecto("P");
+    assert.equal(r.idioma, "es");
+    assert.equal(r.origen, "de sus documentos");
+    assert.deepEqual(r.enDisco.es, { documentos: 2, tareas: ["vieja"] });
+  });
+
+  it("2. un manifiesto sin `idioma` también deduce del disco", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "t", EN);
+    manifiesto(docs, { preset: "software" });
+    process.env.PHASE_GATE_LANG = "es";
+    assert.equal(idiomaDelProyecto("P").idioma, "en");
+  });
+
+  it("3. sin documentos, `idiomaPorDefecto` de machine.json", () => {
+    const { config } = instalacion();
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
+    process.env.PHASE_GATE_LANG = "es";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de machine.json" });
+  });
+
+  it("4. después, PHASE_GATE_LANG (también con región: en-GB, es_MX.UTF-8)", () => {
+    instalacion();
+    process.env.PHASE_GATE_LANG = "en-GB";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
+    process.env.PHASE_GATE_LANG = "es_MX.UTF-8";
+    assert.equal(idiomaDelProyecto("P").idioma, "es");
+    // Un valor que no es ninguno de los dos no cuenta: pasa al sistema.
+    process.env.PHASE_GATE_LANG = "fr";
+    fijarLocaleDelSistema("es-ES");
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "es", origen: "del sistema" });
+  });
+
+  it("5. por último, el sistema: «es» si su locale empieza por es; cualquier otro, «en»", () => {
+    instalacion();
+    delete process.env.PHASE_GATE_LANG;
+    for (const [locale, idioma] of [["es-MX", "es"], ["es", "es"], ["en-US", "en"], ["fr-FR", "en"], ["pt-BR", "en"]] as const) {
+      fijarLocaleDelSistema(locale);
+      assert.equal(idiomaDelSistema(), idioma, locale);
+      assert.equal(idiomaDelProyecto("P").idioma, idioma, locale);
+      assert.equal(idiomaDelEquipo().origen, "del sistema");
+    }
+    assert.equal(idiomaDeEtiqueta(" EN_us.UTF-8 "), "en");
+    assert.equal(idiomaDeEtiqueta(""), null);
+  });
+
+  it("sin proyecto, los pasos del equipo (3 a 5)", () => {
+    instalacion();
+    process.env.PHASE_GATE_LANG = "en";
+    assert.equal(idiomaDelProyecto(null).idioma, "en");
+  });
+});
+
+describe("idioma del proyecto: conflictos", () => {
+  it("IDIOMA-MIXTO: documentos de los dos idiomas sin idioma declarado; gana el que más tiene", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "a", ES);
+    crearTarea(docs, "P", "b", EN);
+    const r = idiomaDelProyecto("P");
+    assert.equal(r.idioma, "en");
+    const conflicto = conflictoDeIdioma("P", r);
+    assert.equal(conflicto?.codigo, "IDIOMA-MIXTO");
+    assert.equal(conflicto?.severidad, "error");
+    assert.match(conflicto!.texto, /2 en "es", 3 en "en"/);
+  });
+
+  it("a la par, el español (el de todos los proyectos de la 2.x)", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "a", ["00 - Contexto Inicial.md"]);
+    crearTarea(docs, "P", "b", ["00 - Initial Context.md"]);
+    assert.equal(idiomaDelProyecto("P").idioma, "es");
+  });
+
+  it("IDIOMA-CON-TAREAS: el manifiesto dice un idioma y hay tareas en el otro; doctor lo da como error", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "vieja", ES);
+    manifiesto(docs, { idioma: "en" });
+    const conflicto = conflictoDeIdioma("P");
+    assert.equal(conflicto?.codigo, "IDIOMA-CON-TAREAS");
+    assert.match(conflicto!.texto, /«vieja»/);
+    const hallazgos = diagnosticar().hallazgos.filter((h) => h.codigo.startsWith("IDIOMA-"));
+    assert.deepEqual(hallazgos.map((h) => [h.codigo, h.severidad]), [["IDIOMA-CON-TAREAS", "error"]]);
+  });
+
+  it("IDIOMA-CON-TAREAS: get_phase_prompt se niega con el mismo texto", async () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "vieja", ES);
+    manifiesto(docs, { idioma: "en" });
+    await assert.rejects(textoDelPromptDeFase(2, { project: "P", carpetaProyecto: "P", deducido: null }), /IDIOMA-CON-TAREAS/);
+    const { cliente, cerrar } = await conectar();
+    try {
+      const r = await cliente.callTool({ name: "get_phase_prompt", arguments: { phase: 2, project: "P" } });
+      assert.equal(r.isError, true);
+      assert.match(textoDe(r), /tiene documentos en "es"/);
+    } finally {
+      await cerrar();
+    }
+  });
+
+  it("sin conflicto: documentos de un solo idioma, el mismo que el declarado", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "t", ES);
+    manifiesto(docs, { idioma: "es" });
+    assert.equal(conflictoDeIdioma("P"), null);
+    assert.deepEqual(documentosPorIdioma("P").en, { documentos: 0, tareas: [] });
+  });
+});
+
+describe("idioma: manifiesto, init y redacción", () => {
+  it("el manifiesto acepta es y en, y nada más", () => {
+    assert.equal(Manifiesto.safeParse({ version: 1, idioma: "en" }).success, true);
+    assert.equal(Manifiesto.safeParse({ version: 1 }).success, true);
+    assert.equal(Manifiesto.safeParse({ version: 1, idioma: "fr" }).success, false);
+    const { docs } = instalacion();
+    manifiesto(docs, { idioma: "fr" });
+    const lectura = leerManifiesto("P");
+    assert.equal(lectura.estado, "invalido");
+  });
+
+  it("un manifiesto nuevo lleva el idioma de los documentos del proyecto, nunca el del sistema", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "t", ES);
+    assert.equal(idiomaParaManifiesto("P", "en"), "es");
+    crearProyecto(docs, "VACIO");
+    assert.equal(idiomaParaManifiesto("VACIO", "en"), "en");
+    assert.equal(manifiestoNuevo("software", "en"), `{\n  "$schema": "https://unpkg.com/mcp-phase-gate@3/schema/project.json",\n  "version": 1,\n  "preset": "software",\n  "idioma": "en"\n}\n`);
+  });
+
+  it("start_task con `redaccion` la deja en el frontmatter; el prompt solo gana una línea, en el idioma del proyecto", async () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "otra", ES);
+    const { cliente, cerrar } = await conectar();
+    try {
+      const r = await cliente.callTool({ name: "start_task", arguments: { project: "P", task_name: "en-ingles", initial_context: "Add a coupon field.", redaccion: "en" } });
+      assert.equal(r.isError, undefined, textoDe(r));
+    } finally {
+      await cerrar();
+    }
+    const contexto = fs.readFileSync(path.join(docs, "P", "Proyectos", "en-ingles", "00 - Contexto Inicial.md"), "utf-8");
+    assert.equal(contexto, "---\nredaccion: en\n---\nAdd a coupon field.");
+
+    const sin = ensamblarFase(2, "P", path.join(docs, "P", "Proyectos", "otra")).texto;
+    const con = ensamblarFase(2, "P", path.join(docs, "P", "Proyectos", "en-ingles")).texto;
+    assert.equal(con, `${sin}\n\nEscribe el contenido de los documentos de esta tarea en inglés. Los encabezados, nombres de archivo y claves se mantienen como están.`);
+  });
+
+  it("`redaccion` igual al idioma del proyecto no añade nada; un valor que no es es ni en se rechaza", async () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "a", ES);
+    fs.writeFileSync(path.join(docs, "P", "Proyectos", "a", "00 - Contexto Inicial.md"), "---\nredaccion: es\n---\nx");
+    crearTarea(docs, "P", "b", ES);
+    assert.equal(ensamblarFase(2, "P", path.join(docs, "P", "Proyectos", "a")).texto, ensamblarFase(2, "P", path.join(docs, "P", "Proyectos", "b")).texto);
+    const { cliente, cerrar } = await conectar();
+    try {
+      const r = await cliente.callTool({ name: "start_task", arguments: { project: "P", task_name: "x", initial_context: "y", redaccion: "fr" } });
+      assert.equal(r.isError, true);
+      assert.match(textoDe(r), /redaccion/);
+    } finally {
+      await cerrar();
+    }
+  });
+});
