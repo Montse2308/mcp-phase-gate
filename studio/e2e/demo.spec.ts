@@ -130,6 +130,25 @@ test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sell
   expect(await page.evaluate(() => (window as unknown as { __sinRecargar?: boolean }).__sinRecargar)).toBe(true);
 });
 
+test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos modos", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
+  await ponerModo(page, "cabina");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
+  const lista = page.getByRole("list", { name: "Batches of Phase 4" }).getByRole("listitem");
+  await expect(lista).toHaveCount(4);
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFIED");
+  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("VOID");
+  await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo cabina");
+  await ponerModo(page, "sobrio");
+  await expect(page.getByRole("table", { name: "Batches of Phase 4" }).getByRole("row", { name: /L04/ })).toContainText("discarded");
+  await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo sobrio");
+  await ponerModo(page, "cabina");
+  await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
+  const sellados = page.getByRole("list", { name: "Batches of Phase 4" }).getByRole("listitem");
+  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".sello-sellado")).toContainText("SEALED");
+});
+
 test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en los dos modos", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/`);

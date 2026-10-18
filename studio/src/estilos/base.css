@@ -161,6 +161,7 @@ main:focus {
   text-underline-offset: 0.2em;
 }
 .interruptor,
+.idioma,
 .boton {
   font: inherit;
   display: inline-block;
@@ -172,8 +173,33 @@ main:focus {
   cursor: pointer;
   text-decoration: none;
 }
-.interruptor {
+/* El interruptor Cabina / Sobrio y el selector ES / EN, juntos al final de la barra. */
+.preferencias {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin-left: auto;
+}
+.idiomas {
+  display: inline-flex;
+}
+.idioma {
+  padding: 0.35rem 0.55rem;
+  border-radius: 0;
+}
+.idioma:first-child {
+  border-radius: var(--radio) 0 0 var(--radio);
+}
+.idioma:last-child {
+  border-radius: 0 var(--radio) var(--radio) 0;
+  border-left: none;
+}
+.idioma[aria-pressed="true"] {
+  background: var(--seleccion);
+  color: var(--texto-seleccion);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 .boton:disabled,
 .boton[aria-disabled="true"] {
@@ -423,7 +449,7 @@ main:focus {
   h1 {
     font-size: 1.6rem;
   }
-  .interruptor {
+  .preferencias {
     margin-left: 0;
   }
 }

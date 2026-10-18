@@ -139,8 +139,9 @@ export async function ningunEstadoSoloColor(page: Page): Promise<void> {
   expect(solas).toEqual([]);
 }
 
+// El interruptor dice "Modo: …" en español y "Mode: …" en inglés.
 export async function ponerModo(page: Page, modo: "cabina" | "sobrio"): Promise<void> {
-  const boton = page.getByRole("button", { name: /^Modo:/ });
+  const boton = page.getByRole("button", { name: /^(?:Modo|Mode):/ });
   if ((await boton.getAttribute("aria-pressed")) !== String(modo === "sobrio")) await boton.click();
   await expect(page.locator("html")).toHaveAttribute("data-modo", modo);
 }

@@ -24,6 +24,7 @@ import { z } from "zod";
 import { DOCS, REPOS, carpetaPromptsGlobal, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
 import { carpetaPromptsDeProyecto } from "../capas.js";
 import { ErrorDeEject, planDeEject } from "../eject.js";
+import { mensaje } from "../i18n/mensajes.js";
 import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
 import type { EntornoInit } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
@@ -34,7 +35,10 @@ import { sinRutasDelEquipo } from "./privacidad.js";
 export const ACCIONES = ["preset", "reglas", "crear-manifiesto", "eject", "init-cliente"] as const;
 export type Accion = (typeof ACCIONES)[number];
 
-export const DISCO_CAMBIADO = "El disco cambió desde que viste el cambio. Revísalo otra vez.";
+// El 409 de una huella que ya no vale. Sale en el idioma de la petición; la constante es el texto en
+// español, el de siempre (los tests la comparan).
+export const DISCO_CAMBIADO = mensaje("STUDIO-DISCO-CAMBIADO", {}, "es");
+const discoCambiado = (): string => mensaje("STUDIO-DISCO-CAMBIADO");
 const CANDADO = ".studio-acciones.lock";
 
 // ─── Lo que llega ───────────────────────────────────────────────────────────
@@ -65,7 +69,7 @@ export class ErrorDeAccion extends Error {
 
 function argumentosDe<A extends Accion>(accion: A, crudo: unknown): z.infer<(typeof ARGUMENTOS)[A]> {
   const leido = (ARGUMENTOS[accion] as z.ZodType).safeParse(crudo);
-  if (!leido.success) throw new ErrorDeAccion(400, `Argumentos de «${accion}» no válidos: ${leido.error.issues.map((i) => `${i.path.join(".") || "(raíz)"}: ${i.message}`).join("; ")}.`);
+  if (!leido.success) throw new ErrorDeAccion(400, mensaje("STUDIO-ARGUMENTOS-INVALIDOS", { accion, problemas: leido.error.issues.map((i) => ({ ruta: i.path.join("."), mensaje: i.message })) }));
   return leido.data as z.infer<(typeof ARGUMENTOS)[A]>;
 }
 
@@ -101,8 +105,8 @@ const sinBom = (texto: string): string => texto.replace(/^\uFEFF/, "");
 // El manifiesto de un proyecto, como objeto, conservando el orden de sus claves (JSON.parse lo conserva).
 function manifiestoComoObjeto(proyecto: string): { ruta: string; crudo: string; objeto: Record<string, unknown> } | { motivo: string } {
   const lectura = leerManifiesto(proyecto);
-  if (lectura.estado === "ausente") return { motivo: `${proyecto} no tiene phase-gate.json: créalo primero con «Crear phase-gate.json».` };
-  if (lectura.estado === "invalido") return { motivo: `${sinRutasDelEquipo(lectura.error)} Arréglalo a mano antes de cambiarlo desde el Studio.` };
+  if (lectura.estado === "ausente") return { motivo: mensaje("STUDIO-SIN-MANIFIESTO", { proyecto }) };
+  if (lectura.estado === "invalido") return { motivo: mensaje("STUDIO-MANIFIESTO-A-MANO", { error: sinRutasDelEquipo(lectura.error) }) };
   const crudo = leerCrudo(lectura.ruta) ?? "";
   return { ruta: lectura.ruta, crudo, objeto: JSON.parse(sinBom(crudo)) as Record<string, unknown> };
 }
@@ -118,8 +122,8 @@ function planDePreset(a: z.infer<(typeof ARGUMENTOS)["preset"]>): Plan {
   const m = manifiestoComoObjeto(proyecto);
   if ("motivo" in m) return { posible: false, motivo: m.motivo };
   const presets = presetsDisponibles(idiomaDelProyecto(proyecto).idioma);
-  if (!presets.has(a.preset)) return { posible: false, motivo: `No existe el preset "${a.preset}". Los disponibles son: ${[...presets.keys()].sort().join(", ")}.` };
-  if (m.objeto.preset === a.preset) return { posible: false, motivo: `${proyecto} ya usa el preset "${a.preset}".` };
+  if (!presets.has(a.preset)) return { posible: false, motivo: mensaje("STUDIO-PRESET-NO-EXISTE", { preset: a.preset, disponibles: [...presets.keys()].sort() }) };
+  if (m.objeto.preset === a.preset) return { posible: false, motivo: mensaje("STUDIO-PRESET-YA-EN-USO", { proyecto, preset: a.preset }) };
   // Asignar sobre la clave que ya existe la deja en su sitio; si no estaba, va al final.
   m.objeto.preset = a.preset;
   const despues = json2(m.objeto);
@@ -127,7 +131,7 @@ function planDePreset(a: z.infer<(typeof ARGUMENTOS)["preset"]>): Plan {
   if (error) return { posible: false, motivo: `El phase-gate.json resultante no sería válido: ${error}.` };
   return {
     posible: true,
-    interno: { accion: "preset", resumen: `El preset de ${proyecto} pasa a ser "${a.preset}".`, escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: `${proyecto} usa ahora el preset "${a.preset}".` },
+    interno: { accion: "preset", resumen: mensaje("STUDIO-PRESET-RESUMEN", { proyecto, preset: a.preset }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-PRESET-HECHO", { proyecto, preset: a.preset }) },
   };
 }
 
@@ -139,20 +143,20 @@ function planDeReglas(a: z.infer<(typeof ARGUMENTOS)["reglas"]>): Plan {
   const cambios: string[] = [];
   if (a.lotes !== undefined && reglas.lotes !== a.lotes) {
     reglas.lotes = a.lotes;
-    cambios.push(`lotes: ${a.lotes ? "sí" : "no"}`);
+    cambios.push(mensaje("STUDIO-REGLA-LOTES", { lotes: a.lotes }));
   }
   if (a.commits !== undefined && reglas.commits !== a.commits) {
     reglas.commits = a.commits;
     cambios.push(`commits: ${a.commits}`);
   }
-  if (!cambios.length) return { posible: false, motivo: `Las reglas de ${proyecto} ya son esas: no hay nada que cambiar.` };
+  if (!cambios.length) return { posible: false, motivo: mensaje("STUDIO-REGLAS-IGUALES", { proyecto }) };
   m.objeto.reglas = reglas;
   const despues = json2(m.objeto);
   const error = validarManifiesto(despues);
   if (error) return { posible: false, motivo: `El phase-gate.json resultante no sería válido: ${error}.` };
   return {
     posible: true,
-    interno: { accion: "reglas", resumen: `Reglas de ${proyecto}: ${cambios.join(", ")}.`, escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: `Reglas de ${proyecto} cambiadas: ${cambios.join(", ")}.` },
+    interno: { accion: "reglas", resumen: mensaje("STUDIO-REGLAS-RESUMEN", { proyecto, cambios: cambios.join(", ") }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-REGLAS-HECHO", { proyecto, cambios: cambios.join(", ") }) },
   };
 }
 
@@ -161,12 +165,12 @@ function planDeCrear(a: z.infer<(typeof ARGUMENTOS)["crear-manifiesto"]>): Plan 
   const preset = a.preset ?? "software-replica"; // el mismo valor por defecto que init --migrate
   // Con el idioma de sus documentos o, si no dicen nada, el del equipo: como init --migrate (§8.3).
   const idioma = idiomaParaManifiesto(proyecto, idiomaDelEquipo().idioma);
-  if (!presetsDisponibles(idioma).has(preset)) return { posible: false, motivo: `No existe el preset "${preset}".` };
+  if (!presetsDisponibles(idioma).has(preset)) return { posible: false, motivo: mensaje("STUDIO-PRESET-NO-EXISTE", { preset, disponibles: null }) };
   const ruta = rutaManifiesto(proyecto);
-  if (fs.existsSync(ruta)) return { posible: false, motivo: `${proyecto} ya tiene phase-gate.json: «Crear» solo crea, nunca sobrescribe.` };
+  if (fs.existsSync(ruta)) return { posible: false, motivo: mensaje("STUDIO-YA-TIENE-MANIFIESTO", { proyecto }) };
   return {
     posible: true,
-    interno: { accion: "crear-manifiesto", resumen: `Crear el phase-gate.json de ${proyecto} con el preset "${preset}".`, escrituras: [{ ruta, antes: null, despues: manifiestoNuevo(preset, idioma), copia: false, exclusiva: true }], comandos: [], hecho: `Creado el phase-gate.json de ${proyecto}.` },
+    interno: { accion: "crear-manifiesto", resumen: mensaje("STUDIO-CREAR-RESUMEN", { proyecto, preset }), escrituras: [{ ruta, antes: null, despues: manifiestoNuevo(preset, idioma), copia: false, exclusiva: true }], comandos: [], hecho: mensaje("STUDIO-CREAR-HECHO", { proyecto }) },
   };
 }
 
@@ -191,16 +195,16 @@ function planDeEjectAccion(a: z.infer<(typeof ARGUMENTOS)["eject"]>): Plan {
     if (error instanceof ErrorDeEject) return { posible: false, motivo: sinRutasDelEquipo(error.message) };
     throw new ErrorDeAccion(404, sinRutasDelEquipo(error instanceof Error ? error.message : String(error)));
   }
-  if (!destinoPermitido(plan.archivo, plan.proyecto)) return { posible: false, motivo: "Ese destino no es una capa de prompts ni la carpeta de presets: el Studio no escribe ahí." };
+  if (!destinoPermitido(plan.archivo, plan.proyecto)) return { posible: false, motivo: mensaje("STUDIO-DESTINO-NO-ES-CAPA") };
   const antes = leerCrudo(plan.archivo);
   return {
     posible: true,
     interno: {
       accion: "eject",
-      resumen: `Copiar ${a.objetivo} a ${plan.etiqueta ?? "tu carpeta de presets"}${plan.reemplaza ? ", reemplazando lo que hay (queda copia)" : ""}.`,
+      resumen: mensaje("STUDIO-EJECT-RESUMEN", { objetivo: a.objetivo, etiqueta: plan.etiqueta, reemplaza: plan.reemplaza }),
       escrituras: [{ ruta: plan.archivo, antes, despues: plan.texto, copia: plan.reemplaza, exclusiva: false }],
       comandos: [],
-      hecho: `Copiado a ${plan.archivo}. Edítalo ahí.`,
+      hecho: mensaje("STUDIO-EJECT-HECHO", { archivo: plan.archivo }),
     },
   };
 }
@@ -218,7 +222,7 @@ function rutasDeInit(): { docs: string; repos: string } | null {
 // Cursor los leen de archivo). Un /fN que no generó init es de la persona: no se pisa (el CLI pide --yes).
 async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: ContextoDeAcciones): Promise<Plan> {
   const rutas = rutasDeInit();
-  if (!rutas) return { posible: false, motivo: "Faltan PHASE_GATE_DOCS_PATH y PHASE_GATE_REPOS_PATH (o no existen): init no sabría qué rutas registrar." };
+  if (!rutas) return { posible: false, motivo: mensaje("STUDIO-SIN-RUTAS") };
   const entorno = ctx.entornoInit();
   const resumen: string[] = [];
   const hecho: string[] = [];
@@ -229,39 +233,39 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
   if (a.cliente === "claude-code") {
     const plan = await planDeClaude(rutas, a.clave ?? null, entorno);
     if (plan.estado === "sin-lista") motivos.push(`Claude Code: ${sinRutasDelEquipo(plan.mensaje)}`);
-    else if (plan.estado === "existente") motivos.push(`Claude Code ya lo tiene registrado como «${plan.existente}»; init no lo toca. Para cambiarlo: ${plan.comando}`);
+    else if (plan.estado === "existente") motivos.push(mensaje("STUDIO-INIT-CLAUDE-EXISTENTE", { clave: plan.existente, comando: plan.comando }));
     else {
-      resumen.push(`Registrar el servidor en Claude Code como «${plan.clave}» (ámbito user).`);
+      resumen.push(mensaje("STUDIO-INIT-CLAUDE-RESUMEN", { clave: plan.clave }));
       comandos.push({ comando: "claude", args: plan.args, mostrar: plan.comando });
-      hecho.push(`Registrado en Claude Code como «${plan.clave}».`);
+      hecho.push(mensaje("STUDIO-INIT-CLAUDE-HECHO", { clave: plan.clave }));
     }
   } else {
     const plan = planDeArchivo(a.cliente, rutas, a.clave ?? null, entorno);
-    if (plan.estado === "roto") motivos.push(`${plan.nombre}: no se pudo leer su mcp.json (${plan.error ?? "?"}); no se toca.`);
-    else if (plan.estado === "forma-rara") motivos.push(`${plan.nombre}: en su mcp.json, "${plan.seccion}" o el "env" de alguna entrada no es un objeto; no se toca.`);
-    else if (plan.estado === "clave-ocupada") motivos.push(`${plan.nombre}: la clave «${plan.clave}» ya la usa otro servidor.`);
-    else if (plan.estado === "sin-cambios") motivos.push(`${plan.nombre}: sin cambios, ya está registrado como «${plan.claveFinal}».`);
+    if (plan.estado === "roto") motivos.push(mensaje("STUDIO-INIT-ROTO", { cliente: plan.nombre, error: plan.error ?? "?" }));
+    else if (plan.estado === "forma-rara") motivos.push(mensaje("STUDIO-INIT-FORMA-RARA", { cliente: plan.nombre, seccion: plan.seccion }));
+    else if (plan.estado === "clave-ocupada") motivos.push(mensaje("STUDIO-INIT-CLAVE-OCUPADA", { cliente: plan.nombre, clave: plan.clave }));
+    else if (plan.estado === "sin-cambios") motivos.push(mensaje("STUDIO-INIT-SIN-CAMBIOS", { cliente: plan.nombre, clave: plan.claveFinal }));
     else {
       const antes = leerCrudo(plan.archivo);
-      resumen.push(`${plan.estado === "nuevo" ? "Registrar" : "Actualizar"} el servidor en ${plan.nombre} como «${plan.claveFinal}»${plan.comentarios ? " (el archivo tiene comentarios: se perderán, queda la copia)" : ""}.`);
+      resumen.push(mensaje("STUDIO-INIT-RESUMEN", { nuevo: plan.estado === "nuevo", cliente: plan.nombre, clave: plan.claveFinal, comentarios: plan.comentarios }));
       escrituras.push({ ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false });
-      hecho.push(`${plan.nombre}: ${plan.estado === "nuevo" ? "registrado" : "actualizado"} como «${plan.claveFinal}».`);
+      hecho.push(mensaje("STUDIO-INIT-HECHO", { nuevo: plan.estado === "nuevo", cliente: plan.nombre, clave: plan.claveFinal }));
     }
   }
 
   if (a.comandos) {
-    if (a.cliente === "vscode") motivos.push("VS Code no lee los comandos de fase de archivo: usa los MCP Prompts /f1…/fN del servidor.");
+    if (a.cliente === "vscode") motivos.push(mensaje("STUDIO-INIT-VSCODE-SIN-COMANDOS"));
     else {
       const planeados = planDeComandos(a.cliente, entorno);
       const copiar = planeados.filter((c) => c.estado === "nuevo" || c.estado === "actualiza");
       const ajenos = planeados.filter((c) => c.estado === "ajeno" || c.estado === "carpeta");
       for (const c of copiar) escrituras.push({ ruta: c.archivo, antes: leerCrudo(c.archivo), despues: c.texto, copia: false, exclusiva: false });
       if (copiar.length) {
-        resumen.push(`Copiar ${copiar.map((c) => `/f${c.numero}`).join(", ")} a ${mostrar(carpetaDeComandos(a.cliente, entorno), ctx)}.`);
-        hecho.push(`Comandos copiados: ${copiar.map((c) => `/f${c.numero}`).join(", ")}.`);
+        resumen.push(mensaje("STUDIO-INIT-COPIAR-COMANDOS", { comandos: copiar.map((c) => `/f${c.numero}`).join(", "), carpeta: mostrar(carpetaDeComandos(a.cliente, entorno), ctx) }));
+        hecho.push(mensaje("STUDIO-INIT-COMANDOS-COPIADOS", { comandos: copiar.map((c) => `/f${c.numero}`).join(", ") }));
       }
-      if (ajenos.length) resumen.push(`${ajenos.map((c) => `/f${c.numero}`).join(", ")} ya existen y no los generó init: no se tocan.`);
-      if (!copiar.length && !ajenos.length) motivos.push("Los comandos de fase ya están al día.");
+      if (ajenos.length) resumen.push(mensaje("STUDIO-INIT-COMANDOS-AJENOS", { comandos: ajenos.map((c) => `/f${c.numero}`).join(", ") }));
+      if (!copiar.length && !ajenos.length) motivos.push(mensaje("STUDIO-INIT-COMANDOS-AL-DIA"));
     }
   }
 
@@ -293,10 +297,11 @@ function mtimeDe(ruta: string): number | "no-existe" {
   }
 }
 
+// Sin el resumen: es texto en el idioma de la petición, y un plan visto en un idioma se puede aplicar en el
+// otro. Lo que cambia el disco (archivos, contenidos, mtime y comandos) es lo que cuenta.
 export function huellaDe(plan: PlanInterno): string {
   const datos = {
     accion: plan.accion,
-    resumen: plan.resumen,
     escrituras: plan.escrituras.map((e) => ({ ruta: e.ruta, antes: e.antes, despues: e.despues, copia: e.copia, exclusiva: e.exclusiva, mtimeMs: mtimeDe(e.ruta) })),
     comandos: plan.comandos,
   };
@@ -338,9 +343,9 @@ function comprobarDestino(ruta: string): void {
   } catch {
     enTarea = false;
   }
-  if (enTarea) throw new ErrorDeAccion(409, "Esa acción escribiría dentro de una tarea: el Studio nunca escribe documentos ni recibos.");
+  if (enTarea) throw new ErrorDeAccion(409, mensaje("STUDIO-DESTINO-EN-TAREA"));
   try {
-    if (estaDentroReal(requireBasePath(REPOS), ruta)) throw new ErrorDeAccion(409, "Esa acción escribiría dentro de la carpeta de repos: el Studio nunca escribe en los repositorios.");
+    if (estaDentroReal(requireBasePath(REPOS), ruta)) throw new ErrorDeAccion(409, mensaje("STUDIO-DESTINO-EN-REPOS"));
   } catch (error) {
     if (error instanceof ErrorDeAccion) throw error;
   }
@@ -358,7 +363,7 @@ function comprobarDestino(ruta: string): void {
       const partes = relativa.split(/[\\/]/);
       const esManifiesto = partes.length === 2 && partes[1] === "phase-gate.json";
       const enCapaDeProyecto = partes.length >= 4 && partes[1] === ".phase-gate" && partes[2] === "prompts";
-      if (!esManifiesto && !enCapaDeProyecto) throw new ErrorDeAccion(409, "En la Documentación, el Studio solo escribe el phase-gate.json y la capa de prompts de un proyecto.");
+      if (!esManifiesto && !enCapaDeProyecto) throw new ErrorDeAccion(409, mensaje("STUDIO-DESTINO-EN-DOCS"));
     }
   }
 }
@@ -373,7 +378,7 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
 
   const plan = async (cuerpo: unknown): Promise<RespuestaDePlan> => {
     const peticion = PeticionDePlan.safeParse(cuerpo);
-    if (!peticion.success) throw new ErrorDeAccion(400, "La petición tiene que ser { accion, argumentos }, con una de: preset, reglas, crear-manifiesto, eject, init-cliente.");
+    if (!peticion.success) throw new ErrorDeAccion(400, mensaje("STUDIO-PETICION-DE-PLAN"));
     const calculado = await planificar(peticion.data.accion, peticion.data.argumentos, ctx);
     if (!calculado.posible) return calculado;
     const { interno } = calculado;
@@ -397,16 +402,16 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
 
   const aplicar = async (cuerpo: unknown): Promise<RespuestaDeAplicar> => {
     const peticion = PeticionDeAplicar.safeParse(cuerpo);
-    if (!peticion.success) throw new ErrorDeAccion(400, "La petición tiene que ser { accion, argumentos, huella }, con la huella del plan.");
+    if (!peticion.success) throw new ErrorDeAccion(400, mensaje("STUDIO-PETICION-DE-APLICAR"));
     const { accion, argumentos, huella } = peticion.data;
     fs.mkdirSync(stateDir(), { recursive: true });
     return conCandado(
       stateDir(),
       async () => {
         const calculado = await planificar(accion, argumentos, ctx);
-        if (!calculado.posible) throw new ErrorDeAccion(409, `${DISCO_CAMBIADO} ${calculado.motivo}`);
+        if (!calculado.posible) throw new ErrorDeAccion(409, `${discoCambiado()} ${calculado.motivo}`);
         const { interno } = calculado;
-        if (usadas.has(huella) || huellaDe(interno) !== huella) throw new ErrorDeAccion(409, DISCO_CAMBIADO);
+        if (usadas.has(huella) || huellaDe(interno) !== huella) throw new ErrorDeAccion(409, discoCambiado());
         for (const e of interno.escrituras) comprobarDestino(e.ruta);
         usadas.add(huella);
 
@@ -424,7 +429,7 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
             try {
               fs.writeFileSync(e.ruta, e.despues, { encoding: "utf-8", flag: "wx" });
             } catch (error) {
-              if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new ErrorDeAccion(409, DISCO_CAMBIADO);
+              if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new ErrorDeAccion(409, discoCambiado());
               throw error;
             }
           } else {
@@ -434,12 +439,12 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
         }
         for (const c of interno.comandos) {
           const r = await entorno.ejecutar(c.comando, c.args);
-          if (r.codigo !== 0) throw new ErrorDeAccion(500, `${c.mostrar} falló: ${sinRutasDelEquipo(r.stderr.trim() || `código ${r.codigo}`)}`);
+          if (r.codigo !== 0) throw new ErrorDeAccion(500, mensaje("STUDIO-COMANDO-FALLO", { comando: c.mostrar, detalle: r.stderr.trim() ? sinRutasDelEquipo(r.stderr.trim()) : null, codigo: r.codigo }));
           archivos.push(c.mostrar);
         }
         return { hecho: true as const, mensaje: sinRutasDelEquipo(interno.hecho), archivos, copias };
       },
-      { nombre: CANDADO, ocupado: "Otro Studio está aplicando un cambio; vuelve a intentarlo." }
+      { nombre: CANDADO, ocupado: mensaje("STUDIO-CANDADO-OCUPADO") }
     );
   };
 

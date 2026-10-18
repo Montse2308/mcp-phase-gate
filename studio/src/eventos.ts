@@ -1,6 +1,9 @@
 // Los eventos en vivo: una sola conexión SSE para toda la página, y cada vista se suscribe a los tipos que
 // le importan. EventSource se reconecta solo; al reconectar se avisa "reconexion" para recargar la vista
 // entera, porque mientras estuvo caída pudo cambiar cualquier cosa. En el sitio estático no hay SSE.
+//
+// El SSE no lleva el idioma de la interfaz: sus eventos solo dicen qué cambió (tipo, proyecto, tarea), sin
+// textos; lo que se enseña lo trae después la recarga, que sí lo lleva (datos.ts).
 
 import { useEffect, useRef } from "preact/hooks";
 

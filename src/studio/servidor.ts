@@ -16,6 +16,12 @@
 //   6. Los estáticos se sirven solo desde studio/dist, con la ruta real dentro  → 404
 //
 // Toda respuesta lleva la CSP sin 'unsafe-inline', nosniff y no-referrer.
+//
+// El idioma de lo que dice la API (describeEstado, los hallazgos de doctor, las notas de un prompt, los
+// resúmenes de las acciones y los errores) es el de la interfaz: el frontend lo manda en cada petición en
+// la cabecera X-Phase-Gate-Lang ("es" o "en"; cualquier otro valor se ignora), y la petición se atiende
+// dentro de `enIdioma`. Sin cabecera, el de siempre (PHASE_GATE_LANG o el del sistema). No toca el filtro:
+// una cabecera propia en un fetch del mismo origen no abre nada, y nunca se concede un preflight.
 
 import { execFile } from "child_process";
 import * as crypto from "crypto";
@@ -26,9 +32,11 @@ import * as path from "path";
 
 import type { OpcionesUi, Salida } from "../cli.js";
 import { raizPaquete } from "../config.js";
+import { enIdioma, mensaje } from "../i18n/mensajes.js";
 import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
 import { INTERVALO_MS, sesionesAbiertas } from "../sesiones.js";
+import type { Idioma } from "../vocabulario.js";
 import { crearApi, entornoInitDelProceso } from "./api.js";
 import { activarDemo, entornoInitDeDemo, prepararDemo } from "./demo.js";
 import type { CarpetasDeDemo } from "./demo.js";
@@ -36,6 +44,7 @@ import { crearEventos } from "./eventos.js";
 
 export const HOST = "127.0.0.1";
 export const CUERPO_MAXIMO = 64 * 1024;
+export const CABECERA_DE_IDIOMA = "x-phase-gate-lang";
 export const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
   "frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
@@ -90,6 +99,13 @@ function valoresDe(req: http.IncomingMessage, nombre: string): string[] {
     if (req.rawHeaders[i]!.toLowerCase() === nombre) valores.push(req.rawHeaders[i + 1]!);
   }
   return valores;
+}
+
+// El idioma de la interfaz que manda el frontend: una sola cabecera, exactamente "es" o "en". Cualquier
+// otra cosa (repetida, vacía, "fr", "EN-us") no cuenta, y la petición sigue con el idioma por defecto.
+export function idiomaDePeticion(req: http.IncomingMessage): Idioma | null {
+  const valores = valoresDe(req, CABECERA_DE_IDIOMA);
+  return valores.length === 1 && (valores[0] === "es" || valores[0] === "en") ? valores[0] : null;
 }
 
 // timingSafeEqual lanza si las longitudes difieren: se comparan antes. Saber la longitud no ayuda a
@@ -311,22 +327,25 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
         try {
           cuerpo = JSON.parse(leido.texto);
         } catch {
-          enviarJson(res, 400, { error: "El cuerpo no es un JSON válido." });
+          enviarJson(res, 400, { error: mensaje("STUDIO-JSON-INVALIDO", {}, idiomaDePeticion(req) ?? undefined) });
           return;
         }
       }
     }
 
     if (esApi) {
+      const idioma = idiomaDePeticion(req);
       if (!opciones.api) {
-        enviarJson(res, 404, { error: "No existe esa ruta de la API." });
+        enviarJson(res, 404, { error: mensaje("STUDIO-RUTA-NO-EXISTE", {}, idioma ?? undefined) });
         return;
       }
+      const api = opciones.api;
+      const peticion: PeticionApi = { metodo, ruta: url.pathname.slice("/api".length) || "/", consulta: url.searchParams, cuerpo, req };
       try {
-        const respuesta = await opciones.api({ metodo, ruta: url.pathname.slice("/api".length) || "/", consulta: url.searchParams, cuerpo, req }, res);
+        const respuesta = await (idioma ? enIdioma(idioma, () => api(peticion, res)) : api(peticion, res));
         if (respuesta !== "manejada") enviarJson(res, respuesta.estado, respuesta.json);
       } catch {
-        enviarJson(res, 500, { error: "Error interno del Studio." });
+        enviarJson(res, 500, { error: mensaje("STUDIO-ERROR-INTERNO-DEL-STUDIO", {}, idioma ?? undefined) });
       }
       return;
     }
@@ -435,7 +454,11 @@ export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNa
       entornoInit: () => (enDemo ? entornoInitDeDemo(enDemo) : entornoInitDelProceso(ejecutarComando)),
       eventos: (peticion, res) => eventos.manejar(peticion.req, res),
     });
-    const configJs = enDemo ? `window.PG_MODO = "demo";\nwindow.PG_BANDA = ${JSON.stringify(`Demo: datos de ejemplo en ${enDemo.raiz}`)};\n` : undefined;
+    // La banda va en los dos idiomas: PG_BANDA en español (la de siempre) y la carpeta aparte, para que el
+    // frontend la diga en el idioma de la interfaz.
+    const configJs = enDemo
+      ? `window.PG_MODO = "demo";\nwindow.PG_BANDA = ${JSON.stringify(`Demo: datos de ejemplo en ${enDemo.raiz}`)};\nwindow.PG_DEMO_RAIZ = ${JSON.stringify(enDemo.raiz)};\n`
+      : undefined;
     studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: parar, ...(configJs ? { configJs } : {}) });
   } catch (error) {
     parar();

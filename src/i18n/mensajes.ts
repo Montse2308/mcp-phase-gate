@@ -25,6 +25,7 @@ import { TEXTOS_LOTES } from "./textos/lotes.js";
 import { TEXTOS_NUCLEO } from "./textos/nucleo.js";
 import { TEXTOS_PROMPTS } from "./textos/prompts.js";
 import { TEXTOS_SERVIDOR } from "./textos/servidor.js";
+import { TEXTOS_STUDIO } from "./textos/studio.js";
 import type { Catalogo } from "./textos/tipos.js";
 
 export type { Catalogo, Plantilla } from "./textos/tipos.js";
@@ -37,6 +38,7 @@ export const CATALOGOS: Readonly<Record<string, Catalogo>> = {
   nucleo: TEXTOS_NUCLEO,
   prompts: TEXTOS_PROMPTS,
   servidor: TEXTOS_SERVIDOR,
+  studio: TEXTOS_STUDIO,
 };
 
 const TODOS: Catalogo = Object.assign({}, ...Object.values(CATALOGOS));
