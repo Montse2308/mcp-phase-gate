@@ -28,16 +28,33 @@ export type ResolucionProyecto =
 
 export const ESPERA_DE_RAICES_MS = 5000;
 
-type Estado = { raices: string[]; pendiente: Promise<void> | null };
+// `oyentes`: quien quiere saber las raíces en cuanto llegan (el registro de sesiones, src/sesiones.ts).
+type Estado = { raices: string[]; pendiente: Promise<void> | null; oyentes: ((raices: string[]) => void)[] };
 const estados = new WeakMap<McpServer, Estado>();
 
 function estadoDe(mcp: McpServer): Estado {
   let estado = estados.get(mcp);
   if (!estado) {
-    estado = { raices: [], pendiente: null };
+    estado = { raices: [], pendiente: null, oyentes: [] };
     estados.set(mcp, estado);
   }
   return estado;
+}
+
+// Avisa cada vez que se conocen las raíces de la sesión: al terminar el initialize (vacías si el
+// cliente no declara `roots`) y tras cada roots/list_changed. Un oyente que lanza no afecta a nadie.
+export function alRecibirRaices(mcp: McpServer, oyente: (raices: string[]) => void): void {
+  estadoDe(mcp).oyentes.push(oyente);
+}
+
+function avisar(estado: Estado): void {
+  for (const oyente of estado.oyentes) {
+    try {
+      oyente([...estado.raices]);
+    } catch (error) {
+      log("warning", `Un oyente de las raíces falló: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 }
 
 // Una URI file:// a su ruta real. fileURLToPath resuelve igual file:///C:/…, file:///c:/… y
@@ -54,7 +71,10 @@ export function iniciarRoots(mcp: McpServer): void {
   // roots/list_changed, traería raíces viejas (hallazgo 4 de la auditoría de la Etapa 3).
   let ultima = 0;
   const pedir = (): void => {
-    if (!mcp.server.getClientCapabilities()?.roots) return;
+    if (!mcp.server.getClientCapabilities()?.roots) {
+      avisar(estado);
+      return;
+    }
     const esta = ++ultima;
     const peticion = mcp.server
       .listRoots(undefined, { timeout: ESPERA_DE_RAICES_MS })
@@ -68,10 +88,14 @@ export function iniciarRoots(mcp: McpServer): void {
             return [];
           }
         });
+        avisar(estado);
       })
       .catch((error: unknown) => {
         log("warning", `No se pudieron pedir las raíces al cliente: ${error instanceof Error ? error.message : String(error)}`);
-        if (esta === ultima) estado.raices = [];
+        if (esta === ultima) {
+          estado.raices = [];
+          avisar(estado);
+        }
       });
     estado.pendiente = peticion;
   };

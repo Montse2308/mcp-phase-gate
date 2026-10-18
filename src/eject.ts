@@ -64,7 +64,7 @@ function destinoDe(valor: string | null): Destino | string {
   return "Falta --a global o --a proyecto:<NOMBRE>: dónde copiarlo.";
 }
 
-class ErrorDeEject extends Error {
+export class ErrorDeEject extends Error {
   constructor(
     message: string,
     readonly codigo: 1 | 2
@@ -73,27 +73,38 @@ class ErrorDeEject extends Error {
   }
 }
 
-// Escribe, o con --dry-run solo lo dice. Con --fuerza, lo que había queda en <archivo>.bak-<fecha>.
-function escribir(archivo: string, texto: string, opciones: OpcionesEject, salida: Salida, reemplaza: boolean): void {
-  if (opciones.dryRun) {
-    salida.out(`[dry-run] Se escribiría ${archivo}:\n${texto}`);
-    return;
+// Lo que haría un eject, sin escribir nada: el archivo, su texto nuevo y si sustituye a uno que ya existe.
+// Lo calcula una sola función, que usan el CLI (que lo escribe o, con --dry-run, lo enseña) y el Studio
+// (que lo enseña y lo aplica con su huella).
+export type PlanDeEject = {
+  objetivo: Objetivo;
+  archivo: string;
+  texto: string;
+  reemplaza: boolean; // hay algo que sustituir: se deja copia
+  etiqueta: string | null; // "la capa global", "la capa del proyecto X"; null para un preset
+  proyecto: string | null;
+};
+
+// Escribe el plan. Si sustituye algo, lo que había queda antes en <archivo>.bak-<fecha>, que se devuelve.
+export function escribirEject(plan: PlanDeEject, ahora: Date = new Date()): string | null {
+  let copia: string | null = null;
+  if (plan.reemplaza && fs.existsSync(plan.archivo)) {
+    copia = `${plan.archivo}.bak-${marcaDeTiempo(ahora)}`;
+    fs.copyFileSync(plan.archivo, copia);
   }
-  if (reemplaza && fs.existsSync(archivo)) {
-    const copia = `${archivo}.bak-${marcaDeTiempo(new Date())}`;
-    fs.copyFileSync(archivo, copia);
-    salida.out(`Copia de lo anterior: ${copia}`);
-  }
-  fs.mkdirSync(path.dirname(archivo), { recursive: true });
-  fs.writeFileSync(archivo, texto, "utf-8");
+  fs.mkdirSync(path.dirname(plan.archivo), { recursive: true });
+  fs.writeFileSync(plan.archivo, plan.texto, "utf-8");
+  return copia;
 }
 
-function siExisteSinFuerza(existe: boolean, que: string, opciones: OpcionesEject): void {
-  if (existe && !opciones.fuerza) throw new ErrorDeEject(`${que} ya existe. No se toca; con --fuerza se reemplaza dejando copia.`, 1);
+function siExisteSinFuerza(existe: boolean, que: string, fuerza: boolean): void {
+  if (existe && !fuerza) throw new ErrorDeEject(`${que} ya existe. No se toca; con --fuerza se reemplaza dejando copia.`, 1);
 }
+
+type Plan = { archivo: string; texto: string; reemplaza: boolean };
 
 // ─── Cada objetivo ──────────────────────────────────────────────────────────
-function ejectarFase(numero: number, destino: Destino, opciones: OpcionesEject, salida: Salida): string {
+function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
   const [fabrica] = capasDeCuerpos(destino.proyecto);
   const entrada = discoverPhases([fabrica!.ruta]).get(numero);
   if (!entrada) throw new ErrorDeEject(`La fase ${numero} no existe en los prompts de fábrica.`, 2);
@@ -106,10 +117,9 @@ function ejectarFase(numero: number, destino: Destino, opciones: OpcionesEject, 
     ? fs.readdirSync(destino.carpeta).filter((n) => n !== nombre && n.toLowerCase().endsWith(".md") && Number(n.match(PHASE_FILE_PATTERN)?.[1]) === numero)
     : [];
   if (otros.length) throw new ErrorDeEject(`En ${destino.carpeta} ya hay otro archivo de la fase ${numero} (${otros.join(", ")}): bórralo o renómbralo primero.`, 1);
-  siExisteSinFuerza(fs.existsSync(archivo), archivo, opciones);
+  siExisteSinFuerza(fs.existsSync(archivo), archivo, fuerza);
 
-  escribir(archivo, leerPromptNormalizado(entrada.file), opciones, salida, fs.existsSync(archivo));
-  return archivo;
+  return { archivo, texto: leerPromptNormalizado(entrada.file), reemplaza: fs.existsSync(archivo) };
 }
 
 // Sustituye el bloque con ese id en un archivo de bloques, o lo añade al final.
@@ -127,7 +137,7 @@ function conBloque(actual: string, id: string, bloque: string): string {
   return base ? `${base}\n\n${bloque}\n` : `${bloque}\n`;
 }
 
-function ejectarRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: Destino, opciones: OpcionesEject, salida: Salida): string {
+function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: Destino, fuerza: boolean): Plan {
   const capas: Capa[] = capasDe(destino.proyecto);
   const efectivo = contenidoEfectivoDeRanura(capas, objetivo.id);
   if (!efectivo) {
@@ -143,14 +153,13 @@ function ejectarRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino:
   const archivo = path.join(destino.carpeta, ARCHIVO_BLOQUES);
   const actual = fs.existsSync(archivo) ? leerPromptNormalizado(archivo) : "";
   const yaEsta = new RegExp(`<!--\\s*bloque:\\s*${objetivo.id.replace("/", "\\/")}\\s*(?:\\|[^>]*)?-->`).test(actual);
-  siExisteSinFuerza(yaEsta, `El bloque «${objetivo.id}» de ${archivo}`, opciones);
+  siExisteSinFuerza(yaEsta, `El bloque «${objetivo.id}» de ${archivo}`, fuerza);
 
   const bloque = `<!-- bloque: ${objetivo.id} -->\n${efectivo.contenido}\n<!-- /bloque -->`;
-  escribir(archivo, conBloque(actual, objetivo.id, bloque), opciones, salida, yaEsta);
-  return archivo;
+  return { archivo, texto: conBloque(actual, objetivo.id, bloque), reemplaza: yaEsta };
 }
 
-function ejectarComando(numero: number, destino: Destino, opciones: OpcionesEject, salida: Salida): string {
+function planDeComando(numero: number, destino: Destino, fuerza: boolean): Plan {
   const rutas = rutasDeCuerpos(capasDeCuerpos(destino.proyecto));
   const fase = discoverPhases(rutas).get(numero);
   if (!fase) throw new ErrorDeEject(`La fase ${numero} no existe: no hay /f${numero} que copiar.`, 2);
@@ -158,12 +167,11 @@ function ejectarComando(numero: number, destino: Destino, opciones: OpcionesEjec
   const texto = origen ? leerPromptNormalizado(origen) : `${textoGenerico(numero, fase.title)}\n`;
 
   const archivo = path.join(destino.carpeta, "comandos", `f${numero}.md`);
-  siExisteSinFuerza(fs.existsSync(archivo), archivo, opciones);
-  escribir(archivo, texto, opciones, salida, fs.existsSync(archivo));
-  return archivo;
+  siExisteSinFuerza(fs.existsSync(archivo), archivo, fuerza);
+  return { archivo, texto, reemplaza: fs.existsSync(archivo) };
 }
 
-function ejectarPreset(nombre: string, opciones: OpcionesEject, salida: Salida): string {
+function planDePreset(nombre: string, fuerza: boolean): Plan {
   const presets = presetsDisponibles();
   const preset = presets.get(nombre);
   if (!preset) throw new ErrorDeEject(`No existe el preset "${nombre}". Los disponibles son: ${describirPresets(presets)}.`, 2);
@@ -171,46 +179,56 @@ function ejectarPreset(nombre: string, opciones: OpcionesEject, salida: Salida):
 
   const archivo = path.join(carpetaPresetsDelUsuario(), `${nombre}.md`);
   if (path.resolve(preset.ruta) === path.resolve(archivo)) throw new ErrorDeEject(`El preset "${nombre}" ya es tuyo: está en ${archivo}.`, 1);
-  siExisteSinFuerza(fs.existsSync(archivo), archivo, opciones);
-  escribir(archivo, leerPromptNormalizado(preset.ruta), opciones, salida, fs.existsSync(archivo));
-  return archivo;
+  siExisteSinFuerza(fs.existsSync(archivo), archivo, fuerza);
+  return { archivo, texto: leerPromptNormalizado(preset.ruta), reemplaza: fs.existsSync(archivo) };
+}
+
+// El plan de un eject. Lanza ErrorDeEject (con el código de salida del CLI) si no se puede.
+export function planDeEject(textoObjetivo: string, opciones: { destino: string | null; fuerza: boolean }): PlanDeEject {
+  const objetivo = parsearObjetivo(textoObjetivo);
+  if (typeof objetivo === "string") throw new ErrorDeEject(objetivo, 2);
+  if (objetivo.tipo === "preset") return { objetivo, ...planDePreset(objetivo.nombre, opciones.fuerza), etiqueta: null, proyecto: null };
+
+  const destino = destinoDe(opciones.destino);
+  if (typeof destino === "string") throw new ErrorDeEject(destino, 2);
+  const plan =
+    objetivo.tipo === "fase"
+      ? planDeFase(objetivo.numero, destino, opciones.fuerza)
+      : objetivo.tipo === "ranura"
+        ? planDeRanura(objetivo, destino, opciones.fuerza)
+        : planDeComando(objetivo.numero, destino, opciones.fuerza);
+  return { objetivo, ...plan, etiqueta: destino.etiqueta, proyecto: destino.proyecto };
 }
 
 // ─── eject ──────────────────────────────────────────────────────────────────
 export function ejecutarEject(textoObjetivo: string, opciones: OpcionesEject, salida: Salida): number {
-  const objetivo = parsearObjetivo(textoObjetivo);
-  if (typeof objetivo === "string") {
-    salida.err(objetivo);
-    return 2;
+  let plan: PlanDeEject;
+  try {
+    plan = planDeEject(textoObjetivo, opciones);
+  } catch (error) {
+    salida.err(error instanceof Error ? error.message : String(error));
+    return error instanceof ErrorDeEject ? error.codigo : 1;
   }
 
   try {
-    if (objetivo.tipo === "preset") {
-      const archivo = ejectarPreset(objetivo.nombre, opciones, salida);
-      if (!opciones.dryRun) salida.out(`Copiado a ${archivo}. Edítalo ahí: con el mismo nombre, el tuyo gana al del paquete.`);
+    if (opciones.dryRun) {
+      salida.out(`[dry-run] Se escribiría ${plan.archivo}:\n${plan.texto}`);
       return 0;
     }
+    const copia = escribirEject(plan);
+    if (copia) salida.out(`Copia de lo anterior: ${copia}`);
 
-    const destino = destinoDe(opciones.destino);
-    if (typeof destino === "string") {
-      salida.err(destino);
-      return 2;
+    const { objetivo } = plan;
+    if (objetivo.tipo === "preset") {
+      salida.out(`Copiado a ${plan.archivo}. Edítalo ahí: con el mismo nombre, el tuyo gana al del paquete.`);
+      return 0;
     }
-
-    const archivo =
-      objetivo.tipo === "fase"
-        ? ejectarFase(objetivo.numero, destino, opciones, salida)
-        : objetivo.tipo === "ranura"
-          ? ejectarRanura(objetivo, destino, opciones, salida)
-          : ejectarComando(objetivo.numero, destino, opciones, salida);
-    if (opciones.dryRun) return 0;
-
     const fase = objetivo.tipo === "ranura" ? objetivo.archivo.replace("fase-", "") : String(objetivo.numero);
-    const comprobar = destino.proyecto ? `doctor --fase ${fase === "global" ? 1 : fase} --proyecto ${destino.proyecto}` : `doctor --fase ${fase === "global" ? 1 : fase}`;
-    salida.out(`Copiado a ${archivo} (${destino.etiqueta}). Edítalo ahí; \`${comprobar}\` te mostrará que gana.`);
+    const comprobar = plan.proyecto ? `doctor --fase ${fase === "global" ? 1 : fase} --proyecto ${plan.proyecto}` : `doctor --fase ${fase === "global" ? 1 : fase}`;
+    salida.out(`Copiado a ${plan.archivo} (${plan.etiqueta}). Edítalo ahí; \`${comprobar}\` te mostrará que gana.`);
 
     if (objetivo.tipo === "ranura") {
-      const ahora = contenidoEfectivoDeRanura(capasDe(destino.proyecto), objetivo.id);
+      const ahora = contenidoEfectivoDeRanura(capasDe(plan.proyecto), objetivo.id);
       if (ahora) salida.out(`Procedencia de ${objetivo.id}: ${ahora.procedencia.contenidoDe}${ahora.procedencia.modos.length ? ` + ${ahora.procedencia.modos.join(", ")}` : ""}`);
     }
     return 0;

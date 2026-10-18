@@ -1,0 +1,429 @@
+/* La base del Studio: fuentes autoalojadas, maquetación y lo que vale en los dos modos. Los colores
+   salen de las variables de cada modo (cabina.css y sobrio.css). Sin estilos en línea: la CSP no admite
+   'unsafe-inline'. */
+
+@font-face {
+  font-family: "Big Shoulders Display";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fuentes/big-shoulders-display-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fuentes/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fuentes/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fuentes/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+
+:root {
+  --texto-cuerpo: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --texto-titulo: "Big Shoulders Display", "Atkinson Hyperlegible", system-ui, sans-serif;
+  --texto-codigo: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radio: 6px;
+  --espacio: 1rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--texto-cuerpo);
+  font-size: 100%;
+  line-height: 1.5;
+  background: var(--fondo);
+  color: var(--texto);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+code,
+.detalle-error {
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--texto-titulo);
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+}
+h1 {
+  font-size: 2rem;
+}
+h2 {
+  font-size: 1.5rem;
+}
+h3 {
+  font-size: 1.2rem;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--texto-codigo);
+  font-size: 0.92em;
+}
+
+a {
+  color: var(--enlace);
+}
+
+:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 2px;
+}
+
+.saltar {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--panel);
+  color: var(--texto);
+  z-index: 10;
+}
+.saltar:focus {
+  top: 0.5rem;
+}
+
+main {
+  padding: var(--espacio);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+main:focus {
+  outline: none;
+}
+
+/* ─── La barra ─────────────────────────────────────────────────────────── */
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem var(--espacio);
+  background: var(--barra);
+  border-bottom: 2px solid var(--borde-fuerte);
+}
+.marca-studio {
+  margin: 0;
+  font-family: var(--texto-titulo);
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+.marca-studio-texto {
+  color: var(--acento);
+}
+.barra nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.barra nav a {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radio);
+  text-decoration: none;
+  color: var(--texto);
+}
+.barra nav a[aria-current="page"] {
+  background: var(--seleccion);
+  color: var(--texto-seleccion);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.interruptor,
+.boton {
+  font: inherit;
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radio);
+  border: 1px solid var(--borde-fuerte);
+  background: var(--boton);
+  color: var(--texto-boton);
+  cursor: pointer;
+  text-decoration: none;
+}
+.interruptor {
+  margin-left: auto;
+}
+.boton:disabled,
+.boton[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.banda-demo {
+  margin: 0;
+  padding: 0.4rem var(--espacio);
+  background: var(--banda);
+  color: var(--texto-banda);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ─── Piezas comunes ──────────────────────────────────────────────────── */
+.vista > h1 {
+  margin-top: 0.25rem;
+}
+.secundaria {
+  color: var(--texto-secundario);
+}
+.linea {
+  margin: 0.25rem 0;
+}
+.aviso {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radio);
+  border-left: 4px solid var(--borde-fuerte);
+  background: var(--panel);
+}
+.aviso-error {
+  border-left-color: var(--rojo);
+}
+.detalle-error {
+  margin: 0.25rem 0;
+  font-family: var(--texto-codigo);
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+}
+
+.marca {
+  vertical-align: -0.15em;
+  flex: none;
+}
+.marca .relleno {
+  fill: currentColor;
+}
+.marca .trazo {
+  stroke: currentColor;
+}
+.tono-verde > .marca,
+.marca.tono-verde {
+  color: var(--verde);
+}
+.tono-ambar > .marca,
+.marca.tono-ambar {
+  color: var(--ambar);
+}
+.tono-rojo > .marca,
+.marca.tono-rojo {
+  color: var(--rojo);
+}
+.tono-apagado > .marca,
+.marca.tono-apagado {
+  color: var(--apagado);
+}
+
+/* ─── La Red ──────────────────────────────────────────────────────────── */
+.estaciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  gap: var(--espacio);
+}
+.estacion {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 0.85rem 1rem;
+  min-width: 0;
+}
+.estacion-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--borde);
+  margin-bottom: 0.5rem;
+}
+.estacion-cabecera h2 {
+  margin: 0;
+}
+.placa {
+  font-family: var(--texto-codigo);
+  font-size: 0.8rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: 3px;
+  background: var(--placa);
+  color: var(--texto-placa);
+}
+.vias {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+.via {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+.via-dibujo .carril {
+  stroke: var(--carril);
+}
+.via-dibujo .traviesa {
+  fill: var(--traviesa);
+}
+.via-texto {
+  min-width: 0;
+}
+.tren {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: var(--radio);
+  background: var(--fondo-tren);
+}
+.tren p {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+.tren-dibujo .caja {
+  fill: var(--acento);
+}
+.tren-dibujo .ventana {
+  fill: var(--panel);
+}
+.tren-dibujo .rueda {
+  fill: var(--texto-secundario);
+}
+.farol {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
+}
+.farol-dibujo .cuerpo {
+  fill: var(--texto-secundario);
+}
+.farol-dibujo .luz {
+  fill: var(--apagado);
+}
+.farol-encendido .luz {
+  fill: var(--ambar);
+}
+.farol-encendido .halo {
+  fill: var(--ambar);
+  opacity: 0.25;
+  animation: brillo 2.4s ease-in-out infinite;
+}
+@keyframes brillo {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ─── Tablas (modo Sobrio y donde haga falta) ─────────────────────────── */
+.tabla-envoltura {
+  max-width: 100%;
+}
+.tabla {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--panel);
+}
+.tabla caption {
+  text-align: left;
+  font-weight: 700;
+  padding: 0.25rem 0;
+}
+.tabla th,
+.tabla td {
+  border: 1px solid var(--borde);
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+.tabla thead th {
+  background: var(--barra);
+}
+
+/* En un teléfono, cada fila es una ficha: la etiqueta de la columna va delante de cada celda. */
+@media (max-width: 640px) {
+  .tabla,
+  .tabla tbody,
+  .tabla tr,
+  .tabla th,
+  .tabla td {
+    display: block;
+  }
+  .tabla thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .tabla caption {
+    display: block;
+  }
+  .tabla tr {
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    margin: 0 0 0.75rem;
+  }
+  .tabla th,
+  .tabla td {
+    border: none;
+    border-bottom: 1px solid var(--borde);
+  }
+  .tabla tr > :last-child {
+    border-bottom: none;
+  }
+  .tabla td::before {
+    content: attr(data-etiqueta) ": ";
+    font-weight: 700;
+  }
+}
+
+/* ─── Sin movimiento ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 520px) {
+  h1 {
+    font-size: 1.6rem;
+  }
+  .interruptor {
+    margin-left: 0;
+  }
+}

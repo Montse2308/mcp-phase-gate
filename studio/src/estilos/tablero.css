@@ -1,0 +1,388 @@
+/* El Tablero: la vía con sus estaciones, los vagones de la Fase 4 con sus sellos, y el visor lateral. */
+
+.tablero {
+  display: grid;
+  gap: var(--espacio);
+}
+@media (min-width: 1000px) {
+  .tablero.con-visor {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 42%);
+    align-items: start;
+  }
+}
+.miga {
+  margin: 0;
+  color: var(--texto-secundario);
+}
+.descripcion {
+  margin-top: 0;
+}
+
+/* ─── La vía ──────────────────────────────────────────────────────────── */
+.via-tablero {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.via-tablero::before {
+  content: "";
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  top: 1.45rem;
+  height: 0;
+  border-top: 3px solid var(--carril);
+  border-bottom: 3px solid var(--carril);
+  padding-top: 5px;
+  z-index: 0;
+}
+.estacion-via {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.estacion-boton {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radio);
+  cursor: pointer;
+  text-align: center;
+}
+.estacion-boton:hover:not(:disabled),
+.estacion-boton[aria-pressed="true"] {
+  border-color: var(--borde-fuerte);
+  background: var(--panel);
+}
+.estacion-boton:disabled {
+  cursor: default;
+}
+.estacion-texto {
+  display: flex;
+  flex-direction: column;
+}
+.estacion-numero {
+  font-family: var(--texto-titulo);
+  font-size: 1.1rem;
+}
+.estacion-titulo {
+  font-size: 0.9rem;
+}
+.estacion-estado {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.senal-verde .estacion-estado {
+  color: var(--verde);
+}
+.senal-ambar .estacion-estado {
+  color: var(--ambar);
+}
+.senal-rojo .estacion-estado {
+  color: var(--rojo);
+}
+.senal-apagado .estacion-estado {
+  color: var(--texto-secundario);
+}
+
+.senal .senal-caja {
+  fill: var(--placa);
+  stroke: var(--borde-fuerte);
+  stroke-width: 1.5;
+}
+.senal .senal-poste {
+  fill: var(--borde-fuerte);
+}
+.senal-verde .senal-luz {
+  fill: var(--verde);
+}
+.senal-ambar .senal-luz {
+  fill: var(--ambar);
+}
+.senal-ambar .senal-aro {
+  stroke: var(--ambar);
+}
+.senal-rojo .senal-luz {
+  fill: var(--rojo);
+}
+.senal-apagado .senal-aro {
+  stroke: var(--apagado);
+}
+
+/* En un teléfono, la vía pasa a vertical. */
+@media (max-width: 640px) {
+  .via-tablero {
+    flex-direction: column;
+  }
+  .via-tablero::before {
+    left: 1.6rem;
+    right: auto;
+    top: 1rem;
+    bottom: 1rem;
+    width: 0;
+    height: auto;
+    border-top: none;
+    border-bottom: none;
+    border-left: 3px solid var(--carril);
+    border-right: 3px solid var(--carril);
+    padding: 0 0 0 5px;
+  }
+  .estacion-boton {
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .estacion-texto {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    align-items: baseline;
+  }
+}
+
+/* ─── Los vagones ─────────────────────────────────────────────────────── */
+.vagones {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+.vagon-boton {
+  font: inherit;
+  color: inherit;
+  position: relative;
+  width: 100%;
+  min-height: 9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.5rem 1.2rem;
+  background: var(--panel);
+  border: 2px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+  cursor: pointer;
+}
+.vagon-boton:disabled {
+  cursor: default;
+}
+.vagon-boton::before,
+.vagon-boton::after {
+  content: "";
+  position: absolute;
+  bottom: -0.45rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--texto-secundario);
+}
+.vagon-boton::before {
+  left: 18%;
+}
+.vagon-boton::after {
+  right: 18%;
+}
+.vagon-boton[aria-pressed="true"] {
+  outline: 2px solid var(--acento);
+}
+.vagon-vacio .vagon-boton {
+  border-style: dashed;
+  background: transparent;
+}
+.vagon-en-via .vagon-boton {
+  border-style: dashed;
+}
+.vagon-lote {
+  font-family: var(--texto-titulo);
+  font-size: 1.25rem;
+}
+.vagon-objetivo {
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* ─── Los sellos ──────────────────────────────────────────────────────── */
+.sello {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 132px;
+  min-height: 66px;
+  padding: 0.35rem 0.4rem 0.35rem 1.7rem;
+  transform: rotate(-6deg);
+  font-family: var(--texto-codigo);
+  line-height: 1.2;
+  text-align: center;
+}
+.sello-marco,
+.sello-grieta {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sello-palabra,
+.sello-detalle,
+.sello-banda {
+  position: relative;
+}
+.sello-palabra {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 0.85rem;
+}
+.sello-detalle {
+  font-size: 0.72rem;
+}
+.sello-banda {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0 0.3rem;
+  background: var(--fondo-banda-ambar);
+  color: var(--texto-banda-ambar);
+}
+.sello-verificado,
+.sello-pendientes {
+  color: var(--verde);
+}
+.sello-sellado {
+  color: var(--azul);
+}
+.sello-rechazado,
+.sello-agrietado {
+  color: var(--rojo);
+}
+.sello-anulado {
+  color: var(--texto-secundario);
+}
+.sello-manual,
+.sello-nota {
+  color: var(--morado);
+}
+.sello-en-via {
+  padding-left: 0.4rem;
+  color: var(--ambar);
+  transform: none;
+  border: 2px dashed var(--ambar);
+  border-radius: var(--radio);
+}
+.sello-vacio {
+  padding-left: 0.4rem;
+  transform: none;
+  color: var(--texto-secundario);
+  font-size: 0.8rem;
+}
+.sello-nuevo {
+  animation: estampar 300ms ease-out both;
+}
+@keyframes estampar {
+  from {
+    opacity: 0;
+    transform: scale(1.5) rotate(0deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+/* ─── El visor ────────────────────────────────────────────────────────── */
+.visor {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 0.75rem 1rem;
+  min-width: 0;
+}
+.visor-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.visor-cabecera h2 {
+  font-size: 1.2rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ficha {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+  background: var(--fondo-tren);
+  border-radius: var(--radio);
+  font-size: 0.85rem;
+}
+.ficha div {
+  display: contents;
+}
+.ficha dt {
+  font-family: var(--texto-codigo);
+  color: var(--texto-secundario);
+}
+.ficha dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.markdown {
+  overflow-wrap: anywhere;
+}
+.markdown pre {
+  white-space: pre-wrap;
+  background: var(--fondo-tren);
+  padding: 0.5rem;
+  border-radius: var(--radio);
+}
+.markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--borde);
+  padding: 0.25rem 0.4rem;
+  vertical-align: top;
+}
+.markdown img {
+  max-width: 100%;
+}
+.imagen-externa {
+  font-family: var(--texto-codigo);
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+}
+
+.enlace-boton {
+  font: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--enlace);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+.selector-proyecto ul {
+  padding-left: 1.25rem;
+}

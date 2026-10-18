@@ -12,6 +12,283 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-17 — La demo se genera con el código real y commits de git deterministas
+
+**Decisión.** La demo del Studio no es un árbol de archivos escrito a mano: `generarDemo(destino)`
+(`src/studio/demo.ts`) la construye **ejecutando las funciones de las tools** sobre carpetas nuevas
+(`docs/`, `repos/`, `estado/`, `config/` y `casa/`): `registrarLote` (record_batch) escribe cada recibo y
+cierra la Fase 4, y `guardarPuntero` (switch_task) deja la tarea activa de cada proyecto. Los repos son de
+git de verdad, con commits de verdad, y los recibos se anclan a sus SHA. Si el formato de un recibo
+cambia, la demo cambia con él (E5-R9).
+
+| Proyecto | Preset | Repos | Tareas |
+|---|---|---|---|
+| `TIENDA` | `multi-repo-feature` | `api` y `web`, con git | `cupones-de-descuento`, terminada: L01 a L03 verificados, L04 descartado al cerrar la fase, Fase 5 con dos PR y la coordinación. `envio-gratis`, en la Fase 4: L01 verificado, L02 con el commit pendiente (el cambio de `web` sin commitear), L03 sin recibo |
+| `ASISTENTE` | `ai-agent-ops` | `agente`, sin git | `tono-en-reclamos`: los dos lotes anclados por sha256, con la batería de casos en los recibos, y la Fase 4 cerrada |
+| `INVESTIGACION` | `research-ops` | ninguno | `costo-de-embeddings`: `00` y `01`, con `## Validaciones pendientes` (el semáforo ámbar) |
+
+Los textos son ejemplos inventados y viven en `test/fixtures/demo/` (`demo.json`, el guion, más un
+archivo por documento). El paquete publicado no lleva `test/`, así que `npm run build` los copia a
+`build/studio/demo/` (`scripts/copiar-demo.mjs`), junto al módulo que los lee.
+
+**Determinista.** Dos generaciones, en dos procesos, en dos carpetas (una con espacios y acentos en la
+ruta) y con otra zona horaria, dan los mismos bytes y las mismas fechas en los 39 archivos y las 24
+carpetas de fuera de `.git`, y los mismos HEAD: `tienda-api` `debffa2c…` (4 commits) y `tienda-web`
+`cacff761…` (2 commits). El test los compara con esas constantes, no solo entre sí: cualquier cosa del
+equipo que se colara en un commit los cambiaría. Para eso:
+
+- **Los commits** los hace `gitEnLaDemo` (`src/git.ts`), la única escritura en git del paquete. Solo vale
+  dentro de una carpeta con la marca `.demo-mcp-phase-gate` en su raíz y con un `dir` que esté dentro de
+  ella (`..` incluido). Quita del entorno toda `GIT_*` heredada (`GIT_DIR`, `GIT_CONFIG_PARAMETERS`…), pone
+  `GIT_CONFIG_NOSYSTEM=1` y `GIT_CONFIG_GLOBAL=<la marca>` (que solo lleva un comentario: ninguna
+  configuración de quien la genera), autor y committer `Demo <demo@example.invalid>` con la fecha del paso, y
+  `-c commit.gpgsign=false -c init.defaultBranch=main -c core.autocrlf=false -c core.hooksPath=<raíz>/.sin-hooks`
+  (una carpeta que no existe: ningún hook se ejecuta). Los repos se crean con `git init --template=`: nada
+  de la plantilla de la instalación de git.
+- **El reloj** avanza una hora por paso desde `2026-03-02T10:00:00Z` (`registrarLote` recibe `ahora`), y
+  cada archivo lleva la fecha de su paso; las carpetas, la del último.
+- **Mientras se genera**, el proceso trabaja con un entorno prestado: `TZ=UTC` (los recibos guardan la
+  fecha local), ninguna `PHASE_GATE_*`, `ORQUESTADOR_*` ni `GIT_*` de quien la lanza, y la marca como
+  configuración global de git también para las **lecturas** (el asunto y la fecha del commit que guarda el
+  recibo: un `i18n.commitEncoding` de quien la genera cambiaba sus bytes). Al terminar se devuelve el
+  entorno exacto que había.
+- **Sin datos del equipo:** en ningún archivo (salvo `.git/objects` y `.git/index`) aparece el temporal, la
+  raíz de la demo, la carpeta personal, el usuario, el nombre del equipo ni la versión de git.
+
+**`ui --demo`.** Genera la demo en una carpeta fija del temporal del sistema (`mcp-phase-gate-demo`, con el
+uid en Linux y macOS) y la reutiliza mientras su marca diga esta misma versión: arrancar no tarda lo que
+tarda generarla. Si no vale, la genera al lado (`<carpeta>.<pid>-<aleatorio>`) y la renombra al terminar:
+dos `ui --demo` a la vez no se pisan, y una generación cortada no deja una demo a medias con la marca
+puesta. En Linux y macOS, donde el temporal es compartido, solo reutiliza una carpeta del mismo usuario,
+que no sea un enlace y en la que nadie más pueda escribir. Antes de leer nada, el proceso entero pasa a la
+demo (`activarDemo`: fuera las `PHASE_GATE_*`, `ORQUESTADOR_*` y `GIT_*` de quien lo lanza), así que no
+toca la Documentación de nadie; arranca con todas las acciones (§7.8), `init-cliente` escribe en la casa
+de la demo y nunca ejecuta `claude`, y el frontend enseña la banda "Demo: datos de ejemplo en
+`<carpeta>`". `borrarDemo` solo borra una carpeta con la marca, sin seguir enlaces.
+
+Los E2E de las vistas (L05 a L09) siguen sobre su árbol mínimo de `studio/e2e/arbol.ts`: un documento con
+HTML malicioso, un manifiesto roto o una tarea con hueco no caben en una demo que se publica. La demo gana
+su propio E2E contra `ui --demo` (`studio/e2e/demo.spec.ts`).
+
+Probado en `test/demo.test.ts` con procesos `node` de verdad: dos generaciones a la vez en dos zonas
+horarias; otras dos con un entorno hostil (`TZ=Pacific/Kiritimati` o `Asia/Kathmandu`, una capa de prompts
+propia por `PHASE_GATE_PROMPTS_PATH` o por su alias, otra Documentación, `GIT_DIR` y `GIT_WORK_TREE` a un
+repo señuelo, `GIT_CONFIG_COUNT`, y una casa con un `.gitconfig` con otra codificación y unos hooks que
+fallan): el mismo árbol, los HEAD de oro, el señuelo sin commits y ningún hook ejecutado; y `ui --demo
+--no-abrir` como proceso, con el temporal y las cuatro variables en carpetas propias. Comprobado rompiéndolo
+a propósito: de 22 mutaciones, 21 dejan algún test en rojo. La otra quita `GIT_CONFIG_NOSYSTEM` y no se
+puede alcanzar por separado: la configuración del sistema solo se cambia con permisos de administrador (y
+`GIT_CONFIG_SYSTEM` es una `GIT_*`, que el filtro ya quita), y la de Git for Windows no trae nada que los
+`-c` explícitos no fijen.
+
+**Amplía** R6 ("la demo se genera ejecutando las tools reales contra un fixture que también usan los
+tests"): los textos son ese fixture y el mismo generador alimenta los tests de la demo y su E2E.
+
+**Riesgos aceptados.**
+
+- Los HEAD de oro dependen del formato de los objetos de git (SHA-1). Un git que creara los repos en
+  SHA-256 por defecto los cambiaría: el test lo diría, y habría que fijar el formato.
+- La demo vive en el temporal del sistema: otro programa del mismo usuario puede cambiarla entre dos
+  arranques, y `ui --demo` la reutiliza mientras la marca coincida. Es una demo; borrar la carpeta la
+  regenera.
+
+**Qué se descartó.**
+
+- Recibos y documentos escritos a mano como fixture: se quedarían atrás del formato real sin que nada
+  fallara.
+- Guardar los repos de la demo ya hechos (un `.git` o un archivo comprimido en el repo): binarios en el
+  control de versiones, y no ejercitaría el código.
+- Generar la demo en cada arranque: medido en dos equipos, 3,2 s frente a 0,3–0,4 s reutilizándola.
+- Sustituir los E2E de las vistas por la demo, como decía §7.11: los casos hostiles no caben en ella.
+
+---
+
+## 2026-10-17 — El Studio solo ejecuta acciones del CLI, con vista previa y huella
+
+**Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos
+(`src/studio/acciones.ts`):
+
+| Acción | Equivale a | Lo único que puede tocar |
+|---|---|---|
+| `preset` | escribir `preset` en el manifiesto | `<DOCS>/<P>/phase-gate.json` |
+| `reglas` | escribir `reglas.lotes` o `reglas.commits` | el mismo archivo |
+| `crear-manifiesto` | `init --migrate` para un proyecto | crea ese archivo, nunca lo sobrescribe |
+| `eject` | `eject <objetivo> --a …` | la capa global, la del proyecto o la carpeta de presets |
+| `init-cliente` | `init --cliente <c>` | el `mcp.json` de Cursor o VS Code (con copia), o `claude mcp add` |
+
+1. `POST /api/acciones/plan` con `{ accion, argumentos }` devuelve `{ resumen, diff, huella, cambios }`, o
+   `{ posible: false, motivo }` si no hay nada que hacer o no se puede. La huella es el sha256 de lo que se
+   haría —por cada archivo, su ruta, lo que tiene, lo que tendría, si deja copia y su `mtimeMs`; o el
+   comando— así que cambia si el archivo cambia de contenido o solo de fecha.
+2. `POST /api/acciones/aplicar` con `{ accion, argumentos, huella }` **recalcula** el plan y solo escribe si
+   la huella coincide; si no, `409` con "El disco cambió desde que viste el cambio. Revísalo otra vez." Una
+   huella aplicada no vuelve a valer en ese Studio: un plan que solo ejecuta `claude mcp add` no cambia
+   ningún archivo, y la misma vista previa lo ejecutaría dos veces. Aplicar va bajo un candado en la
+   carpeta de estado (`.studio-acciones.lock`, el mismo mecanismo que el de `record_batch`): con dos
+   procesos `node` aplicando la misma huella a la vez, en 5 rondas, uno escribe y el otro recibe `409`.
+
+Cada plan sale de la misma función que usa el CLI: `planDeEject` (eject se partió en plan y escritura),
+`planDeArchivo` y `planDeClaude` (init), `manifiestoNuevo` (lo que escribe `--migrate`). Los argumentos
+se validan con shapes zod estrictos: una clave de más, también `__proto__`, es `400`.
+
+**El manifiesto** se cambia sobre el objeto que da `JSON.parse`, que conserva el orden: la clave que se
+cambia se queda en su sitio y una nueva va al final (`reglas.lotes` y `reglas.commits`, al final de
+`reglas`); se escribe con 2 espacios y LF (el BOM y los CRLF de un archivo escrito a mano no se conservan),
+con un temporal y un `rename`, después de copiar el de antes, byte a byte, a
+`phase-gate.json.bak-<AAAAMMDD-HHMMSS>`. El resultado se valida con el mismo shape que lo lee antes de
+ofrecerlo. Un manifiesto roto o ausente no se cambia desde el Studio: se dice por qué.
+
+**Nunca** escribe documentos de tareas, recibos ni nada de los repos. Cada destino se comprueba sobre su
+ruta real, al planificar y al aplicar: no puede caer dentro de una tarea ni de `PHASE_GATE_REPOS_PATH`, y
+dentro de la Documentación solo puede ser el `phase-gate.json` de un proyecto o su `.phase-gate/prompts/`.
+Probado con la capa global apuntando dentro de una tarea y dentro de un repo: el plan lo rechaza y no se
+crea nada.
+
+`init-cliente` usa el entorno de init que le da el Studio (la carpeta del usuario, `APPDATA` y cómo se
+ejecuta `claude`); en los tests es uno falso, y un test comprueba que la configuración real de los clientes
+no cambió. Las respuestas no llevan rutas del equipo (`<Documentación>`, `~`).
+
+Comprobado rompiéndolo a propósito: de 15 mutaciones, 13 dejan algún test en rojo. Las otras dos son capas
+que no se pueden alcanzar por separado: crear con `wx` (bajo el candado, el recálculo ya ve el archivo que
+apareció) y la lista de destinos de `eject` (`planDeEject` solo produce esas rutas).
+
+**Amplía** SEG-M del plan ("`phase-gate.json` y `.phase-gate/` se editan solo por CLI o UI"): esta es la UI.
+
+**Riesgo aceptado.** Entre el recálculo y la escritura (dentro del candado) pasan milisegundos; un programa
+que no usa el candado, como un editor o OneDrive, podría escribir el mismo archivo justo ahí sin que se
+note.
+
+**Qué se descartó.**
+
+- Un editor libre del manifiesto en el Studio: sin el shape a mano, una coma de más rompería el proyecto.
+- Lanzar el CLI como proceso hijo: habría que analizar su salida, y no daría el diff antes de escribir.
+- Una huella solo con el `mtimeMs`: no ve un cambio que conserve la fecha; por eso cubre también el
+  contenido.
+
+---
+
+## 2026-10-17 — El servidor MCP deja constancia de sus sesiones abiertas
+
+**Decisión.** Cada servidor MCP lanzado por stdio escribe `<stateDir>/sesiones/<pid>.json` con seis
+campos: `pid`, `cliente` (nombre y versión que anunció en el initialize), `raices` (las de la sesión,
+como mucho 20), `proyecto` (el que deducen esas raíces con `resolverPorRaices`, o `null`), `desde` y
+`actualizado`. Nada de la conversación. Lo escribe al conocer las raíces —al terminar el initialize,
+también si el cliente no declara `roots` (con raíces vacías), y tras cada `roots/list_changed`— y lo
+refresca cada minuto; como mucho escribe una vez por minuto, y un cambio dentro de ese minuto se escribe
+al acabarlo. Lo borra al salir: en `exit`, en `SIGINT` (y sale con 130), en `SIGTERM` (143) y cuando el
+cliente cierra stdin.
+
+Escribirlo nunca tumba el servidor ni retrasa una respuesta: la escritura es asíncrona (un temporal y un
+`rename`), nadie la espera, y un fallo se anota una vez en el log. Comprobado con una escritura que no
+termina nunca, con otra que falla y con la carpeta de estado convertida en un archivo: las tools
+responden igual. Solo lo hace el servidor por stdio (`index.ts`); el que montan los tests en memoria, no.
+
+El Studio lo lee como entrada no confiable, porque lo escriben otros procesos. Una sesión cuenta solo si
+su nombre es un entero positivo (`^[1-9]\d{0,9}\.json$`), es un archivo normal de 16 kB o menos, su
+contenido cuadra con un shape zod estricto (sin claves de más), el `pid` de dentro es el del nombre, ese
+`pid` sigue vivo (`process.kill(pid, 0)`; `EPERM` es vivo, de otro usuario) y `actualizado` es de hace
+menos de 10 minutos y no del futuro. Lo demás se ignora. El Studio borra lo que no cuenta al arrancar y
+cada minuto —nunca dentro de un GET de la API—, sin seguir enlaces: `unlink` quita un enlace o un archivo,
+una junction se quita con `rmdir` sin recursión, y una carpeta de verdad no se toca. El temporal de una
+escritura en curso se respeta durante un minuto. A la API solo llegan `pid`, `cliente`, `proyecto`,
+`desde` y `actualizado`: las raíces, que son rutas del equipo, no.
+
+Probado entre procesos de verdad: dos servidores a la vez dejan cada uno su archivo; uno que muere de
+golpe (`SIGKILL`) deja un huérfano que el Studio descarta y borra; el otro, al cerrar stdin, sale y se
+lleva el suyo. Cada regla del lector y del escritor se comprobó rompiéndola a propósito: de 21
+mutaciones, 19 dejan algún test en rojo; las otras dos quitaban solo una de las dos comprobaciones del
+tope de tamaño (al listar y al leer), y quitar las dos a la vez sí lo deja en rojo.
+
+**Riesgos aceptados.**
+
+- Un `pid` que el sistema reutiliza para otro programa parece vivo: esa sesión se sigue enseñando hasta
+  que caduca, como mucho 10 minutos después de su último refresco.
+- En Windows, `kill` termina el proceso sin que pueda limpiar, y un cierre del equipo tampoco limpia: el
+  archivo queda huérfano hasta que el Studio lo descarta por `pid` o por antigüedad.
+
+**Qué se descartó.**
+
+- Que el Studio preguntara a cada servidor por un canal propio (un socket o un pipe con nombre): abriría
+  en el servidor MCP una superficie que hoy no tiene, para un dato solo informativo.
+- Un solo archivo compartido con todas las sesiones: dos servidores escribiéndolo a la vez necesitarían
+  un candado; con un archivo por `pid` cada uno escribe solo el suyo.
+- Guardarlo en `active-tasks.json`: los punteros son la elección de la persona y duran; esto es efímero.
+
+---
+
+## 2026-10-17 — El Studio es un servidor local separado del MCP, en `127.0.0.1`, con token, cookie y CSP
+
+**Decisión.** La interfaz visual es un proceso aparte: `mcp-phase-gate ui` arranca un servidor HTTP
+(`src/studio/servidor.ts`) que escucha **solo** en `127.0.0.1`, en un puerto libre (o el de
+`--puerto`), sin ninguna opción para otra interfaz. El servidor MCP por stdio no lo carga: `cli.ts` lo
+despacha con un `import()` dinámico, y un test (`test/aislamiento.test.ts`) sigue con el analizador de
+TypeScript los imports estáticos del código compilado desde `index.js` y falla si llega a algún archivo
+de `studio/` o a un paquete que no sea el SDK o `zod`.
+
+Cada petición pasa por este filtro, en este orden:
+
+1. `Host` tiene que llegar **una vez** y ser exactamente `127.0.0.1:<puerto>` o `localhost:<puerto>`
+   (sin otras mayúsculas): si no, `421`. Es la defensa contra el DNS rebinding. Node se queda con el
+   primer `Host` repetido, así que las repeticiones se cuentan en `rawHeaders`; y el servidor se crea con
+   `requireHostHeader: false` para que una petición sin `Host` reciba ese mismo `421`.
+2. `Origin`, si viene, una vez y exactamente `http://127.0.0.1:<puerto>` o `http://localhost:<puerto>`
+   (`null` no vale): si no, `403`.
+3. `GET /?token=<t>`: el token son 32 bytes de `crypto.randomBytes` en base64url, nuevo en cada arranque y
+   solo en memoria. Con el correcto, `303` a `/` y `Set-Cookie: pg_sesion_<puerto>=<s>; HttpOnly;
+   SameSite=Strict; Path=/`, con `<s>` otro valor aleatorio de 32 bytes. El token es **de un solo uso**: el
+   canje lo invalida. Todo lo demás (otro token, dos `token`, uno ya usado, el canje por `POST`), `401`.
+4. `/api/**` exige esa cookie, una sola vez y con su valor: sin ella, con otro valor, sin `=` o repetida,
+   `401`.
+5. Un método distinto de `GET` (también `HEAD` y `OPTIONS`) exige `X-Phase-Gate: 1`, una vez: si no,
+   `403`. Ninguna respuesta lleva cabeceras `Access-Control-*`, así que el preflight que esa cabecera
+   provoca en un navegador nunca se concede. El cuerpo es JSON de hasta 64 kB: un `Content-Length` mayor
+   es `413` sin leer nada, y un cuerpo por trozos se corta con `413` en cuanto pasa del límite, mientras
+   llega.
+6. Los estáticos salen solo de `studio/dist`: cada segmento se decodifica **una** vez y pasa por
+   `validarSegmento` (fuera `%2F` y `%5C` decodificados, NUL, `..`, `:` y por tanto `::$DATA`, nombres
+   reservados de Windows), nada que empiece por punto, y la ruta real tiene que quedar dentro de `dist`
+   (`estaDentroReal`: un enlace, una junction o un nombre corto 8.3 que lleve fuera da `404`).
+
+Toda respuesta lleva `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self';
+img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none';
+form-action 'none'`, `X-Content-Type-Options: nosniff` y `Referrer-Policy: no-referrer`; la API y el canje,
+además, `Cache-Control: no-store`. Las cabeceras tienen 10 s para llegar y la petición entera, 15 s.
+
+Al arrancar se imprime `http://127.0.0.1:<puerto>/?token=<token>` y, salvo `--no-abrir`, se abre con
+`execFile` (Windows: `cmd /c start "" <url>`; macOS: `open`; Linux: `xdg-open`), después de comprobar que
+la URL solo lleva `[A-Za-z0-9:/?=._-]`: un `&` partiría el comando de `cmd`. Se queda en primer plano hasta
+`Ctrl+C`.
+
+Cada fila del filtro tiene su test (`test/studio-seguridad.test.ts`, por sockets crudos para poder mandar
+cabeceras repetidas, rutas sin normalizar o un cuerpo a trozos), y cada test se comprobó rompiendo a
+propósito el código que protege: 29 mutaciones, y las 29 dejan algún test en rojo.
+
+**Reemplaza** el descarte de una interfaz gráfica de "Varias documentaciones se resuelven registrando el
+servidor dos veces, no con código" (2026-08-10): aquello era una app de escritorio con firma, tres builds
+y autoactualización para elegir rutas. Esto es una página servida por el mismo paquete, sin nada que
+instalar, que enseña lo que el servidor ya sabe.
+
+**Riesgos aceptados.**
+
+- Un navegador no separa las cookies por puerto (RFC 6265, §8.5): si la persona visita otro servidor en
+  `127.0.0.1` con el mismo navegador, ese servidor recibe la cookie. Por eso su nombre lleva el puerto
+  (dos Studios abiertos no se pisan la sesión), pero no es una frontera frente a otro programa local que
+  ya escuche en `127.0.0.1`.
+- El enlace con el token viaja en la línea de comandos de `cmd`, `open` o `xdg-open` mientras se abre. Un
+  proceso del equipo que la lea a tiempo podría canjearlo antes; como es de un solo uso, la persona
+  recibiría el `401`. Con `--no-abrir` no pasa por ninguna línea de comandos.
+
+**Qué se descartó.**
+
+- Servir la interfaz desde el propio servidor MCP: abriría un puerto en cada sesión que lanza el cliente,
+  y el servidor por stdio dejaría de ser un proceso sin red.
+- Que la página leyera los recursos MCP: un navegador no puede lanzar un servidor por stdio, así que haría
+  falta un puente igualmente, y los recursos no tienen el estado de git, el diagnóstico ni las acciones.
+- Una bandera para escuchar en otra interfaz: el Studio enseña rutas y documentos del equipo y ejecuta
+  acciones; en la red no tiene sentido.
+
+---
+
 ## 2026-10-16 — Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras
 
 **Decisión.** Cuatro ranuras nuevas (el catálogo pasa de 23 a 27): `fase-3/prohibido-lotes` y
@@ -1799,7 +2076,9 @@ pero por accidente, que es la peor forma de funcionar. Ahora se declara qué se 
 > un `machine.json`": ya existe un formato de configuración, pero los espacios con `use_space`
 > siguen descartados. Y **reemplazada en parte** el mismo día por "`init` escribe la configuración
 > del cliente con copia, diff y confirmación": el descarte de la app de escritorio sigue, pero
-> escribir la configuración del cliente ya no se deja a mano.
+> escribir la configuración del cliente ya no se deja a mano. Y **reemplazada en parte** el
+> 2026-10-17 por "El Studio es un servidor local separado del MCP, en `127.0.0.1`, con token, cookie y
+> CSP": ya hay una interfaz visual, aunque no una app de escritorio.
 
 **Decisión.** Tener documentaciones separadas —una de trabajo y otra personal, por ejemplo— se
 documenta como un patrón de configuración: **registrar el servidor más de una vez** en el

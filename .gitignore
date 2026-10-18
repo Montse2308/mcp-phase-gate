@@ -26,3 +26,8 @@ Thumbs.db
 
 # Volcados de auditoría y notas locales
 auditoria*.txt
+
+# Playwright (los E2E del Studio): resultados, informes y trazas
+test-results/
+playwright-report/
+blob-report/

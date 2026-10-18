@@ -106,8 +106,9 @@ function variable(variables: Variables, nombre: string): string {
 }
 
 // Ruta de un archivo dentro de una tarea, a partir de las variables ya decodificadas. Las carpetas
-// y archivos con punto no son tareas ni documentos, igual que para write_central_doc.
-function archivoDeTarea(proyecto: string, tarea: string, partes: string[]): { ruta: string; tarea: string } {
+// y archivos con punto no son tareas ni documentos, igual que para write_central_doc. La usa también
+// la API del Studio para su visor de documentos.
+export function archivoDeTarea(proyecto: string, tarea: string, partes: string[]): { ruta: string; tarea: string } {
   validarSegmento(proyecto, "proyecto");
   validarSegmento(tarea, "tarea");
   for (const parte of partes) validarSegmento(parte, "documento");

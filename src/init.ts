@@ -349,22 +349,46 @@ function bloqueParaPegar(seccion: string, clave: string, entrada: Record<string,
   return json({ [seccion]: { [clave]: entrada } });
 }
 
-async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", rutas: Rutas): Promise<void> {
+// ─── El plan de un cliente de archivo (Cursor, VS Code) ─────────────────────
+// Qué haría init en su mcp.json, sin escribir nada: lo calcula una sola función, que usan `init` (que
+// después pregunta y escribe) y el Studio (que lo enseña y lo aplica con su huella).
+type BaseDePlan = {
+  cliente: "cursor" | "vscode";
+  nombre: string; // "Cursor" o "VS Code"
+  archivo: string;
+  seccion: string;
+  clave: string; // la pedida
+};
+export type PlanDeArchivo =
+  | (BaseDePlan & { estado: "roto"; error: string | null; paraPegar: string })
+  | (BaseDePlan & { estado: "forma-rara"; paraPegar: string })
+  | (BaseDePlan & { estado: "clave-ocupada" })
+  | (BaseDePlan & { estado: "sin-cambios"; claveFinal: string })
+  | (BaseDePlan & {
+      estado: "nuevo" | "actualiza";
+      claveFinal: string;
+      renombra: string | null; // la clave que se sustituye por --clave
+      conserva: string | null; // la clave que ya tenía y se conserva
+      comentarios: boolean;
+      diff: string | null; // el de la entrada que ya existía (null si es nueva)
+      entrada: string; // la entrada que queda, en JSON
+      texto: string; // el archivo entero que se escribiría
+    });
+
+export function carpetaDelCliente(cliente: "cursor" | "vscode", entorno: Pick<EntornoInit, "home" | "appData" | "xdgConfig" | "plataforma">): string {
+  return cliente === "cursor" ? path.join(entorno.home, ".cursor") : carpetaDeVsCode(entorno as EntornoInit);
+}
+
+export function planDeArchivo(cliente: "cursor" | "vscode", rutas: Rutas, claveDada: string | null, entorno: Pick<EntornoInit, "home" | "appData" | "xdgConfig" | "plataforma">): PlanDeArchivo {
   const nombre = cliente === "cursor" ? "Cursor" : "VS Code";
-  const archivo = cliente === "cursor" ? path.join(ctx.entorno.home, ".cursor", "mcp.json") : path.join(carpetaDeVsCode(ctx.entorno), "mcp.json");
+  const archivo = path.join(carpetaDelCliente(cliente, entorno), "mcp.json");
   const seccion = cliente === "cursor" ? "mcpServers" : "servers";
-  const deseada = entradaDelServidor(cliente, rutas, ctx.entorno.plataforma);
-  const clave = ctx.opciones.clave ?? CLAVE_POR_DEFECTO;
+  const deseada = entradaDelServidor(cliente, rutas, entorno.plataforma);
+  const clave = claveDada ?? CLAVE_POR_DEFECTO;
+  const base = { cliente, nombre, archivo, seccion, clave };
 
   const lectura = leerJsonTolerante(archivo);
-  if (lectura.estado === "roto") {
-    fallar(
-      ctx,
-      `${nombre}: no se pudo leer ${archivo} (${lectura.error}). No se toca. Para registrarlo a mano, añade:\n` +
-        bloqueParaPegar(seccion, clave, deseada)
-    );
-    return;
-  }
+  if (lectura.estado === "roto") return { ...base, estado: "roto", error: lectura.error ?? null, paraPegar: bloqueParaPegar(seccion, clave, deseada) };
 
   const datos = lectura.datos;
   // Una sección o un env que no son un objeto no se "arreglan" por su cuenta: no se toca el archivo.
@@ -373,14 +397,7 @@ async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", r
   const formaRara =
     (seccionActual !== undefined && !esObjeto(seccionActual)) ||
     (esObjeto(seccionActual) && Object.values(seccionActual).some((e) => esObjeto(e) && e.env !== undefined && !esObjeto(e.env)));
-  if (formaRara) {
-    fallar(
-      ctx,
-      `${nombre}: en ${archivo}, "${seccion}" o el "env" de alguna entrada no es un objeto. No se toca. Para registrarlo a mano, añade:\n` +
-        bloqueParaPegar(seccion, clave, deseada)
-    );
-    return;
-  }
+  if (formaRara) return { ...base, estado: "forma-rara", paraPegar: bloqueParaPegar(seccion, clave, deseada) };
   const servidores = { ...((seccionActual as Record<string, unknown> | undefined) ?? {}) };
 
   // ¿Ya está registrado? Se busca primero bajo la clave pedida y después bajo cualquier otra.
@@ -388,43 +405,82 @@ async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", r
 
   let claveFinal = clave;
   let nuevaEntrada = deseada;
-  let renombrar: string | null = null;
+  let renombra: string | null = null;
+  let conserva: string | null = null;
 
   if (yaRegistrada) {
     nuevaEntrada = actualizarEntrada(servidores[yaRegistrada] as Record<string, unknown>, deseada);
-    if (yaRegistrada !== clave && ctx.opciones.clave === null) {
+    if (yaRegistrada !== clave && claveDada === null) {
       claveFinal = yaRegistrada;
-      decir(ctx, `${nombre}: ya estaba registrado como «${yaRegistrada}»; se actualiza esa entrada y se conserva su clave (cambiarla cambiaría el nombre de las tools y los prompts, y los permisos concedidos).`);
+      conserva = yaRegistrada;
     } else if (yaRegistrada !== clave) {
-      renombrar = yaRegistrada;
-      decir(ctx, `${nombre}: ya estaba registrado como «${yaRegistrada}»; --clave pide renombrarlo a «${clave}». Ojo: cambia el nombre de todas las tools y prompts, y los permisos concedidos.`);
+      renombra = yaRegistrada;
     }
   } else if (servidores[clave] !== undefined) {
-    fallar(ctx, `${nombre}: la clave «${clave}» ya la usa otro servidor en ${archivo}. Elige otra con --clave.`);
-    return;
+    return { ...base, estado: "clave-ocupada" };
   }
 
   const antes = yaRegistrada ? json(servidores[yaRegistrada]) : "";
   const despues = json(nuevaEntrada);
-  if (yaRegistrada && !renombrar && antes === despues) {
-    ctx.entorno.salida.out(`${nombre}: sin cambios (${archivo}, «${claveFinal}»).`);
+  if (yaRegistrada && !renombra && antes === despues) return { ...base, estado: "sin-cambios", claveFinal };
+
+  if (renombra) delete servidores[renombra];
+  servidores[claveFinal] = nuevaEntrada;
+  return {
+    ...base,
+    estado: yaRegistrada ? "actualiza" : "nuevo",
+    claveFinal,
+    renombra,
+    conserva,
+    comentarios: lectura.comentarios,
+    diff: yaRegistrada ? diffDeLineas(antes, despues) : null,
+    entrada: despues,
+    texto: `${json({ ...datos, [seccion]: servidores })}\n`,
+  };
+}
+
+async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", rutas: Rutas): Promise<void> {
+  const plan = planDeArchivo(cliente, rutas, ctx.opciones.clave, ctx.entorno);
+  const { nombre, archivo, seccion, clave } = plan;
+
+  if (plan.estado === "roto") {
+    fallar(ctx, `${nombre}: no se pudo leer ${archivo} (${plan.error}). No se toca. Para registrarlo a mano, añade:\n` + plan.paraPegar);
+    return;
+  }
+  if (plan.estado === "forma-rara") {
+    fallar(ctx, `${nombre}: en ${archivo}, "${seccion}" o el "env" de alguna entrada no es un objeto. No se toca. Para registrarlo a mano, añade:\n` + plan.paraPegar);
+    return;
+  }
+  if (plan.estado === "clave-ocupada") {
+    fallar(ctx, `${nombre}: la clave «${clave}» ya la usa otro servidor en ${archivo}. Elige otra con --clave.`);
+    return;
+  }
+
+  const conserva = plan.estado === "sin-cambios" ? (plan.claveFinal !== clave ? plan.claveFinal : null) : plan.conserva;
+  if (conserva) {
+    decir(ctx, `${nombre}: ya estaba registrado como «${conserva}»; se actualiza esa entrada y se conserva su clave (cambiarla cambiaría el nombre de las tools y los prompts, y los permisos concedidos).`);
+  } else if (plan.estado !== "sin-cambios" && plan.renombra) {
+    decir(ctx, `${nombre}: ya estaba registrado como «${plan.renombra}»; --clave pide renombrarlo a «${clave}». Ojo: cambia el nombre de todas las tools y prompts, y los permisos concedidos.`);
+  }
+
+  if (plan.estado === "sin-cambios") {
+    ctx.entorno.salida.out(`${nombre}: sin cambios (${archivo}, «${plan.claveFinal}»).`);
     return;
   }
 
   // Cambiar algo que ya existía (o perder comentarios) se confirma; añadir una entrada nueva, no.
-  const cambiaAlgo = Boolean(yaRegistrada) || lectura.comentarios;
-  if (yaRegistrada) ctx.entorno.salida.out(`${nombre}: cambios en «${claveFinal}» (${archivo}):\n${diffDeLineas(antes, despues)}`);
-  if (lectura.comentarios) ctx.entorno.salida.out(`${nombre}: ${archivo} tiene comentarios; al reescribirlo se perderán (queda la copia .bak).`);
+  const yaRegistrada = plan.estado === "actualiza";
+  const cambiaAlgo = yaRegistrada || plan.comentarios;
+  if (yaRegistrada) ctx.entorno.salida.out(`${nombre}: cambios en «${plan.claveFinal}» (${archivo}):\n${plan.diff}`);
+  if (plan.comentarios) ctx.entorno.salida.out(`${nombre}: ${archivo} tiene comentarios; al reescribirlo se perderán (queda la copia .bak).`);
   if (cambiaAlgo && !ctx.opciones.dryRun && !(await confirmar(ctx, `¿Aplicar los cambios en ${archivo}?`))) {
     fallar(ctx, `${nombre}: no se aplicó. Repite con --yes, o en una terminal para confirmarlo.`);
     return;
   }
 
-  if (renombrar) delete servidores[renombrar];
-  servidores[claveFinal] = nuevaEntrada;
-  const copia = escribirConCopia(ctx, archivo, `${json({ ...datos, [seccion]: servidores })}\n`);
+  const copia = escribirConCopia(ctx, archivo, plan.texto);
   const accion = yaRegistrada ? "actualizado" : "registrado";
-  decir(ctx, `${nombre}: ${accion} como «${claveFinal}» en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
+  decir(ctx, `${nombre}: ${accion} como «${plan.claveFinal}» en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
 }
 
 // `claude mcp list` imprime una línea por servidor: "<clave>: <comando o URL> - <estado>".
@@ -447,35 +503,50 @@ function mostrarComando(args: string[]): string {
   return ["claude", ...args].map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(" ");
 }
 
-async function registrarEnClaude(ctx: Contexto, rutas: Rutas): Promise<void> {
+// El plan en Claude Code: el comando que se ejecutaría, o por qué no. Lee `claude mcp list`, que no
+// escribe nada.
+export type PlanDeClaude =
+  | { cliente: "claude-code"; estado: "sin-lista"; mensaje: string }
+  | { cliente: "claude-code"; estado: "existente"; existente: string; comando: string }
+  | { cliente: "claude-code"; estado: "nuevo"; clave: string; args: string[]; comando: string };
+
+export async function planDeClaude(rutas: Rutas, claveDada: string | null, entorno: Pick<EntornoInit, "ejecutar">): Promise<PlanDeClaude> {
   let lista: Ejecucion;
   try {
-    lista = await ctx.entorno.ejecutar("claude", ["mcp", "list"]);
+    lista = await entorno.ejecutar("claude", ["mcp", "list"]);
   } catch (error) {
-    fallar(ctx, `Claude Code: no se pudo ejecutar claude mcp list (${error instanceof Error ? error.message : String(error)}).`);
-    return;
+    return { cliente: "claude-code", estado: "sin-lista", mensaje: `no se pudo ejecutar claude mcp list (${error instanceof Error ? error.message : String(error)}).` };
   }
   // Sin la lista no se puede saber si ya está registrado: añadirlo podría duplicarlo.
   if (lista.codigo !== 0) {
-    fallar(ctx, `Claude Code: claude mcp list falló (${lista.stderr.trim() || `código ${lista.codigo}`}); no se registra para no duplicarlo.`);
-    return;
+    return { cliente: "claude-code", estado: "sin-lista", mensaje: `claude mcp list falló (${lista.stderr.trim() || `código ${lista.codigo}`}); no se registra para no duplicarlo.` };
   }
 
   // `mcp list` no enseña las variables de un registro, así que uno que ya existe no se toca: se dice
   // cómo actualizarlo a mano, con su misma clave.
   const existente = registroEnClaude(lista.stdout);
   if (existente) {
-    ctx.entorno.salida.out(
-      `Claude Code: ya está registrado como «${existente}»; no se toca. Para cambiar sus rutas: ` +
-        `claude mcp remove ${existente}  y después  ${mostrarComando(comandoDeClaude(existente, rutas))}`
-    );
+    return { cliente: "claude-code", estado: "existente", existente, comando: `claude mcp remove ${existente}  y después  ${mostrarComando(comandoDeClaude(existente, rutas))}` };
+  }
+  const clave = claveDada ?? CLAVE_POR_DEFECTO;
+  const args = comandoDeClaude(clave, rutas);
+  return { cliente: "claude-code", estado: "nuevo", clave, args, comando: mostrarComando(args) };
+}
+
+async function registrarEnClaude(ctx: Contexto, rutas: Rutas): Promise<void> {
+  const plan = await planDeClaude(rutas, ctx.opciones.clave, ctx.entorno);
+  if (plan.estado === "sin-lista") {
+    fallar(ctx, `Claude Code: ${plan.mensaje}`);
+    return;
+  }
+  if (plan.estado === "existente") {
+    ctx.entorno.salida.out(`Claude Code: ya está registrado como «${plan.existente}»; no se toca. Para cambiar sus rutas: ${plan.comando}`);
     return;
   }
 
-  const clave = ctx.opciones.clave ?? CLAVE_POR_DEFECTO;
-  const args = comandoDeClaude(clave, rutas);
+  const { clave, args } = plan;
   if (ctx.opciones.dryRun) {
-    decir(ctx, `Claude Code: se ejecutaría ${mostrarComando(args)}`);
+    decir(ctx, `Claude Code: se ejecutaría ${plan.comando}`);
     return;
   }
   const resultado = await ctx.entorno.ejecutar("claude", args).catch((error: unknown) => ({ codigo: 1, stdout: "", stderr: String(error) }));
@@ -499,51 +570,73 @@ function comandosDeFabrica(): { numero: number; texto: string }[] {
     });
 }
 
+// El plan de --comandos para un cliente que lee comandos de archivo: cada /fN, dónde iría, con qué texto y
+// qué pasaría. "ajeno" es un archivo sin la marca de init: es de la persona y no se pisa sin --yes.
+export type ComandoPlaneado = { numero: number; archivo: string; texto: string; estado: "nuevo" | "actualiza" | "sin-cambios" | "ajeno" | "carpeta" };
+
+export function carpetaDeComandos(cliente: "claude-code" | "cursor", entorno: Pick<EntornoInit, "home">): string {
+  return path.join(entorno.home, cliente === "claude-code" ? ".claude" : ".cursor", "commands");
+}
+
+export function planDeComandos(cliente: "claude-code" | "cursor", entorno: Pick<EntornoInit, "home">): ComandoPlaneado[] {
+  const carpeta = carpetaDeComandos(cliente, entorno);
+  return comandosDeFabrica().map(({ numero, texto }) => {
+    const archivo = path.join(carpeta, `f${numero}.md`);
+    const contenido = `${MARCA_DE_COMANDO} v${SERVER_VERSION} -->\n${texto}\n`;
+    if (fs.statSync(archivo, { throwIfNoEntry: false })?.isDirectory()) return { numero, archivo, texto: contenido, estado: "carpeta" };
+    const actual = fs.existsSync(archivo) ? fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n") : null;
+    if (actual === null) return { numero, archivo, texto: contenido, estado: "nuevo" };
+    if (!actual.startsWith(MARCA_DE_COMANDO)) return { numero, archivo, texto: contenido, estado: "ajeno" };
+    if (actual.slice(actual.indexOf("\n") + 1) === `${texto}\n`) return { numero, archivo, texto: contenido, estado: "sin-cambios" };
+    return { numero, archivo, texto: contenido, estado: "actualiza" };
+  });
+}
+
 async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void> {
-  const destinos: [string, string][] = [];
-  if (clientes.includes("claude-code")) destinos.push(["Claude Code", path.join(ctx.entorno.home, ".claude", "commands")]);
-  if (clientes.includes("cursor")) destinos.push(["Cursor", path.join(ctx.entorno.home, ".cursor", "commands")]);
+  const destinos: ["claude-code" | "cursor", string][] = [];
+  if (clientes.includes("claude-code")) destinos.push(["claude-code", "Claude Code"]);
+  if (clientes.includes("cursor")) destinos.push(["cursor", "Cursor"]);
   if (destinos.length === 0) {
     ctx.entorno.salida.out("--comandos: ninguno de los clientes elegidos lee comandos de archivo (Claude Code o Cursor).");
     return;
   }
 
-  const comandos = comandosDeFabrica();
-  for (const [nombre, carpeta] of destinos) {
-    for (const { numero, texto } of comandos) {
-      const archivo = path.join(carpeta, `f${numero}.md`);
-      const contenido = `${MARCA_DE_COMANDO} v${SERVER_VERSION} -->\n${texto}\n`;
-      if (fs.statSync(archivo, { throwIfNoEntry: false })?.isDirectory()) {
+  for (const [cliente, nombre] of destinos) {
+    for (const { numero, archivo, texto: contenido, estado } of planDeComandos(cliente, ctx.entorno)) {
+      if (estado === "carpeta") {
         fallar(ctx, `${nombre}: ${archivo} es una carpeta; no se toca.`);
         continue;
       }
-      const actual = fs.existsSync(archivo) ? fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n") : null;
-
-      if (actual !== null && !actual.startsWith(MARCA_DE_COMANDO)) {
-        // Un archivo sin la marca es de la persona: no se pisa sin --yes.
-        if (!ctx.opciones.yes) {
-          ctx.entorno.salida.out(`${nombre}: ${archivo} es tuyo (no lo generó init); no se toca. Con --yes se reemplaza, con copia.`);
-          continue;
-        }
-      } else if (actual !== null && actual.slice(actual.indexOf("\n") + 1) === `${texto}\n`) {
+      // Un archivo sin la marca es de la persona: no se pisa sin --yes.
+      if (estado === "ajeno" && !ctx.opciones.yes) {
+        ctx.entorno.salida.out(`${nombre}: ${archivo} es tuyo (no lo generó init); no se toca. Con --yes se reemplaza, con copia.`);
+        continue;
+      }
+      if (estado === "sin-cambios") {
         ctx.entorno.salida.out(`${nombre}: /f${numero} sin cambios.`);
         continue;
       }
 
       // Reemplazar un archivo de la persona deja copia; uno generado por init se reescribe sin más.
       let copia: string | null = null;
-      if (actual !== null && !actual.startsWith(MARCA_DE_COMANDO)) {
+      if (estado === "ajeno") {
         copia = escribirConCopia(ctx, archivo, contenido);
       } else if (!ctx.opciones.dryRun) {
-        fs.mkdirSync(carpeta, { recursive: true });
+        fs.mkdirSync(path.dirname(archivo), { recursive: true });
         fs.writeFileSync(archivo, contenido, "utf-8");
       }
-      decir(ctx, `${nombre}: /f${numero} ${actual === null ? "copiado" : "actualizado"} en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
+      decir(ctx, `${nombre}: /f${numero} ${estado === "nuevo" ? "copiado" : "actualizado"} en ${archivo}.${copia ? ` Copia: ${copia}` : ""}`);
     }
   }
 }
 
 // ─── 4. Migración ───────────────────────────────────────────────────────────
+// El phase-gate.json que crea la migración (y "Crear phase-gate.json" en el Studio): solo $schema,
+// version y preset.
+export function manifiestoNuevo(preset: string): string {
+  return `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset })}\n`;
+}
+
 async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   const preset = ctx.opciones.preset ?? "software-replica";
   const presets = presetsDisponibles();
@@ -579,7 +672,7 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   for (const proyecto of proyectos) {
     const archivo = path.join(docs, proyecto, ARCHIVO_MANIFIESTO);
     if (fs.existsSync(archivo)) continue; // solo crea, nunca sobrescribe
-    if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset })}\n`, "utf-8");
+    if (!ctx.opciones.dryRun) fs.writeFileSync(archivo, manifiestoNuevo(preset), "utf-8");
     decir(ctx, `--migrate: ${archivo} con "preset": "${preset}".`);
     creados++;
   }
