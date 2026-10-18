@@ -168,7 +168,7 @@ export function sincronizarPrompts(mcp: McpServer, idioma?: Idioma): void {
   const delServidor = idioma ?? idiomas.get(mcp) ?? idiomaDeMensajes();
   idiomas.set(mcp, delServidor);
   try {
-    const capas = promptsLayers();
+    const capas = promptsLayers(delServidor); // los títulos de las fases, en el idioma de los /fN
     const fases = discoverPhases(capas);
     let actuales = registros.get(mcp);
     if (!actuales) {

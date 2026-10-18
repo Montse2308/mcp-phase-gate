@@ -15,7 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { DOCS, IDIOMA_POR_DEFECTO, REPOS, configDir, idiomaDelEntorno, idiomaDelSistema, raizPaquete, requireBasePath } from "./config.js";
+import { DOCS, REPOS, configDir, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { ErrorConCodigo, mensaje } from "./i18n/mensajes.js";
 import { tasksRootPath, validarSegmento } from "./paths.js";
@@ -157,7 +157,7 @@ export type Preset = {
   origen: OrigenPreset;
 };
 
-export function carpetaPresetsDelPaquete(idioma: string = IDIOMA_POR_DEFECTO): string {
+export function carpetaPresetsDelPaquete(idioma: string = idiomaSinProyecto()): string {
   return path.join(raizPaquete(), "presets", idioma);
 }
 
@@ -193,7 +193,8 @@ function presetsDe(carpeta: string, origen: OrigenPreset): Preset[] {
     .map((archivo) => leerPreset(path.join(carpeta, archivo), archivo.slice(0, -3), origen));
 }
 
-export function presetsDisponibles(idioma: string = IDIOMA_POR_DEFECTO): Map<string, Preset> {
+// Sin idioma, el del equipo (§8.3): los presets del paquete existen en los dos idiomas con los mismos nombres.
+export function presetsDisponibles(idioma: string = idiomaSinProyecto()): Map<string, Preset> {
   const presets = new Map<string, Preset>();
   presets.set(PRESET_POR_DEFECTO, {
     nombre: PRESET_POR_DEFECTO,

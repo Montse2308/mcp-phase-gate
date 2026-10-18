@@ -277,6 +277,8 @@ export const IDIOMA_POR_DEFECTO = "es";
 // Viven en i18n/idioma.ts, sin dependencias: los mensajes los necesitan y este módulo escribe mensajes al
 // cargarse (el .env).
 export { fijarLocaleDelSistema, idiomaDeEtiqueta, idiomaDelEntorno, idiomaDelSistema } from "./i18n/idioma.js";
+import { idiomaDelEntorno as idiomaDelEntornoBase, idiomaDelSistema as idiomaDelSistemaBase } from "./i18n/idioma.js";
+import type { Idioma } from "./vocabulario.js";
 
 // La raíz del paquete: la carpeta que tiene al lado build/, prompts/ y presets/. Los tests corren
 // desde build-test/, que no tiene esas carpetas al lado; la apuntan al repo con fijarRaizDelPaquete
@@ -292,16 +294,32 @@ export function fijarRaizDelPaquete(ruta: string | null): void {
   raizDelPaquete = ruta ?? path.join(MODULE_DIR, "..");
 }
 
-export function defaultPromptsPath(idioma: string = IDIOMA_POR_DEFECTO): string {
+// El idioma de este equipo cuando no hay proyecto (§8.3, pasos 3 a 5): `idiomaPorDefecto` de machine.json,
+// PHASE_GATE_LANG o el del sistema. Es lo mismo que idiomaDelEquipo (manifiesto.ts), que valida
+// machine.json entero; aquí basta con su campo, y así este módulo no importa el del manifiesto, que lo
+// importa a él. Un machine.json ilegible no cuenta: doctor lo dice.
+export function idiomaSinProyecto(): Idioma {
+  try {
+    const crudo = JSON.parse(fs.readFileSync(path.join(configDir(), "machine.json"), "utf-8").replace(/^\uFEFF/, ""));
+    if (crudo?.idiomaPorDefecto === "es" || crudo?.idiomaPorDefecto === "en") return crudo.idiomaPorDefecto;
+  } catch {
+    // sin machine.json, o ilegible
+  }
+  return idiomaDelEntornoBase() ?? idiomaDelSistemaBase();
+}
+
+// Sin idioma, el del equipo: desde la Etapa 6 la capa de fábrica sin proyecto puede ser prompts/en/.
+export function defaultPromptsPath(idioma: string = idiomaSinProyecto()): string {
   return path.join(raizPaquete(), "prompts", idioma);
 }
 
 // De menor a mayor prioridad. La del usuario va al final: gana.
 // Las capas que aportan cuerpos (fase-N-*.md, global-rules.md, comandos/) sin proyecto: la de
-// fábrica y la global. Desde la Etapa 3 el ensamblado completo, con presets, reglas y la capa del
-// proyecto, lo arma capasDe en capas.ts; esto queda como su versión sin proyecto.
-export function promptsLayers(): string[] {
-  const capas = [defaultPromptsPath()];
+// fábrica (en el idioma del equipo, o el que se pida) y la global. Desde la Etapa 3 el ensamblado
+// completo, con presets, reglas y la capa del proyecto, lo arma capasDe en capas.ts; esto queda como su
+// versión sin proyecto.
+export function promptsLayers(idioma: string = idiomaSinProyecto()): string[] {
+  const capas = [defaultPromptsPath(idioma)];
   const global = carpetaPromptsGlobal();
 
   if (global) capas.push(global);

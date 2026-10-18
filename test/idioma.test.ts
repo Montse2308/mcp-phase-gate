@@ -222,3 +222,30 @@ describe("idioma: manifiesto, init y redacción", () => {
     }
   });
 });
+
+describe("idioma sin proyecto: el del equipo", () => {
+  it("la capa de fábrica, las fases y los presets sin proyecto siguen al equipo (machine.json, PHASE_GATE_LANG)", async () => {
+    const { config } = instalacion();
+    const { promptsLayers } = await import("../src/config.js");
+    const { fasesDe } = await import("../src/capas.js");
+    const { carpetaPresetsDelPaquete } = await import("../src/manifiesto.js");
+    process.env.PHASE_GATE_LANG = "en";
+    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "en")));
+    assert.equal(fasesDe(null).get(1)?.documento, "01 - Technical Analysis.md");
+    assert.ok(carpetaPresetsDelPaquete().endsWith(path.join("presets", "en")));
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "es" }));
+    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "es")), "machine.json gana a PHASE_GATE_LANG");
+  });
+
+  it("los /fN de un servidor en inglés salen con los títulos de las fases en inglés", async () => {
+    instalacion();
+    process.env.PHASE_GATE_LANG = "en";
+    const { cliente, cerrar } = await conectar();
+    try {
+      const { prompts } = await cliente.listPrompts();
+      assert.match(prompts.find((p) => p.name === "f1")?.title ?? "", /Discovery/);
+    } finally {
+      await cerrar();
+    }
+  });
+});
