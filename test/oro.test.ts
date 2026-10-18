@@ -92,3 +92,36 @@ describe("prueba de oro: software-replica reproduce la 2.2.0 (fases 1 a 3) y la 
     assert.equal(ensamblarFase(5, null).texto, oro(5));
   });
 });
+
+// La prueba de oro en inglés (§8.4, L06 de la Etapa 6): con "idioma": "en" y software-replica, cada fase se
+// ensambla exactamente como test/oro/3.2.0-en/fase-N.txt, generado una vez con ORO_REGENERAR_EN=1 y revisado.
+// Desde entonces, cualquier cambio en los prompts o presets en inglés lo tiene que regenerar a propósito
+// (E3-R8). Las de español (2.2.0 y 3.0.0) no cambian: esta etapa no tocó el español.
+const ORO_EN = path.join(RAIZ, "test", "oro", "3.2.0-en");
+
+describe("prueba de oro en inglés: software-replica con idioma en (3.2.0-en)", () => {
+  for (const fase of [1, 2, 3, 4, 5]) {
+    it(`fase ${fase}`, () => {
+      proyecto({ version: 1, preset: "software-replica", idioma: "en" });
+
+      const { texto, avisos } = ensamblarFase(fase, "PROYECTO-A", null, { incluirConfigProyecto: false });
+      assert.deepEqual(avisos, []);
+      const archivo = path.join(ORO_EN, `fase-${fase}.txt`);
+      if (process.env.ORO_REGENERAR_EN === "1") {
+        fs.mkdirSync(ORO_EN, { recursive: true });
+        fs.writeFileSync(archivo, texto, "utf-8");
+      }
+      assert.equal(texto, fs.readFileSync(archivo, "utf-8").replace(/\r\n/g, "\n"));
+    });
+  }
+
+  it("cada fase en inglés es distinta de su gemela en español, y sin restos de marcadores ni de bloques del servidor en español", () => {
+    proyecto({ version: 1, preset: "software-replica", idioma: "en" });
+    for (const fase of [1, 2, 3, 4, 5]) {
+      const en = fs.readFileSync(path.join(ORO_EN, `fase-${fase}.txt`), "utf-8");
+      assert.notEqual(en, oro(fase));
+      assert.ok(!en.includes("<!--"), `fase ${fase}`);
+      assert.ok(!/ARCHIVOS DE ESTA TAREA|Fase \d|léelos/.test(en), `fase ${fase}`);
+    }
+  });
+});

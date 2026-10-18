@@ -227,7 +227,7 @@ Rules specific to this section:
 
 ---
 
-## QUALITY MARKS
+## QUALITY MARKERS
 
 <!-- slot: examples -->
 Real excerpts from approved documents.

@@ -136,7 +136,7 @@ document comes out short on its own: that is how depth is adjusted, not by trimm
 
 ---
 
-## QUALITY MARKS
+## QUALITY MARKERS
 
 <!-- slot: examples -->
 This is what a useful analysis looks like. These are real excerpts from approved documents.
