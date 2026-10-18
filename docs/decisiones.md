@@ -12,6 +12,48 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-18 — Los prompts en inglés se reescriben con glosario y revisión, no se traducen a máquina
+
+**Decisión.** `prompts/en/` es un juego de fábrica completo, gemelo de `prompts/es/`: reglas globales, las
+cinco fases (`phase-1-discovery.md` … `phase-5-audit.md`), los comandos (`commands/f1.md` … `f5.md`) y las
+cuatro variantes de regla (`reglas/`, con los mismos nombres de archivo: los elige el código). Cada archivo
+se **reescribió** en inglés, no se tradujo frase por frase, con un contrato fijo:
+
+- el **glosario** de `docs/glosario.md` (Batch, Receipt, Anchor, Seal, Slot, Block, Basis, Gate…);
+- los encabezados, claves y nombres de documento del vocabulario (§8.2), que comprueba su test de contrato;
+- las **mismas ranuras, en el mismo orden**, con la palabra y el alias ingleses (`<!-- slot: tests -->`); los
+  bloques de las variantes, con los mismos ids y modos (`<!-- block: phase-4/commits -->`);
+- el **mismo número de puntos** en cada `FORBIDDEN` y `SELF-CHECK` que en su `PROHIBIDO` y `AUTOVERIFICACIÓN`, con
+  la misma numeración (el 14 y el 15 de la Fase 4 siguen siendo de las variantes);
+- los nombres de las tools y de sus parámetros sin traducir (`titulo`, `que_se_hizo`…), glosados una vez cuando
+  el nombre no se entiende; los valores de `estado` en inglés (`verified`…), que `record_batch` acepta desde L03;
+- los ejemplos de calidad, reescritos con el mismo propósito; los de la descripción del PR (Fase 5), **nuevos y
+  genéricos** (una tienda en línea inventada), nunca de PR reales (ADR del 2026-08-07);
+- la auditoría de la Fase 5 se escribe en inglés, y sus rangos de palabras se ajustan al inglés, que usa menos
+  palabras para lo mismo (el normal pasa de 200–260 a 190–240; el tope, de 500 a 450).
+
+`test/prompts-en.test.ts` comprueba la paridad (ranuras en orden, puntos por sección, ejemplos delimitados,
+bloques de las variantes) y que un proyecto con `"idioma": "en"` ensambla las cinco fases con las cuatro
+políticas de commits, con y sin lotes, sin avisos, sin marcadores y con todos los bloques del servidor en
+inglés.
+
+**Revisión de la autora.** El plan pide que la autora revise cada archivo antes del commit (E6-R3). Para esta
+etapa dio un OK general por adelantado; la lectura archivo por archivo queda registrada como pendiente en la
+sección de ejecución del plan, y cualquier cambio de voz que pida entra como un lote de ajuste, con la prueba
+de oro regenerada a propósito (L06).
+
+**Amplía** la ADR del 2026-08-08 (README bilingüe): ahora también son bilingües los prompts.
+
+**Qué se descartó.**
+
+- Traducción automática sin contrato: un prompt es el producto, y una traducción literal pierde el tono
+  ("hazlo en esta fase" no es "do it in this phase" en un prompt que funcione) y, sin paridad comprobada,
+  alguna regla.
+- Ids de ranura en inglés como canónicos: los usan los presets, `eject` y el Studio desde la Etapa 3; el alias
+  da lo mismo sin romper nada.
+
+---
+
 ## 2026-10-18 — Mensajes y descripciones en dos idiomas; los nombres de las tools no se traducen
 
 > **Reemplaza** la nota de la 2.x "la interfaz del servidor está en inglés": solo lo estaban los nombres de
