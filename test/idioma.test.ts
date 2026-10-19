@@ -384,10 +384,12 @@ describe("doctor --fase en inglés", () => {
     process.env.PHASE_GATE_LANG = "en";
     const { formatearProcedencia, procedenciaDeFase } = await import("../src/diagnostico.js");
     const texto = formatearProcedencia(procedenciaDeFase(3, "P"));
-    assert.match(texto, /phase-3\/tests \(fase-3\/pruebas\)\s+\S*presets.en.ai-agent-ops\.md:\d+/);
+    // La ruta del preset puede llevar espacios (C:\Users\Nombre Apellido\…): `.*`, que no pasa de línea, y no `\S*`
+    // (hallazgo 7 de la auditoría de la Etapa 6).
+    assert.match(texto, /phase-3\/tests \(fase-3\/pruebas\)\s+.*presets.en.ai-agent-ops\.md:\d+/);
     assert.match(texto, /global\/zero-breakage \(global\/cero-rupturas\)\s+factory  \+ after \(/);
     assert.match(texto, /global\/extra\s+factory/);
     process.env.PHASE_GATE_LANG = "es";
-    assert.match(formatearProcedencia(procedenciaDeFase(3, "P")), /fase-3\/pruebas\s+\S*ai-agent-ops\.md:\d+/);
+    assert.match(formatearProcedencia(procedenciaDeFase(3, "P")), /fase-3\/pruebas\s+.*presets.en.ai-agent-ops\.md:\d+/);
   });
 });

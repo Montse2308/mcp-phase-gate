@@ -15,7 +15,7 @@ import { configDir, fijarRaizDelPaquete, stateDir } from "../src/config.js";
 import { manifiestoNuevo } from "../src/init.js";
 import { DISCO_CAMBIADO } from "../src/studio/acciones.js";
 import { AplicarRespuesta, PlanRespuesta } from "../src/studio/contrato.js";
-import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
+import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, huellaDeConfiguracion, limpiarEntorno } from "./helpers.js";
 import { entornoInitDePrueba, pedir, studioConApi } from "./studio-ayudas.js";
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -26,13 +26,15 @@ afterEach(() => {
   fijarRaizDelPaquete(null);
 });
 
-// La configuración real de los clientes, antes de empezar: al final se comprueba que nada la tocó.
+// La configuración real de los clientes, antes de empezar: al final se comprueba que nada la tocó. Por su
+// contenido y no por su fecha: Claude Code reescribe ~/.claude.json por su cuenta mientras trabaja (contadores,
+// sesiones), así que de ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto
+// (hallazgo 8 de la auditoría de la Etapa 6).
 function huellaReal(): string[] {
   const appData = process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming");
-  return [path.join(os.homedir(), ".cursor", "mcp.json"), path.join(appData, "Code", "User", "mcp.json"), path.join(os.homedir(), ".claude.json"), path.join(os.homedir(), ".config", "Code", "User", "mcp.json")].map((ruta) => {
-    const info = fs.statSync(ruta, { throwIfNoEntry: false });
-    return `${ruta}|${info ? `${info.size}|${info.mtimeMs}` : "no existe"}`;
-  });
+  return [path.join(os.homedir(), ".cursor", "mcp.json"), path.join(appData, "Code", "User", "mcp.json"), path.join(os.homedir(), ".claude.json"), path.join(os.homedir(), ".config", "Code", "User", "mcp.json")].map(
+    (ruta) => `${ruta}|${huellaDeConfiguracion(ruta)}`
+  );
 }
 const REAL_ANTES = huellaReal();
 
@@ -353,6 +355,27 @@ describe("acciones: init-cliente, sobre un HOME falso", () => {
     const r = await aplicar(s, "init-cliente", { cliente: "claude-code", clave: "otra" }, q.huella);
     assert.equal(r.estado, 500);
     assert.match(r.json.error, /sin permiso/);
+  });
+});
+
+describe("la huella de la configuración real de los clientes", () => {
+  it("de ~/.claude.json solo cuentan sus mcpServers: lo que Claude Code reescribe solo no la cambia", () => {
+    const archivo = path.join(carpetaTemporal("casa"), ".claude.json");
+    const escribir = (datos: unknown): void => fs.writeFileSync(archivo, JSON.stringify(datos), "utf-8");
+    escribir({ numStartups: 1, mcpServers: { a: { command: "x" } }, projects: { "C:/p": { mcpServers: {}, historial: [1] } } });
+    const antes = huellaDeConfiguracion(archivo);
+    escribir({ numStartups: 2, tipsHistory: { t: 3 }, mcpServers: { a: { command: "x" } }, projects: { "C:/p": { mcpServers: {}, historial: [1, 2] } } });
+    assert.equal(huellaDeConfiguracion(archivo), antes);
+    escribir({ numStartups: 2, mcpServers: { a: { command: "x" } }, projects: { "C:/p": { mcpServers: { nuevo: { command: "y" } } } } });
+    assert.notEqual(huellaDeConfiguracion(archivo), antes, "claude mcp add (alcance local) sí la cambia");
+
+    // Cualquier otro archivo, por su contenido entero.
+    const cursor = path.join(path.dirname(archivo), "mcp.json");
+    fs.writeFileSync(cursor, "{}", "utf-8");
+    const vacia = huellaDeConfiguracion(cursor);
+    fs.writeFileSync(cursor, '{"mcpServers":{}}', "utf-8");
+    assert.notEqual(huellaDeConfiguracion(cursor), vacia);
+    assert.equal(huellaDeConfiguracion(path.join(path.dirname(archivo), "no-existe.json")), "no existe");
   });
 });
 

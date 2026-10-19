@@ -3,6 +3,7 @@
 // en llamadas.txt), Node y git: el `claude` de verdad no está, así que nada puede llegar a un cliente real.
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -37,12 +38,35 @@ export function entornoFalso(raiz: string): EntornoFalso {
   };
 }
 
-// La configuración real de los clientes de quien corre los E2E: antes y después tiene que ser la misma.
+// La configuración real de los clientes de quien corre los E2E: antes y después tiene que ser la misma. Por su
+// contenido y no por su fecha: Claude Code reescribe ~/.claude.json por su cuenta mientras trabaja, así que de
+// ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto (hallazgo 8 de la auditoría de
+// la Etapa 6). De una carpeta de comandos, sus archivos y el contenido de cada uno.
 export function huellaDeLosClientesReales(): string[] {
   const casa = os.homedir();
   const appData = process.env.APPDATA ?? path.join(casa, "AppData", "Roaming");
-  return [path.join(casa, ".cursor", "mcp.json"), path.join(appData, "Code", "User", "mcp.json"), path.join(casa, ".claude.json"), path.join(casa, ".claude", "commands"), path.join(casa, ".cursor", "commands")].map((ruta) => {
-    const info = fs.statSync(ruta, { throwIfNoEntry: false });
-    return `${ruta}|${info ? `${info.isDirectory() ? "d" : info.size}|${info.mtimeMs}` : "no existe"}`;
-  });
+  return [path.join(casa, ".cursor", "mcp.json"), path.join(appData, "Code", "User", "mcp.json"), path.join(casa, ".claude.json"), path.join(casa, ".claude", "commands"), path.join(casa, ".cursor", "commands")].map(
+    (ruta) => `${ruta}|${huella(ruta)}`
+  );
+}
+
+function huella(ruta: string): string {
+  const info = fs.statSync(ruta, { throwIfNoEntry: false });
+  if (!info) return "no existe";
+  if (info.isDirectory()) {
+    return `d|${fs
+      .readdirSync(ruta)
+      .sort()
+      .map((nombre) => `${nombre}:${huella(path.join(ruta, nombre))}`)
+      .join(",")}`;
+  }
+  const texto = fs.readFileSync(ruta, "utf-8");
+  if (path.basename(ruta) !== ".claude.json") return createHash("sha256").update(texto).digest("hex");
+  try {
+    const datos = JSON.parse(texto) as { mcpServers?: unknown; projects?: Record<string, { mcpServers?: unknown }> };
+    const servidores = { global: datos.mcpServers ?? null, proyectos: Object.entries(datos.projects ?? {}).map(([carpeta, p]) => [carpeta, p?.mcpServers ?? null]) };
+    return createHash("sha256").update(JSON.stringify(servidores)).digest("hex");
+  } catch {
+    return "ilegible";
+  }
 }

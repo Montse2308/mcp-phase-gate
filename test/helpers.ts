@@ -4,6 +4,7 @@
 // lo que se está probando es precisamente el comportamiento contra el disco: qué carpetas
 // cuentan como proyecto, qué documentos existen y en qué orden se tocaron.
 
+import { createHash } from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -141,3 +142,23 @@ idiomaDeLosTests();
 // Una PHASE_GATE_* que quien corre los tests tenga en su terminal ganaría a las ORQUESTADOR_* que
 // ponen los tests. Se limpia al importar, antes del primer test de cada archivo.
 limpiarEntorno();
+
+// La huella de un archivo de configuración de un cliente MCP real, para comprobar que un test no lo tocó: su
+// contenido, no su fecha. De ~/.claude.json, que Claude Code reescribe solo, únicamente sus `mcpServers` (los
+// globales y los de cada proyecto): es lo único que init o `claude mcp add` cambiarían.
+export function huellaDeConfiguracion(ruta: string): string {
+  let texto: string;
+  try {
+    texto = fs.readFileSync(ruta, "utf-8");
+  } catch {
+    return "no existe";
+  }
+  if (path.basename(ruta) !== ".claude.json") return createHash("sha256").update(texto).digest("hex");
+  try {
+    const datos = JSON.parse(texto) as { mcpServers?: unknown; projects?: Record<string, { mcpServers?: unknown }> };
+    const servidores = { global: datos.mcpServers ?? null, proyectos: Object.entries(datos.projects ?? {}).map(([carpeta, p]) => [carpeta, p?.mcpServers ?? null]) };
+    return createHash("sha256").update(JSON.stringify(servidores)).digest("hex");
+  } catch {
+    return "ilegible";
+  }
+}
