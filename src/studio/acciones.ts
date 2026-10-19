@@ -128,7 +128,7 @@ function planDePreset(a: z.infer<(typeof ARGUMENTOS)["preset"]>): Plan {
   m.objeto.preset = a.preset;
   const despues = json2(m.objeto);
   const error = validarManifiesto(despues);
-  if (error) return { posible: false, motivo: `El phase-gate.json resultante no sería válido: ${error}.` };
+  if (error) return { posible: false, motivo: mensaje("STUDIO-MANIFIESTO-NO-VALDRIA", { error }) };
   return {
     posible: true,
     interno: { accion: "preset", resumen: mensaje("STUDIO-PRESET-RESUMEN", { proyecto, preset: a.preset }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-PRESET-HECHO", { proyecto, preset: a.preset }) },
@@ -153,7 +153,7 @@ function planDeReglas(a: z.infer<(typeof ARGUMENTOS)["reglas"]>): Plan {
   m.objeto.reglas = reglas;
   const despues = json2(m.objeto);
   const error = validarManifiesto(despues);
-  if (error) return { posible: false, motivo: `El phase-gate.json resultante no sería válido: ${error}.` };
+  if (error) return { posible: false, motivo: mensaje("STUDIO-MANIFIESTO-NO-VALDRIA", { error }) };
   return {
     posible: true,
     interno: { accion: "reglas", resumen: mensaje("STUDIO-REGLAS-RESUMEN", { proyecto, cambios: cambios.join(", ") }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-REGLAS-HECHO", { proyecto, cambios: cambios.join(", ") }) },

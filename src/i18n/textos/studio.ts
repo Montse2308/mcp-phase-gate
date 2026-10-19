@@ -21,6 +21,78 @@ const faseEs = (numero: number): string => (numero === 0 ? "00" : `Fase ${numero
 const faseEn = (numero: number): string => (numero === 0 ? "00" : `Phase ${numero}`);
 
 export const TEXTOS_STUDIO = {
+  // ─── El filtro de seguridad de studio/servidor.ts ───
+  // Antes de que la petición diga su idioma: salen en el del proceso (PHASE_GATE_LANG o el del sistema). El
+  // filtro no lee la cabecera de idioma (hallazgo 9 de la auditoría de la Etapa 6).
+  "STUDIO-FILTRO-CUERPO-GRANDE": {
+    es: (p: { kb: number }) => `El cuerpo pasa de ${p.kb} kB.`,
+    en: (p: { kb: number }) => `The body is larger than ${p.kb} kB.`,
+  },
+  "STUDIO-FILTRO-CUERPO-ILEGIBLE": { es: "El cuerpo no se pudo leer.", en: "The body could not be read." },
+  "STUDIO-FILTRO-HOST": {
+    es: "Host no permitido: el Studio solo atiende en 127.0.0.1 y localhost, con su puerto.",
+    en: "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.",
+  },
+  "STUDIO-FILTRO-ORIGEN": { es: "Origen no permitido.", en: "Origin not allowed." },
+  "STUDIO-FILTRO-MAL-FORMADA": { es: "Petición mal formada.", en: "Malformed request." },
+  "STUDIO-FILTRO-ENLACE-USADO": {
+    es: "Este enlace no vale o ya se usó. Vuelve a lanzar `mcp-phase-gate ui` y abre el enlace nuevo.",
+    en: "This link is not valid or was already used. Run `mcp-phase-gate ui` again and open the new link.",
+  },
+  "STUDIO-FILTRO-SIN-SESION": {
+    es: "Falta la sesión: abre el enlace que imprimió `mcp-phase-gate ui`.",
+    en: "There is no session: open the link that `mcp-phase-gate ui` printed.",
+  },
+  "STUDIO-FILTRO-SIN-CABECERA": { es: "Falta la cabecera X-Phase-Gate.", en: "The X-Phase-Gate header is missing." },
+  "STUDIO-FILTRO-METODO": { es: "Método no permitido.", en: "Method not allowed." },
+  "STUDIO-FILTRO-INTERNO": { es: "Error interno del Studio.", en: "Internal Studio error." },
+  "STUDIO-EVENTOS-LLENO": {
+    es: (p: { maximo: number }) => `Hay ${p.maximo} conexiones de eventos abiertas: cierra alguna pestaña del Studio.`,
+    en: (p: { maximo: number }) => `There are ${p.maximo} event connections open: close some Studio tab.`,
+  },
+
+  // ─── `mcp-phase-gate ui` en la terminal: en el idioma de --idioma, o en el del proceso ───
+  "UI-DEMO-GENERADA": {
+    es: (p: { raiz: string }) => `Demo generada en ${p.raiz}.`,
+    en: (p: { raiz: string }) => `Demo generated in ${p.raiz}.`,
+  },
+  "UI-DEMO-FALLO": {
+    es: (p: { detalle: string }) => `No se pudo preparar la demo: ${p.detalle}`,
+    en: (p: { detalle: string }) => `Could not prepare the demo: ${p.detalle}`,
+  },
+  "UI-PUERTO-OCUPADO": {
+    es: (p: { puerto: number }) => `El puerto ${p.puerto} ya está en uso: elige otro con --puerto, o déjalo libre.`,
+    en: (p: { puerto: number }) => `Port ${p.puerto} is already in use: pick another one with --puerto, or free it.`,
+  },
+  "UI-NO-ARRANCA": {
+    es: (p: { detalle: string }) => `No se pudo arrancar el Studio: ${p.detalle}`,
+    en: (p: { detalle: string }) => `Could not start the Studio: ${p.detalle}`,
+  },
+  "UI-EN-MARCHA": {
+    es: (p: { url: string }) => `Studio de mcp-phase-gate en ${p.url}`,
+    en: (p: { url: string }) => `mcp-phase-gate Studio at ${p.url}`,
+  },
+  "UI-ENLACE-UNA-VEZ": {
+    es: "El enlace sirve una sola vez: ábrelo en tu navegador. Ctrl+C para cerrar.",
+    en: "The link works only once: open it in your browser. Ctrl+C to close.",
+  },
+  "UI-SIN-NAVEGADOR": { es: "No se pudo abrir el navegador: copia el enlace.", en: "Could not open the browser: copy the link." },
+
+  "STUDIO-MANIFIESTO-NO-VALDRIA": {
+    es: (p: { error: string }) => `El phase-gate.json resultante no sería válido: ${p.error}.`,
+    en: (p: { error: string }) => `The resulting phase-gate.json would not be valid: ${p.error}.`,
+  },
+
+  // ─── studio/demo.ts ───
+  "DEMO-NO-VACIA": {
+    es: (p: { destino: string }) => `${p.destino} no está vacía: la demo se genera en una carpeta nueva.`,
+    en: (p: { destino: string }) => `${p.destino} is not empty: the demo is generated in a new folder.`,
+  },
+  "DEMO-NO-ES-DEMO": {
+    es: (p: { raiz: string }) => `${p.raiz} no es una carpeta de demo: no se borra.`,
+    en: (p: { raiz: string }) => `${p.raiz} is not a demo folder: it is not deleted.`,
+  },
+
   // ─── studio/servidor.ts y el enrutado de studio/api.ts ───
   "STUDIO-JSON-INVALIDO": { es: "El cuerpo no es un JSON válido.", en: "The body is not valid JSON." },
   "STUDIO-RUTA-NO-EXISTE": { es: "No existe esa ruta de la API.", en: "That API route does not exist." },

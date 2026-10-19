@@ -208,7 +208,11 @@ español y en inglés: los errores y las respuestas de las tools, las preguntas 
 `eject`, los bloques que el servidor añade a un prompt y las descripciones de las tools, de sus parámetros, de
 los recursos y de los MCP Prompts `/fN`. Son 620 códigos en seis catálogos (700 en siete desde que el Studio ganó el suyo, L07) (`src/i18n/textos/`), que junta
 `src/i18n/mensajes.ts` con `mensaje(codigo, parametros, idioma?)` y `fallo(...)`, un `Error` que guarda su
-`codigo`.
+`codigo`. *Matizado el 2026-10-19* (hallazgo 9 de la auditoría de la Etapa 6): las líneas que `ui` imprime en la
+terminal y las respuestas de texto del filtro de seguridad del Studio (421, 403, 401, 405, 413, 500) seguían
+fijas en español. Ahora tienen código: las de `ui`, en el idioma de `--idioma` o en el del proceso; las del
+filtro, en el del proceso (`PHASE_GATE_LANG` o el sistema), porque el filtro no lee la cabecera de idioma de una
+petición que todavía no ha validado.
 
 **En qué idioma sale cada cosa:**
 

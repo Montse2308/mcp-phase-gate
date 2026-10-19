@@ -24,6 +24,7 @@ import * as path from "path";
 
 import { DOCS, carpetaPromptsGlobal, configDir, requireBasePath, stateDir, stateFile, tasksSubdir } from "../config.js";
 import { fasesDe } from "../capas.js";
+import { mensaje } from "../i18n/mensajes.js";
 import { ARCHIVO_MAQUINA, ARCHIVO_MANIFIESTO } from "../manifiesto.js";
 import { discoverProjects, estaDentro } from "../paths.js";
 import { loteDelNombre, etiquetaDeLote } from "../recibos.js";
@@ -311,7 +312,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
   return {
     manejar: (req, res) => {
       if (conexiones.size >= maximo) {
-        const texto = JSON.stringify({ error: `Hay ${maximo} conexiones de eventos abiertas: cierra alguna pestaña del Studio.` });
+        const texto = JSON.stringify({ error: mensaje("STUDIO-EVENTOS-LLENO", { maximo }) });
         res.writeHead(503, { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(texto), "Cache-Control": "no-store", "Retry-After": "10" });
         res.end(texto);
         return;

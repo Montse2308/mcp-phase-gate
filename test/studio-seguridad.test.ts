@@ -204,6 +204,18 @@ describe("Studio: Host (DNS rebinding)", () => {
     assert.equal((await get(p, "/", [`Host: 127.0.0.1:${p}`])).estado, 421);
   });
 
+  // Hallazgo 9 de la auditoría de la Etapa 6: el texto del filtro estaba fijo en español. Sale en el idioma del
+  // proceso (la cabecera de idioma de la petición no cuenta aquí: el filtro no la lee), y en español es el de siempre.
+  it("el texto del filtro sale en el idioma del proceso; la cabecera de idioma no lo cambia", async () => {
+    const s = await studio();
+    const p = s.puerto;
+    assert.equal((await get(p, "/", [], "atacante.example")).cuerpo, "Host no permitido: el Studio solo atiende en 127.0.0.1 y localhost, con su puerto.");
+    process.env.PHASE_GATE_LANG = "en";
+    assert.equal((await get(p, "/", [], "atacante.example")).cuerpo, "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.");
+    assert.equal((await get(p, "/", ["X-Phase-Gate-Lang: es"], "atacante.example")).cuerpo, "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.");
+    assert.equal((await get(p, "/api/estado", [])).cuerpo, "There is no session: open the link that `mcp-phase-gate ui` printed.");
+  });
+
   it("el 421 llega antes que nada: ni el canje del token ni la API", async () => {
     const s = await studio();
     const r = await get(s.puerto, `/?token=${s.token}`, [], "atacante.example");

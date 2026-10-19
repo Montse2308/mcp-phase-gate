@@ -21,6 +21,7 @@ import { fileURLToPath } from "url";
 
 import { SERVER_VERSION, raizPaquete } from "../config.js";
 import { MARCA_DE_DEMO, gitEnLaDemo } from "../git.js";
+import { mensaje } from "../i18n/mensajes.js";
 import { registrarLote } from "../lotes.js";
 import type { EntradaDeLote } from "../lotes.js";
 import type { EntornoInit } from "../init.js";
@@ -140,7 +141,7 @@ function fijarCarpetas(raiz: string, fecha: Date): void {
 }
 
 export async function generarDemo(destino: string, idioma: Idioma = "es"): Promise<CarpetasDeDemo> {
-  if (fs.existsSync(destino) && fs.readdirSync(destino).length) throw new Error(`${destino} no está vacía: la demo se genera en una carpeta nueva.`);
+  if (fs.existsSync(destino) && fs.readdirSync(destino).length) throw new Error(mensaje("DEMO-NO-VACIA", { destino }));
   const c = carpetasDeDemo(destino, idioma);
   const delIdioma = DEL_IDIOMA[idioma];
   fs.mkdirSync(destino, { recursive: true, mode: 0o700 });
@@ -249,7 +250,7 @@ function fijarRecibos(carpetaTarea: string, fecha: Date): void {
 // Windows, rmSync no borra un nombre con acentos y no lanza ("01 - Análisis Técnico.md"). Los objetos de
 // git son de solo lectura en Windows: se les quita antes.
 export function borrarDemo(raiz: string): void {
-  if (!fs.statSync(path.join(raiz, MARCA_DE_DEMO), { throwIfNoEntry: false })?.isFile()) throw new Error(`${raiz} no es una carpeta de demo: no se borra.`);
+  if (!fs.statSync(path.join(raiz, MARCA_DE_DEMO), { throwIfNoEntry: false })?.isFile()) throw new Error(mensaje("DEMO-NO-ES-DEMO", { raiz }));
   const borrar = (ruta: string): void => {
     const info = fs.lstatSync(ruta);
     if (info.isDirectory() && !info.isSymbolicLink()) {
