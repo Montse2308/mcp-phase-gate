@@ -47,8 +47,8 @@ export type { Procedencia } from "./bloques.js";
 export const ARCHIVO_BLOQUES = "bloques.md";
 
 // Las secciones de las reglas globales que son esqueleto: no son ranuras, ningún bloque las toca y,
-// si un global-rules.md propio no las tiene, se reinyectan las de fábrica.
-export const SECCIONES_ESQUELETO = ["BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"];
+// si un global-rules.md propio no las tiene, se reinyectan las de fábrica. Del vocabulario (§8.2).
+export const SECCIONES_ESQUELETO: readonly string[] = VOCABULARIO.es.seccionesEsqueleto;
 
 export function carpetaPromptsDeProyecto(carpetaProyecto: string): string {
   return path.join(requireBasePath(DOCS), carpetaProyecto, ".phase-gate", "prompts");

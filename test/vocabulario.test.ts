@@ -277,10 +277,11 @@ describe("contrato del vocabulario con los prompts de fábrica", () => {
 
     it(`${idioma}: las reglas globales tienen las secciones que el código busca, con su texto exacto`, () => {
       const lineas = fs.readFileSync(path.join(carpeta, "global-rules.md"), "utf-8").replace(/\r\n/g, "\n").split("\n");
-      for (const titulo of [v.encabezados.base, v.encabezados.pendientesHeredados, v.encabezados.reglasAdicionales]) {
+      for (const titulo of [v.encabezados.evidencia, v.encabezados.base, v.encabezados.pendientesHeredados, v.encabezados.reglasAdicionales]) {
         assert.equal(lineas.filter((l) => l === `## ${titulo}`).length, 1, `falta "## ${titulo}"`);
       }
       assert.deepEqual(v.seccionesEsqueleto, [v.encabezados.base, v.encabezados.pendientesHeredados]);
+      assert.deepEqual(v.seccionesGlobales, [v.encabezados.evidencia, v.encabezados.base, v.encabezados.pendientesHeredados]);
       assert.ok(lineas.join("\n").includes(`\`## ${v.encabezados.validacionesPendientes}\``));
     });
 

@@ -48,7 +48,7 @@ import { ensamblarIndice, faseEnCarpeta, lotesDelPlan, recibosDeLaTarea } from "
 import type { FaseDeLotes, ReciboEnDisco } from "./lotes.js";
 import { GENERADO_POR, etiquetaDeLote, frontmatterDeRecibo } from "./recibos.js";
 import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
-import { idInglesDeRanura } from "./vocabulario.js";
+import { VOCABULARIO, idInglesDeRanura } from "./vocabulario.js";
 import type { Idioma } from "./vocabulario.js";
 
 export type Severidad = "error" | "aviso" | "info";
@@ -97,9 +97,10 @@ export type Diagnostico = {
 // Las secciones de las reglas globales que las fases citan por su nombre. Un global-rules.md
 // propio sustituye al de fábrica (no se suma), así que si le falta una, las fases citan una regla
 // que no existe. Es el riesgo E1-R1, y el aviso que pedía la Etapa 1 para cuando hubiera doctor.
-export const SECCIONES_GLOBALES = ["EVIDENCIA", "BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"];
-// Las mismas, en un global-rules.md en inglés (§8.2): una sección está si está en cualquiera de los dos.
-export const SECCIONES_GLOBALES_EN = ["EVIDENCE", "BASIS OF EACH DECISION", "INHERITED PENDING ITEMS"];
+// Vienen del vocabulario (§8.2).
+export const SECCIONES_GLOBALES: readonly string[] = VOCABULARIO.es.seccionesGlobales;
+// Las mismas, en un global-rules.md en inglés: una sección está si está en cualquiera de los dos.
+export const SECCIONES_GLOBALES_EN: readonly string[] = VOCABULARIO.en.seccionesGlobales;
 
 const ORDEN_SEVERIDAD: Record<Severidad, number> = { error: 0, aviso: 1, info: 2 };
 

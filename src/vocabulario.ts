@@ -54,6 +54,7 @@ export type ModoDeBloque = "reemplazar" | "antes" | "despues";
 export type Vocabulario = {
   encabezados: {
     validacionesPendientes: string;
+    evidencia: string;
     base: string;
     pendientesHeredados: string;
     reglasAdicionales: string;
@@ -109,6 +110,10 @@ export type Vocabulario = {
   marcadores: { ranura: string; bloque: string; modos: Record<ModoDeBloque, string> };
   carpetaComandos: string;
   seccionesEsqueleto: [string, string]; // BASE y PENDIENTES de las reglas globales
+  // EVIDENCIA, BASE y PENDIENTES: las secciones de las reglas globales que las fases citan por su nombre.
+  // doctor avisa si a un global-rules.md propio le falta alguna (hallazgo 13 de la auditoría de la Etapa 6:
+  // vivían en diagnostico.ts y capas.ts, fuera del vocabulario).
+  seccionesGlobales: [string, string, string];
   // La línea que se añade al final del prompt cuando una tarea se redacta en otro idioma (§8.3), escrita
   // en el idioma del proyecto, por idioma de redacción.
   lineaDeRedaccion: Record<Idioma, string>;
@@ -123,6 +128,7 @@ export type Vocabulario = {
 const ES: Vocabulario = {
   encabezados: {
     validacionesPendientes: "Validaciones pendientes",
+    evidencia: "EVIDENCIA",
     base: "BASE DE CADA DECISIÓN",
     pendientesHeredados: "PENDIENTES HEREDADOS",
     reglasAdicionales: "REGLAS ADICIONALES",
@@ -216,6 +222,7 @@ const ES: Vocabulario = {
   marcadores: { ranura: "ranura", bloque: "bloque", modos: { reemplazar: "reemplazar", antes: "antes", despues: "despues" } },
   carpetaComandos: "comandos",
   seccionesEsqueleto: ["BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"],
+  seccionesGlobales: ["EVIDENCIA", "BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"],
   lineaDeRedaccion: {
     es: "Escribe el contenido de los documentos de esta tarea en español. Los encabezados, nombres de archivo y claves se mantienen como están.",
     en: "Escribe el contenido de los documentos de esta tarea en inglés. Los encabezados, nombres de archivo y claves se mantienen como están.",
@@ -229,6 +236,7 @@ const ES: Vocabulario = {
 const EN: Vocabulario = {
   encabezados: {
     validacionesPendientes: "Pending validations",
+    evidencia: "EVIDENCE",
     base: "BASIS OF EACH DECISION",
     pendientesHeredados: "INHERITED PENDING ITEMS",
     reglasAdicionales: "ADDITIONAL RULES",
@@ -322,6 +330,7 @@ const EN: Vocabulario = {
   marcadores: { ranura: "slot", bloque: "block", modos: { reemplazar: "replace", antes: "before", despues: "after" } },
   carpetaComandos: "commands",
   seccionesEsqueleto: ["BASIS OF EACH DECISION", "INHERITED PENDING ITEMS"],
+  seccionesGlobales: ["EVIDENCE", "BASIS OF EACH DECISION", "INHERITED PENDING ITEMS"],
   lineaDeRedaccion: {
     es: "Write the content of this task's documents in Spanish. Headings, file names and keys stay as they are.",
     en: "Write the content of this task's documents in English. Headings, file names and keys stay as they are.",
