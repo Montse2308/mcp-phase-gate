@@ -247,7 +247,10 @@ los recursos y de los MCP Prompts `/fN`. Son 620 códigos en seis catálogos (70
 terminal y las respuestas de texto del filtro de seguridad del Studio (421, 403, 401, 405, 413, 500) seguían
 fijas en español. Ahora tienen código: las de `ui`, en el idioma de `--idioma` o en el del proceso; las del
 filtro, en el del proceso (`PHASE_GATE_LANG` o el sistema), porque el filtro no lee la cabecera de idioma de una
-petición que todavía no ha validado.
+petición que todavía no ha validado. *Y una consecuencia del contexto por llamada que esta entrada no decía* (cuestionamiento de la
+misma auditoría): lo que corre fuera de una llamada (la vigilancia de las capas, la sincronización de los `/fN`,
+los avisos de un ensamblado sin contexto) y los errores de validación de los argumentos, que zod redacta con los
+esquemas fijados al arrancar, salen en el idioma de arranque del servidor, no en el del proyecto.
 
 **En qué idioma sale cada cosa:**
 
