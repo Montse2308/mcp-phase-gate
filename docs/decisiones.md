@@ -12,6 +12,52 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-18 — El README principal pasa a inglés
+
+> **Reemplaza en parte** la del 2026-08-08 "README bilingüe completo, asumiendo el costo de la
+> duplicación": los dos README siguen completos y cambiar uno obliga a cambiar el otro; lo que cambia es
+> cuál es el principal.
+
+**Decisión.** `README.md`, en inglés, es el principal: el que fija la estructura y el primero que se
+actualiza. `README.es.md` es su gemelo completo, con las mismas secciones en el mismo orden, las mismas
+tablas, el mismo esquema de enlaces y anclas, y los diagramas Mermaid traducidos. Los dos abren igual:
+
+1. el nombre y una frase ("An MCP server that turns any AI coding agent into a gated, auditable,
+   batch-by-batch engineering workflow." y su versión en español);
+2. el GIF de su idioma por su URL absoluta de Pages, enlazado al MP4 del mismo idioma;
+3. las insignias: CI, npm, provenance, licencia y la demo en vivo;
+4. tres líneas: el problema, la solución y el enlace a la demo;
+5. "Try it in 10 seconds" / "Pruébalo en 10 segundos": `npx mcp-phase-gate ui --demo`, con `--idioma`.
+
+Los dos ganan una sección de arquitectura (un diagrama de las piezas reales y el enlace a este registro,
+con su número de entradas) y una de idiomas, y dejan de decir que el producto está en español. El caso de
+estudio sigue la misma regla: `docs/case-study.md` y su gemelo `docs/caso-de-estudio.md`.
+
+**Por qué.**
+
+- npm enseña `README.md` en la página del paquete y GitHub lo abre por defecto: es lo primero que lee
+  quien llega de fuera, y la mayoría de esa gente lee inglés.
+- El producto ya es bilingüe (Etapa 6): prompts, comandos, variantes, presets, mensajes y Studio existen en
+  inglés. La razón de la ADR del 2026-08-08 para tratar el español como el idioma del producto ("los
+  prompts, que son el producto real, están en español y se quedan así") dejó de ser cierta. El README en
+  inglés ya existía, pero describía un producto en español y lo decía en su segunda línea.
+
+**Qué se descartó.**
+
+- Reducir el español a un resumen que remita al inglés, la salida que la ADR del 2026-08-08 dejaba
+  prevista si uno de los dos envejecía: el español sigue siendo un idioma de primera en el producto, y
+  quien lo usa en español tiene que poder instalarlo y configurarlo sin cambiar de documento.
+- Un solo README con los dos idiomas intercalados: el doble de largo para cualquiera de los dos lectores.
+- Imágenes con ruta relativa al repo: npmjs.com las rompe, porque `docs/medios/` no viaja en el paquete
+  (§8.1 del plan). La captura de `tablero-cabina.png` sale de la cabecera y la de `tablero-sobrio.png` de
+  la sección del Studio: las dos enseñan la interfaz de antes del selector de idioma.
+
+**Riesgo aceptado.** El de siempre: dos documentos largos que cambian juntos. Ningún test compara su
+estructura (`test/docs.test.ts` solo vigila los comandos de fase); la mitigación sigue siendo la línea de
+"Where everything is" / "Dónde está cada cosa" que recuerda cambiar el otro.
+
+---
+
 ## 2026-10-18 — Los medios se generan de la demo real y se publican en Pages, no en git
 
 **Decisión.** El GIF, el video y el póster de los README salen de **código real ejecutándose**, nunca de
@@ -105,7 +151,7 @@ de oro regenerada a propósito (L06).
 español y en inglés: los errores y las respuestas de las tools, las preguntas de confirmación, las líneas de
 `doctor` (y el texto de cada hallazgo, con el código del propio hallazgo), `--help` y la salida de `init` y
 `eject`, los bloques que el servidor añade a un prompt y las descripciones de las tools, de sus parámetros, de
-los recursos y de los MCP Prompts `/fN`. Son 620 códigos en seis catálogos (`src/i18n/textos/`), que junta
+los recursos y de los MCP Prompts `/fN`. Son 620 códigos en seis catálogos (700 en siete desde que el Studio ganó el suyo, L07) (`src/i18n/textos/`), que junta
 `src/i18n/mensajes.ts` con `mensaje(codigo, parametros, idioma?)` y `fallo(...)`, un `Error` que guarda su
 `codigo`.
 
@@ -2559,6 +2605,9 @@ precisamente el comportamiento contra el disco.
 ---
 
 ## 2026-08-08 — README bilingüe completo, asumiendo el costo de la duplicación
+
+> **Reemplazada en parte** el 2026-10-18 por "El README principal pasa a inglés": los dos siguen completos
+> y gemelos; lo que cambia es cuál es el principal.
 
 **Decisión.** `README.md` en inglés y `README.es.md` en español, los dos completos. Ambos
 abren explicando qué problema resuelve, por qué las fases y para quién es, antes de la

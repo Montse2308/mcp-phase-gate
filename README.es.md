@@ -1,12 +1,32 @@
 # mcp-phase-gate
 
-*Léelo en [inglés](README.md) · Este es el README en español.*
+Un servidor MCP que convierte a cualquier agente de IA que programa en un flujo de ingeniería con compuertas, auditable y lote por lote.
+
+*Este es el README en español · El principal, en inglés: [README.md](README.md).*
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Montse2308/mcp-phase-gate/master/docs/medios/tablero-cabina.png" alt="El tablero de una tarea en el Studio: las estaciones con sus señales y los lotes de la Fase 4 como vagones, cada uno con su sello" width="820">
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, de unos 41 segundos: init --dry-run y doctor en una terminal; después el Studio: la red de proyectos, el tablero de una tarea terminada con sus sellos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, el Taller y el sitio publicado en un teléfono" width="760"></a>
 </p>
 
-**[Prueba la demo del Studio en el navegador](https://montse2308.github.io/mcp-phase-gate/)**, de solo lectura y con datos de ejemplo. En tu equipo: `npx mcp-phase-gate ui --demo`.
+[![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/mcp-phase-gate)](https://www.npmjs.com/package/mcp-phase-gate)
+[![npm provenance](https://img.shields.io/badge/npm-provenance-blue)](https://www.npmjs.com/package/mcp-phase-gate#provenance)
+[![Licencia: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/Montse2308/mcp-phase-gate/blob/master/LICENSE)
+[![Demo en vivo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-blue)](https://montse2308.github.io/mcp-phase-gate/)
+
+**El problema:** un agente de IA que programa se lanza directo al código, toma decisiones que nadie le pidió y su razonamiento muere con el chat.<br>
+**La solución:** cinco fases con una compuerta entre ellas, y cada una deja un documento en disco; en la Fase 4 es el propio servidor quien escribe el recibo de cada lote, después de comprobar el commit contra git.<br>
+**Velo:** la [demo en vivo](https://montse2308.github.io/mcp-phase-gate/) es el Studio con datos de ejemplo, de solo lectura, en español y en inglés.
+
+## Pruébalo en 10 segundos
+
+```bash
+npx mcp-phase-gate ui --demo
+```
+
+Abre el Studio en tu navegador sobre una demo que se genera en una carpeta temporal (tres proyectos, commits de git de verdad); no toca tu Documentación. `--idioma es` o `--idioma en` elige el idioma de la demo; sin él, decide `PHASE_GATE_LANG` o el del sistema.
+
+---
 
 Un servidor MCP (Model Context Protocol) que parte cada requerimiento en **cinco fases con compuerta** y obliga a que cada una deje su documento antes de pasar a la siguiente. En el panel de tu cliente se identifica como `mcp-phase-gate`.
 
@@ -40,7 +60,7 @@ Y entre una fase y otra hay una **compuerta**, que es lo que le da el nombre al 
 
 En la Fase 4 la IA hace el commit de cada lote solo con tu OK (es la política por defecto; un proyecto puede elegir otra, [ver abajo](#-configuración-por-proyecto)); nunca hace push ni abre el PR, en ninguna política. El recibo de cada lote lo escribe el servidor, que comprueba contra git que su commit existe y está en la rama ([ver abajo](#-la-fase-4-con-el-servidor-record_batch)). En la Fase 5 solo lee.
 
-Desde la 3.0 el flujo se adapta al tipo de trabajo con **presets**: código con o sin suite de pruebas, un requerimiento que cruza varios repositorios, el mantenimiento de un agente de IA o una investigación cuyo entregable es un informe. Las cinco fases y su compuerta son las mismas; cambian las secciones que tienen que cambiar.
+Desde la 3.0 el flujo se adapta al tipo de trabajo con **presets**: código con o sin suite de pruebas, un requerimiento que cruza varios repositorios, el mantenimiento de un agente de IA o una investigación cuyo entregable es un informe. Las cinco fases y su compuerta son las mismas; cambian las secciones que tienen que cambiar. Desde la 3.2 todo funciona en **español y en inglés**: prompts, presets, mensajes del servidor y el Studio ([ver abajo](#-idiomas)).
 
 ## Para quién es
 
@@ -52,13 +72,48 @@ Habla MCP estándar, así que funciona en cualquier cliente compatible. Está **
 
 ---
 
+## 📐 Arquitectura
+
+```mermaid
+flowchart LR
+    CL["Cliente MCP<br/>Claude Code · Cursor · VS Code"]
+    subgraph SRV["Servidor MCP (stdio)"]
+        T["13 tools · 5 recursos<br/>/f1 … /f5 como MCP Prompts"]
+    end
+    CL <-- "stdio" --> T
+    T --> P["Capas de prompts<br/>fábrica prompts/es · prompts/en<br/>preset · reglas · global · proyecto"]
+    T --> MF["Manifiestos<br/>phase-gate.json por proyecto<br/>machine.json por equipo"]
+    T <--> DOC[("Documentación Central en disco<br/>tareas · documentos de fase · recibos")]
+    T --> GIT["git, de solo lectura<br/>una sola puerta, sin locks"]
+    T --> ST["Estado local<br/>punteros de tarea activa · sesiones abiertas"]
+
+    subgraph STU["Studio: mcp-phase-gate ui (proceso aparte)"]
+        H["API HTTP + SSE<br/>en 127.0.0.1, token y cookie"]
+    end
+    BR["Navegador"] <--> H
+    H --> DOC
+    H --> GIT
+    H --> ST
+    H -. "vista previa y Aplicar: solo configuración" .-> MF
+    STU -- "ui --export-static" --> PG["GitHub Pages<br/>demo estática, es y en"]
+```
+
+- **El servidor** habla con el cliente por stdio y casi no guarda estado propio (un puntero de tarea activa por proyecto): la fase de una tarea se deduce de qué documentos hay en disco, el prompt se arma con sus capas en cada llamada, y a git se le pregunta por una sola puerta de solo lectura que no toma locks ni ejecuta nada que traiga el repo.
+- **La Documentación Central** es una carpeta tuya, sincronizada o no. El servidor solo escribe dentro de las carpetas de tarea, y los recibos de la Fase 4 solo con `record_batch`.
+- **El Studio** es un proceso aparte, que solo carga `ui`: una API HTTP local con eventos en vivo (SSE) sobre las mismas funciones que usan las tools. Nunca escribe documentos de tareas ni recibos. `--export-static` lo convierte en el sitio de solo lectura que se publica en GitHub Pages.
+
+Cada decisión de diseño está registrada, con su porqué y la alternativa que descartó, en [`docs/decisiones.md`](docs/decisiones.md), el **registro de decisiones de arquitectura**: 99 entradas, la más reciente arriba.
+
+---
+
 ## 📁 Cómo se organiza la Documentación
 
-Cada tarea vive dentro de una carpeta con esta estructura fija:
+Cada tarea vive dentro de una carpeta con esta estructura fija (aquí, un proyecto en español):
 
 ```
 DOCUMENTACIÓN/
 ├── PROYECTO-A/
+│   ├── phase-gate.json                ← opcional: el manifiesto del proyecto
 │   └── Proyectos/
 │       └── <nombre_de_la_tarea>/
 │           ├── 00 - Contexto Inicial.md   ← lo escribe start_task
@@ -78,11 +133,58 @@ DOCUMENTACIÓN/
         └── <nombre_de_la_tarea>/
 ```
 
-`PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `PHASE_GATE_TASKS_SUBDIR` más abajo.
+`PROYECTO-A`, `PROYECTO-B` y `PROYECTO-C` son de ejemplo: tus proyectos son las carpetas que tú tengas ahí, con los nombres que tú les pongas. El nivel `Proyectos` es la subcarpeta de tareas, y su nombre también es configurable — ver `PHASE_GATE_TASKS_SUBDIR` más abajo. Los nombres de los documentos salen de los prompts de las fases del idioma del proyecto: un proyecto en inglés tiene `00 - Initial Context.md`, `01 - Technical Analysis.md`… `04 - Execution/` y `05 - Audit.md` ([ver la tabla](#-idiomas)). Un proyecto nunca mezcla los dos.
 
 **Lotes y recibos.** El plan de la Fase 3 parte el trabajo en lotes (`L01`, `L02`…): cada uno es un cambio que se revierte solo y deja la aplicación funcionando. La Fase 4 los ejecuta uno a la vez, y de cada lote quedan un **recibo** corto (qué se hizo, qué se verificó, qué espera por ti) en `04 - Ejecución/`, que escribe el servidor con `record_batch`, y un commit. Al cerrar el último lote, el servidor genera `04 - Ejecución.md`: con varios lotes es el índice de los recibos; con uno solo, el propio recibo, que se mueve ahí. Hasta entonces la fase no aparece como terminada ([cómo funciona](#-la-fase-4-con-el-servidor-record_batch)). Al pedir la Fase 4 o la 5, el servidor añade al prompt la lista de recibos que ya existen, para retomar en otro chat sin adivinar sus nombres.
 
 > El servidor arma esta ruta **automáticamente**. Tú (o el LLM) solo indican `project`, `task_name` y `file_name`; no hay que escribir la ruta completa a mano.
+
+---
+
+## 🌐 Idiomas
+
+Los prompts, los comandos, las variantes de regla y los presets vienen en español y en inglés (`prompts/es/`, `prompts/en/`, `presets/es/`, `presets/en/`). Hay dos cosas distintas que tienen idioma:
+
+| Qué | Dónde se declara | Qué decide |
+|---|---|---|
+| **El idioma del proyecto** | `"idioma": "es"` o `"en"` en su `phase-gate.json` | Qué prompts y presets de fábrica usa, los nombres de los documentos y el idioma en que escribe el servidor: los recibos, el índice y los bloques que añade a un prompt |
+| **El idioma de redacción de una tarea** | `redaccion` en `start_task` (`"es"` o `"en"`), que queda en la cabecera del contexto inicial | Solo el idioma en que la IA escribe el **contenido** de los documentos. El prompt gana una línea al final; nombres, encabezados y claves se quedan como están |
+
+**Cómo se resuelve el idioma de un proyecto**, por este orden:
+
+1. `idioma` en su `phase-gate.json`.
+2. **Los documentos que ya tiene en disco**: las tareas con `01 - Análisis Técnico.md` son en español; las que tienen `01 - Technical Analysis.md`, en inglés. Si hay de los dos, el que más documentos tenga (un empate es español), y `doctor` avisa con `IDIOMA-MIXTO`.
+3. `idiomaPorDefecto` en el `machine.json` de este equipo.
+4. `PHASE_GATE_LANG` (`es` o `en`; también valen `es-MX` o `en_US.UTF-8`).
+5. El idioma del sistema: `es` si su locale empieza por `es`; si no, `en`.
+
+El disco va antes que el equipo a propósito: los proyectos de la 2.x no tienen manifiesto y están en español, y abrir uno en un equipo configurado en inglés no puede dejar sus tareas como si no tuvieran ninguna fase hecha. `doctor` enseña de dónde sale el idioma de cada proyecto. `init --migrate` escribe `idioma` en los manifiestos que crea: el de los documentos del proyecto si los tiene, y si no, `--idioma` o lo que contestes a su pregunta.
+
+| Fase | Proyecto en español | Proyecto en inglés |
+|---|---|---|
+| — | `00 - Contexto Inicial.md` | `00 - Initial Context.md` |
+| 1 | `01 - Análisis Técnico.md` | `01 - Technical Analysis.md` |
+| 2 | `02 - Decisiones.md` | `02 - Decisions.md` |
+| 3 | `03 - Plan Técnico.md` | `03 - Technical Plan.md` |
+| 4 | `04 - Ejecución.md` y `04 - Ejecución/` | `04 - Execution.md` y `04 - Execution/` |
+| 5 | `05 - Auditoría.md` | `05 - Audit.md` |
+
+**Cambiar el idioma de un proyecto no renombra nada.** Si el manifiesto declara un idioma y hay tareas con documentos del otro, `doctor` avisa con `IDIOMA-CON-TAREAS` y `get_phase_prompt` se niega con el mismo mensaje, porque si no esas tareas aparecerían vacías. Devuelve el manifiesto a su idioma, o renombra esas carpetas a mano.
+
+**Una tarea en el otro idioma.** En un proyecto en español, `start_task` con `redaccion: "en"` crea la tarea con los nombres y la estructura en español del proyecto, y el prompt le pide a la IA que escriba el contenido en inglés. Al revés es igual.
+
+**Los mensajes del propio servidor.** Los errores y las respuestas, `doctor`, `--help`, `init`, `eject` y las descripciones de las tools y de sus parámetros existen en los dos idiomas. Una llamada que resuelve un proyecto responde en el idioma de ese proyecto; si no, decide `PHASE_GATE_LANG`, y por último el sistema. Las descripciones de las tools y de sus parámetros se fijan al arrancar el servidor, porque el cliente las pide una vez, al conectar. Los clientes MCP suelen lanzar el servidor con un entorno reducido, y en Windows Node sigue la configuración regional, así que dilo de forma explícita en el bloque `env` del cliente: `"PHASE_GATE_LANG": "es"` si trabajas en español, o `"en"`.
+
+**Lo que nunca se traduce:** los nombres de las tools (`start_task`, `record_batch`…) y de sus parámetros (`titulo`, `que_se_hizo`, `cerrar_fase`…), los ids de lote `L01…L99`, los ids de ranura, los nombres de los presets, las políticas de commits, las claves del manifiesto, las variables de entorno y los códigos de los hallazgos de `doctor`. Para que eso no estorbe:
+
+- `crear_proyecto` acepta también el alias `create_project`.
+- `record_batch` acepta `estado` en inglés: `verified`, `with pending items`, `failed`, `discarded`.
+- Cada ranura conserva su id canónico en español y tiene un alias en inglés, que se acepta en los bloques, en los marcadores de ranura y en `eject`: `phase-3/tests` → `fase-3/pruebas`, `global/zero-breakage` → `global/cero-rupturas`… La tabla completa está en [`docs/glosario.md`](docs/glosario.md).
+- Los recibos, los planes y los encabezados se leen en los dos idiomas: un recibo escrito en español se sigue leyendo en un proyecto abierto en inglés.
+
+**Los prompts en inglés no son una traducción automática.** Cada archivo se reescribió con un glosario fijo ([`docs/glosario.md`](docs/glosario.md)), con las mismas ranuras en el mismo orden y el mismo número de puntos en `FORBIDDEN` y `SELF-CHECK` que su gemelo en español. Un test de contrato comprueba que estén todos los encabezados que busca el código, y una prueba de oro (`test/oro/3.2.0-en/`) fija los prompts ensamblados en inglés; las pruebas de oro en español no cambiaron.
+
+**El Studio tiene su propio idioma**, independiente del de cada proyecto: un selector ES / EN en la barra de arriba, que el navegador recuerda; un enlace para compartir con `#?lang=en`; si no, los idiomas del navegador, y por último inglés. `<html lang>` lo sigue, y los documentos se enseñan tal como están escritos ([ver abajo](#-el-studio-ver-el-flujo-en-el-navegador-ui)).
 
 ---
 
@@ -132,7 +234,8 @@ Recuerda que en JSON cada `\` va doble `\\`.
       "args": ["-y", "mcp-phase-gate"],
       "env": {
         "PHASE_GATE_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
-        "PHASE_GATE_REPOS_PATH": "C:\\proyectos"
+        "PHASE_GATE_REPOS_PATH": "C:\\proyectos",
+        "PHASE_GATE_LANG": "es"
       }
     }
   }
@@ -154,7 +257,8 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
       "args": ["-y", "mcp-phase-gate"],
       "env": {
         "PHASE_GATE_DOCS_PATH": "C:\\Users\\TU_USUARIO\\OneDrive - TU ORGANIZACIÓN\\Documentos\\DOCUMENTACIÓN",
-        "PHASE_GATE_REPOS_PATH": "C:\\proyectos"
+        "PHASE_GATE_REPOS_PATH": "C:\\proyectos",
+        "PHASE_GATE_LANG": "es"
       }
     }
   }
@@ -166,7 +270,7 @@ Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay
 <summary><b>Claude Code</b> — de una sola línea</summary>
 
 ```bash
-claude mcp add mcp-phase-gate --env PHASE_GATE_DOCS_PATH="C:\Users\TU_USUARIO\Documentos\DOCUMENTACIÓN" --env PHASE_GATE_REPOS_PATH="C:\proyectos" -- npx -y mcp-phase-gate
+claude mcp add mcp-phase-gate --env PHASE_GATE_DOCS_PATH="C:\Users\TU_USUARIO\Documentos\DOCUMENTACIÓN" --env PHASE_GATE_REPOS_PATH="C:\proyectos" --env PHASE_GATE_LANG=es -- npx -y mcp-phase-gate
 ```
 
 O a mano, en un `.mcp.json` en la raíz del proyecto, con la misma forma que el de Cursor.
@@ -174,9 +278,11 @@ O a mano, en un `.mcp.json` en la raíz del proyecto, con la misma forma que el 
 
 Ese `PHASE_GATE_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. Sirve igual `G:\Mi unidad\Documentación`, `D:\Dropbox\Docs` o `C:\Docs` sin nube ninguna.
 
+`PHASE_GATE_LANG` es opcional: fija el idioma de las descripciones de las tools y de los mensajes que no son de un proyecto, y el de los proyectos nuevos que no tienen otra pista. Si trabajas en español, ponlo en `"es"`: el idioma del sistema es el último recurso ([ver Idiomas](#-idiomas)).
+
 > **Por este camino no hay archivo `.env`.** El paquete vive dentro de `node_modules`, donde no tiene sentido dejar tu configuración, así que las rutas van **obligatoriamente** en el bloque `"env"`. El `.env` solo existe en el camino de abajo.
 
-**Las dos variables son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
+**Las dos variables de rutas son obligatorias y no tienen valor por defecto.** Si falta alguna, o si apunta a una carpeta que no existe, las tools que la necesitan te lo dicen con ese nombre exacto en vez de fallar más tarde por otro motivo.
 
 > **¿Ya lo usabas con `ORQUESTADOR_*`?** Esos nombres siguen funcionando como alias de `PHASE_GATE_*`; no tienes que tocar nada. Si defines los dos con valores distintos gana `PHASE_GATE_*`, y `doctor` y el log del servidor te avisan.
 
@@ -186,7 +292,7 @@ Ese `PHASE_GATE_DOCS_PATH` es solo un **ejemplo** con una carpeta de OneDrive. S
 
 ### 🔧 Camino B — desde el código
 
-Necesario solo si vas a editar los prompts del repo directamente o a contribuir. Para *añadir* prompts propios no hace falta: eso se hace superponiendo carpetas, [ver abajo](#-los-prompts-de-las-fases-viven-en-promptses).
+Necesario solo si vas a editar los prompts del repo directamente o a contribuir. Para *añadir* prompts propios no hace falta: eso se hace superponiendo carpetas, [ver abajo](#-los-prompts-de-las-fases-viven-en-promptsidioma).
 
 **1. Clona y compila.** La carpeta `build/` NO se sube al repo, así que hay que generarla en cada dispositivo:
 
@@ -212,7 +318,7 @@ PHASE_GATE_REPOS_PATH=C:\proyectos
 
 > Guarda el `.env` en **UTF-8** (con o sin BOM, da igual). Si lo creas desde PowerShell con `>` sale en UTF-16: el servidor lo detecta, no lo carga y te lo dice, tanto en el error de la variable que falta como en `doctor`.
 
-**3. Registra el servidor** igual que en el camino A, pero cambiando `command` y `args` por el `build/index.js` de tu clon, y sin bloque `"env"` (las rutas ya vienen del `.env`):
+**3. Registra el servidor** igual que en el camino A, pero cambiando `command` y `args` por el `build/index.js` de tu clon, y sin las rutas en el bloque `"env"` (ya vienen del `.env`):
 
 ```json
 "command": "node",
@@ -238,7 +344,7 @@ Desde una terminal, con las mismas variables que le das al cliente:
 npx mcp-phase-gate doctor
 ```
 
-Te dice qué versión corre y desde dónde (`npx`, global, una dependencia o un clon), qué valor tiene cada variable y de dónde salió (el entorno o el `.env`, y si usaste el nombre nuevo o el alias), tu configuración local (`machine.json` y los presets disponibles), qué archivo de prompt gana en cada fase, y qué proyectos hay con su tarea activa, su manifiesto, su preset (y de dónde sale), sus reglas y sus repos con su rama. Termina con una lista de hallazgos: una variable obligatoria que falta, un `.env` en UTF-16, un manifiesto mal escrito, una copia en conflicto que dejó OneDrive, un preset que no existe, un proyecto sin manifiesto que usa el preset por defecto sin que lo sepas, un bloque que no encaja en ninguna ranura, un repo que no está en este equipo… Sale con código `1` si hay algún error, así que sirve también en un script. `doctor --json` da lo mismo como JSON.
+Te dice qué versión corre y desde dónde (`npx`, global, una dependencia o un clon), qué valor tiene cada variable y de dónde salió (el entorno o el `.env`, y si usaste el nombre nuevo o el alias), tu configuración local (`machine.json` y los presets disponibles), qué archivo de prompt gana en cada fase, y qué proyectos hay con su tarea activa, su manifiesto, su idioma y su preset (y de dónde sale cada uno), sus reglas y sus repos con su rama. Termina con una lista de hallazgos: una variable obligatoria que falta, un `.env` en UTF-16, un manifiesto mal escrito, una copia en conflicto que dejó OneDrive, un preset que no existe, un proyecto sin manifiesto que usa el preset por defecto sin que lo sepas, un proyecto con documentos en los dos idiomas (`IDIOMA-MIXTO`), un bloque que no encaja en ninguna ranura, un repo que no está en este equipo… Sale con código `1` si hay algún error, así que sirve también en un script. `doctor --json` da lo mismo como JSON.
 
 En la Fase 4 revisa además los recibos: uno de un lote que el plan no declara (`RECIBO-FUERA-DE-PLAN`), los escritos a mano (`RECIBO-MANUAL`), un `04 - Ejecución.md` que ya no es el que el servidor ensamblaría con sus recibos (`INDICE-DESINCRONIZADO`) y las rutas de la Documentación de más de 240 caracteres (`RUTA-LARGA`). **`doctor --reverificar`** comprueba también contra git que el commit de cada recibo siga en su rama, y que cada artefacto sellado no haya cambiado (`ANCLA-NO-VIGENTE`): úsalo después de un rebase.
 
@@ -259,16 +365,12 @@ Abre una aplicación web local con lo que ve el servidor, armada con las mismas 
 | Vista | Qué enseña |
 |---|---|
 | **Red** | Cada proyecto como una estación: su preset, su manifiesto, sus repos con rama y cambios pendientes, la tarea activa con su fase y qué cliente MCP lo tiene abierto ahora mismo |
-| **Tablero** | Las fases de una tarea como una vía con semáforos (cerrada, con pendientes, hueco, pendiente), y los lotes de la Fase 4 como vagones con su sello (commit verificado, sha256 sellado, fallido, descartado, manual…). Un clic abre el documento o el recibo |
+| **Tablero** | Las fases de una tarea como una vía con semáforos (cerrada, con pendientes, hueco, pendiente), y los lotes de la Fase 4 como vagones con su sello: VERIFICADO (commit), SELLADO (sha256), EN VÍA (commit pendiente), RECHAZADO (fallido), ANULADO (descartado), MANUAL, y un sello agrietado cuando el ancla ya no está vigente. Un clic abre el documento o el recibo |
 | **Taller** | El prompt que recibe cada fase, ranura por ranura: qué capa y qué `archivo:línea` ganó, el diff frente al texto de fábrica y `eject` para editarlo |
 | **Vigía** | Los hallazgos de `doctor` con cómo se arregla cada uno, y lo que haría `init` en cada cliente |
 | **Bitácora** | La línea de tiempo de la tarea: documentos, recibos, commits con su asunto, reanclajes y el cierre de la Fase 4 |
 
-Todo tiene un modo **Sobrio** (tablas, tema claro) además del modo **Cabina** de siempre, funciona con el teclado y en el teléfono, y nunca expresa un estado solo con color.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Montse2308/mcp-phase-gate/master/docs/medios/tablero-sobrio.png" alt="El mismo tablero en modo Sobrio: las estaciones y los lotes como tablas" width="720">
-</p>
+Todo tiene un modo **Sobrio** (tablas, tema claro) además del modo **Cabina** de siempre, funciona con el teclado y en el teléfono, y nunca expresa un estado solo con color. La interfaz está en español o en inglés, con el selector ES / EN de la barra de arriba o `#?lang=es` en el enlace ([ver Idiomas](#-idiomas)).
 
 **Solo escribe configuración** —el preset, las reglas, un `phase-gate.json` nuevo, `eject`, `init` en un cliente— y siempre en dos pasos: una vista previa con el diff, y "Aplicar", que solo escribe si el disco no cambió desde que lo viste. Nunca escribe documentos de tareas, recibos ni nada de tus repos.
 
@@ -279,7 +381,8 @@ Todo tiene un modo **Sobrio** (tablas, tema claro) además del modo **Cabina** d
 | `--puerto <n>` | Un puerto fijo en vez de uno al azar |
 | `--no-abrir` | No abre el navegador: solo imprime el enlace |
 | `--demo` | Sobre una demo con datos de ejemplo, en una carpeta temporal: tres proyectos (multi-repo, un agente de IA y uno de investigación) con commits de git de verdad. No toca tu Documentación |
-| `--export-static <dir>` | No arranca nada: escribe en `<dir>` (nueva o vacía) un sitio estático de solo lectura con la demo. Es lo que se publica en GitHub Pages |
+| `--idioma es\|en` | Con `--demo`: el idioma de la demo (`TIENDA`, `ASISTENTE`, `INVESTIGACION` en español; `SHOP`, `ASSISTANT`, `RESEARCH` en inglés). Sin él, `PHASE_GATE_LANG` o el del sistema |
+| `--export-static <dir>` | No arranca nada: escribe en `<dir>` (nueva o vacía) un sitio estático de solo lectura con la demo, siempre en los dos idiomas (`datos/es/` y `datos/en/`); el sitio cambia de demo al cambiar el idioma de la interfaz. Es lo que se publica en GitHub Pages |
 | `--incluir-datos-reales` | Con `--export-static`: tu Documentación en vez de la demo. Pide que escribas `exportar` (o `--yes`), y sustituye las rutas de este equipo por `<Documentación>`, `<repos>`, `~`… |
 
 ---
@@ -294,7 +397,7 @@ Todo tiene un modo **Sobrio** (tablas, tema claro) además del modo **Cabina** d
 
   Si cambias de equipo o de chat y el LLM "olvidó" dónde escribir, dile que llame `get_active_task` o simplemente indícale el `project` + `task_name`.
 - **El proyecto sale de la carpeta que tienes abierta.** Si tu cliente anuncia sus carpetas abiertas (MCP Roots), y una de ellas es un repo de un proyecto o está dentro de su carpeta de la Documentación, el servidor deduce el proyecto y te lo dice en una línea. `project` pasa a ser opcional ([ver abajo](#el-proyecto-sale-de-la-carpeta-abierta)).
-- Lo que es **de cada equipo** y no viaja con la Documentación —en qué ruta está cada repo en esta máquina, el preset por defecto de tus proyectos sin manifiesto, tus presets propios— vive en `machine.json`, en la misma carpeta de datos (en Linux, `~/.config/mcp-phase-gate/`).
+- Lo que es **de cada equipo** y no viaja con la Documentación —en qué ruta está cada repo en esta máquina, el preset y el idioma por defecto de tus proyectos sin manifiesto, tus presets propios— vive en `machine.json`, en la misma carpeta de datos (en Linux, `~/.config/mcp-phase-gate/`).
 - **La fase no se guarda: se deduce.** El servidor mira qué documentos tiene ya la carpeta de la tarea y de ahí saca en qué fase vas, porque cada fase declara cómo se llama el suyo. Por eso el dato nunca se desincroniza: si borras `02 - Decisiones.md` porque quedó mal, la tarea vuelve sola a la Fase 2.
 - Y si el archivo de punteros se pierde —equipo nuevo, o lo borraste—, `get_active_task` no se queda mudo: propone la tarea con actividad más reciente y **te avisa de que es una deducción**, para que la confirmes antes de escribir.
 - **Regla de oro:** si usas una carpeta sincronizada, deja que termine de sincronizar antes de empezar a trabajar en el otro equipo, para no crear conflictos de archivos.
@@ -355,13 +458,13 @@ cambios, la causa está casi siempre aquí.
 | Las rutas de este equipo | `.env` en la raíz ([camino B](#-camino-b--desde-el-código), paso 2) | Cambian el usuario del sistema y dónde tengas la carpeta de Documentación. |
 | El registro del MCP | La configuración de tu cliente ([camino A](#-camino-a--con-npx-recomendado), o el paso 3 del [camino B](#-camino-b--desde-el-código)) | En Cursor y VS Code contiene la ruta absoluta a `build/index.js`, que depende de dónde clonaste y apunta a una carpeta gitignoreada. Ninguna ruta puede ser correcta en todos los equipos. Ver [`docs/decisiones.md`](docs/decisiones.md). La excepción es el `.mcp.json` de Claude Code, que va con ruta relativa. |
 | Los comandos `/f1`–`/f5` como archivos, **solo si tu cliente no muestra bien los MCP Prompts** | `C:\Users\<TU_USUARIO>\.cursor\commands\f<N>.md` en Cursor | Desde la 2.2.0 el servidor los ofrece como MCP Prompts y llegan solos con cada versión ([ver abajo](#los-comandos-de-fase)). La copia en archivos solo hace falta como respaldo (`init --comandos` la hace por ti); en **Claude Code** dentro de este repo ya está versionada en `.claude/commands/`. |
-| La configuración de este equipo | `machine.json` y `presets/` en `%APPDATA%\mcp-phase-gate\` (o `PHASE_GATE_CONFIG_PATH`) | Son rutas y preferencias de esta máquina: dónde está cada repo aquí y el preset por defecto de tus proyectos sin manifiesto ([ver abajo](#machinejson-lo-de-cada-equipo)). |
+| La configuración de este equipo | `machine.json` y `presets/` en `%APPDATA%\mcp-phase-gate\` (o `PHASE_GATE_CONFIG_PATH`) | Son rutas y preferencias de esta máquina: dónde está cada repo aquí y el preset y el idioma por defecto de tus proyectos sin manifiesto ([ver abajo](#machinejson-lo-de-cada-equipo)). |
 
 ### Los comandos de fase
 
 Se invocan en el chat escribiendo `/f1`, `/f2`, etc. **Son solo orquestación**: dicen qué
 tools llamar y en qué orden. El comportamiento, la estructura del documento y su nombre de
-archivo los dicta el prompt de la fase en `prompts/es/`, así que afinar una fase no obliga a
+archivo los dicta el prompt de la fase en `prompts/<idioma>/`, así que afinar una fase no obliga a
 tocar su comando.
 
 Lo que hace cada uno:
@@ -382,13 +485,15 @@ commits; si no le das ninguno, audita los que lista el servidor al final del pro
 (COMMITS DE LA FASE 4). Los demás arrancan de `get_active_task`.
 
 **Llegan solos, como MCP Prompts.** Desde la 2.2.0 el servidor ofrece cada comando como un
-prompt MCP (`f1`…`f5`), con su texto en [`prompts/es/comandos/`](prompts/es/comandos). No hay que
+prompt MCP (`f1`…`f5`), con su texto en [`prompts/es/comandos/`](prompts/es/comandos) (y en
+[`prompts/en/commands/`](prompts/en/commands) en inglés). No hay que
 copiar nada a ninguna carpeta y se actualizan con cada versión del paquete. Todos sus
 argumentos son opcionales —`project`; en `/f1` también `task_name` y `contexto`; en `/f5`,
 `commits`—: lo que no pases te lo pide el propio comando, y un contexto largo puede ir pegado
 después del comando como texto normal. Sin `project`, si el servidor lo deduce de la carpeta
-abierta, el comando ya llega con él. Una fase que añadas tú (una `fase-6`) recibe su `/f6`
-con un texto genérico, y un `comandos/fN.md` en tu carpeta de prompts propia (o en la de un
+abierta, el comando ya llega con él. Con proyecto, el texto sale del idioma y de las capas de
+ese proyecto. Una fase que añadas tú (una `fase-6`) recibe su `/f6`
+con un texto genérico, y un `comandos/fN.md` (`commands/fN.md` en inglés) en tu carpeta de prompts propia (o en la de un
 proyecto) gana al de fábrica.
 
 Cómo se ven en cada cliente:
@@ -401,7 +506,7 @@ Cómo se ven en cada cliente:
 
 **Si tu cliente no los muestra cómodamente**, usa los archivos: en este repo, Claude Code ya
 los lee de [`.claude/commands/`](.claude/commands) (idénticos a `prompts/es/comandos/`); para
-usarlos en tus otros proyectos, `npx mcp-phase-gate init --comandos` los copia a
+usarlos en tus otros proyectos, `npx mcp-phase-gate init --comandos` los copia, en el idioma de tu equipo, a
 `C:\Users\<TU_USUARIO>\.claude\commands\` o a `C:\Users\<TU_USUARIO>\.cursor\commands\`, sin
 pisar los que ya tengas tuyos. Más detalle en
 [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md).
@@ -410,7 +515,7 @@ pisar los que ya tengas tuyos. Más detalle en
 
 ## 🚦 La compuerta: saltarse una fase deja de ser invisible
 
-Si pides una fase por delante de la que te toca, el prompt llega con un aviso al principio:
+Si pides una fase por delante de la que te toca, el prompt llega con un aviso al principio (en el idioma del proyecto):
 
 ```
 ## ATENCIÓN — COMPUERTA DE FASE
@@ -419,8 +524,11 @@ Pediste la Fase 4, pero la tarea "login-sso" no tiene los documentos de fases an
 
 - Fase 3: falta `03 - Plan Técnico.md`
 
-Esta tarea va en la Fase 3 (Plan Técnico). NO hagas el trabajo de la Fase 4 sobre
-documentos que no existen ni te los inventes a partir del contexto del chat.
+Esta tarea va en la Fase 3 (Plan Técnico). NO hagas el trabajo de la Fase 4 sobre documentos que no
+existen ni te los inventes a partir del contexto del chat.
+
+Díselo al usuario antes de nada y pregúntale si prefiere hacer primero la fase que falta o continuar de
+todos modos. Lo que sigue es el prompt de la fase que pediste: aplícalo solo después de resolver esto con el usuario.
 ```
 
 **Avisa, no bloquea.** El prompt se entrega igual, así que el día que quieras saltarte una fase a propósito en un cambio trivial, puedes. Lo que cambia es que ya no pasa desapercibido.
@@ -431,7 +539,7 @@ Tres cosas que **no** hace, a propósito:
 - **No te obliga a escribir nada más.** Sigues escribiendo `/f4` a secas. Quien averigua de qué tarea se habla es el servidor, con el puntero que ya mantiene — no el modelo preguntándotelo.
 - **No se calla cuando no puede comprobar.** Si tienes varios proyectos con tarea activa y no se indicó cuál, lo dice en vez de fingir que todo está en orden.
 
-**También señala los pendientes que dejó la fase anterior.** Si el documento de la fase anterior tiene una sección `## Validaciones pendientes` con algo dentro, o si al pedir la Fase 5 algún recibo de lote quedó `con pendientes`, `fallido` o `descartado`, el prompt llega además con un bloque `## PENDIENTES HEREDADOS (detectados por el servidor)` que los nombra, para que la IA te los diga antes de empezar. Una sección que solo dice "Ninguna." no cuenta. Tampoco bloquea nada: solo señala lo que el prompt ya obligaba a escribir.
+**También señala los pendientes que dejó la fase anterior.** Si el documento de la fase anterior tiene una sección `## Validaciones pendientes` con algo dentro, o si al pedir la Fase 5 algún recibo de lote quedó `con pendientes`, `fallido` o `descartado`, el prompt llega además con un bloque `## PENDIENTES HEREDADOS (detectados por el servidor)` que los nombra, para que la IA te los diga antes de empezar. Una sección que solo dice "Ninguna." no cuenta. Tampoco bloquea nada: solo señala lo que el prompt ya obligaba a escribir. (En un proyecto en inglés: `## Pending validations`, `with pending items`, `failed`, `discarded`, `INHERITED PENDING ITEMS` y "None.".)
 
 ---
 
@@ -458,11 +566,11 @@ Desde la 3.0 la IA ya no redacta los recibos ni el documento de la Fase 4: le pa
 
 **Recibos sellados y `reanclar`.** Un recibo con ancla `commit` o sha256 queda **sellado**: `record_batch` no lo reescribe. Si un rebase o un squash cambió los SHA, `get_batch_status` con `reverificar: true` (o `doctor --reverificar`) marca el ancla como no vigente, y la IA la cambia con `record_batch` (`lote`, `reanclar: true` y el `commit` nuevo). El servidor **te pregunta** "El recibo L02 está sellado con el commit `a1b2c3d`. ¿Reemplazar su ancla por `e4f5a6b`?" (sin confirmaciones directas, la IA necesita tu OK en el chat y `force`). Solo cambia el ancla: el contenido del lote no se toca, y "Verificación del commit" guarda el historial. Con la fase ya cerrada también se puede, y el índice se rehace.
 
-**Con un solo lote**, su recibo vive en `04 - Ejecución/` mientras está abierto, así que la fase no aparece cerrada con el commit pendiente; al anclarlo, el servidor lo mueve a `04 - Ejecución.md` y queda un solo archivo. **Para cerrar sin hacer todos los lotes**, si tú lo decides: `record_batch` con `cerrar_fase: true` y `motivo_descarte`. Los lotes sin recibo quedan descartados, los fallidos se quedan como están, y el servidor te pide confirmación antes de escribir nada. Si decides no hacer el commit de un lote que ya está registrado, la IA lo cierra con `record_batch`, `lote`, `estado: descartado` y una nota, sin volver a escribir su contenido.
+**Con un solo lote**, su recibo vive en `04 - Ejecución/` mientras está abierto, así que la fase no aparece cerrada con el commit pendiente; al anclarlo, el servidor lo mueve a `04 - Ejecución.md` y queda un solo archivo. **Para cerrar sin hacer todos los lotes**, si tú lo decides: `record_batch` con `cerrar_fase: true` y `motivo_descarte`. Los lotes sin recibo quedan descartados, los fallidos se quedan como están, y el servidor te pide confirmación antes de escribir nada. Si decides no hacer el commit de un lote que ya está registrado, la IA lo cierra con `record_batch`, `lote`, `estado: descartado` (o `discarded`) y una nota, sin volver a escribir su contenido.
 
 **La Fase 5 recibe los commits ya verificados.** Al pedir la Fase 5, el prompt termina con "COMMITS DE LA FASE 4": por cada repo, sus commits con su asunto, si siguen en la rama, y el rango exacto para auditarlos si son consecutivos. Si un ancla ya no corresponde a la rama, lo dice, para que la IA te avise antes de auditar.
 
-**Tareas de la 2.x a medio camino.** Siguen funcionando: `record_batch` lee los recibos que la IA escribió a mano (los marca como `manual`) y continúa desde el siguiente lote, y un recibo manual con un hash cuenta como sellado. Si el plan no declara `lotes: N` en su frontmatter, `record_batch` te lo pide antes del primer recibo (si ya hay recibos, el plan está congelado y añadirlo pide tu confirmación). Lo que ya no se puede es escribir recibos ni `04 - Ejecución.md` con `write_central_doc` ([ver abajo](#-documentos-protegidos)).
+**Tareas de la 2.x a medio camino.** Siguen funcionando: `record_batch` lee los recibos que la IA escribió a mano (los marca como `manual`) y continúa desde el siguiente lote, y un recibo manual con un hash cuenta como sellado. Si el plan no declara `lotes: N` (`batches: N` en inglés) en su frontmatter, `record_batch` te lo pide antes del primer recibo (si ya hay recibos, el plan está congelado y añadirlo pide tu confirmación). Lo que ya no se puede es escribir recibos ni el documento de la Fase 4 con `write_central_doc` ([ver abajo](#-documentos-protegidos)).
 
 ---
 
@@ -481,7 +589,7 @@ Crear un documento de fase que todavía no existe nunca se rechaza, salvo los de
 - **Si tu cliente admite confirmaciones directas** (elicitation de MCP), el servidor **te pregunta a ti**, en un formulario de tu cliente con una casilla: "Reescribir `01 - Análisis Técnico.md`". Si la marcas y aceptas, se escribe y la respuesta dice que fue con tu confirmación; si dices que no o cierras el formulario, no se escribe nada. Aquí `force` no basta: lo pone la IA, y justo eso es lo que la pregunta evita.
 - **Si no la admite**, sigue como antes: el mensaje de rechazo le explica a la IA que necesita tu confirmación explícita en el chat y `force: true`, y la respuesta avisa de que el documento se sobrescribió (o se creó, si no existía).
 
-Lo mismo para **estrenar un proyecto** con `crear_proyecto: true`: con confirmaciones directas, el servidor te pregunta antes de crear la carpeta.
+Lo mismo para **estrenar un proyecto** con `crear_proyecto: true` (o su alias `create_project`): con confirmaciones directas, el servidor te pregunta antes de crear la carpeta.
 
 Si tu cliente anuncia confirmaciones directas pero el formulario nunca aparece, el servidor espera tres minutos y no escribe nada; a la segunda vez seguida tampoco escribe (aunque la IA haya puesto `force`) y deja de preguntar durante el resto de la sesión: desde ahí vuelve a decidir `force`, con tu confirmación en el chat. Si tu cliente cancela la llamada antes de que respondas, no se escribe nada. Para evitarlo desde el principio, registra el servidor con `PHASE_GATE_ELICITATION=off`. **En Cursor para Windows se recomienda `off`** mientras siga abierto el bug en el que el formulario no aparece.
 
@@ -493,19 +601,19 @@ Además, `write_central_doc` solo escribe **dentro de la carpeta de una tarea qu
 
 | Tool | Qué hace |
 |------|----------|
-| `start_task` | Crea la carpeta de una tarea **nueva** (`<PROYECTO>/Proyectos/<tarea>`), guarda el "00 - Contexto Inicial.md" y la deja como **activa de su proyecto**. Si la tarea ya existe se niega y te manda a `switch_task`, para no reescribir el contexto inicial. Estrenar un proyecto pide `crear_proyecto: true` y, si tu cliente puede, tu confirmación directa. Con `repos` elige qué repos del proyecto toca la tarea, y con `preset` usa otro preset solo para ella ([ver abajo](#una-tarea-con-sus-repos-o-su-propio-preset)). |
+| `start_task` | Crea la carpeta de una tarea **nueva** (`<PROYECTO>/<subcarpeta de tareas>/<tarea>`), guarda el contexto inicial y la deja como **activa de su proyecto**. Si la tarea ya existe se niega y te manda a `switch_task`, para no reescribir el contexto inicial. Estrenar un proyecto pide `crear_proyecto: true` (o `create_project: true`) y, si tu cliente puede, tu confirmación directa. Con `repos` elige qué repos del proyecto toca la tarea, con `preset` usa otro preset solo para ella ([ver abajo](#una-tarea-con-sus-repos-o-su-propio-preset)), y con `redaccion` el contenido se escribe en el otro idioma ([ver arriba](#-idiomas)). |
 | `get_active_task` | Devuelve la tarea activa y **en qué fase va**, deducida de los documentos que ya tiene. Sin `project` responde la de cada proyecto. Úsalo al abrir un chat nuevo o si se perdió el contexto. |
 | `list_tasks` | Lista las tareas que existen y la fase de cada una, de la más reciente a la más antigua. Para retomar algo viejo o ver qué quedó a medias. |
 | `switch_task` | Cambia cuál es la tarea activa de un proyecto. **No toca ningún archivo**: es la forma correcta de retomar una tarea que ya existe. |
-| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR, armadas con el preset y las capas del proyecto (ver abajo). Comprueba de paso la **compuerta**: si te saltaste una fase, el prompt llega con el aviso al principio, seguido de los pendientes heredados si los hay. Con proyecto, termina con el bloque **CONFIGURACIÓN DEL PROYECTO**. |
+| `get_phase_prompt` | Trae las reglas de comportamiento globales según la fase (1–5): 1 Descubrimiento, 2 Decisiones, 3 Plan Técnico, 4 Ejecución, 5 Auditoría / Pre-PR, armadas con el idioma, el preset y las capas del proyecto (ver abajo). Comprueba de paso la **compuerta**: si te saltaste una fase, el prompt llega con el aviso al principio, seguido de los pendientes heredados si los hay. Con proyecto, termina con el bloque **CONFIGURACIÓN DEL PROYECTO**. |
 | `read_central_doc` | Lee un archivo de la Documentación. **Recomendado:** pasar `project` + `task_name` + `file_name` (el servidor arma la ruta). También acepta `file_path` relativo. |
 | `write_central_doc` | Escribe/sobrescribe un archivo dentro de la carpeta de una tarea. Mismos parámetros que `read_central_doc` + `content`, y `force` para los [documentos protegidos](#-documentos-protegidos) cuando tu cliente no admite confirmaciones directas. |
 | `read_repo_file` | Lee un archivo de un repo del proyecto **por su id** (`api`, `web`…), esté donde esté en este equipo. Nunca lee nada de `.git` ([ver abajo](#varios-repositorios-read_repo_file-y-repo_status)). |
 | `repo_status` | Rama, commit, adelante/atrás de su upstream y si el árbol está limpio, de un repo o de todos los de la tarea. Solo lee: no toma locks ni ejecuta comandos que traiga el repo (`core.fsmonitor`, filtros de `.gitattributes`). |
 | `read_cross_repo` | Lee un archivo de cualquier carpeta de tu carpeta de repositorios, por nombre (ej. desde `repo-a` consultar cómo `repo-b` maneja un endpoint) sin cambiar de ventana. Tampoco lee nada de `.git`. Si el proyecto declara sus repos, usa `read_repo_file`. |
-| `record_batch` | Registra un lote de la Fase 4 en su recibo, que escribe el servidor: antes del commit, con el contenido (queda con el commit pendiente), y después, con el `commit`, que comprueba contra git. Sin git, con `artifact_path` (sha256) o `verification_note`. Con `reanclar` cambia el ancla de un recibo sellado y con `cerrar_fase` cierra la fase sin los lotes que faltan, las dos con tu confirmación. Al anclar el último lote genera `04 - Ejecución.md` ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)). |
+| `record_batch` | Registra un lote de la Fase 4 en su recibo, que escribe el servidor: antes del commit, con el contenido (queda con el commit pendiente), y después, con el `commit`, que comprueba contra git. Sin git, con `artifact_path` (sha256) o `verification_note`. Con `reanclar` cambia el ancla de un recibo sellado y con `cerrar_fase` cierra la fase sin los lotes que faltan, las dos con tu confirmación. `estado` acepta los valores en español o en inglés. Al anclar el último lote genera el documento de la Fase 4 ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)). |
 | `get_batch_status` | Cruza el plan con los recibos: qué lote toca, cuál espera su commit, el ancla y el origen de cada recibo (servidor o a mano). Con `reverificar`, comprueba que cada commit siga en la rama y que cada artefacto sellado no haya cambiado. Solo lee. |
-| `get_orchestrator_status` | La radiografía de la instalación, igual que [`doctor`](#-revisar-la-instalación-doctor): versión y ruta del paquete, variables y de dónde salió cada una, configuración, qué prompt gana en cada fase, proyectos con su tarea activa, preset, reglas y repos, y avisos. Además, el cliente conectado, sus capacidades y con qué proyecto coincide la carpeta abierta. Úsala cuando algo no se comporte como esperas. |
+| `get_orchestrator_status` | La radiografía de la instalación, igual que [`doctor`](#-revisar-la-instalación-doctor): versión y ruta del paquete, variables y de dónde salió cada una, configuración, qué prompt gana en cada fase, proyectos con su tarea activa, idioma, preset, reglas y repos, y avisos. Además, el cliente conectado, sus capacidades y con qué proyecto coincide la carpeta abierta. Úsala cuando algo no se comporte como esperas. |
 
 En `start_task`, `switch_task`, `read_central_doc`, `write_central_doc`, `read_repo_file`, `repo_status`, `record_batch` y `get_batch_status`, **`project` es opcional** si tu cliente anuncia la carpeta abierta.
 
@@ -542,7 +650,7 @@ Un proyecto que no existe se rechaza mostrando la lista de los que sí, en vez d
 
 ## 🧱 Configuración por proyecto
 
-Todo esto es **opcional**: un proyecto sin configuración funciona con los valores por defecto. Pero desde la 3.0 cada proyecto puede declarar con qué preset trabaja, qué repositorios toca y con qué reglas.
+Todo esto es **opcional**: un proyecto sin configuración funciona con los valores por defecto. Pero desde la 3.0 cada proyecto puede declarar con qué preset trabaja, qué repositorios toca y con qué reglas, y desde la 3.2, su idioma.
 
 ### `phase-gate.json`, el manifiesto del proyecto
 
@@ -552,6 +660,7 @@ Vive en la carpeta del proyecto, `<DOCS>/<PROYECTO>/phase-gate.json`, así que v
 {
   "$schema": "https://unpkg.com/mcp-phase-gate@3/schema/project.json",
   "version": 1,
+  "idioma": "es",
   "preset": "multi-repo-feature",
   "repos": [
     { "id": "api", "dir": "backend-api", "rol": "backend" },
@@ -564,8 +673,8 @@ Vive en la carpeta del proyecto, `<DOCS>/<PROYECTO>/phase-gate.json`, así que v
 
 | Campo | Qué es |
 |-------|--------|
+| `idioma` | `es` o `en`: el idioma del proyecto ([ver Idiomas](#-idiomas)). Sin él, se deduce de los documentos que ya hay en disco y, después, del equipo. |
 | `preset` | El preset del proyecto ([ver la tabla](#presets)). Por defecto, `software`. |
-| `idioma` | `es` (el inglés llega en una versión posterior). |
 | `repos` | Los repositorios del proyecto: un `id` corto, su `dir` **relativo a `PHASE_GATE_REPOS_PATH`** (nunca absoluto ni con `..`: el manifiesto viaja entre equipos) y un `rol` opcional. |
 | `reglas.lotes` | `false` si el proyecto no trabaja por lotes: un solo lote, cuyo recibo pasa a ser el documento de la Fase 4 al anclarlo. Si falta, decide el preset. |
 | `reglas.commits` | La política de commits de la Fase 4 ([ver abajo](#la-política-de-commits)). Si falta, decide el preset. |
@@ -583,16 +692,18 @@ Lo que solo vale en esta máquina vive aparte, en `%APPDATA%\mcp-phase-gate\mach
   "$schema": "https://unpkg.com/mcp-phase-gate@3/schema/machine.json",
   "version": 1,
   "repos": { "PROYECTO-A/api": "D:\\trabajo\\backend-api" },
-  "presetPorDefecto": "software-replica"
+  "presetPorDefecto": "software-replica",
+  "idiomaPorDefecto": "es"
 }
 ```
 
 - `repos` dice dónde está un repo concreto **en este equipo**, aunque esté fuera de `PHASE_GATE_REPOS_PATH`. La clave es `"<PROYECTO>/<id>"`, con el proyecto sin distinguir mayúsculas.
 - `presetPorDefecto` es el preset de tus proyectos **sin manifiesto**: la forma de conservar tu flujo de siempre sin escribir un manifiesto en cada proyecto.
+- `idiomaPorDefecto` es el idioma de los proyectos que no declaran uno ni tienen documentos de los que deducirlo.
 
 ### Presets
 
-Un preset cambia el contenido de unas pocas secciones de los prompts; las fases, la compuerta y los documentos son siempre los mismos.
+Un preset cambia el contenido de unas pocas secciones de los prompts; las fases, la compuerta y los documentos son siempre los mismos. Cada uno viene en los dos idiomas (`presets/es/`, `presets/en/`), con las mismas ranuras.
 
 | Preset | Para qué |
 |--------|----------|
@@ -636,7 +747,7 @@ En todas: `git add` archivo por archivo (nunca `-A`, `.` ni una carpeta), nunca 
 
 ### El bloque CONFIGURACIÓN DEL PROYECTO
 
-Cuando el servidor sabe el proyecto, cada prompt de fase termina con lo que declara su configuración, como dato:
+Cuando el servidor sabe el proyecto, cada prompt de fase termina con lo que declara su configuración, como dato (en el idioma del proyecto; en inglés, `PROJECT CONFIGURATION`):
 
 ```
 ## CONFIGURACIÓN DEL PROYECTO (la declara phase-gate.json)
@@ -666,9 +777,9 @@ Con los repos declarados en el manifiesto, la IA los usa por su id: `read_repo_f
 
 ---
 
-## 📝 Los prompts de las fases viven en `prompts/es/`
+## 📝 Los prompts de las fases viven en `prompts/<idioma>/`
 
-El texto de cada fase **ya no está dentro del código**: son archivos markdown sueltos, en una carpeta por idioma.
+El texto de cada fase **ya no está dentro del código**: son archivos markdown sueltos, en una carpeta por idioma. El juego en español:
 
 ```
 prompts/es/
@@ -684,6 +795,8 @@ prompts/es/
 └── reglas/                      ← las variantes de lotes y commits que activa el manifiesto
 presets/es/                      ← los presets del paquete, un archivo cada uno
 ```
+
+`prompts/en/` es su gemelo en inglés (`phase-1-discovery.md` … `phase-5-audit.md`, `commands/`, `reglas/`), y `presets/en/`, los presets en inglés.
 
 **Se leen en cada llamada.** Si editas un `.md`, la siguiente vez que la IA invoque
 `get_phase_prompt` ya recibe la versión nueva — sin `npm run build` y sin reiniciar el
@@ -701,10 +814,10 @@ documento: 02 - Decisiones.md
 
 `get_phase_prompt` lee esa cabecera y le entrega al modelo, al final del prompt, el nombre exacto del documento de la fase y los de las fases anteriores. **Por eso los comandos `/f1`–`/f5` ya no nombran ningún archivo:** el nombre vive en un solo sitio, y cambiar un prompt no obliga a editar además un comando en cada dispositivo.
 
-La fase 1 declara además `documento_inicial`, que es el archivo que escribe `start_task` con el contexto.
+La fase 1 declara además `documento_inicial`, que es el archivo que escribe `start_task` con el contexto. (En los prompts en inglés las claves son `document` e `initial_document`; se leen las dos.)
 
 Reglas del formato:
-- El archivo debe llamarse `fase-<N>-<lo-que-sea>.md` (también acepta `phase-<N>-...`).
+- El archivo debe llamarse `fase-<N>-<lo-que-sea>.md` o `phase-<N>-<lo-que-sea>.md`.
 - La cabecera es opcional y no se filtra al prompt: se quita antes de entregarlo.
 - **El número de fases no está cableado:** si agregas un `fase-6-despliegue.md`, la
   fase 6 existe de inmediato.
@@ -718,9 +831,9 @@ Los prompts se arman **por capas**, de menor a mayor prioridad:
 
 | Capa | Dónde | Qué puede aportar |
 |------|-------|-------------------|
-| Fábrica | `prompts/es/` del paquete | Las fases, `global-rules.md` y los comandos |
-| Preset | el archivo del preset efectivo | Solo bloques |
-| Reglas | `prompts/es/reglas/`, según `lotes` y `commits` | Solo bloques |
+| Fábrica | `prompts/<idioma>/` del paquete, en el idioma del proyecto | Las fases, `global-rules.md` y los comandos |
+| Preset | el archivo del preset efectivo, en `presets/<idioma>/` o el tuyo | Solo bloques |
+| Reglas | `prompts/<idioma>/reglas/`, según `lotes` y `commits` | Solo bloques |
 | Global | `PHASE_GATE_PROMPTS_PATH`, o si no, la carpeta `prompts/` junto a `machine.json` cuando existe | Fases, `global-rules.md`, comandos y un `bloques.md` |
 | Proyecto | `<DOCS>/<PROYECTO>/.phase-gate/prompts/` | Lo mismo que la global, solo para ese proyecto |
 
@@ -752,13 +865,13 @@ Este proyecto corre `make test` y el plan dice qué debe dar en cada lote.
 <!-- /bloque -->
 ```
 
-- El identificador es `<archivo>/<ranura>`: `global` o `fase-N`, y el nombre de la ranura.
-- El modo es `reemplazar` (por defecto), `antes` o `despues`.
+- El identificador es `<archivo>/<ranura>`: `global` o `fase-N` (o `phase-N`), y el nombre de la ranura. Cada ranura tiene un id canónico en español y un alias en inglés (`fase-3/pruebas` es `phase-3/tests`); valen los dos, y `doctor` y el Studio hablan del canónico.
+- El modo es `reemplazar` (por defecto), `antes` o `despues` (en inglés, `replace`, `before`, `after`; los marcadores también pueden ser `<!-- block: … -->`).
 - Los bloques se aplican por capa, de abajo arriba: el de más arriba manda. Un bloque **no puede cambiar el nombre de un documento**.
 - `global/extra` es una ranura vacía al final de las reglas globales, para **sumar** reglas sin sustituir ninguna.
 - Lo que no encaja se avisa y no se aplica: un bloque de una ranura que no existe (con una nota al principio del prompt y en `doctor`), uno repetido, o un archivo mal formado (que se ignora entero).
 
-**`global-rules.md` entero.** Sustituirlo con uno propio sigue funcionando, pero ya no es la forma recomendada: usa un `bloques.md` con `global/cero-rupturas`, `global/evidencia` o `global/extra`. Si tu `global-rules.md` no trae las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS`, que las fases citan, el servidor **añade las de fábrica al final** y `doctor` te lo dice (`GLOBAL-REINYECTADO`). `EVIDENCIA` es una ranura y no se añade: si falta, `doctor` avisa.
+**`global-rules.md` entero.** Sustituirlo con uno propio sigue funcionando, pero ya no es la forma recomendada: usa un `bloques.md` con `global/cero-rupturas`, `global/evidencia` o `global/extra`. Si tu `global-rules.md` no trae las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS` (`BASIS OF EACH DECISION` e `INHERITED PENDING ITEMS` en inglés), que las fases citan, el servidor **añade las de fábrica al final** y `doctor` te lo dice (`GLOBAL-REINYECTADO`). `EVIDENCIA` es una ranura y no se añade: si falta, `doctor` avisa.
 
 ### `eject`: copiar lo que hoy está en vigor para editarlo
 
@@ -768,9 +881,9 @@ npx mcp-phase-gate eject fase-3/pruebas --a proyecto:PROYECTO-A
 
 | Objetivo | Copia | A |
 |----------|-------|---|
-| `fase-3` | El prompt de fábrica de la fase, con sus ranuras | `<capa>/fase-3-plan-tecnico.md` |
-| `fase-3/pruebas`, `global/evidencia` | El contenido **efectivo** de la ranura para ese proyecto (con su preset y sus reglas ya aplicados), como bloque | `<capa>/bloques.md` |
-| `comando-f4` | El texto de `/f4` | `<capa>/comandos/f4.md` |
+| `fase-3` (o `phase-3`) | El prompt de fábrica de la fase, con sus ranuras | `<capa>/fase-3-plan-tecnico.md` (el nombre del archivo de fábrica, en el idioma de la capa) |
+| `fase-3/pruebas`, `global/evidencia` | El contenido **efectivo** de la ranura para ese proyecto (con su preset y sus reglas ya aplicados), como bloque en el idioma de la capa | `<capa>/bloques.md` |
+| `comando-f4` | El texto de `/f4` | `<capa>/comandos/f4.md` (`commands/` en inglés) |
 | `preset:<nombre>` | El archivo del preset | `presets/<nombre>.md` junto a `machine.json` |
 
 `--a global` copia a tu capa global (si no tienes `PHASE_GATE_PROMPTS_PATH`, a la carpeta `prompts/` junto a `machine.json`, que pasa a ser tu capa global); `--a proyecto:<NOMBRE>`, a la de ese proyecto. Si ya existe, no lo toca salvo con `--fuerza`, que deja copia. `--dry-run` lo enseña sin escribir. Después, `doctor --fase 3 --proyecto PROYECTO-A` te muestra que gana tu copia.
@@ -791,7 +904,8 @@ para que el resultado sea consistente sin importar qué modelo de IA se use.
   en el prompt. Así la descripción se adapta al tamaño del ticket sin dejar de ser
   predecible.
 - **Límites de longitud en palabras**, no adjetivos: trivial (60–100), chico
-  (120–160), normal (200–260), grande (350–450, tope 500).
+  (120–160), normal (200–260), grande (350–450, tope 500). El prompt en inglés usa
+  55–90, 110–150, 190–240 y 320–400 (tope 450): el inglés dice lo mismo con menos palabras.
 - **Se entrega dentro de un bloque de código de cuatro backticks**, para que al
   copiar y pegar en GitHub llegue el markdown en crudo y no el texto ya renderizado.
 
@@ -811,7 +925,7 @@ La 3.0 es la primera versión mayor: **el preset por defecto deja de ser el fluj
 
 1. **Actualiza.** Por `npx` llega solo. Desde el código: `git pull`, `npm install` y `npm run build`.
 2. **Elige tu preset.** Para seguir como antes en todos tus proyectos sin manifiesto, una de dos:
-   - `npx mcp-phase-gate init --migrate` escribe `phase-gate.json` con `"preset": "software-replica"` en cada proyecto que no lo tenga (solo crea, nunca sobrescribe). Viaja con la Documentación.
+   - `npx mcp-phase-gate init --migrate` escribe `phase-gate.json` con `"preset": "software-replica"` en cada proyecto que no lo tenga (solo crea, nunca sobrescribe), junto con el `idioma` del proyecto. Viaja con la Documentación.
    - `npx mcp-phase-gate init --migrate --solo-este-equipo` escribe `"presetPorDefecto": "software-replica"` en el `machine.json` de este equipo, sin tocar la Documentación. Repítelo en cada equipo.
 
    Si no haces nada, tus proyectos usan `software`: el mismo flujo, con la verificación y las pruebas pensadas para código con o sin suite, sin la réplica.
@@ -819,11 +933,13 @@ La 3.0 es la primera versión mayor: **el preset por defecto deja de ser el fluj
 
 Qué más cambia, por si te afecta:
 
-- **Los prompts de fábrica se mudaron a `prompts/es/`.** Tu `PHASE_GATE_PROMPTS_PATH` sigue igual: las capas propias tienen sus archivos en la raíz.
-- **Un `global-rules.md` propio** recibe ahora las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS` de fábrica si no las trae. Mejor aún: cámbialo por un `bloques.md` ([ver arriba](#bloques-cambiar-una-sección-sin-copiar-el-prompt)).
+- **Los prompts de fábrica se mudaron a `prompts/es/`** (y, desde la 3.2, `prompts/en/`). Tu `PHASE_GATE_PROMPTS_PATH` sigue igual: las capas propias tienen sus archivos en la raíz.
+- **Un `global-rules.md` propio** recibe ahora las secciones `BASE DE CADA DECISIÓN` y `PENDIENTES HEREDADOS` de fábrica (o sus versiones en inglés) si no las trae. Mejor aún: cámbialo por un `bloques.md` ([ver arriba](#bloques-cambiar-una-sección-sin-copiar-el-prompt)).
 - **`project` es opcional** en las tools que lo pedían, si tu cliente anuncia la carpeta abierta. Si ya lo pasas, nada cambia.
 - **Cuatro tools nuevas**: `read_repo_file` y `repo_status`, para los repos que declara un manifiesto, y `record_batch` y `get_batch_status`, con las que el servidor escribe y verifica la Fase 4. `read_cross_repo` sigue igual.
-- **La Fase 4 la escribe el servidor.** La IA ya no escribe recibos ni `04 - Ejecución.md` con `write_central_doc` (se rechazan): registra cada lote con `record_batch`. Una tarea a medio camino sigue desde el siguiente lote ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)).
+- **La Fase 4 la escribe el servidor.** La IA ya no escribe recibos ni el documento de la Fase 4 con `write_central_doc` (se rechazan): registra cada lote con `record_batch`. Una tarea a medio camino sigue desde el siguiente lote ([ver arriba](#-la-fase-4-con-el-servidor-record_batch)).
+
+Tus proyectos en español siguen en español al pasar a la 3.2: sin `idioma` en el manifiesto, el idioma se deduce de sus documentos antes que de nada más ([ver Idiomas](#-idiomas)).
 
 ---
 
@@ -844,13 +960,14 @@ Cada variable tiene además un **alias** con el nombre de antes, `ORQUESTADOR_*`
 | `PHASE_GATE_STATE_PATH` | Carpeta de datos del usuario (ver arriba) | Carpeta donde se guardan los punteros de tarea activa. Casi nunca hace falta tocarla; sirve para aislar el estado en pruebas y es **obligatoria si registras el servidor más de una vez** (ver [¿Varias carpetas de Documentación?](#-varias-carpetas-de-documentación-opcional)). |
 | `PHASE_GATE_CONFIG_PATH` | La carpeta de datos del usuario | Carpeta de `machine.json` y de tus presets propios ([ver arriba](#machinejson-lo-de-cada-equipo)); con una subcarpeta `prompts/`, esa es tu capa global si no defines `PHASE_GATE_PROMPTS_PATH`. Casi nunca hace falta. No tiene alias. |
 | `PHASE_GATE_ELICITATION` | ninguno (activadas) | `off` (o `false`, `0`, `no`) para que el servidor no pida [confirmaciones directas](#-documentos-protegidos) al cliente y decida `force`, como antes. Recomendado en Cursor para Windows (`init` lo pone solo). No tiene alias. |
+| `PHASE_GATE_LANG` | ninguno (el del sistema) | `es` o `en`: el idioma de las descripciones de las tools, de los mensajes que no son de un proyecto y de los proyectos sin otra pista ([ver Idiomas](#-idiomas)). No tiene alias. |
 
 ---
 
 ## 🧑‍💻 Desarrollo (si modificas el código)
 
 > **Ojo:** esto aplica solo a cambios en el **código**. Si lo único que tocaste fue
-> un prompt de `prompts/es/*.md` o un preset, **no hace falta compilar ni reiniciar nada** — se leen
+> un prompt de `prompts/<idioma>/*.md` o un preset, **no hace falta compilar ni reiniciar nada** — se leen
 > en cada llamada.
 
 El código fuente está en `src/`, repartido por responsabilidad:
@@ -860,9 +977,11 @@ El código fuente está en `src/`, repartido por responsabilidad:
 | `config.ts` | Variables del entorno y su alias, lectura del `.env`, dónde viven el estado y la configuración, identidad del servidor |
 | `paths.ts` | Cómo se arma cada ruta y la comprobación de que no se salga de su base |
 | `phases.ts` | Descubrir las fases y leer sus archivos |
-| `capas.ts` | Las capas, la configuración efectiva de un proyecto (preset y reglas) y el ensamblado de cada prompt |
+| `capas.ts` | Las capas, la configuración efectiva de un proyecto (idioma, preset y reglas) y el ensamblado de cada prompt |
 | `bloques.ts` | Leer los bloques y aplicarlos sobre las ranuras |
-| `manifiesto.ts` | `phase-gate.json`, `machine.json`, los presets disponibles y los JSON Schema publicados |
+| `vocabulario.ts` | El único lugar con los textos que el código busca o escribe con una forma fija (encabezados, claves de los recibos, nombres de documento, marcadores, alias de ranura), en español y en inglés |
+| `i18n/` | Los mensajes del servidor en los dos idiomas: un catálogo por grupo de módulos en `i18n/textos/`, que junta `mensajes.ts` |
+| `manifiesto.ts` | `phase-gate.json`, `machine.json`, el idioma de un proyecto, los presets disponibles y los JSON Schema publicados |
 | `roots.ts` | El proyecto deducido de las carpetas abiertas en el cliente |
 | `git.ts` | La única puerta a git, de solo lectura para el servidor (su única escritura es la de la demo del Studio, en sus propios repos temporales) |
 | `repos.ts` | Leer archivos y estado de git de los repos de un proyecto |
@@ -903,14 +1022,18 @@ Los tests viven en `test/` y no necesitan ninguna dependencia extra: usan `node:
 viene con Node. Las pruebas de extremo a extremo del Studio viven en `studio/e2e/`. Montan una Documentación Central de mentira en una carpeta temporal, así que
 no tocan la tuya. El CI los corre en cada PR.
 
+El GIF, el video y el póster de los README no están en git: `scripts/medios.mjs` los genera desde la demo real en el workflow de GitHub Pages con cada tag, en los dos idiomas, y se publican en `https://montse2308.github.io/mcp-phase-gate/medios/`.
+
 ### Dónde está cada cosa
 
 | Qué buscas | Dónde |
 |------------|-------|
-| Lo que el proyecto hace hoy | Este README (y su gemelo en inglés, [`README.md`](README.md) — **si cambias uno, cambia el otro**) |
-| Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md) |
-| Los comandos `/f1`–`/f5` | Su texto en [`prompts/es/comandos/`](prompts/es/comandos); cómo llegan a cada cliente en [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
-| Los presets y los esquemas | [`presets/es/`](presets/es) y [`schema/`](schema). Los esquemas se generan de los shapes zod: `npm run build && node scripts/generar-esquemas.mjs` |
+| Lo que el proyecto hace hoy | Este README (y su gemelo en inglés, el principal, [`README.md`](README.md) — **si cambias uno, cambia el otro**) |
+| Por qué está diseñado así | [`docs/decisiones.md`](docs/decisiones.md), el registro de decisiones de arquitectura |
+| Cómo se construyó, y qué se midió | [`docs/caso-de-estudio.md`](docs/caso-de-estudio.md) (en inglés: [`docs/case-study.md`](docs/case-study.md)) |
+| Los términos fijos en los dos idiomas | [`docs/glosario.md`](docs/glosario.md) |
+| Los comandos `/f1`–`/f5` | Su texto en [`prompts/es/comandos/`](prompts/es/comandos) y [`prompts/en/commands/`](prompts/en/commands); cómo llegan a cada cliente en [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
+| Los presets y los esquemas | [`presets/es/`](presets/es), [`presets/en/`](presets/en) y [`schema/`](schema). Los esquemas se generan de los shapes zod: `npm run build && node scripts/generar-esquemas.mjs` |
 | El plan de la versión 3 | [`docs/plan-maestro-v3.md`](docs/plan-maestro-v3.md) |
 | Que un cambio no rompió nada | [`test/`](test), con `npm test`. El CI los corre en cada PR |
 | Lo que falta por hacer | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |
