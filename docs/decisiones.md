@@ -124,6 +124,14 @@ capturas a mano ni de una conversación escenificada, con dos scripts y una cint
 Se generan en el workflow de Pages en cada tag y se publican en `<sitio>/medios/demo-<idioma>.gif`, `.mp4` y
 `poster-<idioma>.png`; los README los enlazan con su URL absoluta, que también se ve en npmjs.com.
 
+*Ampliado el 2026-10-19* (hallazgo 14 de la auditoría de la Etapa 6): el workflow tiene tres jobs. `sitio`
+exporta la demo y `medios` genera los medios, los dos solo con permiso de leer el repo, aunque `medios` instala
+VHS, ffmpeg y Chromium; `desplegar` es el único con `pages: write` e `id-token: write`, y no compila ni instala
+nada. Si los medios fallan, la demo se publica igual, con los medios que ya estaban publicados (desplegar
+reemplaza el sitio entero, y sin ellos los README enseñarían imágenes rotas); la primera vez, sin medios y con
+un aviso. Las actions de los tres workflows van fijadas por SHA, con su versión en un comentario que Dependabot
+mantiene.
+
 **Medido en este equipo** (Windows, VHS 0.12.1, ffmpeg 6.0, Chromium de Playwright 1.63): 41,3 s en español y
 42,4 s en inglés; MP4 de 1,52 MB en los dos; GIF de 4,93 MB y 4,72 MB a 8 fps y 760 px (a 12 fps y 960 px
 pasaban de 7 MB). El presupuesto es el de §8.8 (GIF ≤ 5 MB, MP4 ≤ 8 MB) y el script falla si se pasa.

@@ -7,6 +7,13 @@ name: Studio en GitHub Pages
 # así que `ui --export-static` genera la demo en una carpeta temporal (R6).
 #
 # Requiere, una sola vez, activar Pages con origen "GitHub Actions" en la configuración del repo.
+#
+# Tres jobs (hallazgo 14 de la auditoría de la Etapa 6):
+#   - sitio: compila y exporta la demo. Solo puede leer el repo.
+#   - medios: el GIF, el video y el póster de cada idioma. Instala VHS, ffmpeg y Chromium, así que tampoco
+#     tiene más permiso que leer. Si falla, el sitio se publica igual (con los medios que ya había).
+#   - desplegar: el único con permiso para escribir en Pages. No compila ni instala nada.
+# Las actions van fijadas por SHA, con su versión al lado: Dependabot las actualiza juntas.
 
 on:
   push:
@@ -15,23 +22,18 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  desplegar:
+  sitio:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.despliegue.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -42,10 +44,41 @@ jobs:
 
       - run: node build/index.js ui --export-static studio-public
 
-      # Los medios de los README (§8.8): el GIF, el video y el póster de cada idioma, generados aquí desde la
-      # demo real con VHS (terminal) y Playwright (Studio), y publicados en el sitio, en medios/. No se
-      # versionan en git. scripts/medios.mjs falla si el GIF pasa de 5 MB o el MP4 de 8 MB.
-      - uses: charmbracelet/vhs-action@v2.1.1
+      # Con include-hidden-files: el .nojekyll del export empieza por punto.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sitio
+          path: studio-public
+          include-hidden-files: true
+          retention-days: 1
+
+  # Los medios de los README (§8.8): el GIF, el video y el póster de cada idioma, generados aquí desde la
+  # demo real con VHS (terminal) y Playwright (Studio), y publicados en el sitio, en medios/. No se
+  # versionan en git. scripts/medios.mjs falla si el GIF pasa de 5 MB o el MP4 de 8 MB.
+  medios:
+    needs: sitio
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # La escena 7 graba el sitio exportado en un teléfono.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sitio
+          path: studio-public
+
+      - uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2.1.1
         with:
           version: v0.12.1
           install-fonts: "true"
@@ -53,21 +86,62 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-ibm-plex
 
       - run: npx playwright install --with-deps chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: "0"
 
-      - run: node scripts/medios.mjs --sitio studio-public --salida studio-public/medios
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: "0"
+      - run: node scripts/medios.mjs --sitio studio-public --salida medios
 
-      - uses: actions/configure-pages@v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: medios
+          path: medios
+          retention-days: 1
+
+  desplegar:
+    needs: [sitio, medios]
+    # También si los medios fallaron: la demo no depende de ellos.
+    if: ${{ !cancelled() && needs.sitio.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sitio
+          path: studio-public
+
+      - id: medios
+        if: ${{ needs.medios.result == 'success' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: medios
+          path: studio-public/medios
+
+      # Sin medios nuevos, los que ya están publicados: desplegar reemplaza el sitio entero, y sin ellos los
+      # README (en GitHub y en npmjs.com) enseñarían imágenes rotas. Si tampoco hay publicados (la primera
+      # vez), se despliega sin medios y se avisa.
+      - if: ${{ steps.medios.outcome != 'success' }}
+        env:
+          SITIO: https://montse2308.github.io/mcp-phase-gate/medios
+        run: |
+          mkdir -p studio-public/medios
+          for archivo in demo-es.gif demo-en.gif demo-es.mp4 demo-en.mp4 poster-es.png poster-en.png medios.json; do
+            if ! curl -fsSL --retry 2 -o "studio-public/medios/$archivo" "$SITIO/$archivo"; then
+              rm -f "studio-public/medios/$archivo"
+              echo "::warning::Los medios no se generaron y $archivo no estaba publicado: el sitio sale sin él."
+            fi
+          done
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       # Desde la v4, upload-pages-artifact deja fuera los archivos que empiezan por punto: sin
       # include-hidden-files, el .nojekyll del export no llegaría.
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: studio-public
           include-hidden-files: true
 
       - id: despliegue
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
