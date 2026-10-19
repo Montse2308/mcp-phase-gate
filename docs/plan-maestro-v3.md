@@ -4588,7 +4588,7 @@ En todas las filas, 2 tests se omiten fuera de Linux o macOS, como en las etapas
 **Lo que se comprobó además de la suite:**
 
 - **Cada commit por sí solo**, en un clon temporal (`git clone --no-hardlinks`, un `npm ci` y, para cada commit de L01 a L11, `npm run build` y `npm test`): los 12 compilan y pasan, con los totales de la tabla.
-- **Un sistema en inglés**, como una CI de Linux sin `LANG`: la suite y los E2E con un preload (`NODE_OPTIONS=--import`) que hace que `Intl` diga `en-US` en todos los procesos, también en los hijos. 992 tests (990 pasan) y 51 E2E. Es el riesgo propio de esta etapa: que la suite dependa del idioma del sistema. Por eso `test/helpers.ts` fija `PHASE_GATE_LANG=es`, y `ui --demo` conserva `PHASE_GATE_LANG`.
+- **Un sistema en inglés**, como una CI de Linux sin `LANG`: la suite y los E2E del Studio con un preload (`NODE_OPTIONS=--import`) que hace que `Intl` diga `en-US`. 992 tests (990 pasan) y 51 E2E. Ese preload no llega al servidor de `test/e2e.test.ts`: `StdioClientTransport` solo hereda una lista blanca del SDK más el `env` del test, y ni `NODE_OPTIONS` ni `PHASE_GATE_LANG` están en ella. En este equipo el hijo seguía en español por la región de Windows, así que la simulación no vio el fallo que después dio la CI. `test/helpers.ts` fija `PHASE_GATE_LANG=es` para el proceso de los tests y para los hijos que reciben `process.env`; `ui --demo` la conserva. El de `e2e.test.ts` tiene que repetirla en su propio `env`.
 - **El español no cambió:** las pruebas de oro `2.2.0` y `3.0.0` y el export de oro de la demo en español (`test/oro/export/`) siguen idénticos (se regeneraron con `ORO_REGENERAR=1` y git no vio cambios).
 - **La paridad del inglés:** las mismas 27 ranuras en el mismo orden, el mismo número de puntos en cada PROHIBIDO / AUTOVERIFICACIÓN, los mismos bloques y modos en las variantes y en los cinco presets (`test/prompts-en.test.ts`, `test/presets-en.test.ts`, `test/vocabulario.test.ts`). Un proyecto en inglés ensambla las cinco fases con las cuatro políticas de commits, con y sin lotes, sin avisos.
 - **La demo en inglés** es determinista en dos procesos y dos zonas horarias, con sus HEAD de oro (`shop-api` `46b45c1b…`, `shop-web` `8706b5ac…`).
@@ -4614,7 +4614,7 @@ En todas las filas, 2 tests se omiten fuera de Linux o macOS, como en las etapas
 
 1. **La auditoría externa** de la etapa, a ciegas y con permiso para cuestionar las ADRs, antes del PR. *Hecha: ver abajo.*
 2. **La revisión de la autora** de `prompts/en/**` y `presets/en/**` (§8.4, paso 3), y con ella los ejemplos de calidad en inglés (hallazgo 5 de la auditoría).
-3. **La CI** (Linux, Node 22 y 24): nunca ha corrido en esta etapa. La simulación de un sistema en inglés cubre el riesgo del idioma, no el del sistema.
+3. **La CI** (Linux y Windows, Node 22 y 24) corrió en el PR #55: los E2E del Studio pasaron y los cuatro `build-and-test` fallaron por el idioma del servidor de los e2e (el ajuste de abajo). La simulación de un sistema en inglés no cubría a ese hijo. El workflow de Pages sigue sin ejecutarse.
 4. **El workflow de Pages con los medios** (VHS por su action, las fuentes IBM Plex, ffmpeg de apt, Chromium): nunca se ha ejecutado, y desde A5 tiene tres jobs y las actions fijadas por SHA (su YAML no se validó con un parser en este equipo); se puede probar con `workflow_dispatch` en una rama antes del tag. Después, comprobar en npmjs.com que el GIF y los enlaces de los README se ven.
 5. **El orden de subida:** esta rama lleva debajo L11 a L13 de la Etapa 5, que no están en `master`. Después, el tag `v3.2.0` y la publicación, que hace la autora.
 6. **Clientes reales:** `PHASE_GATE_LANG=en` con las descripciones en inglés en Claude Code, Cursor y VS Code, y una tarea entera en un proyecto en inglés con un modelo de verdad.
@@ -4635,6 +4635,7 @@ En todas las filas, 2 tests se omiten fuera de Linux o macOS, como en las etapas
 | A7 | `010e946` | 19 | 1004 |
 | A6 | `3ceeb49` | 6, 16 y dos ADR que faltaban | 1004 |
 | A8 | El commit de documentación de la auditoría | 15, esta sección y una nota en la ADR de L03 | 1004 · E2E 51 |
+| A9 | `363200f` | la CI del PR: el hijo de `test/e2e.test.ts` no recibía `PHASE_GATE_LANG` | 1004 · E2E 51 |
 
 En todas las filas, 2 tests omitidos, como arriba. Los ajustes se numeraron antes de hacerlos (A7 eran los bajos opcionales) y se commitearon en este orden. En A1, el guardián del hallazgo 8 falló una vez (el falso positivo que corrige A4); el resto de la suite pasó. `b83316f` no se corrió aparte: la suite corrió con el test de `010e946` ya presente (independiente, suma 3), y A5 solo toca los workflows.
 
@@ -4673,7 +4674,7 @@ En todas las filas, 2 tests omitidos, como arriba. Los ajustes se numeraron ante
 | La huella del Studio sin el resumen (E6-D7 b) | Nota en la ADR de las huellas (A6) |
 | E6-D5 y otras decisiones sin ADR (la cabecera de idioma del Studio, los sellos con la palabra fuera del SVG) | ADR nuevas del 2026-10-19 (A1 y A6) |
 
-**Pendiente antes del merge y del tag `v3.2.0`:** la revisión de la autora (hallazgos 1 y 5), la CI del PR y el workflow de Pages, y el orden de subida (los commits de la Etapa 5 que esta rama lleva debajo).
+**Pendiente antes del merge y del tag `v3.2.0`:** la revisión de la autora (hallazgos 1 y 5), el workflow de Pages y el orden de subida (los commits de la Etapa 5 que esta rama lleva debajo). La CI del PR #55 corrió sobre `51b73e2`: los E2E del Studio pasaron en Linux y en Windows, y los cuatro `build-and-test` fallaron los mismos 10 tests de `test/e2e.test.ts`, porque el servidor hijo hablaba inglés. `StdioClientTransport` no hereda `PHASE_GATE_LANG` (la suite la fija en el proceso, y el SDK solo pasa una lista blanca más el `env` del test); en los runners el idioma del sistema es inglés y en este equipo es español, por eso aquí la suite pasaba. Se arregló en `363200f` poniendo `PHASE_GATE_LANG=es` en ese `env`. No cambia el producto. En Linux esos jobs omiten 4 tests (el nombre corto 8.3, que ese volumen no genera; el congelamiento al cambiar mayúsculas; la subcarpeta de tareas y las mayúsculas; y la URI `file:///c%3A/` de VS Code) y en Windows 2 (`XDG_STATE_HOME` y el FIFO): es lo que corresponde a cada sistema. En Node 24 sobre Linux falló además, una sola vez, «los seis tipos» de `test/studio-eventos.test.ts` (no llegó el evento de documento dentro de los 450 ms); los otros tres jobs no lo vieron. Es el temporizador del hallazgo 18, que sigue pendiente.
 
 ---
 
