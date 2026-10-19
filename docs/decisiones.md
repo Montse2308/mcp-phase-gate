@@ -12,6 +12,48 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-18 — Los medios se generan de la demo real y se publican en Pages, no en git
+
+**Decisión.** El GIF, el video y el póster de los README salen de **código real ejecutándose**, nunca de
+capturas a mano ni de una conversación escenificada, con dos scripts y una cinta:
+
+- `docs/medios/terminal.tape` (VHS): `mcp-phase-gate init --cliente cursor --dry-run` (el diff de un
+  `mcp.json` de Cursor que ya tiene otro servidor) y `mcp-phase-gate doctor`, con el binario compilado y el
+  entorno apuntando a la demo de ese idioma.
+- `scripts/grabar-studio.mjs` (Playwright, `recordVideo` a 1280×720 contra `ui --demo --idioma`): la Red, el
+  tablero de la tarea terminada con sus sellos, **en vivo** el commit del lote pendiente y `record_batch` con su
+  SHA (el sello VERIFICADO llega por SSE sin recargar), el Taller con la ranura de pruebas de la Fase 3 que
+  sustituye el preset `ai-agent-ops`, y el sitio publicado en un teléfono (390×844). Las esperas son de
+  eventos del DOM; lo único medido en milisegundos es el tiempo para leer cada imagen.
+- `scripts/medios.mjs` (ffmpeg): cada pieza a 1280×720 y 30 fps, el MP4 H.264 con `+faststart`, el GIF en dos
+  pasadas con paleta propia y el póster, en los dos idiomas, con `medios.json` (duraciones y bytes).
+
+Se generan en el workflow de Pages en cada tag y se publican en `<sitio>/medios/demo-<idioma>.gif`, `.mp4` y
+`poster-<idioma>.png`; los README los enlazan con su URL absoluta, que también se ve en npmjs.com.
+
+**Medido en este equipo** (Windows, VHS 0.12.1, ffmpeg 6.0, Chromium de Playwright 1.63): 41,3 s en español y
+42,4 s en inglés; MP4 de 1,52 MB en los dos; GIF de 4,93 MB y 4,72 MB a 8 fps y 760 px (a 12 fps y 960 px
+pasaban de 7 MB). El presupuesto es el de §8.8 (GIF ≤ 5 MB, MP4 ≤ 8 MB) y el script falla si se pasa.
+
+**Qué se descartó.**
+
+- Versionar los medios en git: binarios pesados en el historial para algo que se regenera solo.
+- Escenificar una sesión de Claude Code o Cursor: la demo honesta solo enseña lo que ejecuta el producto. Una
+  sesión real la grabaría la autora a mano, como pieza aparte.
+- Encender el farol de sesión de la Red escribiendo un registro de sesión inventado: sería escenificar una
+  sesión MCP que no existe. La Red sale tal como es en la demo, sin sesiones abiertas.
+
+**Riesgos aceptados.**
+
+- El GIF entra en el presupuesto con el tercer escalón (8 fps y 760 px), por debajo de los 960 px del plan: un
+  GIF de ~42 s con texto de terminal a 960 px pesa ~7 MB. El MP4, a 1280 px, es la versión nítida.
+- La banda de la demo dice su ruta, y la ruta sale en el video: en la CI de Pages es `/tmp/…`; en un equipo
+  puede llevar el nombre de quien graba, y `grabar-studio.mjs` lo avisa.
+- En Windows, VHS lanza el `bash` de WSL (CreateProcess mira System32 antes que el PATH): ahí `medios.mjs` usa
+  la misma preparación en PowerShell. En la CI, `bash`.
+
+---
+
 ## 2026-10-18 — Los prompts en inglés se reescriben con glosario y revisión, no se traducen a máquina
 
 **Decisión.** `prompts/en/` es un juego de fábrica completo, gemelo de `prompts/es/`: reglas globales, las

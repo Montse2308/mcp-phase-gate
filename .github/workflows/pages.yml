@@ -42,6 +42,24 @@ jobs:
 
       - run: node build/index.js ui --export-static studio-public
 
+      # Los medios de los README (§8.8): el GIF, el video y el póster de cada idioma, generados aquí desde la
+      # demo real con VHS (terminal) y Playwright (Studio), y publicados en el sitio, en medios/. No se
+      # versionan en git. scripts/medios.mjs falla si el GIF pasa de 5 MB o el MP4 de 8 MB.
+      - uses: charmbracelet/vhs-action@v2.1.1
+        with:
+          version: v0.12.1
+          install-fonts: "true"
+
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-ibm-plex
+
+      - run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: "0"
+
+      - run: node scripts/medios.mjs --sitio studio-public --salida studio-public/medios
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: "0"
+
       - uses: actions/configure-pages@v6
 
       # Desde la v4, upload-pages-artifact deja fuera los archivos que empiezan por punto: sin
