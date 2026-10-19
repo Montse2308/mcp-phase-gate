@@ -249,3 +249,37 @@ describe("idioma sin proyecto: el del equipo", () => {
     }
   });
 });
+
+describe("doctor con los prompts de fábrica en inglés", () => {
+  it("las reglas globales en inglés tienen sus secciones: ni faltan ni hay avisos GLOBAL-*", async () => {
+    instalacion();
+    process.env.PHASE_GATE_LANG = "en";
+    const d = diagnosticar();
+    assert.ok(d.capas[0]!.ruta.endsWith(path.join("prompts", "en")));
+    assert.deepEqual(d.reglasGlobales.faltan, []);
+    assert.deepEqual(d.hallazgos.filter((h) => h.codigo.startsWith("GLOBAL-")), []);
+  });
+
+  it("a un global-rules.md propio en inglés le faltan las secciones con su nombre inglés", async () => {
+    const { config } = instalacion();
+    process.env.PHASE_GATE_LANG = "en";
+    fs.mkdirSync(path.join(config, "prompts"), { recursive: true });
+    fs.writeFileSync(path.join(config, "prompts", "global-rules.md"), "## EVIDENCE\nx\n\n## BASIS OF EACH DECISION\ny\n");
+    assert.deepEqual(diagnosticar().reglasGlobales.faltan, ["INHERITED PENDING ITEMS"]);
+  });
+});
+
+describe("doctor --fase en inglés", () => {
+  it("cada ranura con su alias y el id canónico entre paréntesis; fábrica y los modos, traducidos", async () => {
+    const { docs } = instalacion();
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, idioma: "en", preset: "ai-agent-ops" }));
+    process.env.PHASE_GATE_LANG = "en";
+    const { formatearProcedencia, procedenciaDeFase } = await import("../src/diagnostico.js");
+    const texto = formatearProcedencia(procedenciaDeFase(3, "P"));
+    assert.match(texto, /phase-3\/tests \(fase-3\/pruebas\)\s+\S*presets.en.ai-agent-ops\.md:\d+/);
+    assert.match(texto, /global\/zero-breakage \(global\/cero-rupturas\)\s+factory  \+ after \(/);
+    assert.match(texto, /global\/extra\s+factory/);
+    process.env.PHASE_GATE_LANG = "es";
+    assert.match(formatearProcedencia(procedenciaDeFase(3, "P")), /fase-3\/pruebas\s+\S*ai-agent-ops\.md:\d+/);
+  });
+});

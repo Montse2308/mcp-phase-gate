@@ -46,6 +46,7 @@ import { ensamblarIndice, faseEnCarpeta, lotesDelPlan, recibosDeLaTarea } from "
 import type { FaseDeLotes, ReciboEnDisco } from "./lotes.js";
 import { GENERADO_POR, etiquetaDeLote, frontmatterDeRecibo } from "./recibos.js";
 import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
+import { idInglesDeRanura } from "./vocabulario.js";
 import type { Idioma } from "./vocabulario.js";
 
 export type Severidad = "error" | "aviso" | "info";
@@ -95,6 +96,8 @@ export type Diagnostico = {
 // propio sustituye al de fábrica (no se suma), así que si le falta una, las fases citan una regla
 // que no existe. Es el riesgo E1-R1, y el aviso que pedía la Etapa 1 para cuando hubiera doctor.
 export const SECCIONES_GLOBALES = ["EVIDENCIA", "BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"];
+// Las mismas, en un global-rules.md en inglés (§8.2): una sección está si está en cualquiera de los dos.
+export const SECCIONES_GLOBALES_EN = ["EVIDENCE", "BASIS OF EACH DECISION", "INHERITED PENDING ITEMS"];
 
 const ORDEN_SEVERIDAD: Record<Severidad, number> = { error: 0, aviso: 1, info: 2 };
 
@@ -544,21 +547,25 @@ export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico 
   // Reglas globales.
   const archivoGlobales = resolveGlobalRules(rutasCapas);
   const capaGlobales = archivoGlobales ? capaDe(archivoGlobales) : null;
-  let faltan: string[] = [];
+  // Las que faltan, con el nombre del idioma de la capa de fábrica (prompts/es/ o prompts/en/).
+  const nombres = path.basename(capas[0]?.ruta ?? "") === "en" ? SECCIONES_GLOBALES_EN : SECCIONES_GLOBALES;
+  let faltanIndices: number[] = [];
   if (archivoGlobales) {
     try {
       const lineas = new Set(leerPromptNormalizado(archivoGlobales).split("\n").map((linea) => linea.trimEnd().normalize("NFC")));
-      faltan = SECCIONES_GLOBALES.filter((seccion) => !lineas.has(`## ${seccion}`));
+      faltanIndices = SECCIONES_GLOBALES.map((_, i) => i).filter((i) => !lineas.has(`## ${SECCIONES_GLOBALES[i]}`) && !lineas.has(`## ${SECCIONES_GLOBALES_EN[i]}`));
     } catch {
-      faltan = [...SECCIONES_GLOBALES];
+      faltanIndices = SECCIONES_GLOBALES.map((_, i) => i);
     }
   }
+  const faltan = faltanIndices.map((i) => nombres[i]!);
   // BASE y PENDIENTES son esqueleto: si un global-rules.md propio no las tiene, el ensamblado añade
   // las de fábrica (GLOBAL-REINYECTADO). EVIDENCIA es una ranura y no se reinyecta: si falta, las
   // fases citan una sección que no existe (GLOBAL-SIN-BASE).
   if (archivoGlobales && capaGlobales !== "fábrica" && faltan.length) {
     const fabrica = path.join(capas[0]?.ruta ?? "", GLOBAL_RULES_FILE);
-    const reinyectadas = fs.existsSync(fabrica) ? faltan.filter((seccion) => SECCIONES_ESQUELETO.includes(seccion)) : [];
+    // BASE y PENDIENTES son las esqueleto, en el idioma que sea.
+    const reinyectadas = fs.existsSync(fabrica) ? faltanIndices.filter((i) => SECCIONES_ESQUELETO.includes(SECCIONES_GLOBALES[i]!)).map((i) => nombres[i]!) : [];
     const sinReinyectar = faltan.filter((seccion) => !reinyectadas.includes(seccion));
 
     if (reinyectadas.length) hallar("aviso", "GLOBAL-REINYECTADO", textoDeReinyeccion(archivoGlobales, reinyectadas));
@@ -1036,11 +1043,18 @@ export function formatearProcedencia(informe: InformeDeProcedencia): string {
     }),
     "",
   ];
-  const ancho = Math.max(6, ...informe.procedencia.map((p) => p.ranura.length)) + 3;
+  // En inglés, cada ranura con su alias y el id canónico entre paréntesis (§8.2), y "fábrica" y los modos
+  // traducidos. En español, como siempre.
+  const enIngles = idiomaDeMensajes() === "en";
+  const MODOS_EN: Record<string, string> = { reemplazar: "replace", antes: "before", despues: "after" };
+  const nombreDe = (id: string): string => (enIngles && idInglesDeRanura(id) !== id ? `${idInglesDeRanura(id)} (${id})` : id);
+  const deDonde = (texto: string): string => (enIngles ? texto.replace(/^fábrica$/, valor("fábrica")) : texto);
+  const modoDe = (modo: string): string => (enIngles ? modo.replace(/^(reemplazar|antes|despues)\b/, (m) => MODOS_EN[m]!) : modo);
+  const ancho = Math.max(6, ...informe.procedencia.map((p) => nombreDe(p.ranura).length)) + 3;
   lineas.push(`  ${t("DOCTOR-PROCEDENCIA-RANURA").padEnd(ancho)}${t("DOCTOR-PROCEDENCIA-GANA")}`);
   for (const p of informe.procedencia) {
-    const modos = p.modos.length ? `  + ${p.modos.join(", ")}` : "";
-    lineas.push(`  ${p.ranura.padEnd(ancho)}${p.contenidoDe}${modos}`);
+    const modos = p.modos.length ? `  + ${p.modos.map(modoDe).join(", ")}` : "";
+    lineas.push(`  ${nombreDe(p.ranura).padEnd(ancho)}${deDonde(p.contenidoDe)}${modos}`);
   }
   if (informe.avisos.length) {
     lineas.push("", t("DOCTOR-PROCEDENCIA-AVISOS"));
