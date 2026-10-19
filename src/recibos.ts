@@ -12,7 +12,21 @@
 
 import * as path from "path";
 
+import { fallo, mensaje } from "./i18n/mensajes.js";
 import { leerTextoAcotado, validarSegmento } from "./paths.js";
+import {
+  FORMAS_DE_VACIO_EN_RECIBO as FORMAS_DE_VACIO,
+  condicionalCanonica,
+  esCommitNoAplica,
+  esOrigenServidor,
+  estadoCanonico,
+  idiomaDeFrontmatter,
+  normalizarClaves,
+  seccionCanonica,
+  tipoDeAnclaCanonico,
+  vocabulario,
+} from "./vocabulario.js";
+import type { Idioma, SeccionDeRecibo } from "./vocabulario.js";
 
 export type EstadoLote = "verificado" | "con pendientes" | "fallido" | "descartado";
 export const ESTADOS_LOTE: readonly EstadoLote[] = ["verificado", "con pendientes", "fallido", "descartado"];
@@ -90,9 +104,9 @@ export function slugDe(titulo: string): string {
 
 export function nombreDeRecibo(lote: number, titulo: string): string {
   if (!Number.isInteger(lote) || lote < 1 || lote > 99) {
-    throw new Error(`El número de lote tiene que ser un entero de 1 a 99 (llegó ${lote}).`);
+    throw fallo("RECIBOS-LOTE-FUERA-DE-RANGO", { lote });
   }
-  return validarSegmento(`${etiquetaDeLote(lote)} - ${slugDe(titulo)}.md`, "el nombre del recibo");
+  return validarSegmento(`${etiquetaDeLote(lote)} - ${slugDe(titulo)}.md`, mensaje("RECIBOS-CAMPO-NOMBRE"));
 }
 
 // El lote de un nombre de recibo ("L02 - x.md" -> 2), o null si no lo es.
@@ -103,26 +117,9 @@ export function loteDelNombre(nombre: string): number | null {
 }
 
 // ─── Escritura ──────────────────────────────────────────────────────────────
-const QUE_SE_HIZO = "Qué se hizo";
-const ARCHIVOS = "Archivos";
-const VERIFICACION = "Verificación ejecutada";
-const ESPERA = "Espera al usuario";
-const DESVIOS = "Desvíos del plan";
-const DECISIONES = "Decisiones";
-const VERIFICACION_DEL_COMMIT = "Verificación del commit";
-
-// Lo que se escribe en una sección vacía, para que nunca quede un encabezado sin texto. Al leer, cuenta
-// como vacía (junto con las otras formas habituales de decir "nada").
-const VACIA: Record<string, string> = {
-  [QUE_SE_HIZO]: "Nada.",
-  [ARCHIVOS]: "Ninguno.",
-  [VERIFICACION]: "Ninguna.",
-  [ESPERA]: "Ninguna.",
-  [DESVIOS]: "Ninguno.",
-  [DECISIONES]: "Ninguna.",
-};
-const FORMAS_DE_VACIO = new Set(["", "nada", "ninguna", "ninguno", "n/a", "no aplica"]);
-
+// En el idioma del proyecto (§8.2 del plan maestro v3): claves, valores, secciones y lo que se escribe en
+// una sección vacía, para que nunca quede un encabezado sin texto. Al leer, cuenta como vacía cualquier
+// forma habitual de decir "nada" en los dos idiomas.
 function sinCR(texto: string): string {
   return texto.replace(/\r\n?/g, "\n");
 }
@@ -158,48 +155,52 @@ function texto(contenido: string, vacia: string): string {
     .join("\n");
 }
 
-function valorDeCommit(ancla: Ancla): string {
+function valorDeCommit(ancla: Ancla, idioma: Idioma): string {
   if (ancla.tipo === "commit") return ancla.corto;
-  if (ancla.tipo === "pendiente") return "pendiente";
-  return "no aplica";
+  if (ancla.tipo === "pendiente") return vocabulario(idioma).recibo.commitPendiente;
+  return vocabulario(idioma).recibo.noAplica;
 }
 
-export function escribirRecibo(r: Recibo, opciones: { comoDocumento?: boolean } = {}): string {
+export function escribirRecibo(r: Recibo, opciones: { comoDocumento?: boolean; idioma?: Idioma } = {}): string {
+  const idioma = opciones.idioma ?? "es";
+  const v = vocabulario(idioma).recibo;
+  const k = v.claves;
   const fm: [string, string][] = [];
   // Con un solo lote, el recibo pasa a ser el documento de la fase y lo dice su frontmatter.
-  if (opciones.comoDocumento) fm.push(["lotes", String(r.de)], ["generado_por", GENERADO_POR]);
+  if (opciones.comoDocumento) fm.push([k.lotes, String(r.de)], [k.generado_por, GENERADO_POR]);
   fm.push(
-    ["lote", etiquetaDeLote(r.lote)],
-    ["de", String(r.de)],
-    ["repo", r.repo ?? "—"],
-    ["rama", r.rama ?? "—"],
-    ["estado", r.estado],
-    ["commit", valorDeCommit(r.ancla)],
-    ["fecha", r.fecha],
-    ["ancla", r.ancla.tipo]
+    [k.lote, etiquetaDeLote(r.lote)],
+    [k.de, String(r.de)],
+    [k.repo, r.repo ?? "—"],
+    [k.rama, r.rama ?? "—"],
+    [k.estado, v.estados[r.estado]],
+    [k.commit, valorDeCommit(r.ancla, idioma)],
+    [k.fecha, r.fecha],
+    [k.ancla, v.anclas[r.ancla.tipo]]
   );
-  if (r.ancla.tipo === "commit") fm.push(["commit_completo", r.ancla.sha], ["asunto", enUnaLinea(r.ancla.asunto)]);
-  if (r.ancla.tipo === "sha256") fm.push(["artefacto", enUnaLinea(r.ancla.ruta)], ["sha256", r.ancla.sha256], ["bytes", String(r.ancla.bytes)]);
-  if (r.ancla.tipo === "nota") fm.push(["nota", enUnaLinea(r.ancla.texto)]);
-  fm.push(["registrado", r.registrado], ["origen", r.origen]);
+  if (r.ancla.tipo === "commit") fm.push([k.commit_completo, r.ancla.sha], [k.asunto, enUnaLinea(r.ancla.asunto)]);
+  if (r.ancla.tipo === "sha256") fm.push([k.artefacto, enUnaLinea(r.ancla.ruta)], [k.sha256, r.ancla.sha256], [k.bytes, String(r.ancla.bytes)]);
+  if (r.ancla.tipo === "nota") fm.push([k.nota, enUnaLinea(r.ancla.texto)]);
+  fm.push([k.registrado, r.registrado], [k.origen, v.origen[r.origen]]);
 
+  const s = v.secciones;
   const secciones: [string, string][] = [
-    [QUE_SE_HIZO, texto(r.queSeHizo, VACIA[QUE_SE_HIZO]!)],
-    [ARCHIVOS, tabla(["Archivo", "Qué cambió"], r.archivos.map((f) => [f.archivo, f.cambio]), VACIA[ARCHIVOS]!)],
-    [VERIFICACION, texto(r.verificacion, VACIA[VERIFICACION]!)],
-    [ESPERA, tabla(["Prueba", "Resultado esperado"], r.esperaAlUsuario.map((f) => [f.prueba, f.esperado]), VACIA[ESPERA]!)],
-    [DESVIOS, texto(r.desvios, VACIA[DESVIOS]!)],
-    [DECISIONES, texto(r.decisiones, VACIA[DECISIONES]!)],
+    [s.queSeHizo, texto(r.queSeHizo, v.vacias.queSeHizo)],
+    [s.archivos, tabla(v.tablaArchivos, r.archivos.map((f) => [f.archivo, f.cambio]), v.vacias.archivos)],
+    [s.verificacion, texto(r.verificacion, v.vacias.verificacion)],
+    [s.esperaAlUsuario, tabla(v.tablaEspera, r.esperaAlUsuario.map((f) => [f.prueba, f.esperado]), v.vacias.esperaAlUsuario)],
+    [s.desvios, texto(r.desvios, v.vacias.desvios)],
+    [s.decisiones, texto(r.decisiones, v.vacias.decisiones)],
   ];
 
   // Las condicionales solo si traen texto, siempre en el orden de la plantilla.
   const condicionales = [...r.condicionales]
     .filter((c) => sinCR(c.texto).trim())
     .sort((a, b) => TITULOS_CONDICIONALES.indexOf(a.titulo) - TITULOS_CONDICIONALES.indexOf(b.titulo));
-  for (const c of condicionales) secciones.push([c.titulo, texto(c.texto, "")]);
+  for (const c of condicionales) secciones.push([v.condicionales[c.titulo], texto(c.texto, "")]);
 
   if (r.ancla.tipo === "commit" && r.verificacionDelCommit !== null && sinCR(r.verificacionDelCommit).trim()) {
-    secciones.push([VERIFICACION_DEL_COMMIT, texto(r.verificacionDelCommit, "")]);
+    secciones.push([s.verificacionDelCommit, texto(r.verificacionDelCommit, "")]);
   }
 
   const titulo = r.titulo.replace(/\s+/g, " ").trim();
@@ -224,21 +225,25 @@ export function frontmatterDeRecibo(contenido: string): { meta: Record<string, s
   const crudo = sinCR(contenido.replace(/^\uFEFF/, ""));
   const encontrado = crudo.match(FRONTMATTER);
   if (!encontrado) return { meta: {}, cuerpo: crudo };
+  // Con las claves canónicas: un recibo en inglés (`batch`, `status`…) se lee igual (§8.2).
+  return { meta: normalizarClaves(frontmatterCrudo(encontrado[1] ?? "")), cuerpo: crudo.slice(encontrado[0].length) };
+}
+
+function frontmatterCrudo(lineas: string): Record<string, string> {
   const meta: Record<string, string> = {};
-  for (const linea of (encontrado[1] ?? "").split("\n")) {
+  for (const linea of lineas.split("\n")) {
     const corte = linea.indexOf(":");
     if (corte === -1) continue;
     meta[linea.slice(0, corte).trim()] = linea.slice(corte + 1).trim();
   }
-  return { meta, cuerpo: crudo.slice(encontrado[0].length) };
+  return meta;
 }
 
-const SECCIONES_CONOCIDAS = new Map<string, string>(
-  [QUE_SE_HIZO, ARCHIVOS, VERIFICACION, ESPERA, DESVIOS, DECISIONES, VERIFICACION_DEL_COMMIT, ...TITULOS_CONDICIONALES].map((t) => [
-    t.normalize("NFC").toLowerCase(),
-    t,
-  ])
-);
+// Una sección "## X" del recibo, en cualquiera de los dos idiomas: la sección canónica de la plantilla o
+// el título canónico de una condicional.
+function seccionConocida(titulo: string): SeccionDeRecibo | TituloCondicional | null {
+  return seccionCanonica(titulo) ?? condicionalCanonica(titulo);
+}
 
 // Las secciones "## X" conocidas, con su texto. Un "## " que no es de la plantilla se queda dentro de la
 // sección en la que aparece: nunca se pierde ni hace fallar la lectura.
@@ -256,7 +261,7 @@ function secciones(cuerpo: string): { h1: string | null; mapa: Map<string, strin
       h1 = linea.slice(2).trim();
       continue;
     }
-    const conocida = linea.startsWith("## ") ? SECCIONES_CONOCIDAS.get(linea.slice(3).trim().normalize("NFC").toLowerCase()) : undefined;
+    const conocida = linea.startsWith("## ") ? seccionConocida(linea.slice(3)) : null;
     if (conocida) {
       cerrar();
       actual = conocida;
@@ -297,10 +302,9 @@ function filasDeTabla(contenido: string): [string, string][] {
 
 const ES_HASH = /^[0-9a-f]{7,40}$/i;
 
+// En cualquiera de los dos idiomas. Un estado que no se reconoce no se da por bueno: queda con pendientes.
 function estadoDe(valor: string | undefined): EstadoLote {
-  const limpio = (valor ?? "").trim().toLowerCase();
-  // Un estado que no se reconoce no se da por bueno: queda con pendientes.
-  return (ESTADOS_LOTE as readonly string[]).includes(limpio) ? (limpio as EstadoLote) : "con pendientes";
+  return estadoCanonico(valor) ?? "con pendientes";
 }
 
 function nulo(valor: string | undefined): string | null {
@@ -310,7 +314,7 @@ function nulo(valor: string | undefined): string | null {
 
 function anclaDe(meta: Record<string, string>, repo: string | null, rama: string | null, verificado: string): Ancla {
   const commit = (meta.commit ?? "").trim();
-  switch ((meta.ancla ?? "").trim()) {
+  switch (tipoDeAnclaCanonico(meta.ancla)) {
     case "commit":
       return {
         tipo: "commit",
@@ -332,7 +336,7 @@ function anclaDe(meta: Record<string, string>, repo: string | null, rama: string
   // Un recibo de la 2.x no tiene `ancla`: se deduce de `commit`. Un hash queda como commit sin
   // verificar (verificado vacío); `no aplica`, como nota.
   if (ES_HASH.test(commit)) return { tipo: "commit", repo: repo ?? "", sha: commit, corto: commit.slice(0, 7), asunto: "", rama: rama ?? "", verificado: "" };
-  if (commit.toLowerCase() === "no aplica") return { tipo: "nota", texto: "no aplica" };
+  if (esCommitNoAplica(commit)) return { tipo: "nota", texto: commit.toLowerCase() };
   return { tipo: "pendiente" };
 }
 
@@ -343,8 +347,10 @@ export function comoManual(contenido: string): string {
   const crudo = sinCR(contenido.replace(/^\uFEFF/, ""));
   const encontrado = crudo.match(FRONTMATTER);
   if (!encontrado) return crudo;
-  const lineas = (encontrado[1] ?? "").split("\n").filter((linea) => !/^\s*(origen|generado_por)\s*:/i.test(linea));
-  return `---\n${[...lineas, "origen: manual"].join("\n")}\n---\n${crudo.slice(encontrado[0].length)}`;
+  // En el idioma en que viene el frontmatter, y sin esas claves en ninguno de los dos.
+  const origen = vocabulario(idiomaDeFrontmatter(frontmatterCrudo(encontrado[1] ?? ""))).recibo.claves.origen;
+  const lineas = (encontrado[1] ?? "").split("\n").filter((linea) => !/^\s*(origen|origin|generado_por|generated_by)\s*:/i.test(linea));
+  return `---\n${[...lineas, `${origen}: manual`].join("\n")}\n---\n${crudo.slice(encontrado[0].length)}`;
 }
 
 // Lo que hace falta para saber cómo va un lote, leyendo solo el frontmatter: para el progreso de una
@@ -369,7 +375,7 @@ export function parsearRecibo(contenido: string, nombre: string = ""): Recibo {
 
   const repo = nulo(meta.repo);
   const rama = nulo(meta.rama);
-  const origen = (meta.origen ?? "").trim() === "servidor" ? "servidor" : "manual";
+  const origen = esOrigenServidor(meta.origen) ? "servidor" : "manual";
   const registrado = (meta.registrado ?? "").trim();
 
   const condicionales: Recibo["condicionales"] = [];
@@ -390,14 +396,14 @@ export function parsearRecibo(contenido: string, nombre: string = ""): Recibo {
     fecha: (meta.fecha ?? "").trim(),
     registrado,
     origen,
-    queSeHizo: textoDe(mapa, QUE_SE_HIZO),
-    archivos: esVacia(mapa.get(ARCHIVOS) ?? "") ? [] : filasDeTabla(mapa.get(ARCHIVOS) ?? "").map(([archivo, cambio]) => ({ archivo, cambio })),
-    verificacion: textoDe(mapa, VERIFICACION),
-    esperaAlUsuario: esVacia(mapa.get(ESPERA) ?? "") ? [] : filasDeTabla(mapa.get(ESPERA) ?? "").map(([prueba, esperado]) => ({ prueba, esperado })),
-    desvios: textoDe(mapa, DESVIOS),
-    decisiones: textoDe(mapa, DECISIONES),
+    queSeHizo: textoDe(mapa, "queSeHizo"),
+    archivos: esVacia(mapa.get("archivos") ?? "") ? [] : filasDeTabla(mapa.get("archivos") ?? "").map(([archivo, cambio]) => ({ archivo, cambio })),
+    verificacion: textoDe(mapa, "verificacion"),
+    esperaAlUsuario: esVacia(mapa.get("esperaAlUsuario") ?? "") ? [] : filasDeTabla(mapa.get("esperaAlUsuario") ?? "").map(([prueba, esperado]) => ({ prueba, esperado })),
+    desvios: textoDe(mapa, "desvios"),
+    decisiones: textoDe(mapa, "decisiones"),
     condicionales,
-    verificacionDelCommit: mapa.has(VERIFICACION_DEL_COMMIT) ? (mapa.get(VERIFICACION_DEL_COMMIT) ?? "") : null,
+    verificacionDelCommit: mapa.has("verificacionDelCommit") ? (mapa.get("verificacionDelCommit") ?? "") : null,
   };
 }
 

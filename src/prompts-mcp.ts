@@ -17,54 +17,49 @@ import { z } from "zod";
 
 import { capasDeCuerpos, rutasDeCuerpos } from "./capas.js";
 import { promptsLayers } from "./config.js";
+import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
 import { findProjectFolder } from "./paths.js";
 import { proyectoPorRaices } from "./roots.js";
 import { discoverPhases, parsePhaseFile, resolveCommandFile } from "./phases.js";
+import type { Idioma } from "./vocabulario.js";
 
 // Todos los argumentos son opcionales: el texto de cada comando ya pide lo que falte, y así el
 // prompt sirve también en clientes que parten los argumentos por espacios (un contexto largo puede
 // ir pegado después del comando, como texto normal del chat).
-const PROJECT = z.string().optional().describe("Proyecto en el que estás trabajando.");
-
-export function argumentosDeFase(numero: number) {
+//
+// Los títulos, las descripciones, los argumentos y el texto genérico van en el idioma con el que arrancó
+// el servidor (§8.5): la lista de prompts se fija al conectar, como la de tools.
+export function argumentosDeFase(numero: number, idioma: Idioma = "es") {
+  const project = z.string().optional().describe(mensaje("MCPPROMPT-ARG-PROJECT", {}, idioma));
   if (numero === 1) {
     return {
-      project: PROJECT,
-      task_name: z.string().optional().describe("Nombre corto de la tarea nueva."),
-      contexto: z.string().optional().describe("El correo, mensaje o requerimiento completo."),
+      project,
+      task_name: z.string().optional().describe(mensaje("MCPPROMPT-ARG-TASK-NAME", {}, idioma)),
+      contexto: z.string().optional().describe(mensaje("MCPPROMPT-ARG-CONTEXTO", {}, idioma)),
     };
   }
   if (numero === 5) {
     return {
-      project: PROJECT,
-      commits: z
-        .string()
-        .optional()
-        .describe("Rango de commits a auditar. Si lo omites, se toman de los recibos de la Fase 4."),
+      project,
+      commits: z.string().optional().describe(mensaje("MCPPROMPT-ARG-COMMITS", {}, idioma)),
     };
   }
-  return { project: PROJECT };
+  return { project };
 }
 
-export function tituloDePrompt(numero: number, titulo: string): string {
-  return `Fase ${numero} · ${titulo}`;
+export function tituloDePrompt(numero: number, titulo: string, idioma: Idioma = "es"): string {
+  return mensaje("MCPPROMPT-TITULO", { numero, titulo }, idioma);
 }
 
-export function descripcionDePrompt(numero: number, titulo: string): string {
-  return `Arranca la Fase ${numero} (${titulo}) del flujo de mcp-phase-gate.`;
+export function descripcionDePrompt(numero: number, titulo: string, idioma: Idioma = "es"): string {
+  return mensaje("MCPPROMPT-DESCRIPCION", { numero, titulo }, idioma);
 }
 
-export function textoGenerico(numero: number, titulo: string): string {
-  return [
-    `Vas a iniciar la FASE ${numero} (${titulo}) del flujo del mcp-phase-gate.`,
-    "",
-    "Pasos:",
-    "1. Si no sabes cuál es la tarea activa, llama a `get_active_task` (o pídeme project + task_name).",
-    `2. Llama a \`get_phase_prompt(${numero})\` indicándole también el \`project\` en el que estoy trabajando, y asume ese rol.`,
-    "3. Lee los documentos de las fases anteriores con `read_central_doc`; `get_phase_prompt` te dio sus nombres exactos.",
-    "4. Sigue el prompt de la fase y guarda su documento con `write_central_doc`, con el nombre que te indicó `get_phase_prompt`.",
-  ].join("\n");
+// El comando de una fase sin comandos/fN.md. También lo escriben eject e init, que pasan el idioma que
+// les toque; sin él, el español de siempre.
+export function textoGenerico(numero: number, titulo: string, idioma: Idioma = "es"): string {
+  return mensaje("MCPPROMPT-GENERICO", { numero, titulo }, idioma);
 }
 
 type Argumentos = {
@@ -76,7 +71,7 @@ type Argumentos = {
 
 // La sección con lo que vino como argumento. Solo aparecen las líneas de los que vinieron, y sin
 // ninguno la sección no existe: así el texto queda igual que el comando escrito a mano.
-function datosDeInvocacion(args: Argumentos): string | null {
+function datosDeInvocacion(args: Argumentos, idioma: Idioma): string | null {
   const presente = (valor: string | undefined): valor is string => typeof valor === "string" && valor.trim() !== "";
   const lineas: string[] = [];
 
@@ -89,11 +84,11 @@ function datosDeInvocacion(args: Argumentos): string | null {
   if (presente(args.commits)) lineas.push(`- commits: ${enUnaLinea(args.commits)}`);
   if (presente(args.contexto)) lineas.push("- initial_context:", "", args.contexto.trim());
 
-  return lineas.length ? ["## Datos de esta invocación", ...lineas].join("\n") : null;
+  return lineas.length ? [mensaje("MCPPROMPT-DATOS-ENCABEZADO", {}, idioma), ...lineas].join("\n") : null;
 }
 
 // El texto se lee en cada llamada, como los prompts de fase: editar un comando no exige reiniciar.
-export function textoDelComando(numero: number, titulo: string, args: Argumentos, capas: string[] = promptsLayers()): string {
+export function textoDelComando(numero: number, titulo: string, args: Argumentos, capas: string[] = promptsLayers(), idioma: Idioma = "es"): string {
   const archivo = resolveCommandFile(numero, capas);
 
   let cuerpo: string;
@@ -101,14 +96,14 @@ export function textoDelComando(numero: number, titulo: string, args: Argumentos
     try {
       cuerpo = parsePhaseFile(archivo).cuerpo.trim();
     } catch (error) {
-      log("warning", `No se pudo leer ${archivo}; se usa el texto genérico: ${error instanceof Error ? error.message : String(error)}`);
-      cuerpo = textoGenerico(numero, titulo);
+      log("warning", mensaje("MCPPROMPT-LOG-COMANDO-ILEGIBLE", { archivo, error: error instanceof Error ? error.message : String(error) }));
+      cuerpo = textoGenerico(numero, titulo, idioma);
     }
   } else {
-    cuerpo = textoGenerico(numero, titulo);
+    cuerpo = textoGenerico(numero, titulo, idioma);
   }
 
-  const datos = datosDeInvocacion(args);
+  const datos = datosDeInvocacion(args, idioma);
   return datos ? `${cuerpo}\n\n${datos}` : cuerpo;
 }
 
@@ -136,13 +131,17 @@ type Registro = { prompt: RegisteredPrompt; titulo: string; comando: string | nu
 
 const registros = new WeakMap<McpServer, Map<number, Registro>>();
 
-function registrar(mcp: McpServer, numero: number, titulo: string): RegisteredPrompt {
+// El idioma de los /fN de cada servidor: el de su primera sincronización (la de crearServidor). Las
+// siguientes, tras cada tool o al cambiar una capa, lo conservan.
+const idiomas = new WeakMap<McpServer, Idioma>();
+
+function registrar(mcp: McpServer, numero: number, titulo: string, idioma: Idioma): RegisteredPrompt {
   return mcp.registerPrompt(
     `f${numero}`,
     {
-      title: tituloDePrompt(numero, titulo),
-      description: descripcionDePrompt(numero, titulo),
-      argsSchema: argumentosDeFase(numero),
+      title: tituloDePrompt(numero, titulo, idioma),
+      description: descripcionDePrompt(numero, titulo, idioma),
+      argsSchema: argumentosDeFase(numero, idioma),
     },
     async (args: Argumentos): Promise<GetPromptResult> => {
       // El título se toma del registro vigente: puede haber cambiado desde que se registró.
@@ -155,18 +154,21 @@ function registrar(mcp: McpServer, numero: number, titulo: string): RegisteredPr
         if (porRaices.tipo === "unico") datos = { ...args, project: porRaices.carpetaProyecto };
       }
       return {
-        description: descripcionDePrompt(numero, vigente),
-        messages: [{ role: "user", content: { type: "text", text: textoDelComando(numero, vigente, datos, capasDelComando(datos.project)) } }],
+        description: descripcionDePrompt(numero, vigente, idioma),
+        messages: [{ role: "user", content: { type: "text", text: textoDelComando(numero, vigente, datos, capasDelComando(datos.project), idioma) } }],
       };
     }
   );
 }
 
 // Nunca lanza: se llama tras cada tool, y un prompt que no se pudo registrar no debe convertir en
-// error la respuesta de una tool que salió bien.
-export function sincronizarPrompts(mcp: McpServer): void {
+// error la respuesta de una tool que salió bien. `idioma`, el de los /fN: sin él, el de la primera
+// sincronización de este servidor (y, si es la primera, el de los mensajes).
+export function sincronizarPrompts(mcp: McpServer, idioma?: Idioma): void {
+  const delServidor = idioma ?? idiomas.get(mcp) ?? idiomaDeMensajes();
+  idiomas.set(mcp, delServidor);
   try {
-    const capas = promptsLayers();
+    const capas = promptsLayers(delServidor); // los títulos de las fases, en el idioma de los /fN
     const fases = discoverPhases(capas);
     let actuales = registros.get(mcp);
     if (!actuales) {
@@ -186,7 +188,7 @@ export function sincronizarPrompts(mcp: McpServer): void {
       const registro = actuales.get(numero);
 
       if (!registro) {
-        actuales.set(numero, { prompt: registrar(mcp, numero, datos.title), titulo: datos.title, comando });
+        actuales.set(numero, { prompt: registrar(mcp, numero, datos.title, delServidor), titulo: datos.title, comando });
         continue;
       }
 
@@ -194,13 +196,13 @@ export function sincronizarPrompts(mcp: McpServer): void {
         registro.titulo = datos.title;
         registro.comando = comando;
         registro.prompt.update({
-          title: tituloDePrompt(numero, datos.title),
-          description: descripcionDePrompt(numero, datos.title),
+          title: tituloDePrompt(numero, datos.title, delServidor),
+          description: descripcionDePrompt(numero, datos.title, delServidor),
         });
       }
     }
   } catch (error) {
-    log("warning", `No se pudieron sincronizar los prompts /fN: ${error instanceof Error ? error.message : String(error)}`);
+    log("warning", mensaje("MCPPROMPT-LOG-SINCRONIZAR", { error: error instanceof Error ? error.message : String(error) }));
   }
 }
 

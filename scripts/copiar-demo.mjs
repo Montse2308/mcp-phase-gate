@@ -1,4 +1,4 @@
-// Copia los textos de la demo del Studio (test/fixtures/demo/) a build/studio/demo/, junto a demo.js: el
+// Copia los textos de la demo del Studio (test/fixtures/demo/es/ y en/) a build/studio/demo/, junto a demo.js: el
 // paquete publicado no lleva test/, y `ui --demo` y `ui --export-static` los necesitan. Se copia de cero en
 // cada build, para que un texto borrado no se quede en build/.
 //

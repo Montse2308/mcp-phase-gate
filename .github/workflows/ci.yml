@@ -24,9 +24,9 @@ jobs:
         node-version: [22, 24]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -38,3 +38,36 @@ jobs:
       - run: npm run build
 
       - run: npm test
+
+  # Los E2E del Studio en Chromium (§7.10): cada vista, la demo y el sitio estático, con axe y en un
+  # teléfono. Aparte de build-and-test porque necesitan el navegador. En los dos sistemas: hay fallos de
+  # maquetación que dependen de las rutas del equipo, y las de Windows son otras. Node 22, la última 22.x
+  # (Vite 8 pide al menos la 22.12 para compilar).
+  e2e-studio:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    env:
+      # Chromium dentro de node_modules, como en local.
+      PLAYWRIGHT_BROWSERS_PATH: 0
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # --with-deps instala las bibliotecas del sistema que Chromium necesita en Linux; en Windows no hace nada.
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e

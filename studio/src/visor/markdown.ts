@@ -14,6 +14,8 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
+import { t } from "../i18n/idioma";
+
 export const CONFIGURACION = {
   USE_PROFILES: { html: true },
   FORBID_TAGS: ["style", "form", "input", "iframe"],
@@ -32,7 +34,7 @@ export function aHtml(markdown: string): string {
     if (!IMAGEN_INCRUSTADA.test(src)) {
       const texto = document.createElement("span");
       texto.className = "imagen-externa";
-      texto.textContent = `[imagen: ${imagen.getAttribute("alt") || "sin texto"} — ${src}]`;
+      texto.textContent = t("visor.imagen", { alt: imagen.getAttribute("alt") || t("visor.sinTexto"), src });
       imagen.replaceWith(texto);
     }
   }

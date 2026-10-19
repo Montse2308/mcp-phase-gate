@@ -65,6 +65,10 @@ function escenario(): Escenario {
       // Y la configuración local también: el servidor lanzado hereda APPDATA y, sin esto, leería el
       // machine.json y los presets reales de quien corre la suite.
       PHASE_GATE_CONFIG_PATH: carpetaTemporal("config"),
+      // Los tests están escritos en español. StdioClientTransport no hereda PHASE_GATE_LANG: solo
+      // pasa una lista blanca del SDK más este env, así que sin esto el hijo habla el idioma del
+      // sistema (español en este equipo, inglés en la CI).
+      PHASE_GATE_LANG: "es",
     },
   };
 }

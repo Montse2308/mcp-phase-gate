@@ -122,7 +122,35 @@ describe("Studio: arranque", () => {
     assert.deepEqual(ejecutarCli(["ui"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--puerto", "4321", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: 4321, abrir: false, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--demo", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: true } });
-    for (const malo of [["ui", "--puerto", "0"], ["ui", "--puerto", "70000"], ["ui", "--puerto", "12a"], ["ui", "--json"], ["doctor", "--no-abrir"], ["doctor", "--demo"], ["ui", "extra"]]) {
+    // La demo en un idioma (§8.7).
+    assert.deepEqual(ejecutarCli(["ui", "--demo", "--idioma", "en"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: true, idioma: "en" } });
+    // --export-static no arranca el Studio: nunca abre nada.
+    assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: "sitio", datosReales: false, yes: false } } });
+    assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio", "--incluir-datos-reales", "--yes"], salida), {
+      accion: "ui",
+      opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: "sitio", datosReales: true, yes: true } },
+    });
+    for (const malo of [
+      ["ui", "--puerto", "0"],
+      ["ui", "--puerto", "70000"],
+      ["ui", "--puerto", "12a"],
+      ["ui", "--json"],
+      ["doctor", "--no-abrir"],
+      ["doctor", "--demo"],
+      ["ui", "extra"],
+      ["ui", "--export-static"],
+      ["ui", "--export-static", " "],
+      ["ui", "--export-static", "sitio", "--demo"],
+      ["ui", "--export-static", "sitio", "--no-abrir"],
+      ["ui", "--export-static", "sitio", "--puerto", "4321"],
+      ["ui", "--incluir-datos-reales"],
+      ["ui", "--yes"],
+      ["doctor", "--export-static", "sitio"],
+      ["init", "--incluir-datos-reales"],
+      ["ui", "--idioma", "en"],
+      ["ui", "--demo", "--idioma", "fr"],
+      ["ui", "--export-static", "sitio", "--idioma", "en"],
+    ]) {
       assert.deepEqual(ejecutarCli(malo, salida), { accion: "salir", codigo: 2 }, malo.join(" "));
     }
   });
@@ -174,6 +202,18 @@ describe("Studio: Host (DNS rebinding)", () => {
     assert.equal((await crudo(p, "GET / HTTP/1.0\r\n\r\n")).estado, 421);
     assert.equal((await get(p, "/", [`Host: atacante.example`])).estado, 421);
     assert.equal((await get(p, "/", [`Host: 127.0.0.1:${p}`])).estado, 421);
+  });
+
+  // Hallazgo 9 de la auditoría de la Etapa 6: el texto del filtro estaba fijo en español. Sale en el idioma del
+  // proceso (la cabecera de idioma de la petición no cuenta aquí: el filtro no la lee), y en español es el de siempre.
+  it("el texto del filtro sale en el idioma del proceso; la cabecera de idioma no lo cambia", async () => {
+    const s = await studio();
+    const p = s.puerto;
+    assert.equal((await get(p, "/", [], "atacante.example")).cuerpo, "Host no permitido: el Studio solo atiende en 127.0.0.1 y localhost, con su puerto.");
+    process.env.PHASE_GATE_LANG = "en";
+    assert.equal((await get(p, "/", [], "atacante.example")).cuerpo, "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.");
+    assert.equal((await get(p, "/", ["X-Phase-Gate-Lang: es"], "atacante.example")).cuerpo, "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.");
+    assert.equal((await get(p, "/api/estado", [])).cuerpo, "There is no session: open the link that `mcp-phase-gate ui` printed.");
   });
 
   it("el 421 llega antes que nada: ni el canje del token ni la API", async () => {

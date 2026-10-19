@@ -8,6 +8,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { DOCS, REPOS, requireBasePath, tasksSubdir } from "./config.js";
+import { fallo, mensaje } from "./i18n/mensajes.js";
 
 // Comprueba que una ruta quede dentro de otra. No sirve startsWith, y falla en las dos
 // direcciones: con base "C:\PROYECTOS\TRABAJO" deja pasar "C:\PROYECTOS\TRABAJO_VIEJO",
@@ -63,22 +64,18 @@ const CARACTERES_DE_CONTROL = /[\u0000-\u001f\u007f]/;
 const NOMBRES_RESERVADOS_WINDOWS = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³]) *(\..*)?$/i;
 
 export function validarSegmento(valor: string, campo: string): string {
-  const incumple = (regla: string): never => {
-    throw new Error(
-      `${campo} ${JSON.stringify(valor)} no es válido: ${regla}. Tiene que ser un solo nombre de ` +
-        `carpeta o archivo, que funcione igual en Windows, macOS y Linux.`
-    );
+  // La regla se nombra por su código y se redacta dentro de la frase, en el mismo idioma.
+  const incumple = (codigoDeRegla: string): never => {
+    throw fallo("RUTA-SEGMENTO-INVALIDO", { campo, valor, regla: mensaje(codigoDeRegla, { valor }) });
   };
 
-  if (valor.trim() === "") incumple("está vacío");
-  if (valor === "." || valor === "..") incumple(`no puede ser "${valor}"`);
-  if (/[\\/]/.test(valor)) incumple("no puede llevar / ni \\");
-  if (CARACTERES_DE_CONTROL.test(valor)) incumple("no puede llevar caracteres de control");
-  if (CARACTERES_RESERVADOS.test(valor)) incumple('no puede llevar ninguno de < > : " | ? *');
-  if (/[. ]$/.test(valor)) incumple("no puede terminar en punto ni en espacio");
-  if (NOMBRES_RESERVADOS_WINDOWS.test(valor)) {
-    incumple("es un nombre reservado de Windows (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM1–COM9, LPT1–LPT9)");
-  }
+  if (valor.trim() === "") incumple("RUTA-REGLA-VACIO");
+  if (valor === "." || valor === "..") incumple("RUTA-REGLA-PUNTOS");
+  if (/[\\/]/.test(valor)) incumple("RUTA-REGLA-SEPARADOR");
+  if (CARACTERES_DE_CONTROL.test(valor)) incumple("RUTA-REGLA-CONTROL");
+  if (CARACTERES_RESERVADOS.test(valor)) incumple("RUTA-REGLA-RESERVADOS");
+  if (/[. ]$/.test(valor)) incumple("RUTA-REGLA-FINAL");
+  if (NOMBRES_RESERVADOS_WINDOWS.test(valor)) incumple("RUTA-REGLA-NOMBRE-WINDOWS");
 
   return valor;
 }
@@ -89,10 +86,7 @@ export function validarSegmento(valor: string, campo: string): string {
 // lectura no cambia.
 export function validarNombreVisible(valor: string, campo: string): string {
   if (valor.startsWith(".")) {
-    throw new Error(
-      `${campo} ${JSON.stringify(valor)} no es válido: no puede empezar por punto. Las carpetas ` +
-        `con punto no cuentan como proyecto ni como tarea, así que no se vería después.`
-    );
+    throw fallo("RUTA-NOMBRE-CON-PUNTO", { campo, valor });
   }
   return valor;
 }
@@ -124,10 +118,10 @@ export function discoverProjects(base: string = requireBasePath(DOCS)): Map<stri
 export function describeProjects(): string {
   try {
     const nombres = [...discoverProjects().values()].sort();
-    return nombres.length ? nombres.join(", ") : "(ninguno todavía)";
+    return nombres.length ? nombres.join(", ") : mensaje("RUTA-PROYECTOS-NINGUNO");
   } catch {
     // Sin DOCS_PATH configurada no se pueden listar; el error real lo da la tool.
-    return "(no se pudieron leer: revisa PHASE_GATE_DOCS_PATH)";
+    return mensaje("RUTA-PROYECTOS-ILEGIBLES");
   }
 }
 
@@ -139,9 +133,7 @@ export function findProjectFolder(project: string): string | null {
 export function requireProjectFolder(project: string): string {
   const carpeta = findProjectFolder(project);
   if (!carpeta) {
-    throw new Error(
-      `No existe el proyecto "${project}". Los proyectos disponibles son: ${describeProjects()}.`
-    );
+    throw fallo("RUTA-PROYECTO-NO-EXISTE", { proyecto: project, disponibles: describeProjects() });
   }
   return carpeta;
 }
@@ -169,9 +161,10 @@ export function tasksRootPath(carpetaProyecto: string): string {
 //
 // Una ruta relativa hecha de segmentos portables. Cada segmento se valida por separado para que
 // una subcarpeta legítima como "04 - Ejecución/L01 - x.md" siga valiendo.
-function validarRutaRelativa(valor: string, campo: string, relativaA: string): void {
+// `relativaA` es el código del mensaje que nombra la carpeta de referencia.
+function validarRutaRelativa(valor: string, campo: string, relativaA: "RUTA-RELATIVA-A-TAREA" | "RUTA-RELATIVA-A-DOCS"): void {
   if (path.isAbsolute(valor)) {
-    throw new Error(`${campo} no puede ser una ruta absoluta ("${valor}"): es relativo a ${relativaA}.`);
+    throw fallo("RUTA-RELATIVA-ABSOLUTA", { campo, valor, relativaA: mensaje(relativaA) });
   }
   for (const segmento of valor.split(/[\\/]/)) validarSegmento(segmento, campo);
 }
@@ -197,27 +190,27 @@ export function resolveDocPath(args: ArgumentosDeDocumento): string {
 
   if (project && taskName && fileName) {
     const carpetaTarea = resolveTaskFolder(project, taskName);
-    validarRutaRelativa(fileName, "file_name", "la carpeta de la tarea");
+    validarRutaRelativa(fileName, "file_name", "RUTA-RELATIVA-A-TAREA");
 
     const ruta = path.join(carpetaTarea, fileName);
     if (!estaDentroReal(carpetaTarea, ruta)) {
-      throw new Error(`Acceso denegado: file_name "${fileName}" queda fuera de la carpeta de la tarea ${carpetaTarea}.`);
+      throw fallo("RUTA-FUERA-DE-TAREA", { fileName, carpetaTarea });
     }
     return ruta;
   }
 
   if (filePath) {
     const docsBase = requireBasePath(DOCS);
-    validarRutaRelativa(filePath, "file_path", "la Documentación Central");
+    validarRutaRelativa(filePath, "file_path", "RUTA-RELATIVA-A-DOCS");
 
     const ruta = path.join(docsBase, filePath);
     if (!estaDentroReal(docsBase, ruta)) {
-      throw new Error(`Acceso denegado: file_path queda fuera de ${docsBase}.`);
+      throw fallo("RUTA-FUERA-DE-DOCS", { docsBase });
     }
     return ruta;
   }
 
-  throw new Error("Debes proporcionar (project + task_name + file_name) o bien file_path.");
+  throw fallo("RUTA-FALTAN-ARGUMENTOS");
 }
 
 // ─── Ubicación dentro de una tarea ──────────────────────────────────────────
@@ -286,13 +279,13 @@ export function resolveRepoPath(repoName: string, filePath: string): string {
   const ruta = path.join(repo, filePath);
 
   if (!estaDentroReal(repoReal, ruta)) {
-    throw new Error(`Acceso denegado: file_path "${filePath}" queda fuera del repositorio ${repoName}.`);
+    throw fallo("RUTA-FUERA-DE-REPO", { filePath, repoName });
   }
   if (filePath.split(/[\\/]/).some(esSegmentoDeGit)) {
-    throw new Error(`file_path no puede entrar en .git ni leer archivos de git ("${filePath}").`);
+    throw fallo("RUTA-ENTRA-EN-GIT", { filePath });
   }
   if (path.relative(repoReal, rutaReal(ruta)).split(/[\\/]/).some(esSegmentoDeGit)) {
-    throw new Error(`Acceso denegado: file_path "${filePath}" lleva a .git a través de un enlace.`);
+    throw fallo("RUTA-GIT-POR-ENLACE", { filePath });
   }
   return ruta;
 }
@@ -331,19 +324,17 @@ export function leerTextoAcotado(ruta: string): string {
   try {
     descriptor = fs.openSync(ruta, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
   } catch (error: any) {
-    if (error?.code === "EISDIR") throw new Error(`${ruta} no es un archivo: es una carpeta.`);
+    if (error?.code === "EISDIR") throw fallo("RUTA-ES-CARPETA", { ruta });
     throw error;
   }
 
   try {
     const info = fs.fstatSync(descriptor);
     if (!info.isFile()) {
-      throw new Error(`${ruta} no es un archivo normal: es una carpeta, un dispositivo o una tubería.`);
+      throw fallo("RUTA-NO-ES-ARCHIVO-NORMAL", { ruta });
     }
     if (info.size > LIMITE_LECTURA_BYTES) {
-      throw new Error(
-        `${ruta} pesa ${info.size} bytes y el límite de lectura es 1 MB (${LIMITE_LECTURA_BYTES} bytes).`
-      );
+      throw fallo("RUTA-DEMASIADO-GRANDE", { ruta, bytes: info.size, limite: LIMITE_LECTURA_BYTES });
     }
 
     const buffer = Buffer.alloc(LIMITE_LECTURA_BYTES + 1);
@@ -354,17 +345,12 @@ export function leerTextoAcotado(ruta: string): string {
       leidos += bytes;
     }
     if (leidos > LIMITE_LECTURA_BYTES) {
-      throw new Error(
-        `${ruta} creció mientras se leía y pasa del límite de lectura de 1 MB (${LIMITE_LECTURA_BYTES} bytes).`
-      );
+      throw fallo("RUTA-CRECIO", { ruta, limite: LIMITE_LECTURA_BYTES });
     }
 
     const contenido = buffer.subarray(0, leidos);
     if (contenido.subarray(0, BYTES_PARA_DETECTAR_BINARIO).includes(0)) {
-      throw new Error(
-        `${ruta} parece binario: tiene un byte NUL en sus primeros ${BYTES_PARA_DETECTAR_BINARIO} bytes. ` +
-          `Estas tools solo leen texto.`
-      );
+      throw fallo("RUTA-BINARIO", { ruta, bytes: BYTES_PARA_DETECTAR_BINARIO });
     }
 
     return contenido.toString("utf-8");

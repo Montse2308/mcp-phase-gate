@@ -18,10 +18,10 @@
       "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
     },
     "idioma": {
-      "default": "es",
       "type": "string",
       "enum": [
-        "es"
+        "es",
+        "en"
       ]
     },
     "repos": {

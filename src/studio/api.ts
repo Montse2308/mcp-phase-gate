@@ -15,13 +15,14 @@ import * as path from "path";
 
 import { DOCS, REPOS, SERVER_VERSION, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
 import { diagnosticarSinBloquear } from "../diagnostico.js";
+import { enIdioma, mensaje } from "../i18n/mensajes.js";
 import { capasDe, configuracionDe, contenidoEfectivoDeRanura, contextoInicialDe, ensamblarFase, fasesDe } from "../capas.js";
 import type { Capa } from "../capas.js";
 import { CLIENTES, detectarClientes, planDeArchivo, planDeClaude } from "../init.js";
 import type { EntornoInit } from "../init.js";
 import { datosDeCommit } from "../git.js";
 import { VERIFICACIONES_A_LA_VEZ, enParalelo, estadoDeLotes, faseDeLotes, recibosDeLaTarea } from "../lotes.js";
-import { leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
+import { conCacheDelIdioma, idiomaDelProyecto, leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
 import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requireProjectFolder, rutaReal, validarSegmento } from "../paths.js";
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
@@ -56,7 +57,7 @@ import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
 export type ContextoApi = {
-  modo: Exclude<Modo, "estatico">;
+  modo: Modo; // "estatico" solo al exportar (exportar.ts): ningún servidor sirve en ese modo
   watcher: () => EstadoRespuesta["studio"]["watcher"];
   sesiones: () => SesionApi[];
   // Para /api/clientes: la carpeta del usuario, APPDATA y cómo se ejecuta `claude`. En los tests y en la
@@ -84,8 +85,22 @@ function mensajeDe(error: unknown): string {
 
 // El estado de un error que no es un ErrorHttp, por su mensaje: así las funciones de dominio no saben
 // nada de HTTP.
+// Desde la Etapa 6 los errores llevan su código (ErrorConCodigo) y su texto puede estar en inglés: se mira
+// primero el código. El texto queda de respaldo para un error que no lo tenga.
+const POR_CODIGO: [RegExp, number][] = [
+  [/^(?:RUTA-PROYECTO-NO-EXISTE|RECURSO-[A-Z-]*NO-EXISTE|RECURSO-SIN-SUBCARPETA-DE-RECIBOS|EJECT-[A-Z-]*NO-EXISTE|LOTE-TAREA-NO-EXISTE)$/, 404],
+  [/^(?:RUTA-FUERA-[A-Z-]+|RUTA-GIT-POR-ENLACE|RUTA-ENTRA-EN-GIT|REPOS-PATH-FUERA|REPOS-PATH-GIT-POR-ENLACE|REPOS-PATH-EN-GIT|RECURSO-FUERA-DE-TAREA)$/, 403],
+  [/^(?:RUTA-SEGMENTO-INVALIDO|RUTA-NOMBRE-CON-PUNTO|RECURSO-CON-PUNTO)$/, 400],
+  [/^(?:RUTA-DEMASIADO-GRANDE|RUTA-CRECIO|RUTA-BINARIO|RUTA-ES-CARPETA|RUTA-NO-ES-ARCHIVO-NORMAL|MANIFIESTO-TXT-[A-Z-]+|MAQUINA-TXT-[A-Z-]+)$/, 422],
+];
+
 function estadoDe(error: unknown): number {
   if (error instanceof ErrorHttp) return error.estado;
+  const codigo = (error as { codigo?: unknown })?.codigo;
+  if (typeof codigo === "string") {
+    const encontrado = POR_CODIGO.find(([patron]) => patron.test(codigo));
+    if (encontrado) return encontrado[1];
+  }
   const texto = error instanceof Error ? error.message : String(error);
   if (/^No existe/.test(texto) || /no existe en ninguna capa/.test(texto)) return 404;
   if (/^Acceso denegado/.test(texto)) return 403;
@@ -104,7 +119,7 @@ function segmento(crudo: string, campo: string): string {
   try {
     valor = decodeURIComponent(crudo);
   } catch {
-    throw new ErrorHttp(400, `${campo} no es una codificación porcentual válida.`);
+    throw new ErrorHttp(400, mensaje("STUDIO-CODIFICACION-INVALIDA", { campo }));
   }
   return nombreValido(valor, campo);
 }
@@ -112,7 +127,7 @@ function segmento(crudo: string, campo: string): string {
 // Un nombre ya decodificado (los de la consulta los decodifica URLSearchParams): solo se valida.
 function nombreValido(valor: string, campo: string): string {
   validarSegmento(valor, campo);
-  if (valor.startsWith(".")) throw new ErrorHttp(400, `${campo} no puede empezar por punto.`);
+  if (valor.startsWith(".")) throw new ErrorHttp(400, mensaje("STUDIO-EMPIEZA-POR-PUNTO", { campo }));
   return valor;
 }
 
@@ -123,7 +138,7 @@ function proyectoDe(crudo: string): string {
 function tareaDe(carpetaProyecto: string, crudo: string, phases: Map<number, PhaseFile>, yaDecodificado = false): EstadoTarea {
   const nombre = yaDecodificado ? nombreValido(crudo, "tarea") : segmento(crudo, "tarea");
   const estado = listarTareas(carpetaProyecto, phases).find((t) => t.taskName === nombre);
-  if (!estado) throw new ErrorHttp(404, `No existe la tarea "${nombre}" en ${carpetaProyecto}.`);
+  if (!estado) throw new ErrorHttp(404, mensaje("STUDIO-TAREA-NO-EXISTE", { tarea: nombre, proyecto: carpetaProyecto }));
   return estado;
 }
 
@@ -299,7 +314,7 @@ export function estaciones(carpetaProyecto: string, estado: EstadoTarea, phases:
   const hayContexto = fs.existsSync(rutaContexto);
   lista.push({
     numero: 0,
-    titulo: "Contexto inicial",
+    titulo: mensaje("STUDIO-CONTEXTO-INICIAL"),
     documento: contexto,
     existe: hayContexto,
     senal: hayContexto ? "verde" : ultimaPresente > 0 ? "rojo" : "apagado",
@@ -358,7 +373,7 @@ function tarea(crudoP: string, crudoT: string): TareaRespuesta {
 // ─── /api/tareas/:p/:t/documento?archivo= ───────────────────────────────────
 function documento(crudoP: string, crudoT: string, consulta: URLSearchParams): DocumentoRespuesta {
   const archivos = consulta.getAll("archivo");
-  if (archivos.length !== 1 || !archivos[0]) throw new ErrorHttp(400, "Falta `archivo` (uno solo).");
+  if (archivos.length !== 1 || !archivos[0]) throw new ErrorHttp(400, mensaje("STUDIO-FALTA-ARCHIVO"));
   const carpeta = proyectoDe(crudoP);
   const nombreTarea = segmento(crudoT, "tarea");
   // URLSearchParams ya decodificó `archivo` una vez; no se vuelve a decodificar.
@@ -367,7 +382,7 @@ function documento(crudoP: string, crudoT: string, consulta: URLSearchParams): D
   // La regla de .git y de los nombres con punto, también sobre la ruta resuelta: un enlace o un nombre
   // corto 8.3 (GIT~1) dentro de la tarea no lleva a .git ni a un archivo oculto.
   const real = path.relative(rutaReal(carpetaTarea), rutaReal(ruta)).split(/[\\/]/);
-  if (real.some((s) => s.startsWith(".") || esSegmentoDeGit(s))) throw new ErrorHttp(403, "Acceso denegado: ese archivo lleva a .git o a un archivo oculto.");
+  if (real.some((s) => s.startsWith(".") || esSegmentoDeGit(s))) throw new ErrorHttp(403, mensaje("STUDIO-ARCHIVO-OCULTO"));
   const texto = leerTextoAcotado(ruta).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
   return { proyecto: carpeta, tarea: nombreTarea, archivo: partes.join("/"), texto, frontmatter: separarFrontmatter(texto).meta, mtimeMs: fs.statSync(ruta).mtimeMs };
 }
@@ -433,7 +448,7 @@ function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string,
 //   fase-cerrada  el `registrado` más reciente de los recibos, si la fase tiene su documento.
 // Una escritura con confirmación (force o elicitation) no deja rastro propio en el disco —un recibo de la
 // escotilla solo queda con `origen: manual`, igual que uno de la 2.x—, así que no aparece.
-const REANCLADO = /^Reanclado el (\d{4}-\d{2}-\d{2}): (.*)$/;
+const REANCLADO = /^(?:Reanclado el|Re-anchored on) (\d{4}-\d{2}-\d{2}): (.*)$/;
 
 async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespuesta> {
   const carpeta = proyectoDe(crudoP);
@@ -444,7 +459,7 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
 
   for (const e of estaciones(carpeta, estado, phases)) {
     if (!e.existe || e.mtimeMs === null) continue;
-    eventos.push({ tipo: "documento", fecha: iso(e.mtimeMs), titulo: `${e.numero === 0 ? "00" : `Fase ${e.numero}`} · ${e.titulo}: ${e.documento}`, archivo: e.documento, lote: null, commit: null });
+    eventos.push({ tipo: "documento", fecha: iso(e.mtimeMs), titulo: mensaje("STUDIO-BITACORA-DOCUMENTO", { numero: e.numero, titulo: e.titulo, documento: e.documento }), archivo: e.documento, lote: null, commit: null });
   }
 
   let fase: ReturnType<typeof faseDeLotes> | null = null;
@@ -473,10 +488,10 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
     for (const { recibo, relativo, mtimeMs } of recibos) {
       const lote = etiquetaDeLote(recibo.lote);
       const commit = recibo.ancla.tipo === "commit" ? { corto: recibo.ancla.corto, asunto: recibo.ancla.asunto } : null;
-      eventos.push({ tipo: "recibo", fecha: recibo.registrado || iso(mtimeMs), titulo: `${lote} · ${recibo.titulo}: ${recibo.estado}`, archivo: relativo, lote, commit });
+      eventos.push({ tipo: "recibo", fecha: recibo.registrado || iso(mtimeMs), titulo: mensaje("STUDIO-BITACORA-RECIBO", { lote, titulo: recibo.titulo, estado: recibo.estado }), archivo: relativo, lote, commit });
       for (const linea of (recibo.verificacionDelCommit ?? "").split("\n")) {
         const m = linea.match(REANCLADO);
-        if (m) eventos.push({ tipo: "reanclaje", fecha: m[1]!, titulo: `${lote} reanclado: ${m[2]!.replace(/`/g, "")}`, archivo: relativo, lote, commit: null });
+        if (m) eventos.push({ tipo: "reanclaje", fecha: m[1]!, titulo: mensaje("STUDIO-BITACORA-REANCLAJE", { lote, detalle: m[2]!.replace(/`/g, "") }), archivo: relativo, lote, commit: null });
       }
     }
 
@@ -498,7 +513,7 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
 
     const registrados = recibos.map((r) => r.recibo.registrado).filter(Boolean).sort();
     if (cerrada && registrados.length) {
-      eventos.push({ tipo: "fase-cerrada", fecha: registrados[registrados.length - 1]!, titulo: `Fase ${fase.numero} (${fase.titulo}) cerrada: ${fase.documento}`, archivo: fase.documento, lote: null, commit: null });
+      eventos.push({ tipo: "fase-cerrada", fecha: registrados[registrados.length - 1]!, titulo: mensaje("STUDIO-BITACORA-FASE-CERRADA", { numero: fase.numero, titulo: fase.titulo, documento: fase.documento }), archivo: fase.documento, lote: null, commit: null });
     }
   }
 
@@ -527,16 +542,19 @@ export function capaDeProcedencia(contenidoDe: string, capas: Capa[]): string {
 
 async function prompt(crudoP: string, crudoFase: string, consulta: URLSearchParams): Promise<PromptRespuesta> {
   const carpeta = proyectoDe(crudoP);
-  if (!/^\d{1,3}$/.test(crudoFase)) throw new ErrorHttp(400, "La fase es un número (ej. 3).");
+  if (!/^\d{1,3}$/.test(crudoFase)) throw new ErrorHttp(400, mensaje("STUDIO-FASE-NO-ES-NUMERO"));
   const fase = Number(crudoFase);
   const phases = fasesDe(carpeta);
-  if (!phases.has(fase)) throw new ErrorHttp(404, `No existe la Fase ${fase} en ${carpeta}. Las fases son: ${[...phases.keys()].sort((a, b) => a - b).join(", ")}.`);
+  if (!phases.has(fase)) throw new ErrorHttp(404, mensaje("STUDIO-FASE-NO-EXISTE", { fase, proyecto: carpeta, fases: [...phases.keys()].sort((a, b) => a - b).join(", ") }));
   const crudoTarea = consulta.get("tarea");
   // Sin tarea, la activa del proyecto, como get_phase_prompt con `project` y sin `task_name`.
   const elegida = crudoTarea ? tareaDe(carpeta, crudoTarea, phases, true) : (tareaActiva(carpeta, phases)?.estado ?? null);
   const carpetaTarea = elegida?.folderPath ?? null;
 
-  const texto = await textoDelPromptDeFase(fase, { project: carpeta, task_name: crudoTarea ? elegida!.taskName : undefined, carpetaProyecto: carpeta, deducido: null });
+  // El texto exacto que recibe el modelo: get_phase_prompt habla en el idioma del proyecto, no en el de la
+  // interfaz del Studio, así que se ensambla en ese (como hace la tool al resolver el proyecto).
+  const opcionesDelPrompt = { project: carpeta, task_name: crudoTarea ? elegida!.taskName : undefined, carpetaProyecto: carpeta, deducido: null };
+  const texto = await enIdioma(idiomaDelProyecto(carpeta).idioma, () => textoDelPromptDeFase(fase, opcionesDelPrompt));
   const capas = capasDe(carpeta, carpetaTarea);
   const ensamblado = ensamblarFase(fase, carpeta, carpetaTarea);
   const fabrica: Capa[] = capas.filter((c) => c.orden === 1);
@@ -583,40 +601,44 @@ export async function planesDeClientes(entorno: EntornoInit): Promise<PlanDeClie
   for (const cliente of CLIENTES) {
     const base = { cliente, nombre: NOMBRES[cliente], detectado: detectados.includes(cliente) };
     if (!rutas) {
-      planes.push({ ...base, estado: "sin-rutas", archivo: null, comando: null, diff: null, mensaje: "Faltan PHASE_GATE_DOCS_PATH y PHASE_GATE_REPOS_PATH (o no existen): init no sabría qué rutas registrar." });
+      planes.push({ ...base, estado: "sin-rutas", archivo: null, comando: null, diff: null, mensaje: mensaje("STUDIO-SIN-RUTAS") });
       continue;
     }
     if (cliente === "claude-code") {
       const plan = await planDeClaude(rutas, null, entorno);
-      const mensaje =
-        plan.estado === "sin-lista" ? `No se puede saber si ya está registrado: ${sinRutasDelEquipo(plan.mensaje)}` : plan.estado === "existente" ? `Ya está registrado como «${plan.existente}»; init no lo toca.` : `Se registraría como «${plan.clave}» (ámbito user).`;
-      planes.push({ ...base, estado: plan.estado, archivo: null, comando: plan.estado === "sin-lista" ? null : plan.comando, diff: null, mensaje });
+      const texto =
+        plan.estado === "sin-lista"
+          ? mensaje("STUDIO-CLIENTE-SIN-LISTA", { detalle: sinRutasDelEquipo(plan.mensaje) })
+          : plan.estado === "existente"
+            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente })
+            : mensaje("STUDIO-CLIENTE-CLAUDE-NUEVO", { clave: plan.clave });
+      planes.push({ ...base, estado: plan.estado, archivo: null, comando: plan.estado === "sin-lista" ? null : plan.comando, diff: null, mensaje: texto });
       continue;
     }
     const plan = planDeArchivo(cliente, rutas, null, entorno);
     const archivo = conTilde(plan.archivo, entorno.home);
-    let mensaje: string;
+    let texto: string;
     let diff: string | null = null;
     switch (plan.estado) {
       case "roto":
-        mensaje = `No se pudo leer ${archivo}: no se toca.`;
+        texto = mensaje("STUDIO-CLIENTE-ROTO", { archivo });
         break;
       case "forma-rara":
-        mensaje = `En ${archivo}, "${plan.seccion}" o el "env" de alguna entrada no es un objeto: no se toca.`;
+        texto = mensaje("STUDIO-CLIENTE-FORMA-RARA", { archivo, seccion: plan.seccion });
         break;
       case "clave-ocupada":
-        mensaje = `La clave «${plan.clave}» ya la usa otro servidor en ${archivo}.`;
+        texto = mensaje("STUDIO-CLIENTE-CLAVE-OCUPADA", { clave: plan.clave, archivo });
         break;
       case "sin-cambios":
-        mensaje = `Sin cambios: ya está registrado como «${plan.claveFinal}».`;
+        texto = mensaje("STUDIO-CLIENTE-SIN-CAMBIOS", { clave: plan.claveFinal });
         break;
       default:
         diff = plan.diff ?? plan.entrada.split("\n").map((linea) => `+ ${linea}`).join("\n");
-        mensaje =
-          (plan.estado === "nuevo" ? `Se registraría como «${plan.claveFinal}».` : `Se actualizaría la entrada «${plan.claveFinal}».`) +
-          (plan.comentarios ? " El archivo tiene comentarios: al reescribirlo se perderán (queda la copia .bak)." : "");
+        texto =
+          mensaje(plan.estado === "nuevo" ? "STUDIO-CLIENTE-NUEVO" : "STUDIO-CLIENTE-ACTUALIZA", { clave: plan.claveFinal }) +
+          (plan.comentarios ? mensaje("STUDIO-CLIENTE-COMENTARIOS") : "");
     }
-    planes.push({ ...base, estado: plan.estado, archivo, comando: null, diff, mensaje });
+    planes.push({ ...base, estado: plan.estado, archivo, comando: null, diff, mensaje: texto });
   }
   return planes;
 }
@@ -645,26 +667,28 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     }
     // Las dos únicas escrituras: el plan con su huella, y aplicarlo (§7.6).
     if (peticion.ruta === "/acciones/plan" || peticion.ruta === "/acciones/aplicar") {
-      if (peticion.metodo !== "POST") return { estado: 405, json: { error: "Esta ruta solo admite POST." } };
+      if (peticion.metodo !== "POST") return { estado: 405, json: { error: mensaje("STUDIO-SOLO-POST") } };
       try {
         return { estado: 200, json: peticion.ruta === "/acciones/plan" ? await acciones.plan(peticion.cuerpo) : await acciones.aplicar(peticion.cuerpo) };
       } catch (error) {
         const codigo = error instanceof ErrorDeAccion ? error.estado : estadoDe(error);
-        return { estado: codigo, json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? `Error interno: ${mensajeDe(error)}` : mensajeDe(error) } };
+        return { estado: codigo, json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error) } };
       }
     }
     for (const { patron, atender } of rutas) {
       const m = peticion.ruta.match(patron);
       if (!m) continue;
-      if (peticion.metodo !== "GET") return { estado: 405, json: { error: "Esta ruta solo admite GET." } };
+      if (peticion.metodo !== "GET") return { estado: 405, json: { error: mensaje("STUDIO-SOLO-GET") } };
+      // Una lectura recuenta los documentos por idioma una vez por proyecto. Las acciones y el SSE, no: escriben
+      // o viven más que una petición.
       try {
-        return { estado: 200, json: await atender(m, peticion) };
+        return { estado: 200, json: await conCacheDelIdioma(() => atender(m, peticion)) };
       } catch (error) {
         const codigo = estadoDe(error);
-        return { estado: codigo, json: { error: codigo === 500 ? `Error interno: ${mensajeDe(error)}` : mensajeDe(error) } };
+        return { estado: codigo, json: { error: codigo === 500 ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error) } };
       }
     }
-    return { estado: 404, json: { error: "No existe esa ruta de la API." } };
+    return { estado: 404, json: { error: mensaje("STUDIO-RUTA-NO-EXISTE") } };
   };
 }
 

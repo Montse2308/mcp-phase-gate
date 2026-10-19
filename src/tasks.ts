@@ -15,11 +15,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MODULE_DIR, stateDir, stateFile } from "./config.js";
+import { mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
+import { idiomaDelProyecto } from "./manifiesto.js";
 import { claveDeNombre, findProjectFolder, leerTextoAcotado, requireProjectFolder, tasksRootPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
 import type { PhaseFile } from "./phases.js";
-import { cabeceraDeRecibo, loteDelNombre } from "./recibos.js";
+import { cabeceraDeRecibo, frontmatterDeRecibo, loteDelNombre } from "./recibos.js";
+import { ENCABEZADOS_DE_PENDIENTES, FORMAS_DE_VACIO, IDIOMAS, estadoCanonico, lotesDelFrontmatter, vocabulario } from "./vocabulario.js";
+import type { Idioma } from "./vocabulario.js";
 
 // ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
 // Forma del archivo: { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" }
@@ -81,7 +85,7 @@ export function limpiarEstadoViejo(): void {
     try {
       if (fs.existsSync(viejo)) {
         fs.unlinkSync(viejo);
-        log("info", `Estado en formato anterior eliminado: ${viejo}`);
+        log("info", mensaje("TAREA-ESTADO-VIEJO-ELIMINADO", { ruta: viejo }));
       }
     } catch {
       // Que no se pueda borrar no impide trabajar: el archivo viejo ya no se lee.
@@ -119,7 +123,7 @@ export function progresoDeLotes(folderPath: string, plan: string | null, recibos
   let total: number | null = null;
   if (plan) {
     try {
-      const valor = (separarFrontmatter(leerTextoAcotado(path.join(folderPath, plan))).meta.lotes ?? "").trim();
+      const valor = (lotesDelFrontmatter(separarFrontmatter(leerTextoAcotado(path.join(folderPath, plan))).meta) ?? "").trim();
       if (/^\d+$/.test(valor) && Number(valor) >= 1 && Number(valor) <= 99) total = Number(valor);
     } catch {
       total = null;
@@ -254,14 +258,14 @@ export function estadoDeTarea(
 // menos un .md: con varios lotes, la Fase 4 está en curso mucho antes de escribir su documento.
 function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null {
   if (datos.documento && fs.existsSync(path.join(carpetaTarea, datos.documento))) {
-    return `existe \`${datos.documento}\``;
+    return mensaje("TAREA-PRESENCIA-DOCUMENTO", { documento: datos.documento });
   }
 
   if (datos.recibos) {
     const subcarpeta = path.join(carpetaTarea, datos.recibos);
     const entradas = fs.existsSync(subcarpeta) ? fs.readdirSync(subcarpeta, { withFileTypes: true }) : [];
     if (entradas.some((entrada) => entrada.isFile() && entrada.name.toLowerCase().endsWith(".md"))) {
-      return `existen recibos en \`${datos.recibos}/\``;
+      return mensaje("TAREA-PRESENCIA-RECIBOS", { recibos: datos.recibos });
     }
   }
 
@@ -279,11 +283,15 @@ const clave = claveDeNombre;
 // Desde la Etapa 4, los recibos y el documento de la fase que los declara los escribe el servidor
 // (record_batch). write_central_doc los rechaza siempre, también para crearlos; la escotilla de
 // confirmación (elicitation o force) queda para reparar a mano un archivo dañado (decisión H4).
-export const MOTIVO_RECIBO = "Los recibos los escribe `record_batch`.";
-export const MOTIVO_DOCUMENTO_DE_LOTES = "Este documento lo genera `record_batch` al cerrar el último lote.";
+// Son los códigos de los dos motivos: su texto sale en el idioma de la llamada.
+export const MOTIVO_RECIBO = "TAREA-MOTIVO-RECIBO";
+export const MOTIVO_DOCUMENTO_DE_LOTES = "TAREA-MOTIVO-DOCUMENTO-DE-LOTES";
 
+// Si el motivo es uno de los dos de lotes: se compara con su texto en los dos idiomas, porque quien
+// pregunta recibió el texto, no el código, y el idioma de la llamada pudo cambiar entre medias.
 export function esMotivoDeLotes(motivo: string | null): boolean {
-  return motivo === MOTIVO_RECIBO || motivo === MOTIVO_DOCUMENTO_DE_LOTES;
+  if (motivo === null) return false;
+  return IDIOMAS.some((idioma) => [MOTIVO_RECIBO, MOTIVO_DOCUMENTO_DE_LOTES].some((codigo) => motivo === mensaje(codigo, {}, idioma)));
 }
 
 // Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
@@ -298,7 +306,7 @@ export function motivoDeProteccion(
 
   // Ni siquiera para crearlo: solo start_task lo escribe.
   if (buscado === clave(contextoInicial)) {
-    return "El contexto inicial está siempre protegido: es el único documento que no se puede regenerar leyendo el código.";
+    return mensaje("TAREA-MOTIVO-CONTEXTO-INICIAL");
   }
 
   const fases = [...phases.entries()].sort((a, b) => a[0] - b[0]);
@@ -313,7 +321,7 @@ export function motivoDeProteccion(
   // recibos ni su documento se escriben con esta tool, existan o no.
   const [numero, datos] = propia;
   const esDocumento = datos.documento !== undefined && clave(datos.documento) === buscado;
-  if (datos.recibos) return esDocumento ? MOTIVO_DOCUMENTO_DE_LOTES : MOTIVO_RECIBO;
+  if (datos.recibos) return mensaje(esDocumento ? MOTIVO_DOCUMENTO_DE_LOTES : MOTIVO_RECIBO);
 
   // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Se mira el nombre
   // declarado y no el que llegó, que puede venir en otras mayúsculas.
@@ -323,7 +331,7 @@ export function motivoDeProteccion(
     if (posterior <= numero) continue;
     const presencia = presenciaDeFase(carpetaTarea, datosPosterior);
     if (presencia) {
-      return `\`${relativo}\` está congelado: la Fase ${posterior} ya está en curso o cerrada (${presencia}).`;
+      return mensaje("TAREA-MOTIVO-CONGELADO", { relativo, fase: posterior, presencia });
     }
   }
 
@@ -331,14 +339,14 @@ export function motivoDeProteccion(
 }
 
 // Frase corta para el chat. Se le pasa el mapa de fases para poder nombrar la fase siguiente
-// con su título real en vez de un número suelto.
+// con su título real en vez de un número suelto. Es texto de respuesta: en el idioma de la llamada.
 export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFile>): string {
   if (estado.fasesConDocumento === 0) {
-    return "fase desconocida (ningún prompt de fase declara documento, así que no hay nada que deducir)";
+    return mensaje("TAREA-ESTADO-DESCONOCIDO");
   }
 
   if (estado.siguienteFase === null) {
-    return "terminada: todas las fases dejaron su documento";
+    return mensaje("TAREA-ESTADO-TERMINADA");
   }
 
   const titulo = phases.get(estado.siguienteFase)?.title;
@@ -346,18 +354,16 @@ export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFil
   const lotes = estado.lotes;
   let progreso = "";
   if (lotes) {
-    if (lotes.total === null) progreso = "; el plan no declara lotes";
-    else if (lotes.pendienteDeCommit !== null) progreso = `, lote ${lotes.pendienteDeCommit} de ${lotes.total}, commit pendiente`;
-    else if (lotes.actual !== null) progreso = `, lote ${lotes.actual} de ${lotes.total}`;
-    else progreso = `, ${lotes.cerrados} de ${lotes.total} lotes cerrados`;
+    if (lotes.total === null) progreso = mensaje("TAREA-PROGRESO-SIN-LOTES");
+    else if (lotes.pendienteDeCommit !== null) progreso = mensaje("TAREA-PROGRESO-COMMIT-PENDIENTE", { lote: lotes.pendienteDeCommit, total: lotes.total });
+    else if (lotes.actual !== null) progreso = mensaje("TAREA-PROGRESO-LOTE", { lote: lotes.actual, total: lotes.total });
+    else progreso = mensaje("TAREA-PROGRESO-CERRADOS", { cerrados: lotes.cerrados, total: lotes.total });
   }
-  const siguiente = titulo
-    ? `va en Fase ${estado.siguienteFase} (${titulo}${progreso})`
-    : `va en Fase ${estado.siguienteFase}${progreso ? ` (${progreso.replace(/^[,;] /, "")})` : ""}`;
+  const siguiente = mensaje("TAREA-VA-EN-FASE", { fase: estado.siguienteFase, titulo: titulo || null, progreso });
 
   return estado.fasesHechas.length
-    ? `${siguiente}; hechas: ${estado.fasesHechas.join(", ")}`
-    : `${siguiente}; todavía sin documentos`;
+    ? mensaje("TAREA-FASES-HECHAS", { siguiente, hechas: estado.fasesHechas })
+    : mensaje("TAREA-SIN-DOCUMENTOS", { siguiente });
 }
 
 // ─── Listado ────────────────────────────────────────────────────────────────
@@ -510,26 +516,27 @@ export function resolverTareaDelPrompt(phases: FasesPorProyecto, opciones: Opcio
 export function avisoDeCompuerta(fasePedida: number, phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): string | null {
   const resuelta = resolverTareaDelPrompt(phases, opciones);
 
-  if (resuelta === "ambigua") {
-    return (
-      "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
-      "proyectos con tarea activa. Pasa `project` para que se compruebe."
-    );
-  }
+  // Sin un proyecto no hay idioma de proyecto: la nota sale en el de la llamada.
+  if (resuelta === "ambigua") return mensaje("COMPUERTA-AMBIGUA");
   if (!resuelta) return null;
 
   const salto = detectarSalto(fasePedida, resuelta.estado, resuelta.phases);
-  return salto ? avisoDeSalto(salto, resuelta.estado.taskName, resuelta.phases) : null;
+  if (!salto) return null;
+  // El aviso va dentro del prompt: en el idioma del proyecto.
+  const idioma = idiomaDelProyecto(resuelta.carpetaProyecto).idioma;
+  return avisoDeSalto(salto, resuelta.estado.taskName, resuelta.phases, idioma);
 }
 
 // ─── Recibos que ya existen ─────────────────────────────────────────────────
 // Ninguna tool lista una carpeta, así que al retomar la Fase 4 en otro chat, o al auditar en la
 // Fase 5 sin índice, el modelo no tenía cómo saber qué recibos hay ni cómo se llaman sus slugs.
-// Se los da el servidor al final del prompt de la fase que los declara y de las posteriores.
+// Se los da el servidor al final del prompt de la fase que los declara y de las posteriores, en el
+// idioma del proyecto.
 export function bloqueDeRecibos(
   fasePedida: number,
   estado: EstadoTarea,
-  phases: Map<number, PhaseFile>
+  phases: Map<number, PhaseFile>,
+  idioma: Idioma = "es"
 ): string | null {
   const lineas: string[] = [];
 
@@ -545,15 +552,15 @@ export function bloqueDeRecibos(
       .map((entrada) => entrada.name)
       .sort();
 
-    for (const recibo of recibos) lineas.push(`- Fase ${numero}: \`${datos.recibos}/${recibo}\``);
+    for (const recibo of recibos) lineas.push(mensaje("TAREA-RECIBO-EXISTENTE", { fase: numero, ruta: `${datos.recibos}/${recibo}` }, idioma));
   }
 
   if (lineas.length === 0) return null;
 
   return [
-    `## RECIBOS QUE YA EXISTEN EN LA TAREA "${estado.taskName}"`,
+    `## ${vocabulario(idioma).encabezados.recibosQueExisten(estado.taskName)}`,
     "",
-    "Léelos con `read_central_doc` usando estas rutas tal cual:",
+    mensaje("TAREA-RECIBOS-LEELOS", {}, idioma),
     ...lineas,
   ].join("\n");
 }
@@ -566,21 +573,12 @@ export function bloqueDeRecibos(
 //
 // No contradice el rechazo de la #39 a un campo `Estado:`: aquello era hacer depender la
 // compuerta de algo escrito por el modelo. Esto no bloquea ni cambia la fase: solo señala.
-const ENCABEZADO_PENDIENTES = "## Validaciones pendientes";
 
-// Lo que se escribe por costumbre en una sección que no tiene nada: no es un pendiente.
-const SECCION_VACIA = new Set([
-  "",
-  "ninguna",
-  "ninguno",
-  "ninguna pendiente",
-  "nada",
-  "sin pendientes",
-  "no hay pendientes",
-  "fase cerrada sin pendientes",
-  "n/a",
-  "no aplica",
-]);
+// Lo que se escribe por costumbre en una sección que no tiene nada, en los dos idiomas: no es un pendiente.
+const SECCION_VACIA = FORMAS_DE_VACIO;
+
+// "## Validaciones pendientes" o "## Pending validations", sin distinguir mayúsculas (§8.2).
+const ENCABEZADOS_BUSCADOS = new Set(ENCABEZADOS_DE_PENDIENTES.map((titulo) => `## ${titulo}`.normalize("NFC").toLowerCase()));
 
 // La sección reducida a su texto: sin viñetas ni numeración, sin énfasis de Markdown (_ * `),
 // sin puntos suspensivos ni punto final, en una línea y en minúsculas. Así "- Ninguna.",
@@ -604,9 +602,9 @@ const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
 // existe y tiene algo que no sea una forma de decir "ninguna".
 export function tieneValidacionesPendientes(texto: string): boolean {
   const lineas = separarFrontmatter(texto).cuerpo.split("\n");
-  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale.
-  const buscado = ENCABEZADO_PENDIENTES.toLowerCase();
-  const inicio = lineas.findIndex((linea) => linea.trimEnd().normalize("NFC").toLowerCase() === buscado);
+  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale, y en
+  // inglés, "## Pending validations".
+  const inicio = lineas.findIndex((linea) => ENCABEZADOS_BUSCADOS.has(linea.trimEnd().normalize("NFC").toLowerCase()));
   if (inicio === -1) return false;
 
   const resto = lineas.slice(inicio + 1);
@@ -624,11 +622,14 @@ function leerSinFallar(ruta: string): string | null {
   }
 }
 
+// En el idioma del proyecto (`idioma`): el aviso va dentro del prompt.
 export function avisoDePendientes(
   fasePedida: number,
   estado: EstadoTarea,
-  phases: Map<number, PhaseFile>
+  phases: Map<number, PhaseFile>,
+  idioma: Idioma = "es"
 ): string | null {
+  const v = vocabulario(idioma);
   const ordenadas = [...phases.entries()].sort((a, b) => a[0] - b[0]);
   const lineas: string[] = [];
 
@@ -642,7 +643,7 @@ export function avisoDePendientes(
     const documento = anterior[1].documento!;
     const texto = leerSinFallar(path.join(estado.folderPath, documento));
     if (texto !== null && tieneValidacionesPendientes(texto)) {
-      lineas.push(`- \`${documento}\` tiene una sección \`${ENCABEZADO_PENDIENTES}\`.`);
+      lineas.push(mensaje("PENDIENTES-SECCION", { documento, encabezado: `## ${v.encabezados.validacionesPendientes}` }, idioma));
     }
   }
 
@@ -664,43 +665,43 @@ export function avisoDePendientes(
       const ruta = path.join(estado.folderPath, ...relativo.split("/"));
       if (!fs.existsSync(ruta)) continue;
       const texto = leerSinFallar(ruta);
-      const valor = texto === null ? "" : (separarFrontmatter(texto).meta.estado ?? "").trim().toLowerCase();
-      if (ESTADOS_PENDIENTES.has(valor)) lineas.push(`- \`${relativo}\`: estado \`${valor}\`.`);
+      const valor = texto === null ? "" : (frontmatterDeRecibo(texto).meta.estado ?? "").trim().toLowerCase();
+      const canonico = estadoCanonico(valor);
+      if (ESTADOS_PENDIENTES.has(canonico ?? "")) lineas.push(mensaje("PENDIENTES-ESTADO", { relativo, valor, estado: canonico }, idioma));
     }
   }
 
   if (lineas.length === 0) return null;
 
   return [
-    "## PENDIENTES HEREDADOS (detectados por el servidor)",
+    `## ${v.encabezados.pendientesDetectados}`,
     "",
     ...lineas,
     "",
-    "Nómbraselos al usuario antes de empezar (ver PENDIENTES HEREDADOS en las reglas globales).",
+    mensaje("PENDIENTES-NOMBRALOS", { seccion: v.encabezados.pendientesHeredados }, idioma),
   ].join("\n");
 }
 
+// En el idioma del proyecto (`idioma`): el aviso va al principio del prompt.
 export function avisoDeSalto(
   salto: Salto,
   taskName: string,
-  phases: Map<number, PhaseFile>
+  phases: Map<number, PhaseFile>,
+  idioma: Idioma = "es"
 ): string {
-  const titulo = phases.get(salto.siguienteFase)?.title;
-  const vaEn = titulo ? `Fase ${salto.siguienteFase} (${titulo})` : `Fase ${salto.siguienteFase}`;
+  const titulo = phases.get(salto.siguienteFase)?.title || null;
 
-  const lista = salto.faltan.map(({ fase, documento }) => `- Fase ${fase}: falta \`${documento}\``);
+  const lista = salto.faltan.map(({ fase, documento }) => mensaje("COMPUERTA-FALTA", { fase, documento }, idioma));
 
   return [
-    "## ATENCIÓN — COMPUERTA DE FASE",
+    `## ${vocabulario(idioma).encabezados.compuerta}`,
     "",
-    `Pediste la Fase ${salto.fasePedida}, pero la tarea "${taskName}" no tiene los documentos de fases anteriores:`,
+    mensaje("COMPUERTA-PEDISTE", { fase: salto.fasePedida, tarea: taskName }, idioma),
     "",
     ...lista,
     "",
-    `Esta tarea va en la ${vaEn}. NO hagas el trabajo de la Fase ${salto.fasePedida} sobre documentos que no existen ` +
-      "ni te los inventes a partir del contexto del chat.",
+    mensaje("COMPUERTA-VA-EN", { fase: salto.siguienteFase, titulo, pedida: salto.fasePedida }, idioma),
     "",
-    "Díselo al usuario antes de nada y pregúntale si prefiere hacer primero la fase que falta o continuar de todos " +
-      "modos. Lo que sigue es el prompt de la fase que pediste: aplícalo solo después de resolver esto con el usuario.",
+    mensaje("COMPUERTA-PREGUNTA", {}, idioma),
   ].join("\n");
 }

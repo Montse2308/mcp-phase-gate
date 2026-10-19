@@ -181,9 +181,10 @@ describe("frontmatterDeTarea", () => {
       return frontmatterDeTarea(carpeta, CONTEXTO);
     };
 
-    assert.deepEqual(leer("---\nrepos: api, web\npreset: ai-agent-ops\n---\nreq"), { repos: ["api", "web"], preset: "ai-agent-ops" });
-    assert.deepEqual(leer("---\r\nrepos: [api, \"web\"]\r\n---\r\nreq"), { repos: ["api", "web"], preset: null });
-    assert.deepEqual(leer("solo el requerimiento"), { repos: null, preset: null });
+    // Desde la Etapa 6, también `redaccion` (§8.3).
+    assert.deepEqual(leer("---\nrepos: api, web\npreset: ai-agent-ops\nredaccion: en\n---\nreq"), { repos: ["api", "web"], preset: "ai-agent-ops", redaccion: "en" });
+    assert.deepEqual(leer("---\r\nrepos: [api, \"web\"]\r\n---\r\nreq"), { repos: ["api", "web"], preset: null, redaccion: null });
+    assert.deepEqual(leer("solo el requerimiento"), { repos: null, preset: null, redaccion: null });
   });
 });
 

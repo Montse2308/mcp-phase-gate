@@ -2,18 +2,59 @@
 // frente al de fábrica (un diff por líneas), las reglas del proyecto y "Editar", que lanza un eject a la
 // capa global o a la del proyecto. "Ver prompt completo" enseña el texto exacto que recibe el modelo (el
 // mismo de get_phase_prompt) con un botón para copiarlo.
+//
+// En inglés, cada ranura se enseña con su alias y el id canónico entre paréntesis (`phase-3/tests
+// (fase-3/pruebas)`), y las capas y los modos de un bloque se dicen en inglés. Solo al enseñarlos: lo que
+// se manda al servidor (el objetivo de un eject, por ejemplo) es siempre el id canónico.
 
 import { diffLines } from "diff";
 import { useEffect, useState } from "preact/hooks";
 
 import type { ProyectosRespuesta, PromptRespuesta, RanuraApi, TareasRespuesta } from "../../../src/studio/contrato.js";
+import { idInglesDeRanura } from "../../../src/vocabulario.js";
 import { Accion } from "../comun/accion";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
 import { ruta } from "../datos";
+import { idiomaActual, t } from "../i18n/idioma";
+import { origenDelPreset } from "../red/red";
 import { enlace } from "../rutas";
 import type { Ruta } from "../rutas";
 
+// Las políticas de commits son identificadores: no se traducen.
 const POLITICAS = ["agente-commitea-con-OK", "agente-propone", "auto", "ninguno"];
+
+// El id de una ranura para enseñarlo: el canónico en español; en inglés, el alias con el canónico detrás.
+export function idVisible(id: string): string {
+  if (idiomaActual() === "es") return id;
+  const ingles = idInglesDeRanura(id);
+  return ingles === id ? id : `${ingles} (${id})`;
+}
+
+const CAPAS = {
+  fábrica: "capa.fabrica",
+  preset: "capa.preset",
+  reglas: "capa.reglas",
+  global: "capa.global",
+  proyecto: "capa.proyecto",
+  desconocida: "capa.desconocida",
+} as const;
+
+// La capa de una ranura (capaDeProcedencia de la API): "fábrica", "preset: <nombre>", "reglas: <variante>",
+// "global", "proyecto" o "desconocida". Se traduce la etiqueta; el nombre del preset o la variante, no.
+export function capaVisible(capa: string): string {
+  const corte = capa.indexOf(": ");
+  const etiqueta = corte === -1 ? capa : capa.slice(0, corte);
+  const clave = Object.prototype.hasOwnProperty.call(CAPAS, etiqueta) ? CAPAS[etiqueta as keyof typeof CAPAS] : null;
+  if (!clave) return capa;
+  return corte === -1 ? t(clave) : `${t(clave)}: ${capa.slice(corte + 2)}`;
+}
+
+// Un modo aplicado ("antes (<archivo>:<línea>)", "despues (…)"): se traduce la palabra del modo.
+const MODOS = { reemplazar: "bloque.reemplazar", antes: "bloque.antes", despues: "bloque.despues" } as const;
+function modoVisible(modo: string): string {
+  const m = modo.match(/^(reemplazar|antes|despues)\b/);
+  return m ? `${t(MODOS[m[1] as keyof typeof MODOS])}${modo.slice(m[1]!.length)}` : modo;
+}
 
 function irA(p: string, fase: number, tarea: string | null): void {
   const consulta = new URLSearchParams({ fase: String(fase) });
@@ -22,11 +63,11 @@ function irA(p: string, fase: number, tarea: string | null): void {
 }
 
 function DiffDeRanura({ ranura }: { ranura: RanuraApi }) {
-  if (ranura.fabrica === null) return <p class="secundaria">Esta ranura no existe en los prompts de fábrica: todo su contenido es de {ranura.capa}.</p>;
-  if (ranura.fabrica === ranura.efectivo) return <p class="secundaria">Igual que la de fábrica.</p>;
+  if (ranura.fabrica === null) return <p class="secundaria">{t("taller.sinFabrica", { capa: capaVisible(ranura.capa) })}</p>;
+  if (ranura.fabrica === ranura.efectivo) return <p class="secundaria">{t("taller.igualQueFabrica")}</p>;
   const partes = diffLines(ranura.fabrica, ranura.efectivo);
   return (
-    <pre class="diff" aria-label={`Diferencias de ${ranura.id} con la fábrica`}>
+    <pre class="diff" aria-label={t("taller.diferencias", { ranura: idVisible(ranura.id) })}>
       {partes.flatMap((parte, i) =>
         parte.value
           .replace(/\n$/, "")
@@ -53,15 +94,15 @@ function Reglas({ p, datos, alAplicar }: { p: string; datos: PromptRespuesta; al
   const cambios = { ...(lotes !== datos.reglas.lotes ? { lotes } : {}), ...(commits !== datos.reglas.commits ? { commits } : {}) };
   return (
     <section class="reglas" aria-labelledby="titulo-reglas">
-      <h2 id="titulo-reglas">Reglas de {p}</h2>
+      <h2 id="titulo-reglas">{t("taller.reglasDe", { proyecto: p })}</h2>
       <p class="secundaria">
-        Preset: <strong>{datos.preset.nombre}</strong> ({datos.preset.origen})
+        {t("taller.preset")} <strong>{datos.preset.nombre}</strong> ({origenDelPreset(datos.preset.origen)})
       </p>
       <p>
         <label>
-          <input type="checkbox" checked={lotes} onChange={(e) => setLotes((e.target as HTMLInputElement).checked)} /> Lotes
+          <input type="checkbox" checked={lotes} onChange={(e) => setLotes((e.target as HTMLInputElement).checked)} /> {t("taller.lotes")}
         </label>{" "}
-        <label for="politica-commits">Política de commits</label>{" "}
+        <label for="politica-commits">{t("taller.politica")}</label>{" "}
         <select id="politica-commits" value={commits} onChange={(e) => setCommits((e.target as HTMLSelectElement).value)}>
           {POLITICAS.map((politica) => (
             <option key={politica} value={politica}>
@@ -70,7 +111,7 @@ function Reglas({ p, datos, alAplicar }: { p: string; datos: PromptRespuesta; al
           ))}
         </select>
       </p>
-      <Accion etiqueta="Cambiar las reglas" accion="reglas" argumentos={{ proyecto: p, ...cambios }} alAplicar={alAplicar} deshabilitado={Object.keys(cambios).length === 0} />
+      <Accion etiqueta={t("taller.cambiarReglas")} accion="reglas" argumentos={{ proyecto: p, ...cambios }} alAplicar={alAplicar} deshabilitado={Object.keys(cambios).length === 0} />
     </section>
   );
 }
@@ -90,10 +131,10 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
 
   return (
     <section class="vista vista-taller" aria-labelledby="titulo-taller">
-      <h1 id="titulo-taller">Taller de prompts</h1>
+      <h1 id="titulo-taller">{t("taller.titulo")}</h1>
       {proyectos.error ? <Aviso error={proyectos.error} /> : null}
       <form class="selectores" onSubmit={(e) => e.preventDefault()}>
-        <label for="taller-proyecto">Proyecto</label>
+        <label for="taller-proyecto">{t("taller.proyecto")}</label>
         <select id="taller-proyecto" value={p ?? ""} onChange={(e) => irA((e.target as HTMLSelectElement).value, fase, null)}>
           {validos.map((x) => (
             <option key={x.nombre} value={x.nombre}>
@@ -101,16 +142,16 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
             </option>
           ))}
         </select>
-        <label for="taller-tarea">Tarea</label>
+        <label for="taller-tarea">{t("taller.tarea")}</label>
         <select id="taller-tarea" value={tarea ?? ""} onChange={(e) => p && irA(p, fase, (e.target as HTMLSelectElement).value || null)}>
-          <option value="">La activa (o ninguna)</option>
-          {(tareas.datos?.tareas ?? []).map((t) => (
-            <option key={t.tarea} value={t.tarea}>
-              {t.tarea}
+          <option value="">{t("taller.laActiva")}</option>
+          {(tareas.datos?.tareas ?? []).map((x) => (
+            <option key={x.tarea} value={x.tarea}>
+              {x.tarea}
             </option>
           ))}
         </select>
-        <label for="taller-fase">Fase</label>
+        <label for="taller-fase">{t("taller.fase")}</label>
         <select id="taller-fase" value={String(fase)} onChange={(e) => p && irA(p, Number((e.target as HTMLSelectElement).value), tarea)}>
           {(datos?.fases ?? [{ numero: fase, titulo: "" }]).map((f) => (
             <option key={f.numero} value={String(f.numero)}>
@@ -124,7 +165,7 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
       {datos && p ? (
         <>
           {datos.avisos.length ? (
-            <ul class="avisos" aria-label="Avisos del ensamblado">
+            <ul class="avisos" aria-label={t("taller.avisos")}>
               {datos.avisos.map((a, i) => (
                 <li key={i} class="aviso">
                   <strong>{a.codigo}</strong>: {a.texto}
@@ -134,11 +175,11 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
           ) : null}
           <div class="taller">
             <section class="capas" aria-labelledby="titulo-capas">
-              <h2 id="titulo-capas">Capas</h2>
+              <h2 id="titulo-capas">{t("taller.capas")}</h2>
               <ol>
                 {datos.capas.map((c) => (
                   <li key={`${c.orden}-${c.ruta}`}>
-                    <strong>{c.etiqueta}</strong> <span class="secundaria">{c.existe ? "existe" : "no existe"}</span>
+                    <strong>{capaVisible(c.etiqueta)}</strong> <span class="secundaria">{t(c.existe ? "taller.existe" : "taller.noExiste")}</span>
                     <br />
                     <code>{c.ruta}</code>
                   </li>
@@ -147,14 +188,14 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
             </section>
             <section class="ranuras" aria-labelledby="titulo-ranuras">
               <h2 id="titulo-ranuras">
-                Ranuras de la Fase {fase} <span class="secundaria">({datos.ranuras.length}, con las globales)</span>
+                {t("taller.ranurasDe", { fase })} <span class="secundaria">{t("taller.cuentaRanuras", { n: datos.ranuras.length })}</span>
               </h2>
-              <ul aria-label="Ranuras">
+              <ul aria-label={t("taller.ranuras")}>
                 {datos.ranuras.map((x) => (
                   <li key={x.id}>
                     <button type="button" class="ranura-boton" aria-pressed={elegida === x.id} onClick={() => setElegida(x.id)}>
-                      <code>{x.id}</code> <span class={`ficha-origen origen-${x.capa === "fábrica" ? "fabrica" : "propio"}`}>{x.capa}</span>
-                      {x.modos.length ? <span class="secundaria"> {x.modos.join(", ")}</span> : null}
+                      <code>{idVisible(x.id)}</code> <span class={`ficha-origen origen-${x.capa === "fábrica" ? "fabrica" : "propio"}`}>{capaVisible(x.capa)}</span>
+                      {x.modos.length ? <span class="secundaria"> {x.modos.map(modoVisible).join(", ")}</span> : null}
                     </button>
                     {x.contenidoDe !== "fábrica" ? <span class="secundaria procedencia">{x.contenidoDe}</span> : null}
                   </li>
@@ -164,21 +205,18 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
           </div>
           {ranura ? (
             <section class="detalle-ranura" aria-labelledby="titulo-ranura">
-              <h2 id="titulo-ranura">{ranura.id}</h2>
-              <p class="secundaria">
-                Contenido de {ranura.capa}
-                {ranura.contenidoDe !== "fábrica" ? ` (${ranura.contenidoDe})` : ""}, frente al de fábrica:
-              </p>
+              <h2 id="titulo-ranura">{idVisible(ranura.id)}</h2>
+              <p class="secundaria">{t("taller.contenidoDe", { capa: capaVisible(ranura.capa), procedencia: ranura.contenidoDe !== "fábrica" ? ` (${ranura.contenidoDe})` : "" })}</p>
               <DiffDeRanura ranura={ranura} />
-              <Accion etiqueta={`Editar ${ranura.id} en la capa del proyecto`} accion="eject" argumentos={{ objetivo: ranura.id, destino: `proyecto:${p}` }} alAplicar={prompt.recargar} />
-              <Accion etiqueta={`Editar ${ranura.id} en la capa global`} accion="eject" argumentos={{ objetivo: ranura.id, destino: "global" }} alAplicar={prompt.recargar} />
+              <Accion etiqueta={t("taller.editarEnProyecto", { ranura: idVisible(ranura.id) })} accion="eject" argumentos={{ objetivo: ranura.id, destino: `proyecto:${p}` }} alAplicar={prompt.recargar} />
+              <Accion etiqueta={t("taller.editarEnGlobal", { ranura: idVisible(ranura.id) })} accion="eject" argumentos={{ objetivo: ranura.id, destino: "global" }} alAplicar={prompt.recargar} />
             </section>
           ) : null}
           <section class="fase-entera" aria-labelledby="titulo-fase-entera">
-            <h2 id="titulo-fase-entera">La Fase {fase} entera</h2>
-            <Accion etiqueta={`Editar la Fase ${fase} en la capa del proyecto`} accion="eject" argumentos={{ objetivo: `fase-${fase}`, destino: `proyecto:${p}` }} alAplicar={prompt.recargar} />
+            <h2 id="titulo-fase-entera">{t("taller.faseEntera", { fase })}</h2>
+            <Accion etiqueta={t("taller.editarFase", { fase })} accion="eject" argumentos={{ objetivo: `fase-${fase}`, destino: `proyecto:${p}` }} alAplicar={prompt.recargar} />
             <details class="prompt-completo">
-              <summary>Ver prompt completo</summary>
+              <summary>{t("taller.verPrompt")}</summary>
               <button
                 type="button"
                 class="boton"
@@ -189,9 +227,9 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
                   )
                 }
               >
-                {copiado ? "Copiado" : "Copiar"}
+                {t(copiado ? "taller.copiado" : "taller.copiar")}
               </button>
-              <pre class="texto-prompt" aria-label="Prompt completo">
+              <pre class="texto-prompt" aria-label={t("taller.promptCompleto")}>
                 {datos.texto}
               </pre>
             </details>

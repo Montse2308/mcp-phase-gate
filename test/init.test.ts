@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 import { ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
-import { CANDADO_DE_PUSH, MARCA_DE_COMANDO, diffDeLineas, ejecutaPhaseGate, ejecutarInit, quitarComentarios, registroEnClaude } from "../src/init.js";
+import { MARCA_DE_COMANDO, candadoDePush, diffDeLineas, ejecutaPhaseGate, ejecutarInit, quitarComentarios, registroEnClaude } from "../src/init.js";
 import type { EntornoInit, Ejecucion, OpcionesInit } from "../src/init.js";
-import { carpetaTemporal, configTemporal, crearProyecto, estadoTemporal, limpiarEntorno } from "./helpers.js";
+import { carpetaTemporal, configTemporal, crearProyecto, crearTarea, estadoTemporal, limpiarEntorno } from "./helpers.js";
 
 afterEach(() => {
   limpiarEntorno();
@@ -124,7 +124,7 @@ describe("init: registrar en los clientes", () => {
       "--env", `PHASE_GATE_DOCS_PATH=${r.docs}`, "--env", `PHASE_GATE_REPOS_PATH=${r.repos}`,
       "--", "npx", "-y", "mcp-phase-gate",
     ]);
-    assert.ok(p.texto().includes(CANDADO_DE_PUSH));
+    assert.ok(p.texto().includes(candadoDePush()));
     assert.match(p.texto(), /mcp-phase-gate \d+\.\d+\.\d+.* · vía /, "termina con doctor");
   });
 
@@ -355,14 +355,35 @@ describe("init --migrate", () => {
     crearProyecto(r.docs, "PROYECTO-B");
     const suyo = JSON.stringify({ version: 1, preset: "research-ops" });
     fs.writeFileSync(path.join(r.docs, "PROYECTO-A", "phase-gate.json"), suyo, "utf-8");
+    // Uno inválido no se toca: lo dice doctor.
+    crearProyecto(r.docs, "PROYECTO-ROTO");
+    const roto = JSON.stringify({ version: 2 });
+    fs.writeFileSync(path.join(r.docs, "PROYECTO-ROTO", "phase-gate.json"), roto, "utf-8");
+    // Con --docs y sin PHASE_GATE_DOCS_PATH en el entorno, los documentos en inglés de un proyecto se ven.
+    crearProyecto(r.docs, "PROYECTO-EN");
+    crearTarea(r.docs, "PROYECTO-EN", "t", ["00 - Initial Context.md"]);
+    assert.equal(process.env.PHASE_GATE_DOCS_PATH, undefined);
     const p = entornoDePrueba();
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true }), p.entorno), 0, p.errores());
-    assert.equal(fs.readFileSync(path.join(r.docs, "PROYECTO-A", "phase-gate.json"), "utf-8"), suyo, "nunca sobrescribe");
+    // El suyo no se reemplaza: solo se le añade el idioma que ya usaba, detrás de `preset`, con copia del
+    // original (hallazgo 2 de la auditoría de la Etapa 6).
+    assert.equal(
+      fs.readFileSync(path.join(r.docs, "PROYECTO-A", "phase-gate.json"), "utf-8"),
+      `${JSON.stringify({ version: 1, preset: "research-ops", idioma: "es" }, null, 2)}\n`
+    );
+    assert.equal(fs.readFileSync(path.join(r.docs, "PROYECTO-A", `phase-gate.json${BAK}`), "utf-8"), suyo);
+    assert.match(p.texto(), /PROYECTO-A.phase-gate\.json no declaraba idioma; ahora lleva "idioma": "es"/);
+    assert.equal(fs.readFileSync(path.join(r.docs, "PROYECTO-ROTO", "phase-gate.json"), "utf-8"), roto);
+    assert.equal(leer(path.join(r.docs, "PROYECTO-EN", "phase-gate.json")).idioma, "en");
+    assert.equal(process.env.PHASE_GATE_DOCS_PATH, undefined, "la variable vuelve a como estaba");
+    // Desde la Etapa 6 lleva también el idioma: sin documentos que lo digan, el del equipo (aquí, el de los
+    // tests: PHASE_GATE_LANG=es).
     assert.deepEqual(leer(path.join(r.docs, "PROYECTO-B", "phase-gate.json")), {
       $schema: "https://unpkg.com/mcp-phase-gate@3/schema/project.json",
       version: 1,
       preset: "software-replica",
+      idioma: "es",
     });
 
     crearProyecto(r.docs, "PROYECTO-C");

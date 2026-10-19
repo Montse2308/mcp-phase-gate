@@ -13,85 +13,18 @@ import { anclasNoVigentes, diagnosticar, formatearDiagnostico, formatearProceden
 import type { Diagnostico } from "./diagnostico.js";
 import { ejecutarEject } from "./eject.js";
 import { CLAVE_VALIDA, CLIENTES } from "./init.js";
+import { mensaje } from "./i18n/mensajes.js";
 import type { Cliente, OpcionesInit } from "./init.js";
+import type { Idioma } from "./vocabulario.js";
 
-export const AYUDA = `${SERVER_NAME} v${SERVER_VERSION}
+// La ayuda y el aviso de la terminal, en el idioma de los mensajes (PHASE_GATE_LANG, si no el del sistema).
+export function ayuda(): string {
+  return mensaje("CLI-AYUDA", { servidor: SERVER_NAME, version: SERVER_VERSION });
+}
 
-Servidor MCP que parte cada requerimiento en cinco fases con compuerta y obliga a que cada
-una deje su documento en una documentación central.
-
-El servidor NO se ejecuta a mano: lo lanza tu cliente MCP. Ejecutado directamente se queda
-esperando mensajes JSON-RPC por stdin, que es lo que parece que se colgó.
-
-Uso:
-  ${SERVER_NAME}                 Arranca el servidor MCP por stdio (lo hace tu cliente).
-  ${SERVER_NAME} doctor          Revisa la instalación: variables, prompts, proyectos y avisos.
-  ${SERVER_NAME} doctor --json   Lo mismo, como JSON.
-  ${SERVER_NAME} doctor --reverificar
-                                Además, comprueba que el commit de cada recibo siga en su rama y que
-                                cada artefacto sellado no haya cambiado (llama a git).
-  ${SERVER_NAME} doctor --fase N [--proyecto P]
-                                De dónde sale cada ranura del prompt de esa fase (capa y archivo:línea).
-  ${SERVER_NAME} init            Registra el servidor en tus clientes (Claude Code, Cursor, VS Code).
-  ${SERVER_NAME} eject <objetivo> --a global|proyecto:<NOMBRE>
-                                Copia un prompt, una ranura, un comando o un preset para editarlo.
-  ${SERVER_NAME} ui              El Studio: una vista local de tus proyectos y tareas en el navegador.
-  ${SERVER_NAME} --version       La versión.
-  ${SERVER_NAME} --help          Esta ayuda.
-
-init:
-  --cliente claude-code|cursor|vscode|todos   Sin esto, detecta los que hay en este equipo.
-  --clave <clave>        Nombre del registro nuevo (por defecto "pg"). Uno que ya existe conserva el suyo.
-  --docs <ruta>          Documentación Central (si no, PHASE_GATE_DOCS_PATH, o te la pregunta).
-  --repos <ruta>         Carpeta de repositorios (si no, PHASE_GATE_REPOS_PATH, o te la pregunta).
-  --comandos             Copia /f1…/fN a ~/.claude/commands/ o ~/.cursor/commands/.
-  --migrate              Crea phase-gate.json con "preset": "software-replica" en los proyectos sin él.
-    --preset <nombre>    Otro preset para la migración.
-    --solo-este-equipo   En vez de manifiestos, presetPorDefecto en el machine.json de este equipo.
-  --dry-run              Dice lo que haría, sin escribir nada.
-  --yes                  Confirma los cambios sobre lo que ya existe sin preguntar.
-
-eject <objetivo>:
-  fase-3                 El prompt de fábrica de la fase, con sus ranuras.
-  fase-3/pruebas         El contenido efectivo de una ranura (con preset y reglas), como bloque.
-  global/evidencia       Igual, para una ranura de las reglas globales.
-  comando-f4             El texto del comando /f4.
-  preset:<nombre>        El archivo del preset (siempre a tu carpeta de configuración).
-  --a global|proyecto:<NOMBRE>   A qué capa. --dry-run lo enseña sin escribir; --fuerza reemplaza con copia.
-
-ui:
-  --puerto <n>           El puerto (en 127.0.0.1). Sin esto, uno libre.
-  --no-abrir             No abre el navegador: solo imprime el enlace, que sirve una sola vez.
-  --demo                 Sobre una demo con datos de ejemplo, en una carpeta temporal: no toca tu Documentación.
-
-Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
-
-  {
-    "mcpServers": {
-      "${SERVER_NAME}": {
-        "command": "npx",
-        "args": ["-y", "mcp-phase-gate"],
-        "env": {
-          "PHASE_GATE_DOCS_PATH": "<tu carpeta de documentación>",
-          "PHASE_GATE_REPOS_PATH": "<tu carpeta de repositorios>"
-        }
-      }
-    }
-  }
-
-Variables de entorno (los nombres ORQUESTADOR_* de antes siguen valiendo como alias):
-  PHASE_GATE_DOCS_PATH      Obligatoria. Raíz de la Documentación Central.
-  PHASE_GATE_REPOS_PATH     Obligatoria. Carpeta con tus repositorios de código.
-  PHASE_GATE_TASKS_SUBDIR   Subcarpeta de tareas dentro de cada proyecto. Por defecto "Proyectos".
-  PHASE_GATE_PROMPTS_PATH   Carpeta de prompts propios, que se superponen a los del paquete.
-  PHASE_GATE_STATE_PATH     Dónde guardar los punteros de tarea activa.
-  PHASE_GATE_CONFIG_PATH    Carpeta de machine.json y de los presets propios (por defecto, la del sistema).
-  PHASE_GATE_ELICITATION    "off" para que el servidor no pida confirmaciones al cliente.
-
-Documentación: https://github.com/Montse2308/mcp-phase-gate`;
-
-export const AVISO_TERMINAL =
-  "Esperando un cliente MCP por stdin. Si querías revisar la instalación: `npx mcp-phase-gate doctor`.";
+export function avisoTerminal(): string {
+  return mensaje("CLI-AVISO-TERMINAL");
+}
 
 export type Salida = { out: (texto: string) => void; err: (texto: string) => void };
 
@@ -113,9 +46,17 @@ export type ResultadoCli =
 
 // Las opciones de `ui`, ya validadas. El Studio vive en src/studio/ y se carga solo para `ui`, con un
 // import dinámico: el servidor MCP por stdio no carga nada de él (test/aislamiento.test.ts).
-export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean };
+// Con `exportar`, `ui` no arranca el Studio: escribe el sitio estático (§7.9 del plan).
+// `idioma`: el de la demo de `ui --demo` (§8.7); sin él, el de PHASE_GATE_LANG o el del sistema.
+export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean; idioma?: Idioma; exportar?: { destino: string; datosReales: boolean; yes: boolean } };
 
 export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
+  if (opciones.exportar) {
+    const { exportarEstatico } = await import("./studio/exportar.js");
+    const { entornoDelProceso } = await import("./init.js");
+    const { esTerminal, preguntar } = entornoDelProceso(salida);
+    return exportarEstatico(opciones.exportar, { salida, esTerminal, preguntar });
+  }
   const { lanzarStudio } = await import("./studio/servidor.js");
   return lanzarStudio(opciones, salida);
 }
@@ -132,16 +73,16 @@ export async function doctorReverificando(json: boolean, salida: Salida = SALIDA
 
 function invalido(salida: Salida, motivo?: string): ResultadoCli {
   if (motivo) salida.err(`${motivo}\n`);
-  salida.err(AYUDA);
+  salida.err(ayuda());
   return { accion: "salir", codigo: 2 };
 }
 
 // Qué banderas acepta cada subcomando: una bandera de init pasada a doctor es un error, no se ignora.
 const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
-  init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "solo-este-equipo", "dry-run", "yes"],
+  init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "idioma", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
-  ui: ["puerto", "no-abrir", "demo"],
+  ui: ["puerto", "no-abrir", "demo", "idioma", "export-static", "incluir-datos-reales", "yes"],
 };
 
 type Valores = {
@@ -155,6 +96,7 @@ type Valores = {
   comandos?: boolean;
   migrate?: boolean;
   preset?: string;
+  idioma?: string;
   "solo-este-equipo"?: boolean;
   "dry-run"?: boolean;
   yes?: boolean;
@@ -166,6 +108,8 @@ type Valores = {
   puerto?: string;
   "no-abrir"?: boolean;
   demo?: boolean;
+  "export-static"?: string;
+  "incluir-datos-reales"?: boolean;
 };
 
 function opcionesDeInit(valores: Valores): OpcionesInit | string {
@@ -173,13 +117,16 @@ function opcionesDeInit(valores: Valores): OpcionesInit | string {
   if (valores.cliente !== undefined) {
     if (valores.cliente === "todos") clientes = [...CLIENTES];
     else if ((CLIENTES as readonly string[]).includes(valores.cliente)) clientes = [valores.cliente as Cliente];
-    else return `--cliente "${valores.cliente}" no es válido: usa claude-code, cursor, vscode o todos.`;
+    else return mensaje("CLI-CLIENTE-INVALIDO", { cliente: valores.cliente });
   }
   if (valores.clave !== undefined && !CLAVE_VALIDA.test(valores.clave)) {
-    return `--clave "${valores.clave}" no es válida: letras, números, guiones y guiones bajos.`;
+    return mensaje("CLI-CLAVE-INVALIDA", { clave: valores.clave });
   }
-  if ((valores.preset !== undefined || valores["solo-este-equipo"]) && !valores.migrate) {
-    return "--preset y --solo-este-equipo solo valen junto con --migrate.";
+  if ((valores.preset !== undefined || valores.idioma !== undefined || valores["solo-este-equipo"]) && !valores.migrate) {
+    return mensaje("CLI-SOLO-CON-MIGRATE");
+  }
+  if (valores.idioma !== undefined && valores.idioma !== "es" && valores.idioma !== "en") {
+    return mensaje("CLI-IDIOMA-INVALIDO", { idioma: valores.idioma });
   }
   return {
     clientes,
@@ -189,6 +136,7 @@ function opcionesDeInit(valores: Valores): OpcionesInit | string {
     comandos: Boolean(valores.comandos),
     migrate: Boolean(valores.migrate),
     preset: valores.preset ?? null,
+    idioma: (valores.idioma as "es" | "en" | undefined) ?? null,
     soloEsteEquipo: Boolean(valores["solo-este-equipo"]),
     dryRun: Boolean(valores["dry-run"]),
     yes: Boolean(valores.yes),
@@ -202,7 +150,7 @@ export function ejecutarCli(
 ): ResultadoCli {
   if (argv.length === 0) {
     // stderr, no stdout: stdout es el canal del JSON-RPC aunque nadie esté escuchando.
-    if (esTerminal) salida.err(AVISO_TERMINAL);
+    if (esTerminal) salida.err(avisoTerminal());
     return { accion: "servidor" };
   }
 
@@ -224,6 +172,7 @@ export function ejecutarCli(
         comandos: { type: "boolean" },
         migrate: { type: "boolean" },
         preset: { type: "string" },
+        idioma: { type: "string" },
         "solo-este-equipo": { type: "boolean" },
         "dry-run": { type: "boolean" },
         yes: { type: "boolean", short: "y" },
@@ -235,6 +184,8 @@ export function ejecutarCli(
         puerto: { type: "string" },
         "no-abrir": { type: "boolean" },
         demo: { type: "boolean" },
+        "export-static": { type: "string" },
+        "incluir-datos-reales": { type: "boolean" },
       },
     }));
   } catch (error) {
@@ -244,10 +195,10 @@ export function ejecutarCli(
   const subcomando = posicionales[0] ?? "";
   const permitidas = BANDERAS_DE[subcomando] ?? [];
   const sobrantes = Object.keys(valores).filter((bandera) => !["help", "version"].includes(bandera) && !permitidas.includes(bandera));
-  if (sobrantes.length) return invalido(salida, `${sobrantes.map((b) => `--${b}`).join(", ")} no vale con "${subcomando || "(sin subcomando)"}".`);
+  if (sobrantes.length) return invalido(salida, mensaje("CLI-BANDERA-NO-VALE", { banderas: sobrantes, subcomando }));
 
   if (valores.help) {
-    salida.out(AYUDA);
+    salida.out(ayuda());
     return { accion: "salir", codigo: 0 };
   }
 
@@ -258,14 +209,14 @@ export function ejecutarCli(
 
   // doctor --reverificar necesita git, que es asíncrono: lo ejecuta index.ts (doctorReverificando).
   if (posicionales.length === 1 && subcomando === "doctor" && valores.reverificar) {
-    if (valores.fase !== undefined || valores.proyecto !== undefined) return invalido(salida, "--reverificar no va con --fase ni con --proyecto.");
+    if (valores.fase !== undefined || valores.proyecto !== undefined) return invalido(salida, mensaje("CLI-REVERIFICAR-CON-FASE"));
     return { accion: "doctor-reverificar", json: Boolean(valores.json) };
   }
 
   // doctor --fase N [--proyecto P]: la procedencia de cada ranura de esa fase.
   if (posicionales.length === 1 && subcomando === "doctor" && (valores.fase !== undefined || valores.proyecto !== undefined)) {
     const fase = Number(valores.fase);
-    if (valores.fase === undefined || !Number.isInteger(fase) || fase < 1) return invalido(salida, "doctor --proyecto necesita --fase N, con N un número de fase (ej. --fase 3).");
+    if (valores.fase === undefined || !Number.isInteger(fase) || fase < 1) return invalido(salida, mensaje("CLI-FASE-NECESARIA"));
     try {
       const informe = procedenciaDeFase(fase, valores.proyecto ?? null);
       salida.out(valores.json ? JSON.stringify(informe, null, 2) : formatearProcedencia(informe));
@@ -291,12 +242,24 @@ export function ejecutarCli(
   }
 
   if (posicionales.length === 1 && subcomando === "ui") {
+    const exportar = valores["export-static"];
+    if (exportar !== undefined) {
+      if (!exportar.trim()) return invalido(salida, mensaje("CLI-EXPORT-SIN-CARPETA"));
+      if (valores.puerto !== undefined || valores["no-abrir"] || valores.demo) return invalido(salida, mensaje("CLI-EXPORT-INCOMPATIBLE"));
+      // El export escribe siempre los dos idiomas (§8.7): --idioma no tiene sentido aquí.
+      if (valores.idioma !== undefined) return invalido(salida, mensaje("CLI-IDIOMA-SOLO-CON-DEMO"));
+      return { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: exportar, datosReales: valores["incluir-datos-reales"] === true, yes: valores.yes === true } } };
+    }
+    if (valores["incluir-datos-reales"] || valores.yes) return invalido(salida, mensaje("CLI-SOLO-CON-EXPORT"));
+    if (valores.idioma !== undefined && !valores.demo) return invalido(salida, mensaje("CLI-IDIOMA-SOLO-CON-DEMO"));
+    if (valores.idioma !== undefined && valores.idioma !== "es" && valores.idioma !== "en") return invalido(salida, mensaje("CLI-IDIOMA-INVALIDO", { idioma: valores.idioma }));
     let puerto: number | null = null;
     if (valores.puerto !== undefined) {
       puerto = Number(valores.puerto);
-      if (!/^\d+$/.test(valores.puerto) || puerto < 1 || puerto > 65535) return invalido(salida, `--puerto "${valores.puerto}" no es válido: un número de 1 a 65535.`);
+      if (!/^\d+$/.test(valores.puerto) || puerto < 1 || puerto > 65535) return invalido(salida, mensaje("CLI-PUERTO-INVALIDO", { puerto: valores.puerto }));
     }
-    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"], demo: valores.demo === true } };
+    const idioma = valores.idioma as Idioma | undefined;
+    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"], demo: valores.demo === true, ...(idioma ? { idioma } : {}) } };
   }
 
   return invalido(salida);

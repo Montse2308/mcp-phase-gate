@@ -1,0 +1,46 @@
+// Cómo se arregla cada hallazgo del diagnóstico, por su código (§7.7.4 del plan), en inglés. Se tipa
+// contra la tabla española: un código que falta, o uno que sobra, rompe el build; y el test
+// (test/vigia-arreglos.test.ts) exige que las dos tengan exactamente los códigos que el servidor emite.
+
+import type { ARREGLOS_ES } from "./arreglos-es.js";
+
+export const ARREGLOS_EN = {
+  "VAR-FALTA": "Define the variable in the \"env\" block of your client's mcp.json (or in the .env at the package root), pointing to a folder that exists.",
+  "VAR-DISCREPA": "Keep a single name: delete the ORQUESTADOR_* one (the alias) or give it the same value as its PHASE_GATE_*.",
+  "LANG-INVALIDO": "Set PHASE_GATE_LANG=es or PHASE_GATE_LANG=en in the \"env\" block of your client's mcp.json, or remove it to use the system language.",
+  "ENV-UTF16": "Save the .env again as UTF-8 without BOM (in PowerShell, `> .env` writes it as UTF-16).",
+  "ENV-ILEGIBLE": "Check that the .env exists and can be read, and that every line has the form KEY=value.",
+  "DOCS-ILEGIBLE": "Check that PHASE_GATE_DOCS_PATH points to a folder that exists and that you are allowed to read it.",
+  "ESTADO-ILEGIBLE": "Delete or fix the active-tasks file; a switch_task writes it again.",
+  "PUNTERO-HUERFANO": "Choose another active task with switch_task: the pointer points to something that no longer exists.",
+  "CAPA-NO-EXISTE": "Create the PHASE_GATE_PROMPTS_PATH folder, or remove the variable to use only the package's prompts.",
+  "CAPA-NO-ES-CARPETA": "PHASE_GATE_PROMPTS_PATH has to be a folder: fix the path.",
+  "PROMPTS-ILEGIBLES": "Check the permissions of the prompts folder, or reinstall the package if they are the factory ones.",
+  "PRESETS-ILEGIBLES": "Check the permissions of <configuration>/presets, or move out of it the files that are not presets.",
+  "FASE-SIN-DOC": "Add `documento: NN - Name.md` to the header of that phase prompt, or delete your copy to use the factory one.",
+  "FASE-SIN-COMANDO": "Nothing to do: /fN uses a generic text. For your own, `eject comando-fN --a global`.",
+  "GLOBAL-SIN-BASE": "Add the missing sections to your global-rules.md, or change the global rules with a bloques.md (global/evidencia, global/extra).",
+  "GLOBAL-REINYECTADO": "Nothing to do; to remove the warning, change the global rules with a bloques.md instead of a whole global-rules.md.",
+  "BLOQUE-HUERFANO": "Fix the block's id (fase-N/<slot> or global/<slot>): the Workshop lists the slots that exist.",
+  "BLOQUE-DUPLICADO": "Keep a single copy of that block in the file: the first one counts.",
+  "BLOQUE-MAL-FORMADO": "Check the `<!-- bloque: … -->` and `<!-- /bloque -->` markers of that file: while one is wrong, the whole file is ignored.",
+  "MANIFIESTO-INVALIDO": "Fix the phase-gate.json at the path the error gives (the editor autocompletes it with its $schema).",
+  "MANIFIESTO-CONFLICTO": "Compare the conflicted copy with phase-gate.json, move whatever is worth keeping to the good one and delete the copy.",
+  "PRESET-NO-EXISTE": "Choose a preset that exists (the Network lists them), or create your own in <configuration>/presets.",
+  "PRESET-IMPLICITO": "Create the project's phase-gate.json (\"Create phase-gate.json\" in the Network, or `init --migrate`), or set presetPorDefecto in machine.json.",
+  "MAQUINA-INVALIDA": "Fix machine.json at the path the error gives: the repos' paths have to be absolute.",
+  "MAQUINA-CLAVE-DUPLICADA": "Keep a single key per project and repo in machine.json (the project ignores case).",
+  "REPO-NO-EXISTE": "Fix the repo's dir in phase-gate.json, or its path in machine.json for this machine.",
+  "GIT-NO-INSTALADO": "Install git, or add it to the MCP client's PATH.",
+  "GIT-LENTO": "Nothing to do: repo_status tries without that time limit. If it always happens, check that repo (is it on a network folder?).",
+  "ROOTS-AMBIGUO": "Open a single project's folder in the client, or pass `project` in every call.",
+  "RUTA-LARGA": "Shorten the folder or task names: close to 255 characters, OneDrive and Windows fail.",
+  "RECIBO-FUERA-DE-PLAN": "Raise `lotes` in the plan's frontmatter if the batch is real, or delete that receipt.",
+  "RECIBO-ILEGIBLE": "Open that receipt and fix it (is it binary or over 1 MB?); with write_central_doc and force, only to repair it.",
+  "RECIBO-MANUAL": "Nothing to do: record_batch reads it all the same. If you want a server receipt, record it with record_batch.",
+  "INDICE-DESINCRONIZADO": "If the change was on purpose, leave it; if not, close the phase again with record_batch to regenerate the index.",
+  "ANCLA-NO-VIGENTE": "If there was a rebase or a squash, re-anchor the batch with record_batch and `reanclar: true`.",
+  "IDIOMA-MIXTO": "Set \"idioma\" in the project's phase-gate.json: the language of the tasks you want to keep using.",
+  "IDIOMA-CON-TAREAS": "Set \"idioma\" in phase-gate.json back to the language of those tasks, or rename their documents by hand.",
+  "MANIFIESTO-SIN-IDIOMA": "Add \"idioma\" to the project's phase-gate.json (the language of its future tasks), or run `init --migrate`, which fills it in.",
+} satisfies Record<keyof typeof ARREGLOS_ES, string>;

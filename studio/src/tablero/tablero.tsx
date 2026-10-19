@@ -10,6 +10,7 @@ import { Aviso, Cargando, useRecurso } from "../comun/estado";
 import { Selector } from "../comun/selector";
 import { Tabla } from "../comun/tabla";
 import { ruta } from "../datos";
+import { t } from "../i18n/idioma";
 import { useModoVisual } from "../preferencias";
 import { enlace } from "../rutas";
 import { Visor } from "../visor/visor";
@@ -20,11 +21,24 @@ import type { Sello, TipoDeSello } from "./sellos";
 const ESTAMPADOS = new Set<TipoDeSello>(["verificado", "sellado", "pendientes", "rechazado", "anulado", "manual", "nota"]);
 
 function etiquetaDe(e: Estacion): string {
-  return e.numero === 0 ? "00" : `Fase ${e.numero}`;
+  return e.numero === 0 ? "00" : t("tablero.fase", { n: e.numero });
+}
+
+// La señal de una estación es un valor del contrato (TextoDeSenal), en español: aquí se dice.
+const SENALES: Record<Estacion["texto"], "senal.cerrada" | "senal.conPendientes" | "senal.enCurso" | "senal.hueco" | "senal.pendiente"> = {
+  cerrada: "senal.cerrada",
+  "con pendientes": "senal.conPendientes",
+  "en curso": "senal.enCurso",
+  hueco: "senal.hueco",
+  pendiente: "senal.pendiente",
+};
+
+function textoDeSenal(e: Estacion): string {
+  return t(SENALES[e.texto]);
 }
 
 function SelloVisible({ sello, nuevo }: { sello: Sello; nuevo: boolean }) {
-  if (!sello.palabra) return <span class="sello sello-vacio">sin recibo</span>;
+  if (!sello.palabra) return <span class="sello sello-vacio">{t("sello.sinRecibo")}</span>;
   return (
     <span class={`sello sello-${sello.tipo}${nuevo ? " sello-nuevo" : ""}`}>
       {sello.marco ? <img class="sello-marco" src={`./sellos/${sello.marco}.svg`} alt="" width="120" height="60" /> : null}
@@ -44,7 +58,7 @@ function SelloVisible({ sello, nuevo }: { sello: Sello; nuevo: boolean }) {
 
 function Via({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir: (archivo: string) => void; abierto: string | null }) {
   return (
-    <ol class="via-tablero" aria-label="Estaciones de la tarea">
+    <ol class="via-tablero" aria-label={t("tablero.estaciones")}>
       {estaciones.map((e) => (
         <li key={e.numero} class={`estacion-via senal-${e.senal}`}>
           <button type="button" class="estacion-boton" disabled={!e.existe} aria-pressed={abierto === e.documento} onClick={() => alAbrir(e.documento)}>
@@ -52,7 +66,7 @@ function Via({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir
             <span class="estacion-texto">
               <span class="estacion-numero">{etiquetaDe(e)}</span>
               <span class="estacion-titulo">{e.titulo}</span>
-              <span class="estacion-estado">{e.texto}</span>
+              <span class="estacion-estado">{textoDeSenal(e)}</span>
             </span>
           </button>
         </li>
@@ -63,7 +77,7 @@ function Via({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir
 
 function Vagones({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nuevos: Set<string>; alAbrir: (archivo: string) => void; abierto: string | null }) {
   return (
-    <ol class="vagones" aria-label="Lotes de la Fase 4">
+    <ol class="vagones" aria-label={t("tablero.lotesDeLaFase")}>
       {filas.map((f) => {
         const sello = selloDe(f);
         return (
@@ -80,18 +94,19 @@ function Vagones({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nue
   );
 }
 
-export function Tablero({ p, t }: { p: string | undefined; t: string | undefined }) {
-  if (!p || !t) return <Selector vista="tablero" titulo="Tablero" />;
-  return <TableroDeTarea key={`${p}/${t}`} p={p} t={t} />;
+// `t` es la tarea (así se llama en la ruta); dentro se dice `tarea` o `nombre`, para no tapar a t().
+export function Tablero({ p, t: tarea }: { p: string | undefined; t: string | undefined }) {
+  if (!p || !tarea) return <Selector vista="tablero" titulo={t("vista.tablero")} />;
+  return <TableroDeTarea key={`${p}/${tarea}`} p={p} t={tarea} />;
 }
 
-function TableroDeTarea({ p, t }: { p: string; t: string }) {
+function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
   const modo = useModoVisual();
   const [abierto, setAbierto] = useState<string | null>(null);
   const [reverificar, setReverificar] = useState(false);
-  const deEsta = (_tipo: string, d: Record<string, string>): boolean => !d.p || (d.p === p && (!d.t || d.t === t));
-  const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, t)}`, ["documento", "recibo", "config", "prompts"], deEsta);
-  const lotes = useRecurso<LotesRespuesta>(`/api/tareas/${ruta(p, t)}/lotes${reverificar ? "?reverificar=1" : ""}`, ["documento", "recibo", "config"], deEsta);
+  const deEsta = (_tipo: string, d: Record<string, string>): boolean => !d.p || (d.p === p && (!d.t || d.t === nombre));
+  const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, nombre)}`, ["documento", "recibo", "config", "prompts"], deEsta);
+  const lotes = useRecurso<LotesRespuesta>(`/api/tareas/${ruta(p, nombre)}/lotes${reverificar ? "?reverificar=1" : ""}`, ["documento", "recibo", "config"], deEsta);
 
   // Un sello que aparece en una recarga (por un evento), y no estaba, cae una vez.
   const anteriores = useRef<Map<string, TipoDeSello> | null>(null);
@@ -113,9 +128,9 @@ function TableroDeTarea({ p, t }: { p: string; t: string }) {
     <div class={`tablero${abierto ? " con-visor" : ""}`}>
       <section class="vista vista-tablero" aria-labelledby="titulo-tablero">
         <p class="miga">
-          <a href={enlace("red")}>Red</a> › {p}
+          <a href={enlace("red")}>{t("vista.red")}</a> › {p}
         </p>
-        <h1 id="titulo-tablero">{t}</h1>
+        <h1 id="titulo-tablero">{nombre}</h1>
         {tarea.error ? <Aviso error={tarea.error} /> : null}
         {tarea.cargando && !datos ? <Cargando /> : null}
         {datos ? (
@@ -123,18 +138,18 @@ function TableroDeTarea({ p, t }: { p: string; t: string }) {
             <p class="descripcion">{datos.estado.descripcion}</p>
             {datos.compuerta ? (
               <p class="aviso" role="note">
-                Hay un hueco: la compuerta avisaría al pedir la fase siguiente.
+                {t("tablero.hueco")}
               </p>
             ) : null}
             {datos.pendientes ? (
               <p class="aviso" role="note">
-                La fase anterior dejó pendientes: el prompt de la siguiente los nombrará.
+                {t("tablero.pendientes")}
               </p>
             ) : null}
             {modo === "sobrio" ? (
               <Tabla
-                titulo="Estaciones"
-                columnas={["Estación", "Documento", "Señal"]}
+                titulo={t("tablero.tablaEstaciones")}
+                columnas={[t("tablero.colEstacion"), t("tablero.colDocumento"), t("tablero.colSenal")]}
                 filas={datos.estaciones.map((e) => ({
                   clave: String(e.numero),
                   celdas: [
@@ -146,7 +161,7 @@ function TableroDeTarea({ p, t }: { p: string; t: string }) {
                     ) : (
                       e.documento
                     ),
-                    e.texto,
+                    textoDeSenal(e),
                   ],
                 }))}
               />
@@ -157,21 +172,21 @@ function TableroDeTarea({ p, t }: { p: string; t: string }) {
         ) : null}
 
         <section class="lotes" aria-labelledby="titulo-lotes">
-          <h2 id="titulo-lotes">Lotes</h2>
+          <h2 id="titulo-lotes">{t("tablero.lotes")}</h2>
           {lotes.datos && !lotes.datos.disponible ? <p class="secundaria">{lotes.datos.motivo}</p> : null}
           {lotes.datos?.disponible ? (
             <>
               <p class="secundaria">
-                {lotes.datos.estado.cerrados} de {lotes.datos.estado.declarados} cerrados · Siguiente: {lotes.datos.estado.siguiente}
+                {t("tablero.resumenLotes", { cerrados: lotes.datos.estado.cerrados, declarados: lotes.datos.estado.declarados, siguiente: lotes.datos.estado.siguiente ?? "" })}
               </p>
               <button type="button" class="boton" onClick={() => (reverificar ? lotes.recargar() : setReverificar(true))} disabled={lotes.cargando}>
-                {lotes.cargando ? "Reverificando…" : "Reverificar anclas"}
+                {t(lotes.cargando ? "tablero.reverificando" : "tablero.reverificar")}
               </button>
-              {lotes.datos.reverificado ? <span class="secundaria"> Anclas reverificadas contra git y el disco.</span> : null}
+              {lotes.datos.reverificado ? <span class="secundaria"> {t("tablero.reverificado")}</span> : null}
               {modo === "sobrio" ? (
                 <Tabla
-                  titulo="Lotes de la Fase 4"
-                  columnas={["Lote", "Objetivo", "Repo", "Sello", "Ancla", "Recibo"]}
+                  titulo={t("tablero.lotesDeLaFase")}
+                  columnas={[t("tablero.colLote"), t("tablero.colObjetivo"), t("tablero.colRepo"), t("tablero.colSello"), t("tablero.colAncla"), t("tablero.colRecibo")]}
                   filas={filas.map((f) => ({
                     clave: f.lote,
                     celdas: [
@@ -197,7 +212,7 @@ function TableroDeTarea({ p, t }: { p: string; t: string }) {
           ) : null}
         </section>
       </section>
-      {abierto ? <Visor p={p} t={t} archivo={abierto} alCerrar={() => setAbierto(null)} /> : null}
+      {abierto ? <Visor p={p} t={nombre} archivo={abierto} alCerrar={() => setAbierto(null)} /> : null}
     </div>
   );
 }

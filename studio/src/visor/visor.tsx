@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from "preact/hooks";
 import type { DocumentoRespuesta } from "../../../src/studio/contrato.js";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
 import { ruta } from "../datos";
+import { t } from "../i18n/idioma";
 import { aHtml } from "./markdown";
 
 // El cuerpo sin el frontmatter, que ya va en la ficha.
@@ -13,11 +14,12 @@ function sinFrontmatter(texto: string): string {
   return texto.replace(/^---\n[\s\S]*?\n---\n?/, "");
 }
 
-export function Visor({ p, t, archivo, alCerrar }: { p: string; t: string; archivo: string; alCerrar: () => void }) {
+// `t` es la tarea; dentro, `tarea`, para no tapar a t().
+export function Visor({ p, t: tarea, archivo, alCerrar }: { p: string; t: string; archivo: string; alCerrar: () => void }) {
   const { datos, error, cargando } = useRecurso<DocumentoRespuesta>(
-    `/api/tareas/${ruta(p, t)}/documento?archivo=${encodeURIComponent(archivo)}`,
+    `/api/tareas/${ruta(p, tarea)}/documento?archivo=${encodeURIComponent(archivo)}`,
     ["documento", "recibo"],
-    (_tipo, d) => d.p === p && d.t === t
+    (_tipo, d) => d.p === p && d.t === tarea
   );
   const titulo = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -32,13 +34,13 @@ export function Visor({ p, t, archivo, alCerrar }: { p: string; t: string; archi
           {archivo}
         </h2>
         <button type="button" class="boton" onClick={alCerrar}>
-          Cerrar el visor
+          {t("visor.cerrar")}
         </button>
       </header>
       {error ? <Aviso error={error} /> : null}
       {cargando && !datos ? <Cargando /> : null}
       {ficha.length ? (
-        <dl class="ficha" aria-label="Frontmatter">
+        <dl class="ficha" aria-label={t("visor.frontmatter")}>
           {ficha.map(([clave, valor]) => (
             <div key={clave}>
               <dt>{clave}</dt>

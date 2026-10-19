@@ -17,6 +17,7 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 
 import { DOCS, requireBasePath } from "./config.js";
+import { fallo, mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
 import { leerMaquina, manifiestoDe, resolverRepos } from "./manifiesto.js";
 import { discoverProjects, estaDentroReal, rutaReal } from "./paths.js";
@@ -52,7 +53,7 @@ function avisar(estado: Estado): void {
     try {
       oyente([...estado.raices]);
     } catch (error) {
-      log("warning", `Un oyente de las raíces falló: ${error instanceof Error ? error.message : String(error)}`);
+      log("warning", mensaje("ROOTS-TXT-OYENTE-FALLO", { detalle: error instanceof Error ? error.message : String(error) }));
     }
   }
 }
@@ -84,14 +85,14 @@ export function iniciarRoots(mcp: McpServer): void {
           try {
             return [rutaDeRaiz(raiz.uri)];
           } catch (error) {
-            log("warning", `Se descarta la raíz ${raiz.uri}: ${error instanceof Error ? error.message : String(error)}`);
+            log("warning", mensaje("ROOTS-TXT-RAIZ-DESCARTADA", { uri: raiz.uri, detalle: error instanceof Error ? error.message : String(error) }));
             return [];
           }
         });
         avisar(estado);
       })
       .catch((error: unknown) => {
-        log("warning", `No se pudieron pedir las raíces al cliente: ${error instanceof Error ? error.message : String(error)}`);
+        log("warning", mensaje("ROOTS-TXT-SIN-RAICES", { detalle: error instanceof Error ? error.message : String(error) }));
         if (esta === ultima) {
           estado.raices = [];
           avisar(estado);
@@ -116,7 +117,13 @@ export async function raicesActuales(mcp: McpServer): Promise<string[]> {
   return [...estado.raices];
 }
 
-type Coincidencia = { proyecto: string; fuerza: "fuerte" | "debil"; motivo: string };
+// El motivo se guarda como código y datos: se redacta al entregarlo, en el idioma de ese momento (la
+// deducción corre antes de saber el proyecto, y su línea sale cuando ya se sabe).
+type Motivo = { codigo: string; parametros: Record<string, string> };
+type Coincidencia = { proyecto: string; fuerza: "fuerte" | "debil"; motivo: Motivo };
+
+// El motivo de cada resolución "unico" que da resolverPorRaices, para volver a redactarlo en lineaDeDeduccion.
+const motivos = new WeakMap<object, Motivo>();
 
 // La raíz de un disco o la carpeta del usuario "contienen" los repos de cualquier proyecto: abrirlas no
 // dice nada de en qué proyecto se trabaja, así que no dan coincidencia débil (hallazgo 3 de la
@@ -158,13 +165,13 @@ function coincidencias(raices: string[]): Coincidencia[] {
       };
       for (const repo of repos) {
         if (dentro(repo.ruta, raiz)) {
-          encontradas.push({ proyecto, fuerza: "fuerte", motivo: `la carpeta abierta \`${raiz}\` es el repo \`${repo.id}\` de ${proyecto}` });
+          encontradas.push({ proyecto, fuerza: "fuerte", motivo: { codigo: "ROOTS-TXT-MOTIVO-ES-REPO", parametros: { raiz, repo: repo.id, proyecto } } });
         } else if (!esDemasiadoAmplia(raiz) && dentro(raiz, repo.ruta)) {
-          encontradas.push({ proyecto, fuerza: "debil", motivo: `la carpeta abierta \`${raiz}\` contiene el repo \`${repo.id}\` de ${proyecto}` });
+          encontradas.push({ proyecto, fuerza: "debil", motivo: { codigo: "ROOTS-TXT-MOTIVO-CONTIENE-REPO", parametros: { raiz, repo: repo.id, proyecto } } });
         }
       }
       if (dentro(carpeta, raiz)) {
-        encontradas.push({ proyecto, fuerza: "fuerte", motivo: `la carpeta abierta \`${raiz}\` está en la carpeta de ${proyecto} de la Documentación` });
+        encontradas.push({ proyecto, fuerza: "fuerte", motivo: { codigo: "ROOTS-TXT-MOTIVO-EN-DOCS", parametros: { raiz, proyecto } } });
       }
     }
   }
@@ -191,12 +198,16 @@ export function resolverPorRaices(raices: string[]): ResolucionProyecto {
   const fuertes = [...new Set(encontradas.filter((c) => c.fuerza === "fuerte").map((c) => c.proyecto))];
   const debiles = [...new Set(encontradas.filter((c) => c.fuerza === "debil").map((c) => c.proyecto))];
 
-  const motivoDe = (proyecto: string, fuerza: Coincidencia["fuerza"]): string =>
-    encontradas.find((c) => c.proyecto === proyecto && c.fuerza === fuerza)!.motivo;
+  const unico = (proyecto: string, fuerza: Coincidencia["fuerza"]): ResolucionProyecto => {
+    const motivo = encontradas.find((c) => c.proyecto === proyecto && c.fuerza === fuerza)!.motivo;
+    const resolucion: ResolucionProyecto = { tipo: "unico", carpetaProyecto: proyecto, motivo: mensaje(motivo.codigo, motivo.parametros), fuerza };
+    motivos.set(resolucion, motivo);
+    return resolucion;
+  };
 
-  if (fuertes.length === 1) return { tipo: "unico", carpetaProyecto: fuertes[0]!, motivo: motivoDe(fuertes[0]!, "fuerte"), fuerza: "fuerte" };
+  if (fuertes.length === 1) return unico(fuertes[0]!, "fuerte");
   if (fuertes.length > 1) return { tipo: "ambiguo", candidatos: fuertes };
-  if (debiles.length === 1) return { tipo: "unico", carpetaProyecto: debiles[0]!, motivo: motivoDe(debiles[0]!, "debil"), fuerza: "debil" };
+  if (debiles.length === 1) return unico(debiles[0]!, "debil");
   // Varias débiles (una carpeta que contiene repos de varios proyectos) no apuntan a ninguno.
   return { tipo: "ninguno" };
 }
@@ -206,7 +217,7 @@ export async function proyectoPorRaices(mcp: McpServer): Promise<ResolucionProye
     return resolverPorRaices(await raicesActuales(mcp));
   } catch (error) {
     // Sin Documentación configurada no hay nada que cruzar; el error real lo da la tool.
-    log("warning", `No se pudo deducir el proyecto de las raíces: ${error instanceof Error ? error.message : String(error)}`);
+    log("warning", mensaje("ROOTS-TXT-SIN-DEDUCCION", { detalle: error instanceof Error ? error.message : String(error) }));
     return { tipo: "ninguno" };
   }
 }
@@ -218,14 +229,17 @@ export async function proyectoPorRaices(mcp: McpServer): Promise<ResolucionProye
 export type ProyectoResuelto = { carpetaProyecto: string; deducido: string | null };
 
 export function lineaDeDeduccion(resolucion: Extract<ResolucionProyecto, { tipo: "unico" }>): string {
-  return `Proyecto deducido de la carpeta abierta: ${resolucion.carpetaProyecto} (${resolucion.motivo}).`;
+  // El motivo, otra vez en el idioma de ahora: al deducirlo todavía no se sabía el del proyecto.
+  const motivo = motivos.get(resolucion);
+  return mensaje("ROOTS-TXT-DEDUCIDO", {
+    proyecto: resolucion.carpetaProyecto,
+    motivo: motivo ? mensaje(motivo.codigo, motivo.parametros) : resolucion.motivo,
+  });
 }
 
 export function errorSinProyecto(resolucion: ResolucionProyecto): Error {
   if (resolucion.tipo === "ambiguo") {
-    return new Error(
-      `No sé en qué proyecto estás: la carpeta abierta coincide con varios (${resolucion.candidatos.join(", ")}). Indica \`project\`.`
-    );
+    return fallo("ROOTS-TXT-AMBIGUO", { candidatos: resolucion.candidatos });
   }
-  return new Error("No sé en qué proyecto estás: indica `project`.");
+  return fallo("ROOTS-TXT-SIN-PROYECTO");
 }

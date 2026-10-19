@@ -1,13 +1,15 @@
 // El ciclo de toda escritura del Studio (§7.6): "Vista previa" pide el plan (resumen, diff y huella), y
 // "Aplicar" lo manda con su huella. Si el disco cambió entre las dos cosas, el servidor responde 409 y se
 // dice, con un botón para volver a ver el cambio. En el sitio estático no hay escrituras.
+//
+// Al cambiar el idioma de la interfaz, una vista previa abierta se cierra: su resumen estaba en el idioma de
+// antes. La huella no depende del idioma, así que un plan visto en uno se puede aplicar en el otro.
 
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { AplicarRespuesta, PlanRespuesta } from "../../../src/studio/contrato.js";
 import { ErrorDeApi, MODO, post } from "../datos";
-
-export const SOLO_LECTURA = "En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.";
+import { t, useIdioma } from "../i18n/idioma";
 
 type Estado =
   | { tipo: "inactivo" }
@@ -36,13 +38,20 @@ export function Diff({ texto, etiqueta }: { texto: string; etiqueta: string }) {
 
 export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado }: { etiqueta: string; accion: string; argumentos: unknown; alAplicar?: () => void; deshabilitado?: boolean }) {
   const [estado, setEstado] = useState<Estado>({ tipo: "inactivo" });
+  const idioma = useIdioma();
+  const idiomaDelEstado = useRef(idioma);
+  useEffect(() => {
+    if (idiomaDelEstado.current === idioma) return;
+    idiomaDelEstado.current = idioma;
+    setEstado({ tipo: "inactivo" });
+  }, [idioma]);
   if (MODO === "estatico") {
     return (
       <p class="accion accion-solo-lectura">
         <button type="button" class="boton" disabled>
           {etiqueta}
         </button>{" "}
-        <span class="secundaria">{SOLO_LECTURA}</span>
+        <span class="secundaria">{t("estatico.soloLectura")}</span>
       </p>
     );
   }
@@ -69,36 +78,36 @@ export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado 
     <div class="accion">
       {estado.tipo === "inactivo" || estado.tipo === "hecho" || estado.tipo === "imposible" || estado.tipo === "error" ? (
         <button type="button" class="boton" onClick={pedirPlan} disabled={deshabilitado}>
-          {etiqueta}: vista previa
+          {t("accion.vistaPrevia", { etiqueta })}
         </button>
       ) : null}
-      {estado.tipo === "pidiendo" ? <p role="status">Calculando el cambio…</p> : null}
+      {estado.tipo === "pidiendo" ? <p role="status">{t("accion.calculando")}</p> : null}
       {estado.tipo === "imposible" ? <p class="aviso" role="status">{estado.motivo}</p> : null}
       {estado.tipo === "plan" || estado.tipo === "aplicando" ? (
-        <section class="vista-previa" aria-label={`Vista previa: ${etiqueta}`}>
+        <section class="vista-previa" aria-label={t("accion.region", { etiqueta })}>
           <p>{estado.plan.resumen}</p>
           <ul class="cambios">
             {estado.plan.cambios.map((c) => (
               <li key={c.archivo}>
-                {c.tipo === "crear" ? "Crea" : c.tipo === "reemplazar" ? "Reescribe (deja copia .bak)" : "Ejecuta"} <code>{c.archivo}</code>
+                {t(c.tipo === "crear" ? "accion.crea" : c.tipo === "reemplazar" ? "accion.reescribe" : "accion.ejecuta")} <code>{c.archivo}</code>
               </li>
             ))}
           </ul>
-          <Diff texto={estado.plan.diff} etiqueta={`Cambios de ${etiqueta}`} />
+          <Diff texto={estado.plan.diff} etiqueta={t("accion.cambiosDe", { etiqueta })} />
           <p class="botones">
             <button type="button" class="boton boton-principal" onClick={() => aplicar(estado.plan)} disabled={estado.tipo === "aplicando"}>
-              {estado.tipo === "aplicando" ? "Aplicando…" : "Aplicar"}
+              {t(estado.tipo === "aplicando" ? "accion.aplicando" : "accion.aplicar")}
             </button>
             <button type="button" class="boton" onClick={() => setEstado({ tipo: "inactivo" })} disabled={estado.tipo === "aplicando"}>
-              Cancelar
+              {t("accion.cancelar")}
             </button>
           </p>
         </section>
       ) : null}
       {estado.tipo === "hecho" ? (
         <p class="aviso aviso-hecho" role="status">
-          Hecho: {estado.respuesta.mensaje}
-          {estado.respuesta.copias.length ? ` Copia de lo anterior: ${estado.respuesta.copias.join(", ")}.` : ""}
+          {t("accion.hecho", { mensaje: estado.respuesta.mensaje })}
+          {estado.respuesta.copias.length ? t("accion.copias", { copias: estado.respuesta.copias.join(", ") }) : ""}
         </p>
       ) : null}
       {estado.tipo === "error" ? (
@@ -106,7 +115,7 @@ export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado 
           {estado.mensaje}{" "}
           {estado.cambio ? (
             <button type="button" class="boton" onClick={pedirPlan}>
-              Ver el cambio otra vez
+              {t("accion.verOtraVez")}
             </button>
           ) : null}
         </p>

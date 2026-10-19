@@ -8,31 +8,45 @@ import { Farol, Marca, Tren, Via } from "../comun/marcas";
 import type { Forma, Tono } from "../comun/marcas";
 import { Tabla } from "../comun/tabla";
 import { AccionesDeProyecto } from "./acciones";
+import { t, tn } from "../i18n/idioma";
 import { useModoVisual } from "../preferencias";
 import { enlace } from "../rutas";
 
 type Estado = { forma: Forma; tono: Tono; texto: string };
 
 export function estadoDelManifiesto(p: ProyectoApi): Estado {
-  if (p.manifiesto.estado === "valido") return { forma: "lleno", tono: "verde", texto: "phase-gate.json válido" };
-  if (p.manifiesto.estado === "ausente") return { forma: "vacio", tono: "apagado", texto: "sin phase-gate.json" };
-  return { forma: "rombo", tono: "rojo", texto: "phase-gate.json inválido" };
+  if (p.manifiesto.estado === "valido") return { forma: "lleno", tono: "verde", texto: t("red.manifiestoValido") };
+  if (p.manifiesto.estado === "ausente") return { forma: "vacio", tono: "apagado", texto: t("red.sinManifiesto") };
+  return { forma: "rombo", tono: "rojo", texto: t("red.manifiestoInvalido") };
 }
 
 export function estadoDelRepo(r: RepoApi): Estado & { via: "limpia" | "cambios" | "sin-git" | "rota" } {
-  if (!r.existe) return { forma: "rombo", tono: "rojo", texto: "no existe en este equipo", via: "rota" };
+  if (!r.existe) return { forma: "rombo", tono: "rojo", texto: t("red.repoNoExiste"), via: "rota" };
   if (r.error) return { forma: "triangulo", tono: "ambar", texto: r.error, via: "rota" };
-  if (!r.respondio) return { forma: "triangulo", tono: "ambar", texto: "git no respondió a tiempo", via: "rota" };
-  if (!r.esGit) return { forma: "raya", tono: "apagado", texto: "sin git", via: "sin-git" };
-  const donde = r.separado ? `separado en ${r.head ?? "?"}` : `rama ${r.rama ?? "?"}`;
-  const pasos = [r.adelante ? `${r.adelante} adelante` : null, r.atras ? `${r.atras} atrás` : null].filter(Boolean).join(", ");
-  if (r.limpio) return { forma: "lleno", tono: "verde", texto: `${donde} · árbol limpio${pasos ? ` · ${pasos}` : ""}`, via: "limpia" };
+  if (!r.respondio) return { forma: "triangulo", tono: "ambar", texto: t("red.gitNoRespondio"), via: "rota" };
+  if (!r.esGit) return { forma: "raya", tono: "apagado", texto: t("red.sinGit"), via: "sin-git" };
+  const donde = r.separado ? t("red.separado", { head: r.head ?? "?" }) : t("red.rama", { rama: r.rama ?? "?" });
+  const pasos = [r.adelante ? t("red.adelante", { n: r.adelante }) : null, r.atras ? t("red.atras", { n: r.atras }) : null].filter(Boolean).join(", ");
+  if (r.limpio) return { forma: "lleno", tono: "verde", texto: `${donde} · ${t("red.arbolLimpio")}${pasos ? ` · ${pasos}` : ""}`, via: "limpia" };
   const total = r.cambios + r.sinSeguimiento;
-  return { forma: "anillo", tono: "ambar", texto: `${donde} · ${total} ${total === 1 ? "cambio" : "cambios"} sin commit${pasos ? ` · ${pasos}` : ""}`, via: "cambios" };
+  return { forma: "anillo", tono: "ambar", texto: `${donde} · ${tn("red.cambiosSinCommit", total)}${pasos ? ` · ${pasos}` : ""}`, via: "cambios" };
+}
+
+// El origen de un preset (OrigenDelPreset de capas.ts) es un valor del contrato, en español: aquí se dice.
+const ORIGENES: Record<string, "origen.tarea" | "origen.proyecto" | "origen.maquina" | "origen.defecto"> = {
+  "de la tarea": "origen.tarea",
+  "del proyecto": "origen.proyecto",
+  "de machine.json": "origen.maquina",
+  "por defecto": "origen.defecto",
+};
+
+export function origenDelPreset(origen: string): string {
+  const clave = ORIGENES[origen];
+  return clave ? t(clave) : origen;
 }
 
 function placa(p: ProyectoApi): string {
-  return p.preset ? `${p.preset.nombre} · ${p.preset.origen}` : "preset sin resolver";
+  return p.preset ? `${p.preset.nombre} · ${origenDelPreset(p.preset.origen)}` : t("red.presetSinResolver");
 }
 
 function Estacion({ p, presets, recargar }: { p: ProyectoApi; presets: string[]; recargar: () => void }) {
@@ -51,11 +65,11 @@ function Estacion({ p, presets, recargar }: { p: ProyectoApi; presets: string[];
       {p.errorDeConfiguracion && !p.manifiesto.error ? <p class="detalle-error">{p.errorDeConfiguracion}</p> : null}
       {p.reglas ? (
         <p class="linea secundaria">
-          Lotes: {p.reglas.lotes ? "sí" : "no"} · Commits: {p.reglas.commits}
+          {t("red.reglas", { lotes: t(p.reglas.lotes ? "comun.si" : "comun.no"), commits: p.reglas.commits })}
         </p>
       ) : null}
       {p.repos.length ? (
-        <ul class="vias" aria-label={`Repositorios de ${p.nombre}`}>
+        <ul class="vias" aria-label={t("red.repositoriosDe", { proyecto: p.nombre })}>
           {p.repos.map((r) => {
             const e = estadoDelRepo(r);
             return (
@@ -70,26 +84,26 @@ function Estacion({ p, presets, recargar }: { p: ProyectoApi; presets: string[];
           })}
         </ul>
       ) : (
-        <p class="linea secundaria">Sin repos declarados.</p>
+        <p class="linea secundaria">{t("red.sinRepos")}</p>
       )}
       {p.activa ? (
         <div class="tren">
           <Tren />
           <p>
-            <span class="secundaria">Tarea activa{p.activa.origen === "deducida" ? " (deducida, la más reciente)" : ""}:</span> <strong>{p.activa.tarea}</strong>
+            <span class="secundaria">{t(p.activa.origen === "deducida" ? "red.tareaActivaDeducida" : "red.tareaActiva")}</span> <strong>{p.activa.tarea}</strong>
             <br />
             {p.activa.descripcion}
           </p>
           <a class="boton" href={enlace("tablero", p.nombre, p.activa.tarea)}>
-            Abrir tablero
+            {t("red.abrirTablero")}
           </a>
         </div>
       ) : (
-        <p class="linea secundaria">{p.tareas ? `${p.tareas} tareas, ninguna activa.` : "Sin tareas todavía."}</p>
+        <p class="linea secundaria">{p.tareas ? tn("red.tareasNingunaActiva", p.tareas) : t("red.sinTareas")}</p>
       )}
       <p class={`farol ${p.sesiones.length ? "tono-verde" : "tono-apagado"}`}>
         <Farol encendido={p.sesiones.length > 0} />
-        {p.sesiones.length ? `Abierto en ${p.sesiones.map((s) => s.cliente).join(", ")}` : "Ninguna sesión MCP lo tiene abierto"}
+        {p.sesiones.length ? t("red.abiertoEn", { clientes: p.sesiones.map((s) => s.cliente).join(", ") }) : t("red.ningunaSesion")}
       </p>
       <AccionesDeProyecto p={p} presets={presets} alAplicar={recargar} />
     </article>
@@ -99,8 +113,8 @@ function Estacion({ p, presets, recargar }: { p: ProyectoApi; presets: string[];
 function TablaDeProyectos({ proyectos }: { proyectos: ProyectoApi[] }) {
   return (
     <Tabla
-      titulo="Proyectos de la Documentación"
-      columnas={["Proyecto", "Preset", "Manifiesto", "Repos", "Tarea activa", "Sesión MCP"]}
+      titulo={t("red.tabla")}
+      columnas={[t("red.colProyecto"), t("red.colPreset"), t("red.colManifiesto"), t("red.colRepos"), t("red.colTareaActiva"), t("red.colSesion")]}
       filas={proyectos.map((p) => ({
         clave: p.nombre,
         celdas: [
@@ -121,11 +135,11 @@ export function Red() {
   const { datos, error, cargando, recargar } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts"]);
   return (
     <section class="vista vista-red" aria-labelledby="titulo-red">
-      <h1 id="titulo-red">Red de proyectos</h1>
+      <h1 id="titulo-red">{t("red.titulo")}</h1>
       {error ? <Aviso error={error} /> : null}
       {datos?.error ? <Aviso error={datos.error} /> : null}
       {cargando && !datos ? <Cargando /> : null}
-      {datos && datos.proyectos.length === 0 && !datos.error ? <p>No hay proyectos en la Documentación todavía.</p> : null}
+      {datos && datos.proyectos.length === 0 && !datos.error ? <p>{t("red.vacia")}</p> : null}
       {datos && datos.proyectos.length ? (
         modo === "sobrio" ? (
           <TablaDeProyectos proyectos={datos.proyectos} />

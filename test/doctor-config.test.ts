@@ -102,6 +102,7 @@ describe("diagnosticar: manifiestos y presets de cada proyecto", () => {
 
     const p = diagnosticar().proyectos.find((x) => x.nombre === "PROYECTO-A")!;
     assert.equal(p.manifiesto, "válido");
+    assert.equal(p.errorDelManifiesto, null);
     assert.deepEqual(p.preset, { nombre: "research-ops", origen: "del proyecto" });
     assert.deepEqual(p.reglas, { lotes: true, commits: "ninguno" });
     assert.deepEqual(p.repos, [{ id: "api", ruta: path.join(repos, "api"), origen: "PHASE_GATE_REPOS_PATH", existe: true, esGit: true, rama: "main" }]);
@@ -117,7 +118,9 @@ describe("diagnosticar: manifiestos y presets de cada proyecto", () => {
     assert.match(hallazgo(d, "MANIFIESTO-INVALIDO")[0]?.texto ?? "", /phase-gate\.json de PROYECTO-A no es válido .*version: debe ser 1/);
     const p = d.proyectos.find((x) => x.nombre === "PROYECTO-A")!;
     assert.equal(p.tareas, 1);
-    assert.match(p.manifiesto, /^inválido: /);
+    // El estado es canónico y el error va aparte (hallazgo 20 de la auditoría de la Etapa 6).
+    assert.equal(p.manifiesto, "inválido");
+    assert.match(p.errorDelManifiesto ?? "", /phase-gate\.json de PROYECTO-A no es válido .*version: debe ser 1/);
     assert.equal(p.preset, null);
   });
 

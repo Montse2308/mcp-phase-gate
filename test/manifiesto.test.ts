@@ -67,7 +67,8 @@ describe("leerManifiesto", () => {
 
     const manifiesto = manifiestoDe("PROYECTO-A");
     assert.equal(manifiesto?.preset, "software");
-    assert.equal(manifiesto?.idioma, "es");
+    // Antes: "es" por defecto. Desde la Etapa 6, sin `idioma` el del proyecto se deduce (§8.3).
+    assert.equal(manifiesto?.idioma, undefined);
     assert.deepEqual(manifiesto?.repos.map((r) => r.id), ["api", "web"]);
     assert.equal(manifiesto?.reglas.lotes, undefined, "si falta, decide el preset");
   });

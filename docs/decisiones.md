@@ -12,6 +12,459 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-19 — El Studio elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo
+
+> Registra decisiones de la Etapa 6 (L07) que se tomaron en el código sin ADR (auditoría externa de la Etapa 6,
+> §8). **Matiza** §8.6 del plan, que pedía el texto de los sellos dentro del SVG.
+
+**Decisión.**
+
+- **El idioma de la interfaz** sale, por orden, de `#?lang=es|en` en el enlace (se puede compartir, y la elección
+  se recuerda), de la elección guardada en `localStorage` (el selector ES / EN), del primero de
+  `navigator.languages` que sea español o inglés, y si no, inglés (`studio/src/i18n/idioma.ts`). `<html lang>`
+  lo sigue siempre. Es independiente del idioma de cada proyecto: los documentos se enseñan como están escritos.
+- **El navegador lo manda en cada petición** a la API en la cabecera `X-Phase-Gate-Lang` (`es` o `en`; otro
+  valor, o la cabecera repetida, no cuenta), y el servidor atiende esa petición dentro de `enIdioma`. El SSE no
+  lleva texto. El filtro de seguridad no la lee: sus respuestas salen en el idioma del proceso.
+- **Los sellos** son un marco SVG sin texto (`studio/public/sellos/`) con la palabra encima, en HTML y del
+  diccionario de la interfaz (VERIFICADO / VERIFIED, SELLADO / SEALED…). En modo Sobrio, solo el texto.
+
+**Por qué.**
+
+- El servidor no sabe en qué idioma está el navegador, y la interfaz puede cambiar de idioma sin recargar: la
+  petición es lo único que lo sabe en cada momento. Una cookie o un parámetro en la URL de la API habrían
+  servido igual, pero la cabecera no se queda en el historial ni en los registros, y una cabecera propia en un
+  `fetch` del mismo origen no abre nada nuevo (el Studio nunca concede un preflight).
+- `#?lang=` va primero para que un enlace compartido abra en el idioma de quien lo comparte.
+- Con la palabra fuera del dibujo, un idioma nuevo no obliga a redibujar ni a duplicar los SVG, y la palabra la
+  lee un lector de pantalla.
+
+**Qué se descartó.**
+
+- El texto como `<text>` dentro del SVG, como pedía §8.6: un SVG por idioma, o un SVG en línea que el
+  diccionario rellene, para lo mismo que hace un `<span>`.
+- Guardar el idioma en el servidor por sesión: dos pestañas en idiomas distintos se pisarían.
+
+---
+
+## 2026-10-19 — Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del equipo
+
+> **Matiza** la del 2026-10-18 "El idioma es del proyecto y se deduce primero del disco…", en su paso 5.
+
+**Decisión.**
+
+- **Un manifiesto válido sin `idioma`** es de la 3.0 o la 3.1, cuyo esquema daba `"es"` por defecto. Si sus
+  documentos no dicen el idioma, el proyecto es español en vez de seguir al sistema. `idiomaPorDefecto` de
+  `machine.json` y `PHASE_GATE_LANG` siguen contando antes, porque alguien los fijó a propósito; lo único que
+  se reemplaza es el último paso, el locale del sistema. El origen se ve en `doctor` como
+  `del manifiesto sin idioma`.
+- **`doctor` avisa con `MANIFIESTO-SIN-IDIOMA`** cuando el manifiesto no dice su idioma y sus documentos
+  tampoco: el idioma sale entonces de este equipo (o es el español de la 3.x), y el manifiesto viaja entre
+  equipos.
+- **`init --migrate` completa** los manifiestos válidos que no llevan `idioma`: les añade el que el proyecto
+  ya usa, detrás de `preset`, deja copia `.bak-…` del original y no toca ninguna otra clave. Uno inválido no
+  se toca. Hasta ahora `--migrate` solo creaba los que faltaban.
+- **Sin proyecto** (`get_phase_prompt` sin proyecto, la capa de fábrica sin proyecto, los `/fN`), manda el
+  idioma del equipo: `idiomaPorDefecto`, `PHASE_GATE_LANG` o el sistema (desvío E6-D5, que no tenía ADR).
+  Quien trabaje en español en un equipo en inglés fija `PHASE_GATE_LANG=es` en el bloque `env` de su
+  cliente, como recomienda el README.
+
+**Por qué.** La auditoría externa de la Etapa 6 (hallazgo 2) midió que, con el sistema en inglés y sin
+`PHASE_GATE_LANG`, 98 de 123 salidas en español cambiaban: un proyecto creado con `init` de la 3.0 o la 3.1,
+todavía sin tareas, pasaba al inglés y su primera tarea se creaba con nombres en inglés. Fuera de Windows es
+el caso normal: los clientes MCP lanzan el servidor sin `LANG`, y entonces el sistema dice `en`. La suite no
+lo veía porque fija `PHASE_GATE_LANG=es`; ahora `test/oro.test.ts` ensambla las cinco fases en español con el
+sistema en inglés y sin esa variable, y `test/idioma.test.ts` prueba el orden con un manifiesto sin idioma.
+
+**Qué se descartó.**
+
+- Devolverle al esquema `idioma: "es"` por defecto: un manifiesto sin idioma con tareas en inglés dejaría de
+  deducirse de sus documentos, y el paso 2 ("el disco es la verdad") perdería el caso que más importa.
+- Solo el aviso de `doctor`, sin cambiar la resolución: el proyecto seguiría cambiando de idioma en silencio
+  en cada equipo que no corra `doctor`.
+- Un job de CI que corra la suite sin `PHASE_GATE_LANG`: la suite crea cientos de proyectos sin manifiesto ni
+  documentos, cuyo idioma es, a propósito, el del sistema, y fallaría por diseño. La prueba de oro con el
+  sistema en inglés simulado (`fijarLocaleDelSistema`) cubre el riesgo en cualquier sistema, también en
+  Windows, donde `LANG` no cuenta.
+- Que `--migrate` reescriba el manifiesto entero con sus valores por defecto: cambiaría claves que la
+  persona no pidió cambiar.
+
+**Riesgo aceptado.** `--migrate` vuelve a escribir el JSON con dos espacios de sangría: un manifiesto escrito
+en una línea o con otro formato cambia de forma (no de contenido). Queda la copia.
+
+---
+
+## 2026-10-18 — El README principal pasa a inglés
+
+> **Reemplaza en parte** la del 2026-08-08 "README bilingüe completo, asumiendo el costo de la
+> duplicación": los dos README siguen completos y cambiar uno obliga a cambiar el otro; lo que cambia es
+> cuál es el principal.
+
+**Decisión.** `README.md`, en inglés, es el principal: el que fija la estructura y el primero que se
+actualiza. `README.es.md` es su gemelo completo, con las mismas secciones en el mismo orden, las mismas
+tablas, el mismo esquema de enlaces y anclas, y los diagramas Mermaid traducidos. Los dos abren igual:
+
+1. el nombre y una frase ("An MCP server that turns any AI coding agent into a gated, auditable,
+   batch-by-batch engineering workflow." y su versión en español);
+2. el GIF de su idioma por su URL absoluta de Pages, enlazado al MP4 del mismo idioma;
+3. las insignias: CI, npm, provenance, licencia y la demo en vivo;
+4. tres líneas: el problema, la solución y el enlace a la demo;
+5. "Try it in 10 seconds" / "Pruébalo en 10 segundos": `npx mcp-phase-gate ui --demo`, con `--idioma`.
+
+Los dos ganan una sección de arquitectura (un diagrama de las piezas reales y el enlace a este registro,
+con su número de entradas) y una de idiomas, y dejan de decir que el producto está en español. El caso de
+estudio sigue la misma regla: `docs/case-study.md` y su gemelo `docs/caso-de-estudio.md`.
+
+**Por qué.**
+
+- npm enseña `README.md` en la página del paquete y GitHub lo abre por defecto: es lo primero que lee
+  quien llega de fuera, y la mayoría de esa gente lee inglés.
+- El producto ya es bilingüe (Etapa 6): prompts, comandos, variantes, presets, mensajes y Studio existen en
+  inglés. La razón de la ADR del 2026-08-08 para tratar el español como el idioma del producto ("los
+  prompts, que son el producto real, están en español y se quedan así") dejó de ser cierta. El README en
+  inglés ya existía, pero describía un producto en español y lo decía en su segunda línea.
+
+**Qué se descartó.**
+
+- Reducir el español a un resumen que remita al inglés, la salida que la ADR del 2026-08-08 dejaba
+  prevista si uno de los dos envejecía: el español sigue siendo un idioma de primera en el producto, y
+  quien lo usa en español tiene que poder instalarlo y configurarlo sin cambiar de documento.
+- Un solo README con los dos idiomas intercalados: el doble de largo para cualquiera de los dos lectores.
+- Imágenes con ruta relativa al repo: npmjs.com las rompe, porque `docs/medios/` no viaja en el paquete
+  (§8.1 del plan). La captura de `tablero-cabina.png` sale de la cabecera y la de `tablero-sobrio.png` de
+  la sección del Studio: las dos enseñan la interfaz de antes del selector de idioma.
+
+**Riesgo aceptado.** El de siempre: dos documentos largos que cambian juntos. Ningún test compara su
+estructura (`test/docs.test.ts` solo vigila los comandos de fase); la mitigación sigue siendo la línea de
+"Where everything is" / "Dónde está cada cosa" que recuerda cambiar el otro.
+
+---
+
+## 2026-10-18 — Los medios se generan de la demo real y se publican en Pages, no en git
+
+**Decisión.** El GIF, el video y el póster de los README salen de **código real ejecutándose**, nunca de
+capturas a mano ni de una conversación escenificada, con dos scripts y una cinta:
+
+- `docs/medios/terminal.tape` (VHS): `mcp-phase-gate init --cliente cursor --dry-run` (el diff de un
+  `mcp.json` de Cursor que ya tiene otro servidor) y `mcp-phase-gate doctor`, con el binario compilado y el
+  entorno apuntando a la demo de ese idioma.
+- `scripts/grabar-studio.mjs` (Playwright, `recordVideo` a 1280×720 contra `ui --demo --idioma`): la Red, el
+  tablero de la tarea terminada con sus sellos, **en vivo** el commit del lote pendiente y `record_batch` con su
+  SHA (el sello VERIFICADO llega por SSE sin recargar), el Taller con la ranura de pruebas de la Fase 3 que
+  sustituye el preset `ai-agent-ops`, y el sitio publicado en un teléfono (390×844). Las esperas son de
+  eventos del DOM; lo único medido en milisegundos es el tiempo para leer cada imagen.
+- `scripts/medios.mjs` (ffmpeg): cada pieza a 1280×720 y 30 fps, el MP4 H.264 con `+faststart`, el GIF en dos
+  pasadas con paleta propia y el póster, en los dos idiomas, con `medios.json` (duraciones y bytes).
+
+Se generan en el workflow de Pages en cada tag y se publican en `<sitio>/medios/demo-<idioma>.gif`, `.mp4` y
+`poster-<idioma>.png`; los README los enlazan con su URL absoluta, que también se ve en npmjs.com.
+
+*Ampliado el 2026-10-19* (hallazgo 14 de la auditoría de la Etapa 6): el workflow tiene tres jobs. `sitio`
+exporta la demo y `medios` genera los medios, los dos solo con permiso de leer el repo, aunque `medios` instala
+VHS, ffmpeg y Chromium; `desplegar` es el único con `pages: write` e `id-token: write`, y no compila ni instala
+nada. Si los medios fallan, la demo se publica igual, con los medios que ya estaban publicados (desplegar
+reemplaza el sitio entero, y sin ellos los README enseñarían imágenes rotas); la primera vez, sin medios y con
+un aviso. Las actions de los tres workflows van fijadas por SHA, con su versión en un comentario que Dependabot
+mantiene.
+
+**Medido en este equipo** (Windows, VHS 0.12.1, ffmpeg 6.0, Chromium de Playwright 1.63): 41,3 s en español y
+42,4 s en inglés; MP4 de 1,52 MB en los dos; GIF de 4,93 MB y 4,72 MB a 8 fps y 760 px (a 12 fps y 960 px
+pasaban de 7 MB). El presupuesto es el de §8.8 (GIF ≤ 5 MB, MP4 ≤ 8 MB) y el script falla si se pasa.
+
+**Qué se descartó.**
+
+- Versionar los medios en git: binarios pesados en el historial para algo que se regenera solo.
+- Escenificar una sesión de Claude Code o Cursor: la demo honesta solo enseña lo que ejecuta el producto. Una
+  sesión real la grabaría la autora a mano, como pieza aparte.
+- Encender el farol de sesión de la Red escribiendo un registro de sesión inventado: sería escenificar una
+  sesión MCP que no existe. La Red sale tal como es en la demo, sin sesiones abiertas.
+
+**Riesgos aceptados.**
+
+- El GIF entra en el presupuesto con el tercer escalón (8 fps y 760 px), por debajo de los 960 px del plan: un
+  GIF de ~42 s con texto de terminal a 960 px pesa ~7 MB. El MP4, a 1280 px, es la versión nítida.
+- La banda de la demo dice su ruta, y la ruta sale en el video: en la CI de Pages es `/tmp/…`; en un equipo
+  puede llevar el nombre de quien graba, y `grabar-studio.mjs` lo avisa.
+- En Windows, VHS lanza el `bash` de WSL (CreateProcess mira System32 antes que el PATH): ahí `medios.mjs` usa
+  la misma preparación en PowerShell. En la CI, `bash`.
+
+---
+
+## 2026-10-18 — Los prompts en inglés se reescriben con glosario y revisión, no se traducen a máquina
+
+**Decisión.** `prompts/en/` es un juego de fábrica completo, gemelo de `prompts/es/`: reglas globales, las
+cinco fases (`phase-1-discovery.md` … `phase-5-audit.md`), los comandos (`commands/f1.md` … `f5.md`) y las
+cuatro variantes de regla (`reglas/`, con los mismos nombres de archivo: los elige el código). Cada archivo
+se **reescribió** en inglés, no se tradujo frase por frase, con un contrato fijo:
+
+- el **glosario** de `docs/glosario.md` (Batch, Receipt, Anchor, Seal, Slot, Block, Basis, Gate…);
+- los encabezados, claves y nombres de documento del vocabulario (§8.2), que comprueba su test de contrato;
+- las **mismas ranuras, en el mismo orden**, con la palabra y el alias ingleses (`<!-- slot: tests -->`); los
+  bloques de las variantes, con los mismos ids y modos (`<!-- block: phase-4/commits -->`);
+- el **mismo número de puntos** en cada `FORBIDDEN` y `SELF-CHECK` que en su `PROHIBIDO` y `AUTOVERIFICACIÓN`, con
+  la misma numeración (el 14 y el 15 de la Fase 4 siguen siendo de las variantes);
+- los nombres de las tools y de sus parámetros sin traducir (`titulo`, `que_se_hizo`…), glosados una vez cuando
+  el nombre no se entiende; los valores de `estado` en inglés (`verified`…), que `record_batch` acepta desde L03;
+- los ejemplos de calidad, reescritos con el mismo propósito; los de la descripción del PR (Fase 5), **nuevos y
+  genéricos** (una tienda en línea inventada), nunca de PR reales (ADR del 2026-08-07);
+- la auditoría de la Fase 5 se escribe en inglés, y sus rangos de palabras se ajustan al inglés, que usa menos
+  palabras para lo mismo (el normal pasa de 200–260 a 190–240; el tope, de 500 a 450).
+
+`test/prompts-en.test.ts` comprueba la paridad (ranuras en orden, puntos por sección, ejemplos delimitados,
+bloques de las variantes) y que un proyecto con `"idioma": "en"` ensambla las cinco fases con las cuatro
+políticas de commits, con y sin lotes, sin avisos, sin marcadores y con todos los bloques del servidor en
+inglés.
+
+**Revisión de la autora.** El plan pide que la autora revise cada archivo antes del commit (E6-R3). Para esta
+etapa dio un OK general por adelantado; la lectura archivo por archivo queda registrada como pendiente en la
+sección de ejecución del plan, y cualquier cambio de voz que pida entra como un lote de ajuste, con la prueba
+de oro regenerada a propósito (L06).
+
+**Amplía** la ADR del 2026-08-08 (README bilingüe): ahora también son bilingües los prompts.
+
+**Qué se descartó.**
+
+- Traducción automática sin contrato: un prompt es el producto, y una traducción literal pierde el tono
+  ("hazlo en esta fase" no es "do it in this phase" en un prompt que funcione) y, sin paridad comprobada,
+  alguna regla.
+- Ids de ranura en inglés como canónicos: los usan los presets, `eject` y el Studio desde la Etapa 3; el alias
+  da lo mismo sin romper nada.
+
+---
+
+## 2026-10-18 — Mensajes y descripciones en dos idiomas; los nombres de las tools no se traducen
+
+> **Reemplaza** la nota de la 2.x "la interfaz del servidor está en inglés": solo lo estaban los nombres de
+> las tools y de casi todos sus parámetros; las descripciones y los mensajes estaban en español.
+
+**Decisión.** Todo texto que el servidor dirige a una persona o al modelo tiene un **código** y un texto en
+español y en inglés: los errores y las respuestas de las tools, las preguntas de confirmación, las líneas de
+`doctor` (y el texto de cada hallazgo, con el código del propio hallazgo), `--help` y la salida de `init` y
+`eject`, los bloques que el servidor añade a un prompt y las descripciones de las tools, de sus parámetros, de
+los recursos y de los MCP Prompts `/fN`. Son 620 códigos en seis catálogos (700 en siete desde que el Studio ganó el suyo, L07) (`src/i18n/textos/`), que junta
+`src/i18n/mensajes.ts` con `mensaje(codigo, parametros, idioma?)` y `fallo(...)`, un `Error` que guarda su
+`codigo`. *Matizado el 2026-10-19* (hallazgo 9 de la auditoría de la Etapa 6): las líneas que `ui` imprime en la
+terminal y las respuestas de texto del filtro de seguridad del Studio (421, 403, 401, 405, 413, 500) seguían
+fijas en español. Ahora tienen código: las de `ui`, en el idioma de `--idioma` o en el del proceso; las del
+filtro, en el del proceso (`PHASE_GATE_LANG` o el sistema), porque el filtro no lee la cabecera de idioma de una
+petición que todavía no ha validado. *Y una consecuencia del contexto por llamada que esta entrada no decía* (cuestionamiento de la
+misma auditoría): lo que corre fuera de una llamada (la vigilancia de las capas, la sincronización de los `/fN`,
+los avisos de un ensamblado sin contexto) y los errores de validación de los argumentos, que zod redacta con los
+esquemas fijados al arrancar, salen en el idioma de arranque del servidor, no en el del proyecto.
+
+**En qué idioma sale cada cosa:**
+
+| Qué | Idioma |
+|---|---|
+| Lo que se escribe en la carpeta del proyecto (recibos, índice, la comparación de "Verificación del commit") y los bloques que se añaden a un prompt (ARCHIVOS DE ESTA TAREA, la compuerta, los pendientes, los recibos que existen, CONFIGURACIÓN DEL PROYECTO, COMMITS DE LA FASE 4, la nota de un bloque huérfano) | El del **proyecto**, siempre explícito |
+| Errores y respuestas de una tool | El del proyecto si la llamada lo resuelve; si no, `PHASE_GATE_LANG`; si no, el del sistema |
+| Descripciones y títulos de tools, parámetros, recursos y `/fN`; los mensajes de validación de zod | Los de **arranque**: `PHASE_GATE_LANG` o, si no, el del sistema. Son estáticos desde la Etapa 2 |
+| `doctor`, `--help`, `init`, `eject` | Como los mensajes, sin proyecto |
+
+El servidor abre un contexto por llamada (`AsyncLocalStorage`) y lo fija en cuanto resuelve el proyecto, así
+que el error que lanza un módulo de abajo sale en su idioma sin pasar el idioma a cada función.
+
+- **Los nombres de las tools no cambian** (`start_task`, `record_batch`…), ni los de sus parámetros, salvo
+  `crear_proyecto`, que gana el alias `create_project` (los dos valen; con valores distintos, error).
+- **Los valores que el código interpreta tampoco**, pero `record_batch` acepta además `estado` en inglés
+  (`verified`, `with pending items`, `failed`, `discarded`) y los títulos de `condicionales` en inglés, y los
+  normaliza al canónico: los prompts en inglés los nombran así.
+- El Studio asigna el estado HTTP de un error por su **código** y ya no por su texto en español.
+- `--help` documenta `PHASE_GATE_LANG`. Recomendación en los README para quien trabaje en español:
+  `PHASE_GATE_LANG=es` en el bloque `env` del cliente (el sistema es el último recurso).
+
+**Test** (`test/mensajes.test.ts`): todo código tiene los dos idiomas, del mismo tipo y con los mismos
+parámetros, y no se repite; ningún texto fijo en inglés es el español; todo código que pide el código fuente
+existe; el idioma de una llamada sale de donde dice la tabla; `PHASE_GATE_LANG` cambia los títulos y las
+descripciones de las tools y de cada parámetro (los nombres no); un error de un proyecto en inglés sale en
+inglés aunque `PHASE_GATE_LANG` diga `es`; `create_project` funciona. Todos los textos en español siguen
+siendo los mismos byte a byte: la suite entera, que los afirma, no cambió salvo donde el comportamiento
+cambia a propósito (el error de `IDIOMA-CON-TAREAS` sale en el idioma del proyecto).
+
+**Qué se descartó.**
+
+- Traducir los nombres de las tools o de sus parámetros: son la API que usan los prompts, los comandos de
+  quien ya los copió y los clientes; un cambio de nombre rompe todo eso por un beneficio de lectura.
+- Pasar el idioma como parámetro a cada función que puede lanzar un error: más de cien firmas tocadas para
+  lo que hace un contexto por llamada.
+- Descripciones de tools según el proyecto de cada llamada: el cliente pide la lista de tools una vez, al
+  conectar, y no sabe de proyectos.
+
+**Riesgo aceptado.** Un error que se produce antes de resolver el proyecto (un argumento mal formado, un
+proyecto que no existe) sale en el idioma del equipo, no en el del proyecto: todavía no se sabe cuál es.
+
+---
+
+## 2026-10-18 — El idioma es del proyecto y se deduce primero del disco; la redacción puede ser de la tarea
+
+> **Matizada** el 2026-10-19 por "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
+> equipo": un manifiesto sin `idioma` y sin documentos que lo digan es español, no el idioma del sistema.
+
+**Decisión.** Dos conceptos distintos:
+
+| Concepto | Dónde se declara | Qué decide |
+|---|---|---|
+| **Idioma del proyecto** | `idioma` en `phase-gate.json` (`"es"` o `"en"`) | La capa de fábrica (`prompts/<idioma>/`, `presets/<idioma>/`), los nombres de los documentos y el vocabulario con que escribe el servidor |
+| **Idioma de redacción** | `redaccion: en` en el frontmatter de `00 - …`, que escribe `start_task` con `redaccion` | Solo en qué idioma escribe el modelo el contenido. El prompt gana una línea al final, en el idioma del proyecto; nada más cambia |
+
+**El idioma de un proyecto** (`idiomaDelProyecto`, `src/manifiesto.ts`) sale, en este orden, de: (1) el
+manifiesto; (2) **los documentos que ya tiene en disco** (`01 - Análisis Técnico.md` frente a `01 - Technical
+Analysis.md`), con mayoría si hay de los dos y el español a la par; (3) `idiomaPorDefecto` de `machine.json`;
+(4) `PHASE_GATE_LANG` (`es`, `en`, también `es-MX` o `en_US.UTF-8`); (5) el del sistema: `es` si su locale
+empieza por `es`, si no `en`. El manifiesto deja de tener `"es"` por defecto (`schema/project.json` se
+regenera): sin `idioma`, se deduce.
+
+- **`doctor`** da `IDIOMA-MIXTO` (error) si, sin idioma declarado, hay documentos de los dos idiomas, e
+  `IDIOMA-CON-TAREAS` (error) si el manifiesto declara uno y hay tareas con documentos del otro.
+  `get_phase_prompt` se niega con ese mismo texto: la deducción daría esas tareas por "sin documentos".
+  Cambiar el idioma no renombra nada (P7). *Ampliado el 2026-10-19:* también se niegan `start_task` (creaba
+  la tarea nueva con los nombres del idioma declarado, y el proyecto mezclaba los dos), `record_batch`,
+  `get_batch_status` y `write_central_doc` con el nombre de un documento de fase; `list_tasks` lo antepone
+  como aviso (hallazgo 4 de la auditoría de la Etapa 6).
+- **`init --migrate`** escribe siempre `idioma` en los manifiestos que crea: el de los documentos del
+  proyecto si los tiene (nunca el del sistema), y si no, `--idioma` o lo que se conteste a la pregunta (por
+  defecto, el del equipo; sin terminal o con `--yes`, el del equipo sin preguntar). Con `--solo-este-equipo`,
+  `--idioma` escribe `idiomaPorDefecto` en `machine.json`. "Crear phase-gate.json" del Studio hace lo mismo.
+- **`eject`** escribe el marcador del bloque y la carpeta de comandos en el idioma del destino
+  (`<!-- block: phase-3/tests -->`, `commands/`).
+- **`doctor`** enseña de dónde sale el idioma de cada proyecto (`del proyecto`, `de sus documentos`…).
+
+**Por qué el disco antes que el sistema.** Los proyectos de la 2.x no tienen manifiesto y están en español.
+Si el idioma del sistema decidiera antes que sus documentos, abrir el mismo proyecto en un equipo en inglés
+(o en una CI de Linux sin `LANG`) lo dejaría de golpe sin fases hechas (E6-R1). Y el sistema va el último
+porque los clientes MCP lanzan el servidor con un entorno reducido, sin `LANG`, y en Windows `Intl` sigue a
+la región e ignora `LANG` (validación V9).
+
+**Amplía** P7 y la ADR del manifiesto (Etapa 3): `idioma` acepta `"en"` y deja de tener valor por defecto.
+
+**Riesgos aceptados.**
+
+- Contar documentos recorre las carpetas de tarea del proyecto cada vez que se resuelve su idioma (unas
+  doce comprobaciones de existencia por tarea). *Matizado el 2026-10-19:* la auditoría midió que una sola
+  llamada lo repetía varias veces (con 600 tareas, `get_phase_prompt` pasaba de 235 a 3489 ms); ahora se
+  cuenta una vez por proyecto y por llamada (`conCacheDelIdioma`), con un `readdir` por tarea y los nombres
+  comparados en NFC y sin mayúsculas, igual en todos los sistemas. Se hace solo con nombres de fábrica: una capa propia que
+  renombra los documentos no cuenta para la deducción, y conviene fijar `idioma` en el manifiesto.
+- La suite se escribió en español: `test/helpers.ts` fija `PHASE_GATE_LANG=es`, y el test que prueba otro
+  idioma lo cambia. El idioma del sistema se prueba con `fijarLocaleDelSistema` y no con `LANG`, que en
+  Windows no cuenta.
+
+**Qué se descartó.**
+
+- Un idioma por tarea para la estructura: la deducción de fase depende de los nombres de documento, y es
+  por proyecto (Etapa 3, G1). Un proyecto no mezcla nombres de dos idiomas.
+- Un comando de migración de idioma que renombre documentos: fuera de este plan.
+
+---
+
+## 2026-10-18 — Los textos de los que depende el código viven en un vocabulario bilingüe; se escribe en el idioma del proyecto y se lee en los dos
+
+**Decisión.** `src/vocabulario.ts` es el único lugar con los textos que el código busca o escribe con una
+forma fija, en español y en inglés: los encabezados (`## Validaciones pendientes` / `## Pending validations`,
+`BASE DE CADA DECISIÓN` / `BASIS OF EACH DECISION`…), las claves y los valores del frontmatter de recibos,
+índices y planes (`lote`/`batch`, `estado: verificado`/`status: verified`, `lotes: N`/`batches: N`), las
+secciones de un recibo, la cabecera de la tabla de lotes (`| Lote | Repo |` / `| Batch | Repo |`), las
+frases que cuentan como sección vacía, las claves del frontmatter de los prompts (`documento`/`document`,
+`documento_inicial`/`initial_document`, `recibos`/`receipts`) y de los presets (`descripcion`/`description`,
+`lotes`/`batches`), las palabras de los marcadores (`ranura`/`slot`, `bloque`/`block`) y sus modos
+(`despues`/`after`), y la carpeta de los comandos (`comandos/`/`commands/`).
+
+- **Se escribe en el idioma del proyecto:** `escribirRecibo` y `textoDelIndice` reciben el idioma (en este
+  lote, siempre `es`; la resolución por proyecto llega en el lote siguiente).
+- **Se lee en los dos:** `parsearRecibo`, `cabeceraDeRecibo` y `frontmatterDeRecibo` devuelven las claves y
+  los valores **canónicos** (los de siempre, en español), así que el resto del código no cambia: un recibo en
+  inglés y su gemelo en español dan el mismo objeto, y de uno se escribe el otro sin perder nada (probado con
+  los cuatro tipos de ancla por los cuatro estados). Igual el plan (`batches: N` y su tabla), los pendientes
+  (`## Pending validations`, "None."), los bloques, las ranuras, el frontmatter de prompts y presets, los
+  comandos y la línea "Re-anchored on" del historial de reanclajes (también en la Bitácora del Studio).
+- **Los identificadores no se traducen:** `L01…L99`, los ids de ranura, los SHA, las rutas, las tools y los
+  presets. Cada ranura tiene un **alias inglés** (`phase-3/tests` → `fase-3/pruebas`): el parser de bloques,
+  el de ranuras y `eject` lo aceptan y lo resuelven al id canónico, así que la procedencia y los avisos
+  hablan siempre del mismo id.
+- **Test de contrato** (`test/vocabulario.test.ts`): cada juego de `prompts/<idioma>/` tiene las secciones
+  esqueleto, los nombres de documento, las claves del frontmatter, la cabecera de la tabla de lotes y los
+  comandos de su idioma, y las mismas 27 ranuras que el español.
+
+**Por qué.** Traducir un prompt sin esto habría roto en silencio la detección de pendientes (el servidor
+buscaba `## Validaciones pendientes`) o la lectura de recibos (`estado:`), y nada lo habría avisado.
+
+**Qué se descartó.**
+
+- Traducir las claves al leer con un diccionario por archivo: con un vocabulario único, el test de contrato
+  sabe qué buscar en cada prompt.
+- Guardar los recibos siempre en español aunque el proyecto sea en inglés: el recibo lo lee una persona.
+- Que el alias de una ranura fuera solo de los bloques: en un prompt en inglés, `<!-- slot: tests -->` es
+  lo que espera leer quien lo abre.
+
+**Riesgo aceptado.** Las secciones de un recibo cuentan como vacías con "nada/ninguna/ninguno/n/a/no
+aplica" y "none/nothing/not applicable", no con "sin pendientes": así un recibo que escribió el servidor
+sigue dando los mismos bytes al leerlo y escribirlo otra vez.
+
+---
+
+## 2026-10-17 — El export estático publica la demo y nunca datos reales sin confirmación
+
+**Decisión.** `mcp-phase-gate ui --export-static <dir>` (`src/studio/exportar.ts`) no arranca ningún
+servidor: escribe en `<dir>` un sitio que funciona servido tal cual (GitHub Pages, o cualquier carpeta), en
+solo lectura.
+
+- **Sin `--incluir-datos-reales`, siempre la demo.** La genera en una carpeta temporal y la lee con el mismo
+  entorno prestado con que se genera (`conEntornoDeDemo`: sus `PHASE_GATE_*`, `TZ=UTC`, ninguna
+  `PHASE_GATE_*`, `ORQUESTADOR_*` ni `GIT_*` de quien exporta): la Documentación de quien lo lanza no se
+  lee. Probado con una Documentación configurada con un proyecto marcador, que no aparece en ningún archivo y
+  queda intacta.
+- **Con `--incluir-datos-reales`**, exporta la Documentación configurada, después de decir cuántos proyectos
+  y que va todo su contenido, y de pedir que se escriba exactamente `exportar`. Sin terminal y sin `--yes`
+  no exporta nada; cualquier otra respuesta, tampoco.
+- **Las mismas rutas que pide el frontend**, con los mismos manejadores de la API (§7.5): el estado, los
+  clientes, los proyectos y, por proyecto, sus tareas y el prompt de cada fase (sin tarea y con cada una);
+  por tarea, su estado, los lotes (también reverificados), la bitácora y cada documento y recibo. Cada
+  respuesta va a `datos/<sha256>.json`, con el nombre sacado del contenido (así no hay que meter la ruta,
+  con sus espacios y acentos, en un nombre de archivo, y una respuesta repetida se guarda una vez), y
+  `datos/indice.json` dice qué archivo y qué código corresponden a cada ruta exacta. Además, el frontend
+  compilado, `config.js` con `window.PG_MODO = "estatico"` y la banda, y `.nojekyll`.
+- **Sin rutas del equipo.** Las raíces de la demo (o las configuradas), el paquete, la carpeta del usuario
+  y el temporal se sustituyen por `<Documentación>`, `<repos>`, `<configuración>`, `<estado>`, `<paquete>`,
+  `~` y `<temporal>`, en sus tres formas (tal cual, con `/` y con las barras escapadas dentro de un JSON que
+  va como texto, como el diff de un `mcp.json`), y lo que va detrás pasa a `/`. Si después quedara alguna
+  de esas raíces en lo que se va a publicar, **no se escribe nada** (probado por separado, sin la
+  sustitución). `/api/clientes` se calcula sobre una casa vacía y sin ejecutar `claude`: nunca la
+  configuración real de los clientes.
+- **Determinista.** JSON con las claves ordenadas: dos exports dan los mismos bytes, y la lista de rutas y
+  seis respuestas que no dependen del sistema (proyectos, y la tarea, los lotes, la bitácora, un recibo y el
+  prompt de la Fase 4 de `cupones-de-descuento`) se comparan con `test/oro/export/`. `/api/estado` (la
+  versión del paquete y la de Node) y `/api/clientes` (la ruta del `mcp.json` de VS Code de cada sistema)
+  quedan fuera del oro: la misma versión da los mismos bytes en el mismo sistema.
+- **Sin pisar nada.** `<dir>` tiene que no existir o estar vacía; el sitio se escribe al lado y se renombra
+  al terminar.
+
+**En el sitio, el frontend** (`studio/src/datos.ts`) resuelve cada `get` en el índice, no abre SSE,
+deshabilita las acciones con "En la demo publicada todo es de solo lectura…" y enseña la banda. Una ruta
+que no está en el índice dice "Esto no está en la demo publicada". Todas las rutas son relativas a la
+página: probado en Chromium con el sitio servido bajo `/mcp-phase-gate/` por un servidor de archivos sin
+API ni CSP, como Pages, y sin ninguna petición fuera de ese subdirectorio.
+
+**Amplía** R6: exportar datos reales exige la bandera y una confirmación escrita, y ni así se publican las
+rutas del equipo.
+
+**Riesgos aceptados.**
+
+- Con datos reales, la sustitución solo conoce las raíces configuradas y las del equipo: una ruta que un
+  documento escriba a mano con otra raíz (otro disco, la carpeta de otro usuario) se publica tal cual. Por
+  eso se pide escribir `exportar`.
+- Exportar la demo tarda unos 16 s en este equipo: unos 3 s generarla y el resto ensamblar los 40 prompts
+  (con el estado de git de los repos). Es un paso del build de Pages, no de uso diario.
+
+**Qué se descartó.**
+
+- Guardar cada respuesta en un archivo con el nombre de su ruta (`datos/tareas/TIENDA/…`): habría que
+  codificar espacios, acentos y la consulta en nombres de archivo, y Pages los sirve decodificados.
+- Publicar las rutas locales con los datos reales, como decía el aviso de §7.9 ("y sus rutas locales"): no
+  aportan nada a quien lee el sitio y dicen cómo está organizado el equipo de quien lo publica.
+- Un Service Worker que hiciera de API: más código en el navegador para lo mismo que un índice.
+
+---
+
 ## 2026-10-17 — La demo se genera con el código real y commits de git deterministas
 
 **Decisión.** La demo del Studio no es un árbol de archivos escrito a mano: `generarDemo(destino)`
@@ -104,6 +557,10 @@ tests"): los textos son ese fixture y el mismo generador alimenta los tests de l
 ---
 
 ## 2026-10-17 — El Studio solo ejecuta acciones del CLI, con vista previa y huella
+
+> **Matizada** el 2026-10-18 (Etapa 6, desvío E6-D7 b): la huella ya no incluye el texto del resumen, que
+> depende del idioma de la interfaz, para que una vista previa hecha en un idioma se pueda aplicar en el otro.
+> No pierde protección: el resumen se deriva de la acción, las rutas y los contenidos, que siguen en la huella.
 
 **Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos
 (`src/studio/acciones.ts`):
@@ -890,6 +1347,10 @@ puntero puede equivocarse, y equivocarse de preset cambia todas las instruccione
 ---
 
 ## 2026-10-15 — Cada proyecto puede declarar un `phase-gate.json`; cada equipo, un `machine.json`
+
+> **Ampliada** el 2026-10-18 por "El idioma es del proyecto y se deduce primero del disco…": `idioma` acepta
+> `"en"` y deja de tener valor por defecto. Y el 2026-10-19 por "Un manifiesto sin `idioma` es español…": un
+> manifiesto sin `idioma`, como los de la 3.0 y la 3.1, se sigue leyendo como español.
 
 **Decisión.** Dos archivos de configuración, los dos opcionales:
 
@@ -2258,6 +2719,9 @@ precisamente el comportamiento contra el disco.
 ---
 
 ## 2026-08-08 — README bilingüe completo, asumiendo el costo de la duplicación
+
+> **Reemplazada en parte** el 2026-10-18 por "El README principal pasa a inglés": los dos siguen completos
+> y gemelos; lo que cambia es cuál es el principal.
 
 **Decisión.** `README.md` en inglés y `README.es.md` en español, los dos completos. Ambos
 abren explicando qué problema resuelve, por qué las fases y para quién es, antes de la

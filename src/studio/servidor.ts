@@ -16,6 +16,12 @@
 //   6. Los estáticos se sirven solo desde studio/dist, con la ruta real dentro  → 404
 //
 // Toda respuesta lleva la CSP sin 'unsafe-inline', nosniff y no-referrer.
+//
+// El idioma de lo que dice la API (describeEstado, los hallazgos de doctor, las notas de un prompt, los
+// resúmenes de las acciones y los errores) es el de la interfaz: el frontend lo manda en cada petición en
+// la cabecera X-Phase-Gate-Lang ("es" o "en"; cualquier otro valor se ignora), y la petición se atiende
+// dentro de `enIdioma`. Sin cabecera, el de siempre (PHASE_GATE_LANG o el del sistema). No toca el filtro:
+// una cabecera propia en un fetch del mismo origen no abre nada, y nunca se concede un preflight.
 
 import { execFile } from "child_process";
 import * as crypto from "crypto";
@@ -26,9 +32,11 @@ import * as path from "path";
 
 import type { OpcionesUi, Salida } from "../cli.js";
 import { raizPaquete } from "../config.js";
+import { enIdioma, idiomaDeMensajes, mensaje } from "../i18n/mensajes.js";
 import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
 import { INTERVALO_MS, sesionesAbiertas } from "../sesiones.js";
+import type { Idioma } from "../vocabulario.js";
 import { crearApi, entornoInitDelProceso } from "./api.js";
 import { activarDemo, entornoInitDeDemo, prepararDemo } from "./demo.js";
 import type { CarpetasDeDemo } from "./demo.js";
@@ -36,6 +44,7 @@ import { crearEventos } from "./eventos.js";
 
 export const HOST = "127.0.0.1";
 export const CUERPO_MAXIMO = 64 * 1024;
+export const CABECERA_DE_IDIOMA = "x-phase-gate-lang";
 export const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
   "frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
@@ -90,6 +99,13 @@ function valoresDe(req: http.IncomingMessage, nombre: string): string[] {
     if (req.rawHeaders[i]!.toLowerCase() === nombre) valores.push(req.rawHeaders[i + 1]!);
   }
   return valores;
+}
+
+// El idioma de la interfaz que manda el frontend: una sola cabecera, exactamente "es" o "en". Cualquier
+// otra cosa (repetida, vacía, "fr", "EN-us") no cuenta, y la petición sigue con el idioma por defecto.
+export function idiomaDePeticion(req: http.IncomingMessage): Idioma | null {
+  const valores = valoresDe(req, CABECERA_DE_IDIOMA);
+  return valores.length === 1 && (valores[0] === "es" || valores[0] === "en") ? valores[0] : null;
 }
 
 // timingSafeEqual lanza si las longitudes difieren: se comparan antes. Saber la longitud no ayuda a
@@ -222,7 +238,7 @@ function leerCuerpo(req: http.IncomingMessage): Promise<{ texto: string } | { es
 
 // Tras un 413 no se sigue leyendo: se responde y se cierra la conexión.
 function rechazarCuerpo(res: http.ServerResponse, estado: 413 | 400, req: http.IncomingMessage): void {
-  const texto = estado === 413 ? `El cuerpo pasa de ${CUERPO_MAXIMO / 1024} kB.` : "El cuerpo no se pudo leer.";
+  const texto = estado === 413 ? mensaje("STUDIO-FILTRO-CUERPO-GRANDE", { kb: CUERPO_MAXIMO / 1024 }) : mensaje("STUDIO-FILTRO-CUERPO-ILEGIBLE");
   res.writeHead(estado, { "Content-Type": "text/plain; charset=utf-8", "Content-Length": Buffer.byteLength(texto), Connection: "close" });
   res.end(texto, () => req.socket.destroy());
 }
@@ -241,14 +257,14 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     // 1. Host: exactamente uno, y exactamente uno de los dos nombres con este puerto.
     const hosts = valoresDe(req, "host");
     if (hosts.length !== 1 || !permitidos.includes(hosts[0]!)) {
-      enviar(res, 421, "Host no permitido: el Studio solo atiende en 127.0.0.1 y localhost, con su puerto.");
+      enviar(res, 421, mensaje("STUDIO-FILTRO-HOST"));
       return;
     }
 
     // 2. Origin: si viene, exactamente uno y de este mismo Studio ("null" no lo es).
     const origenes = valoresDe(req, "origin");
     if (origenes.length > 1 || (origenes.length === 1 && !permitidos.map((h) => `http://${h}`).includes(origenes[0]!))) {
-      enviar(res, 403, "Origen no permitido.");
+      enviar(res, 403, mensaje("STUDIO-FILTRO-ORIGEN"));
       return;
     }
 
@@ -257,7 +273,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     // donde se usa, y se valida después.
     const crudo = req.url ?? "";
     if (!crudo.startsWith("/")) {
-      enviar(res, 400, "Petición mal formada.");
+      enviar(res, 400, mensaje("STUDIO-FILTRO-MAL-FORMADA"));
       return;
     }
     const corte = crudo.indexOf("?");
@@ -268,7 +284,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     if (metodo === "GET" && url.pathname === "/" && url.searchParams.has("token")) {
       const dados = url.searchParams.getAll("token");
       if (token === null || dados.length !== 1 || !igualesEnTiempoConstante(dados[0]!, token)) {
-        enviar(res, 401, "Este enlace no vale o ya se usó. Vuelve a lanzar `mcp-phase-gate ui` y abre el enlace nuevo.");
+        enviar(res, 401, mensaje("STUDIO-FILTRO-ENLACE-USADO"));
         return;
       }
       token = null;
@@ -288,7 +304,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
       const cookies = valoresDeCookie(req, nombreDeCookie(puerto));
       if (!cookies || cookies.length !== 1 || !igualesEnTiempoConstante(cookies[0]!, sesion)) {
         res.setHeader("Cache-Control", "no-store");
-        enviar(res, 401, "Falta la sesión: abre el enlace que imprimió `mcp-phase-gate ui`.");
+        enviar(res, 401, mensaje("STUDIO-FILTRO-SIN-SESION"));
         return;
       }
     }
@@ -299,7 +315,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     if (metodo !== "GET") {
       const marca = valoresDe(req, "x-phase-gate");
       if (marca.length !== 1 || marca[0] !== "1") {
-        enviar(res, 403, "Falta la cabecera X-Phase-Gate.");
+        enviar(res, 403, mensaje("STUDIO-FILTRO-SIN-CABECERA"));
         return;
       }
       const leido = await leerCuerpo(req);
@@ -311,29 +327,32 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
         try {
           cuerpo = JSON.parse(leido.texto);
         } catch {
-          enviarJson(res, 400, { error: "El cuerpo no es un JSON válido." });
+          enviarJson(res, 400, { error: mensaje("STUDIO-JSON-INVALIDO", {}, idiomaDePeticion(req) ?? undefined) });
           return;
         }
       }
     }
 
     if (esApi) {
+      const idioma = idiomaDePeticion(req);
       if (!opciones.api) {
-        enviarJson(res, 404, { error: "No existe esa ruta de la API." });
+        enviarJson(res, 404, { error: mensaje("STUDIO-RUTA-NO-EXISTE", {}, idioma ?? undefined) });
         return;
       }
+      const api = opciones.api;
+      const peticion: PeticionApi = { metodo, ruta: url.pathname.slice("/api".length) || "/", consulta: url.searchParams, cuerpo, req };
       try {
-        const respuesta = await opciones.api({ metodo, ruta: url.pathname.slice("/api".length) || "/", consulta: url.searchParams, cuerpo, req }, res);
+        const respuesta = await (idioma ? enIdioma(idioma, () => api(peticion, res)) : api(peticion, res));
         if (respuesta !== "manejada") enviarJson(res, respuesta.estado, respuesta.json);
       } catch {
-        enviarJson(res, 500, { error: "Error interno del Studio." });
+        enviarJson(res, 500, { error: mensaje("STUDIO-ERROR-INTERNO-DEL-STUDIO", {}, idioma ?? undefined) });
       }
       return;
     }
 
     // 6. Estáticos, solo con GET.
     if (metodo !== "GET") {
-      enviar(res, 405, "Método no permitido.", undefined, { Allow: "GET" });
+      enviar(res, 405, mensaje("STUDIO-FILTRO-METODO"), undefined, { Allow: "GET" });
       return;
     }
     if (url.pathname === "/config.js" && opciones.configJs !== undefined) {
@@ -358,7 +377,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
   // requireHostHeader: false para que una petición sin Host llegue al filtro (y dé su 421) en vez de
   // un 400 de Node: una sola autoridad decide.
   const servidor = http.createServer({ requireHostHeader: false }, (req, res) => {
-    atender(req, res).catch(() => enviar(res, 500, "Error interno del Studio."));
+    atender(req, res).catch(() => enviar(res, 500, mensaje("STUDIO-FILTRO-INTERNO")));
   });
   // Un cliente lento no retiene una conexión: cabeceras en 10 s y la petición entera en 15 s. No
   // afecta al SSE, que es una respuesta larga a una petición corta.
@@ -401,17 +420,20 @@ export function abrir(url: string, plataforma: NodeJS.Platform = process.platfor
 // ─── `mcp-phase-gate ui` ────────────────────────────────────────────────────
 // Arranca, imprime el enlace, lo abre (salvo --no-abrir) y se queda en primer plano hasta Ctrl+C.
 export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNavegador: (url: string) => boolean = abrir): Promise<number> {
+  // Lo que se imprime en la terminal, y la demo: en el idioma pedido con --idioma; sin él, el de los mensajes
+  // (PHASE_GATE_LANG o el del sistema). El servidor no sabe qué idioma resolverá el navegador (§8.7).
+  const idiomaDeLaTerminal = opciones.idioma ?? idiomaDeMensajes();
   let studio: Studio;
   // Con --demo, el proceso entero trabaja sobre la demo (§7.8): sus PHASE_GATE_* sustituyen a las de quien lo
   // lanza antes de leer nada, e init-cliente escribe en la casa de la demo.
   let demo: CarpetasDeDemo | null = null;
   if (opciones.demo) {
     try {
-      const preparada = await prepararDemo();
+      const preparada = await prepararDemo(idiomaDeLaTerminal);
       demo = preparada.carpetas;
-      if (!preparada.reutilizada) salida.out(`Demo generada en ${demo.raiz}.`);
+      if (!preparada.reutilizada) salida.out(mensaje("UI-DEMO-GENERADA", { raiz: demo.raiz }, idiomaDeLaTerminal));
     } catch (error) {
-      salida.err(`No se pudo preparar la demo: ${error instanceof Error ? error.message : String(error)}`);
+      salida.err(mensaje("UI-DEMO-FALLO", { detalle: error instanceof Error ? error.message : String(error) }, idiomaDeLaTerminal));
       return 1;
     }
     activarDemo(demo);
@@ -435,18 +457,26 @@ export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNa
       entornoInit: () => (enDemo ? entornoInitDeDemo(enDemo) : entornoInitDelProceso(ejecutarComando)),
       eventos: (peticion, res) => eventos.manejar(peticion.req, res),
     });
-    const configJs = enDemo ? `window.PG_MODO = "demo";\nwindow.PG_BANDA = ${JSON.stringify(`Demo: datos de ejemplo en ${enDemo.raiz}`)};\n` : undefined;
+    // La banda va en los dos idiomas: PG_BANDA en español (la de siempre) y la carpeta aparte, para que el
+    // frontend la diga en el idioma de la interfaz.
+    const configJs = enDemo
+      ? `window.PG_MODO = "demo";\nwindow.PG_BANDA = ${JSON.stringify(`Demo: datos de ejemplo en ${enDemo.raiz}`)};\nwindow.PG_DEMO_RAIZ = ${JSON.stringify(enDemo.raiz)};\n`
+      : undefined;
     studio = await arrancarStudio({ puerto: opciones.puerto, api, alCerrar: parar, ...(configJs ? { configJs } : {}) });
   } catch (error) {
     parar();
     const codigo = (error as NodeJS.ErrnoException)?.code;
-    salida.err(codigo === "EADDRINUSE" ? `El puerto ${opciones.puerto} ya está en uso: elige otro con --puerto, o déjalo libre.` : `No se pudo arrancar el Studio: ${error instanceof Error ? error.message : String(error)}`);
+    salida.err(
+      codigo === "EADDRINUSE"
+        ? mensaje("UI-PUERTO-OCUPADO", { puerto: opciones.puerto }, idiomaDeLaTerminal)
+        : mensaje("UI-NO-ARRANCA", { detalle: error instanceof Error ? error.message : String(error) }, idiomaDeLaTerminal)
+    );
     return 1;
   }
 
-  salida.out(`Studio de mcp-phase-gate en ${studio.url}`);
-  salida.out("El enlace sirve una sola vez: ábrelo en tu navegador. Ctrl+C para cerrar.");
-  if (opciones.abrir && !abrirNavegador(studio.url)) salida.err("No se pudo abrir el navegador: copia el enlace.");
+  salida.out(mensaje("UI-EN-MARCHA", { url: studio.url }, idiomaDeLaTerminal));
+  salida.out(mensaje("UI-ENLACE-UNA-VEZ", {}, idiomaDeLaTerminal));
+  if (opciones.abrir && !abrirNavegador(studio.url)) salida.err(mensaje("UI-SIN-NAVEGADOR", {}, idiomaDeLaTerminal));
 
   await new Promise<void>((resolver) => {
     const parar = (): void => {

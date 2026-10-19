@@ -26,6 +26,13 @@
     },
     "presetPorDefecto": {
       "type": "string"
+    },
+    "idiomaPorDefecto": {
+      "type": "string",
+      "enum": [
+        "es",
+        "en"
+      ]
     }
   },
   "required": [
