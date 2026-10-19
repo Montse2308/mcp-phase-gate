@@ -40,17 +40,17 @@ Version 3 began with a diagnosis of the 2.0 code: nine findings, S1 to S9 (§2.1
 
 ## 5. What was measured
 
-On my Windows machine, Node 24.13.1.
+Windows, Node 24.11.0 (media: the machine with VHS).
 
 | Figure | Value | How |
 |---|---|---|
-| Test suite | 992 tests: 990 pass, 2 skipped | `npm test` |
+| Test suite | 1004 tests: 1002 pass, 2 skipped | `npm test` |
 | Studio end-to-end | 51 pass | `npm run test:e2e` |
-| Decision log | 99 entries | lines starting with `## 20` in `docs/decisiones.md` |
-| Server messages | 700 codes in Spanish and English, 7 catalogs | keys of each `TEXTOS_*` object in `build/i18n/textos/*.js`; `grep -E '^  "[^"]+": \{' src/i18n/textos/*.ts` agrees |
-| Package | 532.2 kB packed, 1.7 MB unpacked, 185 files | `npm pack --dry-run`, with this documentation |
-| Studio front-end | 125.56 kB gzip of a 200 kB budget | `npm run build` |
-| Whole demo | 6.4 s Spanish, 5.8 s English | `generarDemo`, timed with `Date.now()` |
+| Decision log | 101 entries | lines starting with `## 20` in `docs/decisiones.md` |
+| Server messages | 724 codes in Spanish and English, 7 catalogs | keys of each `TEXTOS_*` object in `build/i18n/textos/*.js`; `grep -E '^  "[^"]+": \{' src/i18n/textos/*.ts` agrees |
+| Package | 536.0 kB packed, 1.8 MB unpacked, 183 files | `npm pack --dry-run`, clean build |
+| Studio front-end | 125.76 kB gzip of a 200 kB budget | `npm run build` |
+| Whole demo | 3.8 s per language (idle) | `generarDemo`, median of 3 runs |
 | Demo media | videos of 41.3 s and 42.4 s; MP4 1.52 MB each; GIF 4.93 MB and 4.72 MB at 8 fps, 760 px | `scripts/medios.mjs` and its `medios.json` (Spanish, then English) |
 
 The demo, counted by generating it in both languages and listing receipt files and each repository's `git rev-list --count HEAD`: three projects, four tasks, two git repositories with six real commits, and eight receipts. Six are sealed (four to a commit, two to a sha256), one was discarded with a note, one waits for its commit.
@@ -58,7 +58,7 @@ The demo, counted by generating it in both languages and listing receipt files a
 ## 6. What I would do differently
 
 - **Separate contract strings from prose on day one.** Planning the English version, I found the code depended on eleven families of Spanish texts: headings it searches for, receipt keys, the phrases that mean "empty". Translating one prompt without a vocabulary module would have silently broken the pending-items warning.
-- **Give every message a code from the start.** The bilingual catalog arrived in the last stage and holds 700 codes. To avoid changing more than a hundred function signatures, the language now travels in a per-call context. It works; I would rather not have needed it.
+- **Give every message a code from the start.** The bilingual catalog arrived in the last stage and holds 724 codes. To avoid changing more than a hundred function signatures, the language now travels in a per-call context. It works; I would rather not have needed it.
 - **Let the server write phase 4 from the first version.** For three stages receipts were the model's job, guarded only by prompt lines.
 - **Cut the demo to the GIF budget.** At 12 fps and 960 px the 42-second GIF passed 7 MB; it fits 5 MB only at 8 fps and 760 px. The MP4 is the sharp version.
 - **Close what is still open.** The README's client matrix still says "to be verified", and my file-by-file review of the English prompts is recorded as pending.

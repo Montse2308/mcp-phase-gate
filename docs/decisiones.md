@@ -12,6 +12,41 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-19 — El Studio elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo
+
+> Registra decisiones de la Etapa 6 (L07) que se tomaron en el código sin ADR (auditoría externa de la Etapa 6,
+> §8). **Matiza** §8.6 del plan, que pedía el texto de los sellos dentro del SVG.
+
+**Decisión.**
+
+- **El idioma de la interfaz** sale, por orden, de `#?lang=es|en` en el enlace (se puede compartir, y la elección
+  se recuerda), de la elección guardada en `localStorage` (el selector ES / EN), del primero de
+  `navigator.languages` que sea español o inglés, y si no, inglés (`studio/src/i18n/idioma.ts`). `<html lang>`
+  lo sigue siempre. Es independiente del idioma de cada proyecto: los documentos se enseñan como están escritos.
+- **El navegador lo manda en cada petición** a la API en la cabecera `X-Phase-Gate-Lang` (`es` o `en`; otro
+  valor, o la cabecera repetida, no cuenta), y el servidor atiende esa petición dentro de `enIdioma`. El SSE no
+  lleva texto. El filtro de seguridad no la lee: sus respuestas salen en el idioma del proceso.
+- **Los sellos** son un marco SVG sin texto (`studio/public/sellos/`) con la palabra encima, en HTML y del
+  diccionario de la interfaz (VERIFICADO / VERIFIED, SELLADO / SEALED…). En modo Sobrio, solo el texto.
+
+**Por qué.**
+
+- El servidor no sabe en qué idioma está el navegador, y la interfaz puede cambiar de idioma sin recargar: la
+  petición es lo único que lo sabe en cada momento. Una cookie o un parámetro en la URL de la API habrían
+  servido igual, pero la cabecera no se queda en el historial ni en los registros, y una cabecera propia en un
+  `fetch` del mismo origen no abre nada nuevo (el Studio nunca concede un preflight).
+- `#?lang=` va primero para que un enlace compartido abra en el idioma de quien lo comparte.
+- Con la palabra fuera del dibujo, un idioma nuevo no obliga a redibujar ni a duplicar los SVG, y la palabra la
+  lee un lector de pantalla.
+
+**Qué se descartó.**
+
+- El texto como `<text>` dentro del SVG, como pedía §8.6: un SVG por idioma, o un SVG en línea que el
+  diccionario rellene, para lo mismo que hace un `<span>`.
+- Guardar el idioma en el servidor por sesión: dos pestañas en idiomas distintos se pisarían.
+
+---
+
 ## 2026-10-19 — Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del equipo
 
 > **Matiza** la del 2026-10-18 "El idioma es del proyecto y se deduce primero del disco…", en su paso 5.
@@ -519,6 +554,10 @@ tests"): los textos son ese fixture y el mismo generador alimenta los tests de l
 ---
 
 ## 2026-10-17 — El Studio solo ejecuta acciones del CLI, con vista previa y huella
+
+> **Matizada** el 2026-10-18 (Etapa 6, desvío E6-D7 b): la huella ya no incluye el texto del resumen, que
+> depende del idioma de la interfaz, para que una vista previa hecha en un idioma se pueda aplicar en el otro.
+> No pierde protección: el resumen se deriva de la acción, las rutas y los contenidos, que siguen en la huella.
 
 **Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos
 (`src/studio/acciones.ts`):

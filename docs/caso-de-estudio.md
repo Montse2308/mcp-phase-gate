@@ -40,17 +40,17 @@ La versión 3 empezó con un diagnóstico del código de la 2.0: nueve hallazgos
 
 ## 5. Lo que se midió
 
-En mi equipo con Windows y Node 24.13.1.
+En Windows, con Node 24.11.0 (los medios: el equipo con VHS).
 
 | Cifra | Valor | Cómo |
 |---|---|---|
-| Suite de pruebas | 992 tests: 990 pasan, 2 omitidos | `npm test` |
+| Suite de pruebas | 1004 tests: 1002 pasan, 2 omitidos | `npm test` |
 | Studio de extremo a extremo | 51 pasan | `npm run test:e2e` |
-| Registro de decisiones | 99 entradas | líneas que empiezan por `## 20` en `docs/decisiones.md` |
-| Mensajes del servidor | 700 códigos en español y en inglés, 7 catálogos | claves de cada objeto `TEXTOS_*` de `build/i18n/textos/*.js` |
-| Paquete | 532,2 kB comprimido, 1,7 MB descomprimido, 185 archivos | `npm pack --dry-run`, con esta documentación |
-| Frontend del Studio | 125,56 kB en gzip de un presupuesto de 200 kB | `npm run build` |
-| Demo completa | 6,4 s en español, 5,8 s en inglés | `generarDemo`, medido con `Date.now()` |
+| Registro de decisiones | 101 entradas | líneas que empiezan por `## 20` en `docs/decisiones.md` |
+| Mensajes del servidor | 724 códigos en español y en inglés, 7 catálogos | claves de cada objeto `TEXTOS_*` de `build/i18n/textos/*.js` |
+| Paquete | 536,0 kB comprimido, 1,8 MB descomprimido, 183 archivos | `npm pack --dry-run`, build limpio |
+| Frontend del Studio | 125,76 kB en gzip de un presupuesto de 200 kB | `npm run build` |
+| Demo completa | 3,8 s por idioma, equipo en reposo | `generarDemo`, mediana de tres corridas |
 | Medios de la demo | videos de 41,3 s y 42,4 s; MP4 de 1,52 MB cada uno; GIF de 4,93 MB y 4,72 MB a 8 fps y 760 px | `scripts/medios.mjs` y su `medios.json` (español, luego inglés) |
 
 La demo, contada generándola en los dos idiomas, listando sus recibos y con `git rev-list --count HEAD` en cada repo: tres proyectos, cuatro tareas, dos repos de git con seis commits reales y ocho recibos. Seis están sellados (cuatro a un commit, dos a un sha256), uno se descartó con una nota y otro espera su commit.
@@ -58,7 +58,7 @@ La demo, contada generándola en los dos idiomas, listando sus recibos y con `gi
 ## 6. Qué haría distinto
 
 - **Separar los textos de contrato de la prosa desde el primer día.** Al planear el inglés vi que el código dependía de once familias de textos en español, como los encabezados que busca o las claves de los recibos. Traducir un prompt sin un módulo de vocabulario habría roto en silencio el aviso de pendientes.
-- **Darle un código a cada mensaje desde el principio.** El catálogo bilingüe llegó en la última etapa, con 700 códigos, y para no tocar más de cien firmas de funciones el idioma viaja en un contexto por llamada.
+- **Darle un código a cada mensaje desde el principio.** El catálogo bilingüe llegó en la última etapa, con 724 códigos, y para no tocar más de cien firmas de funciones el idioma viaja en un contexto por llamada.
 - **Que el servidor escribiera la Fase 4 desde la primera versión.** Durante tres etapas los recibos fueron trabajo del modelo, protegidos solo por líneas del prompt.
 - **Cortar la demo a la medida del GIF.** A 12 fps y 960 px, el GIF de 42 segundos pasaba de 7 MB; solo cabe en 5 MB a 8 fps y 760 px. La versión nítida es el MP4.
 - **Cerrar lo pendiente.** La matriz de clientes del README sigue "por verificar", y mi revisión archivo por archivo de los prompts en inglés sigue pendiente.
