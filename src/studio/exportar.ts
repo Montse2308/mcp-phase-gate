@@ -15,6 +15,11 @@
 // Determinista: la demo tiene fechas y SHA fijos, se lee con el mismo entorno prestado con que se genera
 // (TZ=UTC, sin las variables de quien exporta), los JSON van con las claves ordenadas y las rutas con "/".
 // La misma versión, en el mismo sistema, da los mismos bytes.
+//
+// En los dos idiomas (§8.7): datos/es/ y datos/en/, cada uno con su índice. De la demo, cada idioma con su
+// demo (TIENDA… en español, SHOP… en inglés) y los textos del servidor en ese idioma; con datos reales, la
+// misma Documentación con los textos del servidor en cada idioma. El frontend lee el conjunto del idioma de
+// la interfaz, y al cambiar de idioma cambia también de datos.
 
 import { createHash, randomBytes } from "crypto";
 import * as fs from "fs";
@@ -24,7 +29,10 @@ import * as path from "path";
 import { DOCS, REPOS, configDir, raizPaquete, requireBasePath, stateDir } from "../config.js";
 import type { Salida } from "../cli.js";
 import type { EntornoInit } from "../init.js";
+import { enIdioma, fallo, mensaje } from "../i18n/mensajes.js";
 import { discoverProjects, rutaReal } from "../paths.js";
+import { IDIOMAS } from "../vocabulario.js";
+import type { Idioma } from "../vocabulario.js";
 import { crearApi } from "./api.js";
 import { borrarDemo, conEntornoDeDemo, entornoInitDeDemo, generarDemo } from "./demo.js";
 import type { CarpetasDeDemo } from "./demo.js";
@@ -37,6 +45,8 @@ export type Indice = { rutas: Record<string, { archivo: string; estado: number }
 export const ARCHIVO_DEL_INDICE = "indice.json";
 export const BANDA_DE_LA_DEMO = "Demo: datos de ejemplo. Todo es de solo lectura.";
 export const BANDA_DE_DATOS_REALES = "Exportación de una Documentación: solo lectura.";
+// La banda en el idioma de la interfaz la pone el frontend con esta clave; PG_BANDA queda en español.
+export type ClaveDeBanda = "estatico-demo" | "estatico-datos";
 
 // ─── JSON con las claves ordenadas ──────────────────────────────────────────
 function ordenado(valor: unknown): unknown {
@@ -109,6 +119,7 @@ function sinRutasEnTodo(valor: unknown, raices: Raiz[]): unknown {
 const seg = (...partes: (string | number)[]): string => partes.map((p) => encodeURIComponent(String(p))).join("/");
 
 export type Respuestas = Map<string, { estado: number; json: unknown }>;
+export type RespuestasPorIdioma = Record<Idioma, Respuestas>;
 
 async function recorrer(api: ManejadorApi): Promise<Respuestas> {
   const respuestas: Respuestas = new Map();
@@ -169,30 +180,34 @@ function borrarArbol(ruta: string): void {
 // `normalizar` solo se cambia en los tests, para comprobar que la barrera final funciona por sí sola.
 export function escribirSitio(
   destino: string,
-  respuestas: Respuestas,
+  porIdioma: RespuestasPorIdioma,
   raices: Raiz[],
-  banda: string,
+  banda: ClaveDeBanda,
   dist: string,
   normalizar: (valor: unknown, raices: Raiz[]) => unknown = sinRutasEnTodo
 ): { rutas: number; archivos: number } {
-  if (!fs.existsSync(path.join(dist, "index.html"))) throw new Error(`No está el frontend compilado (${dist}): ejecuta npm run build.`);
-  const indice: Indice = { rutas: {} };
-  const archivos = new Map<string, string>();
-  for (const [ruta, { estado, json }] of respuestas) {
-    const texto = jsonOrdenado(normalizar(json, raices));
-    const archivo = `${createHash("sha256").update(texto).digest("hex").slice(0, 20)}.json`;
-    archivos.set(archivo, texto);
-    indice.rutas[ruta] = { archivo, estado };
-  }
-  const textoDelIndice = jsonOrdenado(indice);
-  const configJs = `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(banda)};\n`;
+  if (!fs.existsSync(path.join(dist, "index.html"))) throw fallo("STUDIO-EXPORT-SIN-FRONTEND", { dist });
+  // Por idioma: datos/<idioma>/indice.json y los archivos de sus respuestas.
+  const conjuntos = IDIOMAS.map((idioma) => {
+    const indice: Indice = { rutas: {} };
+    const archivos = new Map<string, string>();
+    for (const [ruta, { estado, json }] of porIdioma[idioma]) {
+      const texto = jsonOrdenado(normalizar(json, raices));
+      const archivo = `${createHash("sha256").update(texto).digest("hex").slice(0, 20)}.json`;
+      archivos.set(archivo, texto);
+      indice.rutas[ruta] = { archivo, estado };
+    }
+    return { idioma, textoDelIndice: jsonOrdenado(indice), archivos, rutas: porIdioma[idioma].size };
+  });
+  const textoDeBanda = banda === "estatico-demo" ? BANDA_DE_LA_DEMO : BANDA_DE_DATOS_REALES;
+  const configJs = `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(textoDeBanda)};\nwindow.PG_BANDA_CLAVE = ${JSON.stringify(banda)};\n`;
 
   // La última barrera: si quedara una ruta de este equipo en algo que se va a publicar, no se escribe nada.
   const minusculas = process.platform === "win32";
-  const todo = [textoDelIndice, configJs, ...archivos.values()].join("\n");
+  const todo = [configJs, ...conjuntos.flatMap((c) => [c.textoDelIndice, ...c.archivos.values()])].join("\n");
   const buscado = minusculas ? todo.toLowerCase() : todo;
   for (const { ruta } of raices) {
-    if (buscado.includes(minusculas ? ruta.toLowerCase() : ruta)) throw new Error("El export llevaría rutas de este equipo: no se escribe nada.");
+    if (buscado.includes(minusculas ? ruta.toLowerCase() : ruta)) throw fallo("STUDIO-EXPORT-CON-RUTAS");
   }
 
   // Al lado y con otro nombre; se renombra al terminar: un export cortado no deja un sitio a medias.
@@ -201,36 +216,41 @@ export function escribirSitio(
     copiar(dist, temporal);
     fs.writeFileSync(path.join(temporal, "config.js"), configJs, "utf-8");
     fs.writeFileSync(path.join(temporal, ".nojekyll"), "", "utf-8");
-    fs.mkdirSync(path.join(temporal, "datos"));
-    fs.writeFileSync(path.join(temporal, "datos", ARCHIVO_DEL_INDICE), textoDelIndice, "utf-8");
-    for (const [archivo, texto] of [...archivos].sort(([a], [b]) => (a < b ? -1 : 1))) fs.writeFileSync(path.join(temporal, "datos", archivo), texto, "utf-8");
+    for (const { idioma, textoDelIndice, archivos } of conjuntos) {
+      const carpeta = path.join(temporal, "datos", idioma);
+      fs.mkdirSync(carpeta, { recursive: true });
+      fs.writeFileSync(path.join(carpeta, ARCHIVO_DEL_INDICE), textoDelIndice, "utf-8");
+      for (const [archivo, texto] of [...archivos].sort(([a], [b]) => (a < b ? -1 : 1))) fs.writeFileSync(path.join(carpeta, archivo), texto, "utf-8");
+    }
     if (fs.existsSync(destino)) fs.rmdirSync(destino); // vacía: se comprobó antes
     fs.renameSync(temporal, destino);
   } catch (error) {
     borrarArbol(temporal);
     throw error;
   }
-  return { rutas: respuestas.size, archivos: archivos.size };
+  return { rutas: conjuntos.reduce((n, c) => n + c.rutas, 0), archivos: conjuntos.reduce((n, c) => n + c.archivos.size, 0) };
 }
 
 // ─── El comando ─────────────────────────────────────────────────────────────
 // Las raíces que se sustituyen: las de la demo (o las configuradas, con datos reales), el paquete, la carpeta
 // del usuario y el temporal del sistema.
-function raicesDe(demo: CarpetasDeDemo | null, casaFalsa: string): Raiz[] {
+function raicesDe(demos: CarpetasDeDemo[], casaFalsa: string): Raiz[] {
   const comunes: Raiz[] = [
     { ruta: raizPaquete(), nombre: "<paquete>" },
     { ruta: casaFalsa, nombre: "~" },
     { ruta: os.homedir(), nombre: "~" },
     { ruta: os.tmpdir(), nombre: "<temporal>" },
   ];
-  if (demo) {
+  if (demos.length) {
     return variantes([
-      { ruta: demo.docs, nombre: "<Documentación>" },
-      { ruta: demo.repos, nombre: "<repos>" },
-      { ruta: demo.config, nombre: "<configuración>" },
-      { ruta: demo.estado, nombre: "<estado>" },
-      { ruta: demo.casa, nombre: "~" },
-      { ruta: demo.raiz, nombre: "<demo>" },
+      ...demos.flatMap((demo) => [
+        { ruta: demo.docs, nombre: "<Documentación>" },
+        { ruta: demo.repos, nombre: "<repos>" },
+        { ruta: demo.config, nombre: "<configuración>" },
+        { ruta: demo.estado, nombre: "<estado>" },
+        { ruta: demo.casa, nombre: "~" },
+        { ruta: demo.raiz, nombre: "<demo>" },
+      ]),
       ...comunes,
     ]);
   }
@@ -272,7 +292,7 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
   const destino = path.resolve(opciones.destino);
   const info = fs.statSync(destino, { throwIfNoEntry: false });
   if (info && (!info.isDirectory() || fs.readdirSync(destino).length)) {
-    salida.err(`${destino} ya existe y no es una carpeta vacía: el export se escribe en una carpeta nueva.`);
+    salida.err(mensaje("STUDIO-EXPORT-CARPETA-OCUPADA", { destino }));
     return 1;
   }
 
@@ -281,18 +301,19 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
     try {
       proyectos = discoverProjects().size;
     } catch (error) {
-      salida.err(`No se puede exportar la Documentación: ${error instanceof Error ? error.message : String(error)}`);
+      salida.err(mensaje("STUDIO-EXPORT-SIN-DOCUMENTACION", { error: error instanceof Error ? error.message : String(error) }));
       return 1;
     }
-    const aviso = `Vas a publicar los documentos de ${proyectos} ${proyectos === 1 ? "proyecto" : "proyectos"}, con todo su contenido (las rutas de este equipo se sustituyen por <Documentación>, <repos>, ~…). ¿Seguro?`;
+    const aviso = mensaje("STUDIO-EXPORT-AVISO", { proyectos });
     if (!opciones.yes) {
       if (!entorno.esTerminal) {
-        salida.err(`${aviso}\nPara exportar datos reales hace falta confirmarlo: escribe exportar en una terminal, o pasa --yes. No se exportó nada.`);
+        salida.err(mensaje("STUDIO-EXPORT-SIN-CONFIRMAR", { aviso }));
         return 1;
       }
-      const respuesta = (await entorno.preguntar(`${aviso} Escribe exportar para seguir: `)).trim();
-      if (respuesta !== "exportar") {
-        salida.err("No se exportó nada.");
+      // La palabra en cualquiera de los dos idiomas: "exportar" o "export".
+      const respuesta = (await entorno.preguntar(mensaje("STUDIO-EXPORT-PREGUNTA", { aviso }))).trim();
+      if (respuesta !== "exportar" && respuesta !== "export") {
+        salida.err(mensaje("STUDIO-EXPORT-NADA"));
         return 1;
       }
     }
@@ -301,25 +322,31 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
   const trabajo = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-phase-gate-export-"));
   const casa = path.join(trabajo, "casa");
   fs.mkdirSync(casa);
-  let demo: CarpetasDeDemo | null = null;
+  const demos: CarpetasDeDemo[] = [];
   try {
-    let respuestas: Respuestas;
-    if (opciones.datosReales) {
-      respuestas = await recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitVacio(casa) }));
-    } else {
-      // La demo, nunca la Documentación de quien exporta: se genera aquí y se lee con su entorno prestado.
-      demo = await generarDemo(path.join(trabajo, "demo"));
-      const c = demo;
-      respuestas = await conEntornoDeDemo(c, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDeDemo(c) })));
+    const porIdioma = {} as RespuestasPorIdioma;
+    for (const idioma of IDIOMAS) {
+      // Los textos del servidor (estados, avisos, el prompt ensamblado…), en el idioma del conjunto.
+      if (opciones.datosReales) {
+        porIdioma[idioma] = await enIdioma(idioma, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitVacio(casa) })));
+      } else {
+        // La demo de ese idioma, nunca la Documentación de quien exporta: se genera aquí y se lee con su
+        // entorno prestado.
+        const c = await generarDemo(path.join(trabajo, `demo-${idioma}`), idioma);
+        demos.push(c);
+        porIdioma[idioma] = await enIdioma(idioma, () =>
+          conEntornoDeDemo(c, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDeDemo(c) })))
+        );
+      }
     }
-    const { rutas, archivos } = escribirSitio(destino, respuestas, raicesDe(demo, casa), opciones.datosReales ? BANDA_DE_DATOS_REALES : BANDA_DE_LA_DEMO, dist);
-    salida.out(`Exportado en ${destino}: ${rutas} rutas de la API en ${archivos} archivos de datos${opciones.datosReales ? "" : ", de la demo"}.`);
+    const { rutas, archivos } = escribirSitio(destino, porIdioma, raicesDe(demos, casa), opciones.datosReales ? "estatico-datos" : "estatico-demo", dist);
+    salida.out(mensaje("STUDIO-EXPORT-HECHO", { destino, rutas, archivos, demo: !opciones.datosReales }));
     return 0;
   } catch (error) {
-    salida.err(`No se pudo exportar: ${error instanceof Error ? error.message : String(error)}`);
+    salida.err(mensaje("STUDIO-EXPORT-FALLO", { error: error instanceof Error ? error.message : String(error) }));
     return 1;
   } finally {
-    if (demo) borrarDemo(demo.raiz);
+    for (const demo of demos) borrarDemo(demo.raiz);
     borrarArbol(trabajo);
   }
 }

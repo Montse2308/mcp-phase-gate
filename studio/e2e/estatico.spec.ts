@@ -70,7 +70,28 @@ test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda, ningu
   for (const boton of await page.locator(".accion-solo-lectura button").all()) await expect(boton).toBeDisabled();
   expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
   expect(registro.peticiones.filter((u) => u.includes("/api/")), "ni API ni SSE").toEqual([]);
-  expect(registro.peticiones.some((u) => u.endsWith("/datos/indice.json"))).toBe(true);
+  // Los datos de la interfaz en español (§8.7): datos/es/.
+  expect(registro.peticiones.some((u) => u.endsWith("/datos/es/indice.json"))).toBe(true);
+  expect(registro.peticiones.some((u) => u.includes("/datos/en/"))).toBe(false);
+});
+
+test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH, la banda y los sellos en inglés", async ({ page, servidor, registro }) => {
+  await page.goto(sitio(servidor));
+  await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
+  await page.getByRole("group", { name: "Idioma" }).getByRole("button", { name: "EN" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator(".banda-demo")).toHaveText("Demo: sample data. Everything is read-only.");
+  for (const nombre of ["SHOP", "ASSISTANT", "RESEARCH"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "TIENDA" })).toHaveCount(0);
+  expect(registro.peticiones.some((u) => u.endsWith("/datos/en/indice.json"))).toBe(true);
+  await page.goto(sitio(servidor, "#/tablero/SHOP/discount-coupons?lang=en"));
+  await ponerModo(page, "cabina");
+  const lista = page.getByRole("list", { name: /Phase 4/ }).getByRole("listitem");
+  await expect(lista).toHaveCount(4);
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFIED");
+  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("VOID");
+  await sinViolacionesGraves(page, "el tablero estático en inglés");
+  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
 });
 
 test("el tablero de cupones-de-descuento: cuatro vagones, el visor y Reverificar anclas, en los dos modos y con axe", async ({ page, servidor, registro }) => {

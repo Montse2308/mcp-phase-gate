@@ -8,8 +8,10 @@
 // mientras se genera (los recibos guardan la fecha local). Dos generaciones, en dos carpetas y en dos
 // procesos, dan los mismos SHA y los mismos bytes.
 //
-// Los textos viven en test/fixtures/demo/ (en el paquete publicado, copiados a build/studio/demo/): son de
-// ejemplo, sin datos de ningún proyecto real.
+// Los textos viven en test/fixtures/demo/<idioma>/ (en el paquete publicado, copiados a build/studio/demo/):
+// son de ejemplo, sin datos de ningún proyecto real. Desde la Etapa 6 hay dos demos con la misma historia
+// (§8.7): TIENDA, ASISTENTE e INVESTIGACION en español; SHOP, ASSISTANT y RESEARCH en inglés. Cada una con
+// sus repos, sus commits y sus fechas fijas: los SHA difieren entre idiomas, pero cada demo es determinista.
 
 import { randomBytes } from "crypto";
 import * as fs from "fs";
@@ -25,6 +27,7 @@ import type { EntornoInit } from "../init.js";
 import { URL_ESQUEMA_PROYECTO } from "../manifiesto.js";
 import { requireProjectFolder } from "../paths.js";
 import { guardarPuntero } from "../tasks.js";
+import type { Idioma } from "../vocabulario.js";
 
 export { MARCA_DE_DEMO };
 
@@ -44,24 +47,35 @@ type Tarea = { nombre: string; documentos: string[]; lotes: Lote[]; cerrar?: { m
 type Proyecto = { nombre: string; manifiesto: Record<string, unknown>; repos: Record<string, { git: boolean; archivos: Record<string, string> }>; activa: string; tareas: Tarea[] };
 type Guion = { inicio: string; autor: { nombre: string; correo: string }; proyectos: Proyecto[] };
 
-export type CarpetasDeDemo = { raiz: string; docs: string; repos: string; estado: string; config: string; casa: string };
+export type CarpetasDeDemo = { raiz: string; docs: string; repos: string; estado: string; config: string; casa: string; idioma: Idioma };
 
-// La marca dice qué versión generó la demo, para que `ui --demo` sepa si puede reutilizarla. Es también la
-// configuración global de git mientras se genera (gitEnLaDemo): un comentario, que git ignora.
-export function textoDeLaMarca(): string {
-  return `# Demo del Studio de mcp-phase-gate ${SERVER_VERSION}. Es una carpeta temporal: se puede borrar.\n`;
+// Lo que cambia de un idioma a otro fuera de los textos de demo.json: la subcarpeta de las tareas (una demo
+// en inglés con "Proyectos" desentonaría; así se ve además que es configurable), el mensaje del primer
+// commit de cada repo y cómo se describe un archivo cambiado en la tabla de un recibo.
+const DEL_IDIOMA: Record<Idioma, { subcarpeta: string; primerCommit: string; cambio: string }> = {
+  es: { subcarpeta: "Proyectos", primerCommit: "chore: estado inicial", cambio: "modificado" },
+  en: { subcarpeta: "Projects", primerCommit: "chore: initial state", cambio: "changed" },
+};
+
+// La marca dice qué versión y qué idioma generaron la demo, para que `ui --demo` sepa si puede reutilizarla.
+// Es también la configuración global de git mientras se genera (gitEnLaDemo): un comentario, que git ignora.
+// La de español es la de siempre, byte a byte.
+export function textoDeLaMarca(idioma: Idioma = "es"): string {
+  return idioma === "es"
+    ? `# Demo del Studio de mcp-phase-gate ${SERVER_VERSION}. Es una carpeta temporal: se puede borrar.\n`
+    : `# mcp-phase-gate Studio demo ${SERVER_VERSION} (en). It is a temporary folder: it can be deleted.\n`;
 }
 
-export function carpetasDeDemo(raiz: string): CarpetasDeDemo {
-  return { raiz, docs: path.join(raiz, "docs"), repos: path.join(raiz, "repos"), estado: path.join(raiz, "estado"), config: path.join(raiz, "config"), casa: path.join(raiz, "casa") };
+export function carpetasDeDemo(raiz: string, idioma: Idioma = "es"): CarpetasDeDemo {
+  return { raiz, docs: path.join(raiz, "docs"), repos: path.join(raiz, "repos"), estado: path.join(raiz, "estado"), config: path.join(raiz, "config"), casa: path.join(raiz, "casa"), idioma };
 }
 
-// Dónde están los textos: junto al módulo compilado (build/studio/demo/, en el paquete) o en el repo
-// (test/fixtures/demo/, al desarrollar y en los tests).
-export function carpetaDeTextos(): string {
-  const junto = path.join(path.dirname(fileURLToPath(import.meta.url)), "demo");
+// Dónde están los textos de un idioma: junto al módulo compilado (build/studio/demo/<idioma>/, en el paquete)
+// o en el repo (test/fixtures/demo/<idioma>/, al desarrollar y en los tests).
+export function carpetaDeTextos(idioma: Idioma = "es"): string {
+  const junto = path.join(path.dirname(fileURLToPath(import.meta.url)), "demo", idioma);
   if (fs.existsSync(path.join(junto, "demo.json"))) return junto;
-  return path.join(raizPaquete(), "test", "fixtures", "demo");
+  return path.join(raizPaquete(), "test", "fixtures", "demo", idioma);
 }
 
 const sinCR = (texto: string): string => texto.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
@@ -74,7 +88,7 @@ export function entornoDeDemo(c: CarpetasDeDemo): Record<string, string> {
     PHASE_GATE_REPOS_PATH: c.repos,
     PHASE_GATE_STATE_PATH: c.estado,
     PHASE_GATE_CONFIG_PATH: c.config,
-    PHASE_GATE_TASKS_SUBDIR: "Proyectos",
+    PHASE_GATE_TASKS_SUBDIR: DEL_IDIOMA[c.idioma].subcarpeta,
   };
 }
 
@@ -125,14 +139,15 @@ function fijarCarpetas(raiz: string, fecha: Date): void {
   recorrer(raiz);
 }
 
-export async function generarDemo(destino: string): Promise<CarpetasDeDemo> {
+export async function generarDemo(destino: string, idioma: Idioma = "es"): Promise<CarpetasDeDemo> {
   if (fs.existsSync(destino) && fs.readdirSync(destino).length) throw new Error(`${destino} no está vacía: la demo se genera en una carpeta nueva.`);
-  const c = carpetasDeDemo(destino);
+  const c = carpetasDeDemo(destino, idioma);
+  const delIdioma = DEL_IDIOMA[idioma];
   fs.mkdirSync(destino, { recursive: true, mode: 0o700 });
   for (const carpeta of [c.docs, c.repos, c.estado, c.config, c.casa]) fs.mkdirSync(carpeta, { recursive: true });
-  fs.writeFileSync(path.join(destino, MARCA_DE_DEMO), textoDeLaMarca(), "utf-8");
+  fs.writeFileSync(path.join(destino, MARCA_DE_DEMO), textoDeLaMarca(idioma), "utf-8");
 
-  const textos = carpetaDeTextos();
+  const textos = carpetaDeTextos(idioma);
   const guion = JSON.parse(fs.readFileSync(path.join(textos, "demo.json"), "utf-8")) as Guion;
   let momento = Date.parse(guion.inicio);
   const paso = (): Date => {
@@ -145,7 +160,7 @@ export async function generarDemo(destino: string): Promise<CarpetasDeDemo> {
   await conEntornoDeDemo(c, async () => {
     for (const p of guion.proyectos) {
       const carpetaProyecto = path.join(c.docs, p.nombre);
-      fs.mkdirSync(path.join(carpetaProyecto, "Proyectos"), { recursive: true });
+      fs.mkdirSync(path.join(carpetaProyecto, delIdioma.subcarpeta), { recursive: true });
       escribir(path.join(carpetaProyecto, "phase-gate.json"), `${JSON.stringify({ $schema: URL_ESQUEMA_PROYECTO, ...p.manifiesto }, null, 2)}\n`, paso());
 
       // Los repos, con sus archivos de partida y, si tienen git, un primer commit.
@@ -159,12 +174,12 @@ export async function generarDemo(destino: string): Promise<CarpetasDeDemo> {
         if (datos.git) {
           git(dir, ["init", "-q", "--template="], fecha);
           git(dir, ["add", "--", ...Object.keys(datos.archivos)], fecha);
-          git(dir, ["commit", "-q", "-m", "chore: estado inicial"], fecha);
+          git(dir, ["commit", "-q", "-m", delIdioma.primerCommit], fecha);
         }
       }
 
       for (const t of p.tareas) {
-        const carpetaTarea = path.join(carpetaProyecto, "Proyectos", t.nombre);
+        const carpetaTarea = path.join(carpetaProyecto, delIdioma.subcarpeta, t.nombre);
         for (const documento of t.documentos) escribir(path.join(carpetaTarea, documento), sinCR(fs.readFileSync(path.join(textos, p.nombre, t.nombre, documento), "utf-8")), paso());
 
         // Cada lote, con record_batch (registrarLote): el commit primero, si lo hay, y su recibo con el reloj
@@ -180,7 +195,7 @@ export async function generarDemo(destino: string): Promise<CarpetasDeDemo> {
             titulo: l.titulo,
             estado: "verificado",
             que_se_hizo: l.que_se_hizo,
-            archivos: Object.keys(l.archivos).map((archivo) => ({ archivo, cambio: "modificado" })),
+            archivos: Object.keys(l.archivos).map((archivo) => ({ archivo, cambio: delIdioma.cambio })),
             verificacion: l.verificacion,
             ...(l.espera_al_usuario ? { espera_al_usuario: l.espera_al_usuario } : {}),
           };
@@ -262,40 +277,45 @@ export function borrarDemo(raiz: string): void {
 // En Linux y macOS el temporal es compartido entre usuarios: la carpeta lleva el uid, y solo se reutiliza si
 // es de quien la abre, no es un enlace y nadie más puede escribir en ella. Si no, otro usuario podría dejar
 // preparada una "demo" con enlaces a archivos de quien la abre.
-export function carpetaDeLaDemo(): string {
-  return path.join(os.tmpdir(), process.getuid ? `mcp-phase-gate-demo-${process.getuid()}` : "mcp-phase-gate-demo");
+// La demo en inglés, en su propia carpeta (con "-en"): las dos pueden convivir.
+export function carpetaDeLaDemo(idioma: Idioma = "es"): string {
+  const sufijo = idioma === "es" ? "" : `-${idioma}`;
+  return path.join(os.tmpdir(), process.getuid ? `mcp-phase-gate-demo${sufijo}-${process.getuid()}` : `mcp-phase-gate-demo${sufijo}`);
 }
 
-function demoValida(raiz: string): boolean {
+function demoValida(raiz: string, idioma: Idioma): boolean {
   try {
     const info = fs.lstatSync(raiz);
     if (!info.isDirectory()) return false;
     if (process.getuid && (info.uid !== process.getuid() || (info.mode & 0o022) !== 0)) return false;
-    return fs.readFileSync(path.join(raiz, MARCA_DE_DEMO), "utf-8") === textoDeLaMarca() && fs.statSync(path.join(raiz, "docs")).isDirectory();
+    return fs.readFileSync(path.join(raiz, MARCA_DE_DEMO), "utf-8") === textoDeLaMarca(idioma) && fs.statSync(path.join(raiz, "docs")).isDirectory();
   } catch {
     return false;
   }
 }
 
-export async function prepararDemo(raiz: string = carpetaDeLaDemo()): Promise<{ carpetas: CarpetasDeDemo; reutilizada: boolean }> {
-  if (demoValida(raiz)) return { carpetas: carpetasDeDemo(raiz), reutilizada: true };
+export async function prepararDemo(idioma: Idioma = "es", raiz: string = carpetaDeLaDemo(idioma)): Promise<{ carpetas: CarpetasDeDemo; reutilizada: boolean }> {
+  if (demoValida(raiz, idioma)) return { carpetas: carpetasDeDemo(raiz, idioma), reutilizada: true };
   if (fs.existsSync(raiz)) borrarDemo(raiz); // de otra versión, o a medias; sin la marca, borrarDemo no toca nada y lanza
   const nueva = `${raiz}.${process.pid}-${randomBytes(4).toString("hex")}`;
   try {
-    await generarDemo(nueva);
+    await generarDemo(nueva, idioma);
     fs.renameSync(nueva, raiz);
   } catch (error) {
     if (fs.existsSync(path.join(nueva, MARCA_DE_DEMO))) borrarDemo(nueva);
     // Otro `ui --demo` la terminó antes: vale la suya.
-    if (!demoValida(raiz)) throw error;
+    if (!demoValida(raiz, idioma)) throw error;
   }
-  return { carpetas: carpetasDeDemo(raiz), reutilizada: false };
+  return { carpetas: carpetasDeDemo(raiz, idioma), reutilizada: false };
 }
 
 // El proceso de `ui --demo` trabaja solo sobre la demo: fuera las PHASE_GATE_*, ORQUESTADOR_* y GIT_* de
-// quien lo lanza (también las que vinieron del .env), dentro las de la demo.
+// quien lo lanza (también las que vinieron del .env), dentro las de la demo. Se conserva PHASE_GATE_LANG: no
+// es una ruta ni dice nada del equipo, y es el idioma en que esa persona quiere los mensajes.
 export function activarDemo(c: CarpetasDeDemo): void {
-  for (const clave of Object.keys(process.env)) if (PREFIJOS.some((p) => clave.toUpperCase().startsWith(p))) delete process.env[clave];
+  for (const clave of Object.keys(process.env)) {
+    if (clave.toUpperCase() !== "PHASE_GATE_LANG" && PREFIJOS.some((p) => clave.toUpperCase().startsWith(p))) delete process.env[clave];
+  }
   Object.assign(process.env, entornoDeDemo(c));
 }
 

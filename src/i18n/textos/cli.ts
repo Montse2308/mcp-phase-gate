@@ -58,6 +58,7 @@ ui:
   --puerto <n>           El puerto (en 127.0.0.1). Sin esto, uno libre.
   --no-abrir             No abre el navegador: solo imprime el enlace, que sirve una sola vez.
   --demo                 Sobre una demo con datos de ejemplo, en una carpeta temporal: no toca tu Documentación.
+  --idioma es|en         Con --demo, la demo en ese idioma (sin esto, PHASE_GATE_LANG o el del sistema).
   --export-static <dir>  No arranca nada: escribe en <dir> (nueva o vacía) un sitio estático de solo lectura con la demo.
     --incluir-datos-reales  Con tu Documentación en vez de la demo. Pide que escribas "exportar" (o --yes).
 
@@ -136,6 +137,7 @@ ui:
   --puerto <n>           The port (on 127.0.0.1). Without it, a free one.
   --no-abrir             Does not open the browser: only prints the link, which works once.
   --demo                 On a demo with sample data, in a temporary folder: your Documentation is not touched.
+  --idioma es|en         With --demo, the demo in that language (without it, PHASE_GATE_LANG or the system's).
   --export-static <dir>  Starts nothing: writes into <dir> (new or empty) a read-only static site with the demo.
     --incluir-datos-reales  With your Documentation instead of the demo. Asks you to type "exportar" (or --yes).
 
@@ -202,6 +204,10 @@ Documentation: https://github.com/Montse2308/mcp-phase-gate`,
   "CLI-EXPORT-SIN-CARPETA": {
     es: "--export-static necesita una carpeta.",
     en: "--export-static needs a folder.",
+  },
+  "CLI-IDIOMA-SOLO-CON-DEMO": {
+    es: "--idioma solo vale con --demo (con --migrate, en init).",
+    en: "--idioma only works with --demo (with --migrate, in init).",
   },
   "CLI-EXPORT-INCOMPATIBLE": {
     es: "--export-static no arranca el Studio: no va con --puerto, --no-abrir ni --demo (sin --incluir-datos-reales, ya exporta la demo).",

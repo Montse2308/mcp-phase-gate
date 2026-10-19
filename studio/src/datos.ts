@@ -64,7 +64,7 @@ export async function get<T>(ruta: string): Promise<T> {
 // En el sitio exportado (`ui --export-static`) no hay API: datos/indice.json dice, para cada ruta exacta que
 // pide el frontend, en qué archivo de datos/ está su respuesta y con qué código. Rutas relativas a la página,
 // así que funciona igual bajo un subdirectorio (GitHub Pages). La carpeta depende del idioma de la interfaz
-// (carpetaDeDatos): hoy es la misma para los dos.
+// (carpetaDeDatos): datos/es/ o datos/en/.
 type Indice = { rutas: Record<string, { archivo: string; estado: number }> };
 const indices = new Map<string, Promise<Indice["rutas"]>>();
 

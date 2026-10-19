@@ -43,7 +43,7 @@ const test = base.extend<{}, { servidor: Servidor }>({
         env: { PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config, TEMP: temporal, TMP: temporal, TMPDIR: temporal },
       };
       const antes = listado(usuario);
-      const { hijo, servidor } = await lanzarUi(arbol, ["--demo"]);
+      const { hijo, servidor } = await lanzarUi(arbol, ["--demo", "--idioma", "es"]);
       await use(servidor);
       hijo.kill();
       await new Promise((r) => (hijo.exitCode !== null ? r(null) : hijo.on("exit", r)));

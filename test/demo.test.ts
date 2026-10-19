@@ -30,6 +30,8 @@ const INDEX_JS = pathToFileURL(path.join(AQUI, "..", "src", "index.js")).href;
 // cualquier cosa del equipo que se cuele en un commit (la zona horaria, una configuración de git, el autor).
 const HEAD_DE_ORO = { "tienda-api": "debffa2c5f0b55eb2c337d03c75f877a2328a15e", "tienda-web": "cacff76178c5fa43ad7ed46a0587232bc45b1270" };
 const COMMITS = { "tienda-api": "4", "tienda-web": "2" };
+// La demo en inglés (§8.7): la misma historia, otros textos, otros SHA; también fijos.
+const HEAD_DE_ORO_EN = { "shop-api": "46b45c1bc9351ff7db8d6e58607dd1da77eb077f", "shop-web": "8706b5ac3c2aac64f2640193eadad97977b95101" };
 
 const cerrables: (() => void)[] = [];
 afterEach(() => {
@@ -80,15 +82,15 @@ const SCRIPT_GENERAR = [
   "const { fijarRaizDelPaquete } = await import(config);",
   "fijarRaizDelPaquete(raiz);",
   "const { generarDemo } = await import(demo);",
-  "await generarDemo(destino);",
+  "await generarDemo(destino, process.argv[6] ?? 'es');",
   "console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(PHASE_GATE_|ORQUESTADOR_|GIT_|TZ$)/i.test(k)).sort())));",
 ].join("\n");
 
-function generarEnOtroProceso(destino: string, env: NodeJS.ProcessEnv): Promise<{ codigo: number | null; salida: string; error: string }> {
+function generarEnOtroProceso(destino: string, env: NodeJS.ProcessEnv, idioma: "es" | "en" = "es"): Promise<{ codigo: number | null; salida: string; error: string }> {
   const script = path.join(carpetaTemporal("script"), "generar.mjs");
   fs.writeFileSync(script, SCRIPT_GENERAR, "utf-8");
   return new Promise((resolver) => {
-    const hijo = spawn(process.execPath, [script, CONFIG_JS, DEMO_JS, RAIZ, destino], { env, cwd: path.dirname(script), stdio: ["ignore", "pipe", "pipe"] });
+    const hijo = spawn(process.execPath, [script, CONFIG_JS, DEMO_JS, RAIZ, destino, idioma], { env, cwd: path.dirname(script), stdio: ["ignore", "pipe", "pipe"] });
     let salida = "";
     let error = "";
     hijo.stdout.on("data", (d) => (salida += d));
@@ -126,6 +128,27 @@ describe("demo: determinista", () => {
     for (const repo of Object.keys(HEAD_DE_ORO)) assert.deepEqual(["description", "hooks", "info"].filter((n) => fs.existsSync(path.join(a, "repos", repo, ".git", n))), [], repo);
     // envio-gratis va por el lote 2 de 3, con su commit pendiente: el cambio de web sigue sin commitear.
     assert.equal(git(path.join(a, "repos", "tienda-web"), "status", "--porcelain"), "M src/carrito.html");
+  });
+
+  it("la demo en inglés: dos procesos en dos zonas horarias, los mismos bytes, sus HEAD de oro, y todo en inglés", async () => {
+    const a = path.join(carpetaTemporal("demo-en"), "demo");
+    const b = path.join(carpetaTemporal("demo-en"), "demo");
+    const [ra, rb] = await Promise.all([generarEnOtroProceso(a, { ...entornoLimpio(), TZ: "Asia/Kolkata" }, "en"), generarEnOtroProceso(b, entornoLimpio(), "en")]);
+    assert.equal(ra.codigo, 0, ra.error);
+    assert.equal(rb.codigo, 0, rb.error);
+    assert.deepEqual(arbolDeLaDemo(b), arbolDeLaDemo(a));
+    for (const [repo, sha] of Object.entries(HEAD_DE_ORO_EN)) assert.equal(git(path.join(a, "repos", repo), "rev-parse", "HEAD"), sha, repo);
+    assert.equal(git(path.join(a, "repos", "shop-api"), "log", "--reverse", "--format=%s").split("\n")[0], "chore: initial state");
+    // La misma historia: los mismos documentos y recibos, con los nombres ingleses y la subcarpeta Projects.
+    const tareas = path.join(a, "docs", "SHOP", "Projects");
+    assert.deepEqual(fs.readdirSync(tareas).sort(), ["discount-coupons", "free-shipping"]);
+    assert.ok(fs.existsSync(path.join(tareas, "discount-coupons", "04 - Execution.md")));
+    assert.equal(fs.readdirSync(path.join(tareas, "discount-coupons", "04 - Execution")).length, 4);
+    const indice = fs.readFileSync(path.join(tareas, "discount-coupons", "04 - Execution.md"), "utf-8");
+    assert.match(indice, /^---\nbatches: 4\ngenerated_by: mcp-phase-gate\n---/);
+    assert.match(indice, /\| L04 \| api \| .* \| discarded \|/);
+    for (const archivo of arbolDeLaDemo(a).map((l) => l.split("|")[0]!)) assert.doesNotMatch(archivo, /Proyectos|Ejecución|Contexto|Análisis/, archivo);
+    assert.equal(fs.readFileSync(path.join(a, ".demo-mcp-phase-gate"), "utf-8").includes("(en)"), true);
   });
 
   it("un entorno hostil (otra zona horaria, otra capa de prompts, otra Documentación, GIT_DIR, un .gitconfig con hooks) no cambia nada", async () => {
@@ -344,7 +367,7 @@ describe("demo: borrar, preparar y activar", () => {
     fijarRaizDelPaquete(RAIZ);
     const padre = carpetaTemporal("demo");
     const raiz = path.join(padre, "mcp-phase-gate-demo");
-    const primera = await prepararDemo(raiz);
+    const primera = await prepararDemo("es", raiz);
     assert.deepEqual(primera, { carpetas: carpetasDeDemo(raiz), reutilizada: false });
     assert.deepEqual(heads(raiz), HEAD_DE_ORO);
     assert.deepEqual(fs.readdirSync(padre), ["mcp-phase-gate-demo"], "no queda la carpeta de al lado");
@@ -352,12 +375,12 @@ describe("demo: borrar, preparar y activar", () => {
     // Lo que se deje dentro sigue ahí si se reutiliza, y desaparece si se regenera.
     const testigo = path.join(raiz, "docs", "testigo.txt");
     fs.writeFileSync(testigo, "t", "utf-8");
-    assert.equal((await prepararDemo(raiz)).reutilizada, true);
+    assert.equal((await prepararDemo("es", raiz)).reutilizada, true);
     assert.ok(fs.existsSync(testigo));
 
     fs.writeFileSync(path.join(raiz, MARCA_DE_DEMO), textoDeLaMarca().replace(/ \d+\.\d+\.\d+\S*\./, " 0.0.1."), "utf-8");
     assert.notEqual(fs.readFileSync(path.join(raiz, MARCA_DE_DEMO), "utf-8"), textoDeLaMarca());
-    assert.equal((await prepararDemo(raiz)).reutilizada, false);
+    assert.equal((await prepararDemo("es", raiz)).reutilizada, false);
     assert.equal(fs.existsSync(testigo), false);
     assert.equal(fs.readFileSync(path.join(raiz, MARCA_DE_DEMO), "utf-8"), textoDeLaMarca());
     assert.deepEqual(fs.readdirSync(padre), ["mcp-phase-gate-demo"]);
@@ -366,11 +389,11 @@ describe("demo: borrar, preparar y activar", () => {
     fs.mkdirSync(path.join(ajena, "docs"), { recursive: true });
     fs.writeFileSync(path.join(ajena, "docs", "mio.md"), "mío", "utf-8");
     const antes = huellaDelArbol(path.dirname(ajena));
-    await assert.rejects(prepararDemo(ajena), /no es una carpeta de demo/);
+    await assert.rejects(prepararDemo("es", ajena), /no es una carpeta de demo/);
     assert.deepEqual(huellaDelArbol(path.dirname(ajena)), antes);
   });
 
-  it("activarDemo: fuera las PHASE_GATE_*, ORQUESTADOR_* y GIT_* de quien lanza, dentro las de la demo; init en la casa de la demo, sin ejecutar nada", async () => {
+  it("activarDemo: fuera las PHASE_GATE_* (salvo PHASE_GATE_LANG), ORQUESTADOR_* y GIT_* de quien lanza, dentro las de la demo; init en la casa de la demo, sin ejecutar nada", async () => {
     const c = carpetasDeDemo(carpetaTemporal("demo"));
     process.env.PHASE_GATE_DOCS_PATH = "ajena";
     process.env.PHASE_GATE_PROMPTS_PATH = "ajena";
@@ -383,7 +406,8 @@ describe("demo: borrar, preparar y activar", () => {
     });
     activarDemo(c);
     const quedan = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(PHASE_GATE_|ORQUESTADOR_|GIT_)/i.test(k)));
-    assert.deepEqual(quedan, entornoDeDemo(c));
+    // PHASE_GATE_LANG se queda (los tests la fijan en "es"): es el idioma de los mensajes, no una ruta.
+    assert.deepEqual(quedan, { ...entornoDeDemo(c), PHASE_GATE_LANG: "es" });
 
     const init = entornoInitDeDemo(c);
     assert.equal(init.home, c.casa);
@@ -412,6 +436,8 @@ describe("demo: ui --demo, un proceso de verdad", () => {
       PHASE_GATE_REPOS_PATH: carpetaTemporal("repos"),
       PHASE_GATE_STATE_PATH: carpetaTemporal("estado"),
       PHASE_GATE_CONFIG_PATH: carpetaTemporal("config"),
+      // La demo y los mensajes en español, sin depender del idioma del sistema (en una CI de Linux, inglés).
+      PHASE_GATE_LANG: "es",
     };
     const marcadores = [env.PHASE_GATE_DOCS_PATH!, env.PHASE_GATE_REPOS_PATH!, env.PHASE_GATE_STATE_PATH!, env.PHASE_GATE_CONFIG_PATH!];
     const antes = huellaDelArbol(...marcadores);

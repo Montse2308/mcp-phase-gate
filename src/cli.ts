@@ -15,6 +15,7 @@ import { ejecutarEject } from "./eject.js";
 import { CLAVE_VALIDA, CLIENTES } from "./init.js";
 import { mensaje } from "./i18n/mensajes.js";
 import type { Cliente, OpcionesInit } from "./init.js";
+import type { Idioma } from "./vocabulario.js";
 
 // La ayuda y el aviso de la terminal, en el idioma de los mensajes (PHASE_GATE_LANG, si no el del sistema).
 export function ayuda(): string {
@@ -46,7 +47,8 @@ export type ResultadoCli =
 // Las opciones de `ui`, ya validadas. El Studio vive en src/studio/ y se carga solo para `ui`, con un
 // import dinámico: el servidor MCP por stdio no carga nada de él (test/aislamiento.test.ts).
 // Con `exportar`, `ui` no arranca el Studio: escribe el sitio estático (§7.9 del plan).
-export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean; exportar?: { destino: string; datosReales: boolean; yes: boolean } };
+// `idioma`: el de la demo de `ui --demo` (§8.7); sin él, el de PHASE_GATE_LANG o el del sistema.
+export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean; idioma?: Idioma; exportar?: { destino: string; datosReales: boolean; yes: boolean } };
 
 export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
   if (opciones.exportar) {
@@ -80,7 +82,7 @@ const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "idioma", "solo-este-equipo", "dry-run", "yes"],
   eject: ["a", "dry-run", "fuerza"],
-  ui: ["puerto", "no-abrir", "demo", "export-static", "incluir-datos-reales", "yes"],
+  ui: ["puerto", "no-abrir", "demo", "idioma", "export-static", "incluir-datos-reales", "yes"],
 };
 
 type Valores = {
@@ -244,15 +246,20 @@ export function ejecutarCli(
     if (exportar !== undefined) {
       if (!exportar.trim()) return invalido(salida, mensaje("CLI-EXPORT-SIN-CARPETA"));
       if (valores.puerto !== undefined || valores["no-abrir"] || valores.demo) return invalido(salida, mensaje("CLI-EXPORT-INCOMPATIBLE"));
+      // El export escribe siempre los dos idiomas (§8.7): --idioma no tiene sentido aquí.
+      if (valores.idioma !== undefined) return invalido(salida, mensaje("CLI-IDIOMA-SOLO-CON-DEMO"));
       return { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: exportar, datosReales: valores["incluir-datos-reales"] === true, yes: valores.yes === true } } };
     }
     if (valores["incluir-datos-reales"] || valores.yes) return invalido(salida, mensaje("CLI-SOLO-CON-EXPORT"));
+    if (valores.idioma !== undefined && !valores.demo) return invalido(salida, mensaje("CLI-IDIOMA-SOLO-CON-DEMO"));
+    if (valores.idioma !== undefined && valores.idioma !== "es" && valores.idioma !== "en") return invalido(salida, mensaje("CLI-IDIOMA-INVALIDO", { idioma: valores.idioma }));
     let puerto: number | null = null;
     if (valores.puerto !== undefined) {
       puerto = Number(valores.puerto);
       if (!/^\d+$/.test(valores.puerto) || puerto < 1 || puerto > 65535) return invalido(salida, mensaje("CLI-PUERTO-INVALIDO", { puerto: valores.puerto }));
     }
-    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"], demo: valores.demo === true } };
+    const idioma = valores.idioma as Idioma | undefined;
+    return { accion: "ui", opciones: { puerto, abrir: !valores["no-abrir"], demo: valores.demo === true, ...(idioma ? { idioma } : {}) } };
   }
 
   return invalido(salida);

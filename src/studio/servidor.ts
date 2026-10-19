@@ -32,7 +32,7 @@ import * as path from "path";
 
 import type { OpcionesUi, Salida } from "../cli.js";
 import { raizPaquete } from "../config.js";
-import { enIdioma, mensaje } from "../i18n/mensajes.js";
+import { enIdioma, idiomaDeMensajes, mensaje } from "../i18n/mensajes.js";
 import { ejecutarComando } from "../init.js";
 import { estaDentroReal, validarSegmento } from "../paths.js";
 import { INTERVALO_MS, sesionesAbiertas } from "../sesiones.js";
@@ -426,7 +426,9 @@ export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNa
   let demo: CarpetasDeDemo | null = null;
   if (opciones.demo) {
     try {
-      const preparada = await prepararDemo();
+      // En el idioma pedido con --idioma; sin él, el de los mensajes (PHASE_GATE_LANG o el del sistema): el
+      // servidor no sabe qué idioma resolverá el navegador (§8.7).
+      const preparada = await prepararDemo(opciones.idioma ?? idiomaDeMensajes());
       demo = preparada.carpetas;
       if (!preparada.reutilizada) salida.out(`Demo generada en ${demo.raiz}.`);
     } catch (error) {

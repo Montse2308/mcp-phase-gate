@@ -173,9 +173,8 @@ export function fechaLegible(fecha: string): { texto: string; completa: string }
 }
 
 // ─── El sitio estático ──────────────────────────────────────────────────────
-// La carpeta de los datos exportados para un idioma. Hoy el export escribe un solo conjunto en datos/; cuando
-// escriba datos/es y datos/en (lote L08), esta función devolverá `./datos/${idioma}/` y el cambio de idioma
-// cambiará también de demo.
-export function carpetaDeDatos(_idioma: IdiomaUi): string {
-  return "./datos/";
+// La carpeta de los datos exportados para un idioma: el export escribe datos/es/ y datos/en/ (§8.7), y el
+// cambio de idioma cambia también de datos (la demo de España en español, SHOP… en inglés).
+export function carpetaDeDatos(idioma: IdiomaUi): string {
+  return `./datos/${idioma}/`;
 }

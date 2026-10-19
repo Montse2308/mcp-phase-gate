@@ -122,6 +122,8 @@ describe("Studio: arranque", () => {
     assert.deepEqual(ejecutarCli(["ui"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--puerto", "4321", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: 4321, abrir: false, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--demo", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: true } });
+    // La demo en un idioma (§8.7).
+    assert.deepEqual(ejecutarCli(["ui", "--demo", "--idioma", "en"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: true, idioma: "en" } });
     // --export-static no arranca el Studio: nunca abre nada.
     assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: "sitio", datosReales: false, yes: false } } });
     assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio", "--incluir-datos-reales", "--yes"], salida), {
@@ -145,6 +147,9 @@ describe("Studio: arranque", () => {
       ["ui", "--yes"],
       ["doctor", "--export-static", "sitio"],
       ["init", "--incluir-datos-reales"],
+      ["ui", "--idioma", "en"],
+      ["ui", "--demo", "--idioma", "fr"],
+      ["ui", "--export-static", "sitio", "--idioma", "en"],
     ]) {
       assert.deepEqual(ejecutarCli(malo, salida), { accion: "salir", codigo: 2 }, malo.join(" "));
     }

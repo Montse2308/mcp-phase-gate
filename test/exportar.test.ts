@@ -70,8 +70,9 @@ function bytesDelSitio(raiz: string): string[] {
     .sort();
 }
 
-const leerIndice = (sitio: string): Indice => JSON.parse(fs.readFileSync(path.join(sitio, "datos", ARCHIVO_DEL_INDICE), "utf-8")) as Indice;
-const datosDe = (sitio: string, ruta: string): string => fs.readFileSync(path.join(sitio, "datos", leerIndice(sitio).rutas[ruta]!.archivo), "utf-8");
+// Desde la Etapa 6 (§8.7), un conjunto por idioma: datos/es/ y datos/en/.
+const leerIndice = (sitio: string, idioma = "es"): Indice => JSON.parse(fs.readFileSync(path.join(sitio, "datos", idioma, ARCHIVO_DEL_INDICE), "utf-8")) as Indice;
+const datosDe = (sitio: string, ruta: string, idioma = "es"): string => fs.readFileSync(path.join(sitio, "datos", idioma, leerIndice(sitio, idioma).rutas[ruta]!.archivo), "utf-8");
 
 // El export de oro, reducido: la lista de rutas y las respuestas que no dependen del sistema ni de la
 // versión (/api/estado lleva la versión y la de Node; /api/clientes, la ruta de VS Code de cada sistema).
@@ -106,27 +107,45 @@ describe("export estático de la demo", () => {
     assert.deepEqual(huellaDelArbol(docs), antes);
 
     // El sitio: el frontend, config.js con el modo estático (en vez del de dist), .nojekyll y los datos.
-    assert.equal(fs.readFileSync(path.join(a, "config.js"), "utf-8"), `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(BANDA_DE_LA_DEMO)};\n`);
+    assert.equal(
+      fs.readFileSync(path.join(a, "config.js"), "utf-8"),
+      `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(BANDA_DE_LA_DEMO)};\nwindow.PG_BANDA_CLAVE = "estatico-demo";\n`
+    );
+    assert.deepEqual(fs.readdirSync(path.join(a, "datos")).sort(), ["en", "es"]);
     assert.equal(fs.readFileSync(path.join(a, ".nojekyll"), "utf-8"), "");
     assert.ok(fs.existsSync(path.join(a, "assets", "a.js")));
     const indice = leerIndice(a);
-    for (const [ruta, { archivo, estado }] of Object.entries(indice.rutas)) {
-      assert.equal(estado, 200, ruta);
-      assert.ok(fs.existsSync(path.join(a, "datos", archivo)), `${ruta} → ${archivo}`);
+    for (const idioma of ["es", "en"]) {
+      for (const [ruta, { archivo, estado }] of Object.entries(leerIndice(a, idioma).rutas)) {
+        assert.equal(estado, 200, ruta);
+        assert.ok(fs.existsSync(path.join(a, "datos", idioma, archivo)), `${idioma}: ${ruta} → ${archivo}`);
+      }
+      for (const archivo of fs.readdirSync(path.join(a, "datos", idioma))) assert.ok(!fs.readFileSync(path.join(a, "datos", idioma, archivo), "utf-8").includes("MARCADOR"), archivo);
+      assert.equal(JSON.parse(datosDe(a, "/api/estado", idioma)).studio.modo, "estatico");
     }
     const proyectos = JSON.parse(datosDe(a, "/api/proyectos")) as { proyectos: { nombre: string }[] };
     assert.deepEqual(proyectos.proyectos.map((p) => p.nombre), ["ASISTENTE", "INVESTIGACION", "TIENDA"]);
-    for (const archivo of fs.readdirSync(path.join(a, "datos"))) assert.ok(!fs.readFileSync(path.join(a, "datos", archivo), "utf-8").includes("MARCADOR"), archivo);
-    assert.equal(JSON.parse(datosDe(a, "/api/estado")).studio.modo, "estatico");
+    // En inglés, la demo inglesa, con los textos del servidor en inglés.
+    const delIngles = JSON.parse(datosDe(a, "/api/proyectos", "en")) as { proyectos: { nombre: string }[] };
+    assert.deepEqual(delIngles.proyectos.map((p) => p.nombre), ["ASSISTANT", "RESEARCH", "SHOP"]);
+    assert.match(datosDe(a, "/api/tareas/SHOP/free-shipping", "en"), /pending commit|Phase 4/);
+    assert.match(datosDe(a, "/api/prompts/SHOP/4?tarea=discount-coupons", "en"), /## FILES OF THIS TASK \(exact names\)/);
+    assert.match(datosDe(a, "/api/prompts/SHOP/4?tarea=discount-coupons", "en"), /<repos>\/shop-api`/);
 
-    // Contra el export de oro reducido.
+    // Contra el export de oro reducido. El de español es el de la Etapa 5, sin tocar: la demo en español no
+    // cambió. El de inglés es nuevo (test/oro/export/en/), con la lista de rutas y los proyectos.
     const rutas = `${Object.keys(indice.rutas).join("\n")}\n`;
+    const rutasEn = `${Object.keys(leerIndice(a, "en").rutas).join("\n")}\n`;
     if (process.env.ORO_REGENERAR === "1") {
-      fs.mkdirSync(ORO, { recursive: true });
+      fs.mkdirSync(path.join(ORO, "en"), { recursive: true });
       fs.writeFileSync(path.join(ORO, "rutas.txt"), rutas, "utf-8");
       for (const [archivo, ruta] of Object.entries(ORO_DE)) fs.writeFileSync(path.join(ORO, archivo), datosDe(a, ruta), "utf-8");
+      fs.writeFileSync(path.join(ORO, "en", "rutas.txt"), rutasEn, "utf-8");
+      fs.writeFileSync(path.join(ORO, "en", "proyectos.json"), datosDe(a, "/api/proyectos", "en"), "utf-8");
     }
     assert.equal(rutas, fs.readFileSync(path.join(ORO, "rutas.txt"), "utf-8").replace(/\r\n/g, "\n"), "las rutas exportadas");
+    assert.equal(rutasEn, fs.readFileSync(path.join(ORO, "en", "rutas.txt"), "utf-8").replace(/\r\n/g, "\n"), "las rutas exportadas en inglés");
+    assert.equal(datosDe(a, "/api/proyectos", "en"), fs.readFileSync(path.join(ORO, "en", "proyectos.json"), "utf-8").replace(/\r\n/g, "\n"));
     for (const [archivo, ruta] of Object.entries(ORO_DE)) {
       assert.equal(datosDe(a, ruta), fs.readFileSync(path.join(ORO, archivo), "utf-8").replace(/\r\n/g, "\n"), `${ruta} frente a test/oro/export/${archivo}`);
     }
@@ -134,7 +153,7 @@ describe("export estático de la demo", () => {
     // Sin datos del equipo: ni el temporal, ni el paquete, ni la carpeta personal, ni el usuario o el equipo.
     const formas = (ruta: string) => [ruta, ruta.replace(/\\/g, "/"), ruta.replace(/\\/g, "\\\\")].map((r) => r.toLowerCase());
     const rutasDelEquipo = [os.tmpdir(), fs.realpathSync.native(os.tmpdir()), os.homedir(), RAIZ, fs.realpathSync.native(RAIZ)].flatMap(formas);
-    const textos = fs.readdirSync(carpetaDeTextos(), { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => fs.readFileSync(path.join(e.parentPath, e.name), "utf-8")).join("\n");
+    const textos = fs.readdirSync(path.dirname(carpetaDeTextos()), { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => fs.readFileSync(path.join(e.parentPath, e.name), "utf-8")).join("\n");
     const nombres = [os.userInfo().username, os.hostname()].filter((v) => v.length >= 3 && !textos.includes(v));
     for (const e of fs.readdirSync(a, { recursive: true, withFileTypes: true }).filter((x) => x.isFile())) {
       const texto = fs.readFileSync(path.join(e.parentPath, e.name), "utf-8");
@@ -176,14 +195,17 @@ describe("export estático de la demo", () => {
   it("la barrera final: si quedara una ruta del equipo en lo que se publica, no se escribe nada", () => {
     const raiz = carpetaTemporal("equipo");
     const destino = path.join(carpetaTemporal("sitio"), "sitio");
-    const respuestas = new Map([["/api/estado", { estado: 200, json: { ruta: path.join(raiz, "docs") } }]]);
+    const unaRespuesta = () => new Map([["/api/estado", { estado: 200, json: { ruta: path.join(raiz, "docs") } }]]);
+    // Basta con que la ruta esté en uno de los dos idiomas.
+    const respuestas = { es: new Map(), en: unaRespuesta() };
     const identidad = (valor: unknown) => valor;
-    assert.throws(() => escribirSitio(destino, respuestas, variantes([{ ruta: raiz, nombre: "<x>" }]), BANDA_DE_LA_DEMO, distDePrueba(), identidad), /rutas de este equipo/);
+    assert.throws(() => escribirSitio(destino, respuestas, variantes([{ ruta: raiz, nombre: "<x>" }]), "estatico-demo", distDePrueba(), identidad), /rutas de este equipo/);
     assert.equal(fs.existsSync(destino), false);
     assert.deepEqual(fs.readdirSync(path.dirname(destino)), [], "ni la carpeta de al lado");
     // Con la normalización de verdad, la misma respuesta se escribe sustituida.
-    escribirSitio(destino, respuestas, variantes([{ ruta: raiz, nombre: "<x>" }]), BANDA_DE_LA_DEMO, distDePrueba());
+    escribirSitio(destino, { es: unaRespuesta(), en: unaRespuesta() }, variantes([{ ruta: raiz, nombre: "<x>" }]), "estatico-demo", distDePrueba());
     assert.equal(datosDe(destino, "/api/estado"), '{"ruta":"<x>/docs"}\n');
+    assert.equal(datosDe(destino, "/api/estado", "en"), '{"ruta":"<x>/docs"}\n');
   });
 });
 
@@ -223,11 +245,15 @@ describe("export estático con datos reales", () => {
       const destino = path.join(carpetaTemporal("sitio"), "sitio");
       assert.equal(await exportarEstatico({ destino, datosReales: true, yes }, e, dist), 0, e.mensajes.join("\n"));
       assert.match(e.mensajes.join("\n"), /archivos de datos\.$/);
-      assert.equal(fs.readFileSync(path.join(destino, "config.js"), "utf-8"), `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(BANDA_DE_DATOS_REALES)};\n`);
+      assert.equal(fs.readFileSync(path.join(destino, "config.js"), "utf-8"), `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(BANDA_DE_DATOS_REALES)};\nwindow.PG_BANDA_CLAVE = "estatico-datos";\n`);
       assert.deepEqual((JSON.parse(datosDe(destino, "/api/proyectos")) as { proyectos: { nombre: string }[] }).proyectos.map((p) => p.nombre), ["REAL"]);
       const contexto = JSON.parse(datosDe(destino, `/api/tareas/REAL/tarea-real/documento?archivo=${encodeURIComponent("00 - Contexto Inicial.md")}`)) as { texto: string };
       assert.match(contexto.texto, /El código está en <Documentación>\/otra\./);
-      assert.ok(!fs.readdirSync(path.join(destino, "datos")).some((n) => fs.readFileSync(path.join(destino, "datos", n), "utf-8").toLowerCase().includes(docs.toLowerCase().replace(/\\/g, "\\\\"))));
+      for (const idioma of ["es", "en"]) {
+        assert.ok(!fs.readdirSync(path.join(destino, "datos", idioma)).some((n) => fs.readFileSync(path.join(destino, "datos", idioma, n), "utf-8").toLowerCase().includes(docs.toLowerCase().replace(/\\/g, "\\\\"))));
+      }
+      // La misma Documentación en los dos conjuntos, con los textos del servidor en cada idioma.
+      assert.deepEqual((JSON.parse(datosDe(destino, "/api/proyectos", "en")) as { proyectos: { nombre: string }[] }).proyectos.map((p) => p.nombre), ["REAL"]);
     }
   });
 });
