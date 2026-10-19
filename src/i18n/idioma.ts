@@ -9,7 +9,7 @@ export function idiomaDeEtiqueta(valor: string): Idioma | null {
   return base === "es" || base === "en" ? base : null;
 }
 
-// PHASE_GATE_LANG, si dice "es" o "en". Otro valor no cuenta: doctor lo avisa. No tiene alias, y el .env ya
+// PHASE_GATE_LANG, si dice "es" o "en". Otro valor no cuenta: doctor lo avisa (LANG-INVALIDO). No tiene alias, y el .env ya
 // está cargado en process.env cuando se pregunta (config.ts lo carga al importarse).
 export function idiomaDelEntorno(): Idioma | null {
   return idiomaDeEtiqueta(process.env.PHASE_GATE_LANG ?? "");

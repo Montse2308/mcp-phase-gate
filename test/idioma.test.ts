@@ -393,3 +393,20 @@ describe("doctor --fase en inglés", () => {
     assert.match(formatearProcedencia(procedenciaDeFase(3, "P")), /fase-3\/pruebas\s+.*presets.en.ai-agent-ops\.md:\d+/);
   });
 });
+
+// Hallazgo 10 de la auditoría de la Etapa 6: un PHASE_GATE_LANG que no cuenta se ignoraba en silencio.
+describe("doctor y un PHASE_GATE_LANG que no es es ni en", () => {
+  it("LANG-INVALIDO: aviso con el valor; vacío, es-MX o en_US.UTF-8 no avisan", () => {
+    instalacion();
+    fijarLocaleDelSistema("es-MX");
+    const avisos = (): string[] => diagnosticar().hallazgos.filter((h) => h.codigo === "LANG-INVALIDO").map((h) => `${h.severidad}: ${h.texto}`);
+    process.env.PHASE_GATE_LANG = "fr";
+    assert.deepEqual(avisos(), ['aviso: PHASE_GATE_LANG vale "fr", que no es "es" ni "en" (también valen es-MX o en_US.UTF-8): se ignora y se usa el idioma del sistema, "es".']);
+    process.env.PHASE_GATE_LANG = "x".repeat(5000);
+    assert.match(avisos()[0]!, /vale "x{40}…"/);
+    for (const valor of ["", "  ", "es-MX", "en_US.UTF-8", "EN"]) {
+      process.env.PHASE_GATE_LANG = valor;
+      assert.deepEqual(avisos(), [], valor);
+    }
+  });
+});

@@ -5,6 +5,7 @@
 export const ARREGLOS_ES = {
   "VAR-FALTA": "Define la variable en el bloque \"env\" del mcp.json de tu cliente (o en el .env de la raíz del paquete), apuntando a una carpeta que exista.",
   "VAR-DISCREPA": "Deja un solo nombre: borra el ORQUESTADOR_* (el alias) o dale el mismo valor que a su PHASE_GATE_*.",
+  "LANG-INVALIDO": "Pon PHASE_GATE_LANG=es o PHASE_GATE_LANG=en en el bloque \"env\" del mcp.json de tu cliente, o quítala para usar el idioma del sistema.",
   "ENV-UTF16": "Vuelve a guardar el .env como UTF-8, sin BOM (en PowerShell, `> .env` lo escribe en UTF-16).",
   "ENV-ILEGIBLE": "Revisa que el .env exista y se pueda leer, y que cada línea tenga la forma CLAVE=valor.",
   "DOCS-ILEGIBLE": "Comprueba que PHASE_GATE_DOCS_PATH apunte a una carpeta que exista y que tengas permiso para leerla.",

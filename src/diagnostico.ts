@@ -23,6 +23,8 @@ import {
   TASKS_SUBDIR_POR_DEFECTO,
   configDir,
   errorDeEnv,
+  idiomaDeEtiqueta,
+  idiomaDelSistema,
   leerVariable,
   promptsLayers,
   requireBasePath,
@@ -494,6 +496,14 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
   const variables = NOMBRES_LOGICOS.map((logica) => leerVariable(logica));
   for (const { discrepancia } of variables) {
     if (discrepancia) hallar("aviso", "VAR-DISCREPA", discrepancia);
+  }
+
+  // Un PHASE_GATE_LANG que no dice es ni en no cuenta: se ignora y el idioma sale del sistema. Se avisa,
+  // porque quien lo puso esperaba otra cosa (hallazgo 10 de la auditoría de la Etapa 6). Vacío es como no
+  // tenerlo, y no se avisa.
+  const lang = process.env.PHASE_GATE_LANG ?? "";
+  if (lang.trim() && !idiomaDeEtiqueta(lang)) {
+    hallar("aviso", "LANG-INVALIDO", mensaje("LANG-INVALIDO", { valor: lang.length > 40 ? `${lang.slice(0, 40)}…` : lang, sistema: idiomaDelSistema() }));
   }
 
   const delEnv = errorDeEnv();

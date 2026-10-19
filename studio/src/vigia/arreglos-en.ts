@@ -7,6 +7,7 @@ import type { ARREGLOS_ES } from "./arreglos-es.js";
 export const ARREGLOS_EN = {
   "VAR-FALTA": "Define the variable in the \"env\" block of your client's mcp.json (or in the .env at the package root), pointing to a folder that exists.",
   "VAR-DISCREPA": "Keep a single name: delete the ORQUESTADOR_* one (the alias) or give it the same value as its PHASE_GATE_*.",
+  "LANG-INVALIDO": "Set PHASE_GATE_LANG=es or PHASE_GATE_LANG=en in the \"env\" block of your client's mcp.json, or remove it to use the system language.",
   "ENV-UTF16": "Save the .env again as UTF-8 without BOM (in PowerShell, `> .env` writes it as UTF-16).",
   "ENV-ILEGIBLE": "Check that the .env exists and can be read, and that every line has the form KEY=value.",
   "DOCS-ILEGIBLE": "Check that PHASE_GATE_DOCS_PATH points to a folder that exists and that you are allowed to read it.",

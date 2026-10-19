@@ -128,6 +128,14 @@ export const TEXTOS_DIAGNOSTICO = {
     es: (p: { quien: string; lote: string; texto: string }) => `${p.quien}, ${p.lote}: ${p.texto}`,
     en: (p: { quien: string; lote: string; texto: string }) => `${p.quien}, ${p.lote}: ${p.texto}`,
   },
+  "LANG-INVALIDO": {
+    es: (p: { valor: string; sistema: string }) =>
+      `PHASE_GATE_LANG vale ${JSON.stringify(p.valor)}, que no es "es" ni "en" (también valen es-MX o en_US.UTF-8): ` +
+      `se ignora y se usa el idioma del sistema, "${p.sistema}".`,
+    en: (p: { valor: string; sistema: string }) =>
+      `PHASE_GATE_LANG is ${JSON.stringify(p.valor)}, which is neither "es" nor "en" (es-MX or en_US.UTF-8 also work): ` +
+      `it is ignored and the system language, "${p.sistema}", is used.`,
+  },
   "VAR-FALTA": {
     es: "Falta una variable obligatoria.",
     en: "A required variable is missing.",
