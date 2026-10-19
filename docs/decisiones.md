@@ -12,6 +12,53 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-19 — Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del equipo
+
+> **Matiza** la del 2026-10-18 "El idioma es del proyecto y se deduce primero del disco…", en su paso 5.
+
+**Decisión.**
+
+- **Un manifiesto válido sin `idioma`** es de la 3.0 o la 3.1, cuyo esquema daba `"es"` por defecto. Si sus
+  documentos no dicen el idioma, el proyecto es español en vez de seguir al sistema. `idiomaPorDefecto` de
+  `machine.json` y `PHASE_GATE_LANG` siguen contando antes, porque alguien los fijó a propósito; lo único que
+  se reemplaza es el último paso, el locale del sistema. El origen se ve en `doctor` como
+  `del manifiesto sin idioma`.
+- **`doctor` avisa con `MANIFIESTO-SIN-IDIOMA`** cuando el manifiesto no dice su idioma y sus documentos
+  tampoco: el idioma sale entonces de este equipo (o es el español de la 3.x), y el manifiesto viaja entre
+  equipos.
+- **`init --migrate` completa** los manifiestos válidos que no llevan `idioma`: les añade el que el proyecto
+  ya usa, detrás de `preset`, deja copia `.bak-…` del original y no toca ninguna otra clave. Uno inválido no
+  se toca. Hasta ahora `--migrate` solo creaba los que faltaban.
+- **Sin proyecto** (`get_phase_prompt` sin proyecto, la capa de fábrica sin proyecto, los `/fN`), manda el
+  idioma del equipo: `idiomaPorDefecto`, `PHASE_GATE_LANG` o el sistema (desvío E6-D5, que no tenía ADR).
+  Quien trabaje en español en un equipo en inglés fija `PHASE_GATE_LANG=es` en el bloque `env` de su
+  cliente, como recomienda el README.
+
+**Por qué.** La auditoría externa de la Etapa 6 (hallazgo 2) midió que, con el sistema en inglés y sin
+`PHASE_GATE_LANG`, 98 de 123 salidas en español cambiaban: un proyecto creado con `init` de la 3.0 o la 3.1,
+todavía sin tareas, pasaba al inglés y su primera tarea se creaba con nombres en inglés. Fuera de Windows es
+el caso normal: los clientes MCP lanzan el servidor sin `LANG`, y entonces el sistema dice `en`. La suite no
+lo veía porque fija `PHASE_GATE_LANG=es`; ahora `test/oro.test.ts` ensambla las cinco fases en español con el
+sistema en inglés y sin esa variable, y `test/idioma.test.ts` prueba el orden con un manifiesto sin idioma.
+
+**Qué se descartó.**
+
+- Devolverle al esquema `idioma: "es"` por defecto: un manifiesto sin idioma con tareas en inglés dejaría de
+  deducirse de sus documentos, y el paso 2 ("el disco es la verdad") perdería el caso que más importa.
+- Solo el aviso de `doctor`, sin cambiar la resolución: el proyecto seguiría cambiando de idioma en silencio
+  en cada equipo que no corra `doctor`.
+- Un job de CI que corra la suite sin `PHASE_GATE_LANG`: la suite crea cientos de proyectos sin manifiesto ni
+  documentos, cuyo idioma es, a propósito, el del sistema, y fallaría por diseño. La prueba de oro con el
+  sistema en inglés simulado (`fijarLocaleDelSistema`) cubre el riesgo en cualquier sistema, también en
+  Windows, donde `LANG` no cuenta.
+- Que `--migrate` reescriba el manifiesto entero con sus valores por defecto: cambiaría claves que la
+  persona no pidió cambiar.
+
+**Riesgo aceptado.** `--migrate` vuelve a escribir el JSON con dos espacios de sangría: un manifiesto escrito
+en una línea o con otro formato cambia de forma (no de contenido). Queda la copia.
+
+---
+
 ## 2026-10-18 — El README principal pasa a inglés
 
 > **Reemplaza en parte** la del 2026-08-08 "README bilingüe completo, asumiendo el costo de la
@@ -199,6 +246,9 @@ proyecto que no existe) sale en el idioma del equipo, no en el del proyecto: tod
 ---
 
 ## 2026-10-18 — El idioma es del proyecto y se deduce primero del disco; la redacción puede ser de la tarea
+
+> **Matizada** el 2026-10-19 por "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
+> equipo": un manifiesto sin `idioma` y sin documentos que lo digan es español, no el idioma del sistema.
 
 **Decisión.** Dos conceptos distintos:
 
@@ -1237,6 +1287,10 @@ puntero puede equivocarse, y equivocarse de preset cambia todas las instruccione
 ---
 
 ## 2026-10-15 — Cada proyecto puede declarar un `phase-gate.json`; cada equipo, un `machine.json`
+
+> **Ampliada** el 2026-10-18 por "El idioma es del proyecto y se deduce primero del disco…": `idioma` acepta
+> `"en"` y deja de tener valor por defecto. Y el 2026-10-19 por "Un manifiesto sin `idioma` es español…": un
+> manifiesto sin `idioma`, como los de la 3.0 y la 3.1, se sigue leyendo como español.
 
 **Decisión.** Dos archivos de configuración, los dos opcionales:
 

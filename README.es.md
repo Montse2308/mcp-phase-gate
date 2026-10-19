@@ -102,7 +102,7 @@ flowchart LR
 - **La Documentación Central** es una carpeta tuya, sincronizada o no. El servidor solo escribe dentro de las carpetas de tarea, y los recibos de la Fase 4 solo con `record_batch`.
 - **El Studio** es un proceso aparte, que solo carga `ui`: una API HTTP local con eventos en vivo (SSE) sobre las mismas funciones que usan las tools. Nunca escribe documentos de tareas ni recibos. `--export-static` lo convierte en el sitio de solo lectura que se publica en GitHub Pages.
 
-Cada decisión de diseño está registrada, con su porqué y la alternativa que descartó, en [`docs/decisiones.md`](docs/decisiones.md), el **registro de decisiones de arquitectura**: 99 entradas, la más reciente arriba.
+Cada decisión de diseño está registrada, con su porqué y la alternativa que descartó, en [`docs/decisiones.md`](docs/decisiones.md), el **registro de decisiones de arquitectura**: 100 entradas, la más reciente arriba.
 
 ---
 
@@ -156,9 +156,9 @@ Los prompts, los comandos, las variantes de regla y los presets vienen en españ
 2. **Los documentos que ya tiene en disco**: las tareas con `01 - Análisis Técnico.md` son en español; las que tienen `01 - Technical Analysis.md`, en inglés. Si hay de los dos, el que más documentos tenga (un empate es español), y `doctor` avisa con `IDIOMA-MIXTO`.
 3. `idiomaPorDefecto` en el `machine.json` de este equipo.
 4. `PHASE_GATE_LANG` (`es` o `en`; también valen `es-MX` o `en_US.UTF-8`).
-5. El idioma del sistema: `es` si su locale empieza por `es`; si no, `en`.
+5. El idioma del sistema: `es` si su locale empieza por `es`; si no, `en`. Salvo si el proyecto tiene un `phase-gate.json` sin `idioma`, como los que escribían la 3.0 y la 3.1: ese proyecto es español.
 
-El disco va antes que el equipo a propósito: los proyectos de la 2.x no tienen manifiesto y están en español, y abrir uno en un equipo configurado en inglés no puede dejar sus tareas como si no tuvieran ninguna fase hecha. `doctor` enseña de dónde sale el idioma de cada proyecto. `init --migrate` escribe `idioma` en los manifiestos que crea: el de los documentos del proyecto si los tiene, y si no, `--idioma` o lo que contestes a su pregunta.
+El disco va antes que el equipo a propósito: los proyectos de la 2.x no tienen manifiesto y están en español, y abrir uno en un equipo configurado en inglés no puede dejar sus tareas como si no tuvieran ninguna fase hecha. `doctor` enseña de dónde sale el idioma de cada proyecto. `init --migrate` escribe `idioma` en los manifiestos que crea (el de los documentos del proyecto si los tiene, y si no, `--idioma` o lo que contestes a su pregunta) y lo añade, con copia, a los que ya existían sin él; mientras falte, `doctor` avisa con `MANIFIESTO-SIN-IDIOMA`. Sin proyecto, manda el idioma del equipo: si trabajas en español en un equipo en inglés, pon `PHASE_GATE_LANG=es` en el bloque `env` de tu cliente.
 
 | Fase | Proyecto en español | Proyecto en inglés |
 |---|---|---|

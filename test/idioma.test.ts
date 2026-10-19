@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { ensamblarFase } from "../src/capas.js";
 import { fijarLocaleDelSistema, fijarRaizDelPaquete, idiomaDeEtiqueta, idiomaDelSistema } from "../src/config.js";
 import { diagnosticar } from "../src/diagnostico.js";
+import { enIdioma } from "../src/i18n/mensajes.js";
 import { idiomaParaManifiesto, manifiestoNuevo } from "../src/init.js";
 import { Manifiesto, conflictoDeIdioma, documentosPorIdioma, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto } from "../src/manifiesto.js";
 import { textoDelPromptDeFase } from "../src/servidor.js";
@@ -110,6 +111,29 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     process.env.PHASE_GATE_LANG = "en";
     assert.equal(idiomaDelProyecto(null).idioma, "en");
   });
+
+  // Hallazgo 2 de la auditoría de la Etapa 6: un manifiesto de la 3.0 o la 3.1 no lleva `idioma` (su esquema
+  // daba "es" por defecto). Sin documentos, no pasa al idioma del sistema, que en un Linux sin LANG es inglés.
+  it("5. un manifiesto sin `idioma` ni documentos es español aunque el sistema esté en inglés", () => {
+    const { docs, config } = instalacion();
+    manifiesto(docs, { preset: "software" });
+    delete process.env.PHASE_GATE_LANG;
+    fijarLocaleDelSistema("en-US");
+    const r = idiomaDelProyecto("P");
+    assert.deepEqual([r.idioma, r.origen, r.sinIdiomaDeclarado], ["es", "del manifiesto sin idioma", true]);
+
+    // Lo que alguien fijó a propósito sí cuenta: PHASE_GATE_LANG y machine.json, en ese orden inverso.
+    process.env.PHASE_GATE_LANG = "en";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
+    delete process.env.PHASE_GATE_LANG;
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
+    assert.equal(idiomaDelProyecto("P").origen, "de machine.json");
+
+    // Sin manifiesto, el sistema (E6-D5); y quien pasa el manifiesto ya leído obtiene lo mismo.
+    fs.rmSync(path.join(config, "machine.json"));
+    assert.equal(idiomaDelProyecto("P", { version: 1, preset: "software", repos: [], reglas: {}, fase5: {} }).origen, "del manifiesto sin idioma");
+    assert.deepEqual([idiomaDelProyecto("P", null).idioma, idiomaDelProyecto("P", null).origen], ["en", "del sistema"]);
+  });
 });
 
 describe("idioma del proyecto: conflictos", () => {
@@ -157,6 +181,30 @@ describe("idioma del proyecto: conflictos", () => {
     } finally {
       await cerrar();
     }
+  });
+
+  it("MANIFIESTO-SIN-IDIOMA: aviso solo si ni el manifiesto ni los documentos dicen el idioma", () => {
+    const { docs } = instalacion();
+    manifiesto(docs, { preset: "software" });
+    delete process.env.PHASE_GATE_LANG;
+    fijarLocaleDelSistema("en-US");
+    const conflicto = conflictoDeIdioma("P");
+    assert.deepEqual([conflicto?.codigo, conflicto?.severidad], ["MANIFIESTO-SIN-IDIOMA", "aviso"]);
+    // Fuera de una llamada, el texto sale en el idioma del entorno: aquí, el del sistema, inglés.
+    assert.match(conflicto!.texto, /does not declare "idioma".*"es" is used \(a manifest without idioma is Spanish, as in 3\.0 and 3\.1\).*init --migrate/);
+    assert.match(enIdioma("es", () => conflictoDeIdioma("P"))!.texto, /no declara "idioma".*se usa "es" \(un manifiesto sin idioma es español, como en la 3\.0 y la 3\.1\).*init --migrate/);
+    const hallazgos = diagnosticar().hallazgos.filter((h) => h.codigo === "MANIFIESTO-SIN-IDIOMA");
+    assert.equal(hallazgos.length, 1);
+
+    // Con el idioma declarado, sin manifiesto o con documentos que lo dicen, no hay aviso. (Los documentos van
+    // al final: en Node 24 para Windows, rmSync no borra un nombre con acentos.)
+    manifiesto(docs, { preset: "software", idioma: "en" });
+    assert.equal(conflictoDeIdioma("P"), null);
+    fs.rmSync(path.join(docs, "P", "phase-gate.json"));
+    assert.equal(conflictoDeIdioma("P"), null);
+    manifiesto(docs, { preset: "software" });
+    crearTarea(docs, "P", "t", ES);
+    assert.equal(conflictoDeIdioma("P"), null);
   });
 
   it("sin conflicto: documentos de un solo idioma, el mismo que el declarado", () => {

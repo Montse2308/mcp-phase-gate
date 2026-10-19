@@ -6,6 +6,15 @@ import type { Catalogo } from "./tipos.js";
 
 type Detalle = { detalle: string };
 
+// De dónde sale el idioma de un proyecto que no lo declara (OrigenDelIdioma de manifiesto.ts, sin los que
+// lo declaran): el valor canónico va en español y se traduce al escribir en inglés.
+const ORIGENES_EN: Readonly<Record<string, string>> = {
+  "de machine.json": "from machine.json",
+  "de PHASE_GATE_LANG": "from PHASE_GATE_LANG",
+  "del manifiesto sin idioma": "a manifest without idioma is Spanish, as in 3.0 and 3.1",
+  "del sistema": "from the system",
+};
+
 export const TEXTOS_NUCLEO = {
   // ─── config.ts ──────────────────────────────────────────────────────────────
   "ENV-TXT-ILEGIBLE": {
@@ -262,6 +271,15 @@ export const TEXTOS_NUCLEO = {
     en: ({ proyecto, es, en, idioma, archivo }: { proyecto: string; es: number; en: number; idioma: string; archivo: string }) =>
       `${proyecto} has documents in both languages (${es} in "es", ${en} in "en"): ` +
       `"${idioma}" is used, the one with the most. Set "idioma" in its ${archivo}.`,
+  },
+  "MANIFIESTO-SIN-IDIOMA": {
+    es: ({ proyecto, archivo, idioma, origen }: { proyecto: string; archivo: string; idioma: string; origen: string }) =>
+      `El ${archivo} de ${proyecto} no declara "idioma" y sus documentos no lo dicen: se usa "${idioma}" ` +
+      `(${origen === "del manifiesto sin idioma" ? "un manifiesto sin idioma es español, como en la 3.0 y la 3.1" : origen}). ` +
+      `Ese idioma puede cambiar en otro equipo. Añade "idioma" a su ${archivo}, o ejecuta \`init --migrate\`.`,
+    en: ({ proyecto, archivo, idioma, origen }: { proyecto: string; archivo: string; idioma: string; origen: string }) =>
+      `The ${archivo} of ${proyecto} does not declare "idioma" and its documents don't say either: "${idioma}" is used ` +
+      `(${ORIGENES_EN[origen] ?? origen}). That language can change on another machine. Add "idioma" to its ${archivo}, or run \`init --migrate\`.`,
   },
   "MAQUINA-TXT-RUTA-ABSOLUTA": { es: "tiene que ser una ruta absoluta", en: "must be an absolute path" },
   "MAQUINA-TXT-INVALIDA": {

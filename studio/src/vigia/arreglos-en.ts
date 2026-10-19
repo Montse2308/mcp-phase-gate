@@ -41,4 +41,5 @@ export const ARREGLOS_EN = {
   "ANCLA-NO-VIGENTE": "If there was a rebase or a squash, re-anchor the batch with record_batch and `reanclar: true`.",
   "IDIOMA-MIXTO": "Set \"idioma\" in the project's phase-gate.json: the language of the tasks you want to keep using.",
   "IDIOMA-CON-TAREAS": "Set \"idioma\" in phase-gate.json back to the language of those tasks, or rename their documents by hand.",
+  "MANIFIESTO-SIN-IDIOMA": "Add \"idioma\" to the project's phase-gate.json (the language of its future tasks), or run `init --migrate`, which fills it in.",
 } satisfies Record<keyof typeof ARREGLOS_ES, string>;

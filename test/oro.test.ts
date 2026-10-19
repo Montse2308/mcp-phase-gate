@@ -19,7 +19,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ensamblarFase } from "../src/capas.js";
-import { fijarRaizDelPaquete } from "../src/config.js";
+import { fijarLocaleDelSistema, fijarRaizDelPaquete } from "../src/config.js";
 import { configTemporal, crearProyecto, docsTemporales, limpiarEntorno } from "./helpers.js";
 
 // Este archivo compila a build-test/test/; la raíz del repo está dos niveles arriba.
@@ -31,6 +31,7 @@ const CAMBIAN_EN_LA_3 = new Set([4, 5]);
 afterEach(() => {
   limpiarEntorno();
   fijarRaizDelPaquete(null);
+  fijarLocaleDelSistema(null);
 });
 
 function archivoDeOro(fase: number): string {
@@ -66,6 +67,21 @@ describe("prueba de oro: software-replica reproduce la 2.2.0 (fases 1 a 3) y la 
       assert.equal(texto, oro(fase));
     });
   }
+
+  // La suite fija PHASE_GATE_LANG=es (test/helpers.ts), que oculta el idioma del sistema. Aquí no: un sistema
+  // en inglés sin PHASE_GATE_LANG, como el de un cliente MCP en Linux sin LANG. Un manifiesto de la 3.x, sin
+  // `idioma` y sin documentos, sigue dando el español de siempre (hallazgo 2 de la auditoría de la Etapa 6).
+  it("lo mismo con el sistema en inglés y sin PHASE_GATE_LANG: el manifiesto sin idioma sigue en español", () => {
+    proyecto({ version: 1, preset: "software-replica" });
+    delete process.env.PHASE_GATE_LANG;
+    fijarLocaleDelSistema("en-US");
+
+    for (const fase of [1, 2, 3, 4, 5]) {
+      const { texto, avisos } = ensamblarFase(fase, "PROYECTO-A", null, { incluirConfigProyecto: false });
+      assert.deepEqual(avisos, [], `fase ${fase}`);
+      assert.equal(texto, oro(fase), `fase ${fase}`);
+    }
+  });
 
   // El cambio de la 3.0.0 es de verdad: las fases 4 y 5 ya no son las de la 2.2.0, y las 1 a 3 sí.
   it("las fases 4 y 5 de la 3.0.0 no son las de la 2.2.0; las 1 a 3, sí", () => {

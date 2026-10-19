@@ -20,7 +20,7 @@ import { capasDeCuerpos, fasesDe, rutasDeCuerpos } from "./capas.js";
 import type { Salida } from "./cli.js";
 import { SERVER_NAME, SERVER_VERSION, leerVariable } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
-import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_MAQUINA, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_MAQUINA, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
 import type { Idioma } from "./vocabulario.js";
 import { discoverProjects } from "./paths.js";
 import { leerPromptNormalizado, resolveCommandFile } from "./phases.js";
@@ -704,8 +704,47 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
     decir(ctx, mensaje("INIT-MIGRATE-CREADO", { archivo, preset, idioma }));
     creados++;
   }
-  if (creados === 0) ctx.entorno.salida.out(mensaje("INIT-MIGRATE-NADA"));
+  const completados = completarIdiomas(ctx, proyectos.filter((proyecto) => !nuevos.includes(proyecto)));
+  if (creados === 0 && completados === 0) ctx.entorno.salida.out(mensaje("INIT-MIGRATE-NADA"));
   return true;
+}
+
+// La migración lee manifiestos y documentos con las funciones del servidor, que buscan la Documentación en
+// PHASE_GATE_DOCS_PATH; la de init puede venir de --docs o de la pregunta, sin esa variable en el entorno.
+// Sin esto, el idioma de los documentos no se detectaba y un manifiesto no se podía leer.
+async function conLaDocumentacion<T>(docs: string, funcion: () => Promise<T>): Promise<T> {
+  const antes = process.env.PHASE_GATE_DOCS_PATH;
+  process.env.PHASE_GATE_DOCS_PATH = docs;
+  try {
+    return await funcion();
+  } finally {
+    if (antes === undefined) delete process.env.PHASE_GATE_DOCS_PATH;
+    else process.env.PHASE_GATE_DOCS_PATH = antes;
+  }
+}
+
+// Los manifiestos de la 3.0 y la 3.1 no llevan `idioma`. Se les añade el que el proyecto ya usa (el de sus
+// documentos, o el español de la 3.x si no tiene), para que no dependa del equipo que lo abra (hallazgo 2
+// de la auditoría de la Etapa 6). Solo se añade esa clave, detrás de `preset`, y queda copia del original;
+// un manifiesto inválido no se toca: lo dice doctor.
+function completarIdiomas(ctx: Contexto, proyectos: string[]): number {
+  let completados = 0;
+  for (const proyecto of proyectos) {
+    const lectura = leerManifiesto(proyecto);
+    if (lectura.estado !== "valido" || lectura.manifiesto.idioma) continue;
+    const idioma = idiomaDelProyecto(proyecto, lectura.manifiesto).idioma;
+    const crudo = JSON.parse(fs.readFileSync(lectura.ruta, "utf-8").replace(/^\uFEFF/, "")) as Record<string, unknown>;
+    const conIdioma: Record<string, unknown> = {};
+    for (const [clave, valor] of Object.entries(crudo)) {
+      conIdioma[clave] = valor;
+      if (clave === "preset") conIdioma.idioma = idioma;
+    }
+    if (!("idioma" in conIdioma)) conIdioma.idioma = idioma;
+    const copia = escribirConCopia(ctx, lectura.ruta, `${json(conIdioma)}\n`);
+    decir(ctx, mensaje("INIT-MIGRATE-IDIOMA", { archivo: lectura.ruta, idioma, copia }));
+    completados++;
+  }
+  return completados;
 }
 
 // ─── 6. El candado de git push ──────────────────────────────────────────────
@@ -738,7 +777,7 @@ export async function ejecutarInit(opciones: OpcionesInit, entorno: EntornoInit)
   }
 
   if (opciones.comandos) await copiarComandos(ctx, clientes);
-  if (opciones.migrate && !(await migrar(ctx, docs))) return 2;
+  if (opciones.migrate && !(await conLaDocumentacion(docs, () => migrar(ctx, docs)))) return 2;
 
   entorno.salida.out(`\n${candadoDePush()}`);
   entorno.salida.out(`\n${formatearDiagnostico(diagnosticar(), "texto")}`);

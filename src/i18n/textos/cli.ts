@@ -388,9 +388,15 @@ Documentation: https://github.com/Montse2308/mcp-phase-gate`,
     es: (p: { archivo: string; preset: string; idioma: string }) => `--migrate: ${p.archivo} con "preset": "${p.preset}" e "idioma": "${p.idioma}".`,
     en: (p: { archivo: string; preset: string; idioma: string }) => `--migrate: ${p.archivo} with "preset": "${p.preset}" and "idioma": "${p.idioma}".`,
   },
+  "INIT-MIGRATE-IDIOMA": {
+    es: (p: { archivo: string; idioma: string; copia: string | null }) =>
+      `--migrate: ${p.archivo} no declaraba idioma; ahora lleva "idioma": "${p.idioma}", el que ya usaba.${p.copia ? ` Copia: ${p.copia}` : ""}`,
+    en: (p: { archivo: string; idioma: string; copia: string | null }) =>
+      `--migrate: ${p.archivo} declared no language; it now has "idioma": "${p.idioma}", the one it was already using.${p.copia ? ` Copy: ${p.copia}` : ""}`,
+  },
   "INIT-MIGRATE-NADA": {
-    es: "--migrate: todos los proyectos ya tienen phase-gate.json; nada que crear.",
-    en: "--migrate: all the projects already have phase-gate.json; nothing to create.",
+    es: "--migrate: todos los proyectos ya tienen phase-gate.json con su idioma; nada que hacer.",
+    en: "--migrate: all the projects already have phase-gate.json with their language; nothing to do.",
   },
   "INIT-CANDADO-DE-PUSH": {
     es: `Candado opcional para git push (init no lo instala; de menos a más firme):

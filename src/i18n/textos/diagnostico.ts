@@ -30,6 +30,7 @@ const VALORES_EN: Readonly<Record<string, string>> = {
   "de fábrica": "factory",
   "de sus documentos": "from its documents",
   "de PHASE_GATE_LANG": "from PHASE_GATE_LANG",
+  "del manifiesto sin idioma": "from a manifest without idioma",
   "del sistema": "from the system",
   fuerte: "strong",
   debil: "weak",

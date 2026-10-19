@@ -102,7 +102,7 @@ flowchart LR
 - **The Central Documentation** is a plain folder you own (synced or not). The server only writes inside task folders, and phase 4's receipts only through `record_batch`.
 - **The Studio** is a separate process, loaded only by `ui`: a local HTTP API with live events (SSE) over the same functions the tools use. It never writes task documents or receipts. `--export-static` turns it into the read-only site published on GitHub Pages.
 
-Every design choice is recorded with its reason and the alternative it discarded in [`docs/decisiones.md`](docs/decisiones.md), the **architecture decision record**: 99 entries, newest first (in Spanish).
+Every design choice is recorded with its reason and the alternative it discarded in [`docs/decisiones.md`](docs/decisiones.md), the **architecture decision record**: 100 entries, newest first (in Spanish).
 
 ---
 
@@ -156,9 +156,9 @@ Prompts, commands, rule variants and presets ship in Spanish and English (`promp
 2. **The documents it already has on disk**: tasks with `01 - Análisis Técnico.md` are Spanish, tasks with `01 - Technical Analysis.md` are English. With both, the one with more documents (a tie goes to Spanish), and `doctor` reports `IDIOMA-MIXTO`.
 3. `idiomaPorDefecto` in this machine's `machine.json`.
 4. `PHASE_GATE_LANG` (`es` or `en`; `es-MX` or `en_US.UTF-8` also work).
-5. The system locale: `es` if it starts with `es`, otherwise `en`.
+5. The system locale: `es` if it starts with `es`, otherwise `en`. Except when the project has a `phase-gate.json` without `idioma`, like the ones 3.0 and 3.1 wrote: that project is Spanish.
 
-The disk goes before the machine on purpose: projects from 2.x have no manifest and are in Spanish, and opening one on a machine set to English must not make its tasks look like they have no phases done. `doctor` shows where each project's language comes from. `init --migrate` writes `idioma` into the manifests it creates: the one of the project's documents if it has any, otherwise `--idioma` or your answer to its question.
+The disk goes before the machine on purpose: projects from 2.x have no manifest and are in Spanish, and opening one on a machine set to English must not make its tasks look like they have no phases done. `doctor` shows where each project's language comes from. `init --migrate` writes `idioma` into the manifests it creates (the one of the project's documents if it has any, otherwise `--idioma` or your answer to its question) and adds it, with a backup, to existing ones that lack it; while it's missing, `doctor` reports `MANIFIESTO-SIN-IDIOMA`. Without a project, the machine's language rules: if you work in Spanish on a machine set to English, set `PHASE_GATE_LANG=es` in your client's `env` block.
 
 | Phase | Spanish project | English project |
 |---|---|---|

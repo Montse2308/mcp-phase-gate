@@ -308,10 +308,15 @@ export function copiasEnConflicto(carpetaProyecto: string): string[] {
 //      sistema esté en inglés); con documentos de los dos, el que más tenga, y doctor da IDIOMA-MIXTO;
 //   3. `idiomaPorDefecto` de machine.json;
 //   4. PHASE_GATE_LANG;
-//   5. el idioma del sistema (es si su locale empieza por "es"; si no, en).
-export type OrigenDelIdioma = "del proyecto" | "de sus documentos" | "de machine.json" | "de PHASE_GATE_LANG" | "del sistema";
+//   5. el idioma del sistema (es si su locale empieza por "es"; si no, en). Salvo para un proyecto con un
+//      manifiesto sin `idioma`: ese manifiesto es de la 3.0 o la 3.1, cuyo esquema daba "es" por defecto, y
+//      sigue en español aunque el sistema esté en inglés, como en un Linux sin LANG (hallazgo 2 de la
+//      auditoría de la Etapa 6). machine.json y PHASE_GATE_LANG, que alguien fijó a propósito, sí cuentan.
+export type OrigenDelIdioma = "del proyecto" | "de sus documentos" | "de machine.json" | "de PHASE_GATE_LANG" | "del manifiesto sin idioma" | "del sistema";
 export type DocumentosPorIdioma = Record<Idioma, { documentos: number; tareas: string[] }>;
-export type IdiomaResuelto = { idioma: Idioma; origen: OrigenDelIdioma; enDisco: DocumentosPorIdioma };
+// `sinIdiomaDeclarado`: tiene un manifiesto válido que no dice su idioma (doctor da MANIFIESTO-SIN-IDIOMA
+// si tampoco lo dicen sus documentos).
+export type IdiomaResuelto = { idioma: Idioma; origen: OrigenDelIdioma; enDisco: DocumentosPorIdioma; sinIdiomaDeclarado: boolean };
 
 function sinDocumentos(): DocumentosPorIdioma {
   return { es: { documentos: 0, tareas: [] }, en: { documentos: 0, tareas: [] } };
@@ -359,28 +364,40 @@ export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelId
 // no impide saber el idioma: se sigue con el disco.
 export function idiomaDelProyecto(carpetaProyecto: string | null, manifiesto?: Manifiesto | null): IdiomaResuelto {
   const enDisco = carpetaProyecto ? documentosPorIdioma(carpetaProyecto) : sinDocumentos();
-  let declarado: Idioma | undefined;
+  let delManifiesto: Manifiesto | null = null;
   if (manifiesto === undefined && carpetaProyecto) {
     const lectura = leerManifiesto(carpetaProyecto);
-    declarado = lectura.estado === "valido" ? lectura.manifiesto.idioma : undefined;
+    delManifiesto = lectura.estado === "valido" ? lectura.manifiesto : null;
   } else {
-    declarado = manifiesto?.idioma;
+    delManifiesto = manifiesto ?? null;
   }
-  if (declarado) return { idioma: declarado, origen: "del proyecto", enDisco };
+  const sinIdiomaDeclarado = delManifiesto !== null && !delManifiesto.idioma;
+  if (delManifiesto?.idioma) return { idioma: delManifiesto.idioma, origen: "del proyecto", enDisco, sinIdiomaDeclarado };
   if (enDisco.es.documentos || enDisco.en.documentos) {
     // Con los dos, el que más documentos tenga; a la par, el español (el de todos los proyectos de la 2.x).
-    return { idioma: enDisco.en.documentos > enDisco.es.documentos ? "en" : "es", origen: "de sus documentos", enDisco };
+    return { idioma: enDisco.en.documentos > enDisco.es.documentos ? "en" : "es", origen: "de sus documentos", enDisco, sinIdiomaDeclarado };
   }
-  return { ...idiomaDelEquipo(), enDisco };
+  const delEquipo = idiomaDelEquipo();
+  if (sinIdiomaDeclarado && delEquipo.origen === "del sistema") return { idioma: "es", origen: "del manifiesto sin idioma", enDisco, sinIdiomaDeclarado };
+  return { ...delEquipo, enDisco, sinIdiomaDeclarado };
 }
 
 // Lo que no cuadra con el idioma del proyecto (doctor, y get_phase_prompt para IDIOMA-CON-TAREAS):
-//   IDIOMA-MIXTO       sin idioma declarado, hay documentos con nombres de los dos idiomas;
-//   IDIOMA-CON-TAREAS  el manifiesto declara un idioma y hay tareas con documentos del otro: la deducción
-//                      las daría por "sin documentos". Cambiar el idioma no renombra nada (P7).
+//   IDIOMA-MIXTO           sin idioma declarado, hay documentos con nombres de los dos idiomas;
+//   IDIOMA-CON-TAREAS      el manifiesto declara un idioma y hay tareas con documentos del otro: la deducción
+//                          las daría por "sin documentos". Cambiar el idioma no renombra nada (P7);
+//   MANIFIESTO-SIN-IDIOMA  (aviso) el manifiesto no dice su idioma ni lo dicen sus documentos: el idioma
+//                          sale de este equipo, o es el español de la 3.x, y el manifiesto viaja entre equipos.
 export function conflictoDeIdioma(carpetaProyecto: string, resuelto: IdiomaResuelto = idiomaDelProyecto(carpetaProyecto)): Hallazgo | null {
   const otro: Idioma = resuelto.idioma === "es" ? "en" : "es";
   const delOtro = resuelto.enDisco[otro];
+  if (resuelto.sinIdiomaDeclarado && resuelto.origen !== "de sus documentos") {
+    return {
+      severidad: "aviso",
+      codigo: "MANIFIESTO-SIN-IDIOMA",
+      texto: mensaje("MANIFIESTO-SIN-IDIOMA", { proyecto: carpetaProyecto, archivo: ARCHIVO_MANIFIESTO, idioma: resuelto.idioma, origen: resuelto.origen }),
+    };
+  }
   if (delOtro.documentos === 0) return null;
   if (resuelto.origen === "del proyecto") {
     return {

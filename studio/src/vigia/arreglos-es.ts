@@ -39,4 +39,5 @@ export const ARREGLOS_ES = {
   "ANCLA-NO-VIGENTE": "Si hubo un rebase o un squash, reancla el lote con record_batch y `reanclar: true`.",
   "IDIOMA-MIXTO": "Fija \"idioma\" en el phase-gate.json del proyecto: el de las tareas que quieres seguir usando.",
   "IDIOMA-CON-TAREAS": "Devuelve \"idioma\" del phase-gate.json al de esas tareas, o renombra sus documentos a mano.",
+  "MANIFIESTO-SIN-IDIOMA": "Añade \"idioma\" al phase-gate.json del proyecto (el de sus tareas futuras), o ejecuta `init --migrate`, que lo completa.",
 };
