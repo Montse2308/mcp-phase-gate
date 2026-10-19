@@ -132,8 +132,9 @@ export function limpiarEntorno(): void {
 
 // Desde la Etapa 6, un proyecto sin manifiesto ni documentos toma el idioma del equipo, y en último lugar
 // el del sistema: en Windows con la región en español da "es", en un Linux de CI sin LANG da "en". La
-// suite se escribió en español, así que fija PHASE_GATE_LANG=es (también para los procesos hijos, que
-// heredan el entorno); el test que pruebe otra cosa lo cambia o lo borra.
+// suite se escribió en español, así que fija PHASE_GATE_LANG=es. Los hijos que reciben process.env la
+// heredan; el de test/e2e.test.ts arma un env propio y tiene que repetirla, porque StdioClientTransport
+// no hereda esa variable. El test que pruebe otra cosa la cambia o la borra.
 export function idiomaDeLosTests(): void {
   process.env.PHASE_GATE_LANG = "es";
 }
