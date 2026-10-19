@@ -11,6 +11,7 @@
 // schema/machine.json —los que un editor usa para autocompletar— se generan de ellos
 // (scripts/generar-esquemas.mjs). Un test exige que los publicados coincidan con lo que se genera.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
@@ -322,25 +323,63 @@ function sinDocumentos(): DocumentosPorIdioma {
   return { es: { documentos: 0, tareas: [] }, en: { documentos: 0, tareas: [] } };
 }
 
+// Los nombres se comparan en NFC y sin mayúsculas, igual en todos los sistemas: en Windows y macOS el disco
+// no distingue mayúsculas y en Linux sí, y un nombre que llega en NFD (macOS, OneDrive) es el mismo documento
+// (hallazgo 12 de la auditoría de la Etapa 6).
+const comparable = (nombre: string): string => nombre.normalize("NFC").toLowerCase();
+const NOMBRES_POR_IDIOMA: ReadonlyArray<[Idioma, ReadonlySet<string>]> = IDIOMAS.map((idioma) => {
+  const { contextoInicial, deFase } = VOCABULARIO[idioma].documentos;
+  return [idioma, new Set([contextoInicial, ...deFase].map(comparable))];
+});
+
+// El recuento de una llamada (una tool, una petición de lectura del Studio, un doctor): el idioma de un
+// proyecto se pregunta muchas veces en la misma llamada (el idioma de los mensajes, el de los presets al leer
+// el manifiesto, el de las capas, el del prompt…), y cada recuento lee todas sus carpetas de tarea. Con esto,
+// una vez por proyecto y por llamada (hallazgo 3 de la auditoría de la Etapa 6). Fuera de una llamada no hay
+// caché: cada pregunta mira el disco.
+const recuentosDeLaLlamada = new AsyncLocalStorage<Map<string, DocumentosPorIdioma>>();
+
+export function conCacheDelIdioma<T>(funcion: () => T): T {
+  return recuentosDeLaLlamada.getStore() ? funcion() : recuentosDeLaLlamada.run(new Map(), funcion);
+}
+
 // Cuántos documentos de fase con nombre de cada idioma tienen las tareas del proyecto, y en qué tareas.
 export function documentosPorIdioma(carpetaProyecto: string): DocumentosPorIdioma {
-  const cuenta = sinDocumentos();
   let raiz: string;
-  let tareas: string[];
   try {
     raiz = tasksRootPath(carpetaProyecto);
+  } catch {
+    return sinDocumentos(); // sin Documentación no hay nada que contar
+  }
+  const cache = recuentosDeLaLlamada.getStore();
+  const guardado = cache?.get(raiz);
+  if (guardado) return structuredClone(guardado);
+  const cuenta = contarDocumentos(raiz);
+  cache?.set(raiz, structuredClone(cuenta));
+  return cuenta;
+}
+
+function contarDocumentos(raiz: string): DocumentosPorIdioma {
+  const cuenta = sinDocumentos();
+  let tareas: string[];
+  try {
     tareas = fs
       .readdirSync(raiz, { withFileTypes: true })
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) => e.name)
       .sort();
   } catch {
-    return cuenta; // sin Documentación o sin carpeta de tareas no hay nada que contar
+    return cuenta; // sin carpeta de tareas no hay nada que contar
   }
   for (const tarea of tareas) {
-    for (const idioma of IDIOMAS) {
-      const { contextoInicial, deFase } = VOCABULARIO[idioma].documentos;
-      const hay = [contextoInicial, ...deFase].filter((nombre) => fs.existsSync(path.join(raiz, tarea, nombre))).length;
+    let nombres: string[];
+    try {
+      nombres = fs.readdirSync(path.join(raiz, tarea)).map(comparable);
+    } catch {
+      continue; // una carpeta que desaparece o no se puede leer no cuenta
+    }
+    for (const [idioma, suyos] of NOMBRES_POR_IDIOMA) {
+      const hay = new Set(nombres.filter((nombre) => suyos.has(nombre))).size;
       if (hay) {
         cuenta[idioma].documentos += hay;
         cuenta[idioma].tareas.push(tarea);

@@ -39,7 +39,7 @@ import {
 } from "./paths.js";
 import type { ArgumentosDeDocumento } from "./paths.js";
 import { configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, notaDeHuerfano, reposDeLaTarea } from "./capas.js";
-import { conflictoDeIdioma, describirPresets, idiomaDelProyecto, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
+import { conCacheDelIdioma, conflictoDeIdioma, describirPresets, idiomaDelProyecto, manifiestoDe, presetsDisponibles } from "./manifiesto.js";
 import type { RepoResuelto } from "./manifiesto.js";
 import { bloqueDeCommitsConPlazo, estadoDeLotes, registrarLote } from "./lotes.js";
 import { comoManual } from "./recibos.js";
@@ -274,14 +274,14 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
   const titulo = (codigo: string): string => mensaje(`${codigo}-TITULO`, {}, idioma);
   const descripcion = (codigo: string): string => mensaje(codigo, {}, idioma);
 
-  // Cada llamada abre su contexto de mensajes (el idioma de su proyecto, en cuanto lo sepa), y tras ella
-  // se sincronizan los prompts /fN. Leer las carpetas de prompts cuesta milisegundos, y es lo único que
+  // Cada llamada abre su contexto de mensajes (el idioma de su proyecto, en cuanto lo sepa) y su caché del
+  // recuento de documentos por idioma (conCacheDelIdioma), y tras ella se sincronizan los prompts /fN. Leer las carpetas de prompts cuesta milisegundos, y es lo único que
   // garantiza que una fase nueva aparezca en OneDrive, donde fs.watch no avisa.
   const sincronizandoTras =
     <A extends unknown[], R>(callback: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
       try {
-        return await conContextoDeMensajes(() => callback(...args));
+        return await conContextoDeMensajes(() => conCacheDelIdioma(() => callback(...args)));
       } finally {
         sincronizarPrompts(mcp, idioma);
       }

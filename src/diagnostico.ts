@@ -32,7 +32,7 @@ import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder, leerTextoAcotado, requireProjectFolder } from "./paths.js";
 import { SECCIONES_ESQUELETO, capasDe, configuracionDe, contextoInicialDe, ensamblarFase, fasesDe, frontmatterDeTarea, revisarBloques, textoDeReinyeccion } from "./capas.js";
 import type { ConfiguracionProyecto, Procedencia } from "./capas.js";
-import { conflictoDeIdioma, copiasEnConflicto, describirPresets, idiomaDelProyecto, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
+import { conCacheDelIdioma, conflictoDeIdioma, copiasEnConflicto, describirPresets, idiomaDelProyecto, leerManifiesto, leerMaquina, manifiestoDe, presetsDisponibles, resolverRepos } from "./manifiesto.js";
 import type { LecturaMaquina, Preset, RepoResuelto } from "./manifiesto.js";
 import { PLAZO_DE_ESTADOS_MS, estadoDeRepoSincrono, estadosConPlazo } from "./repos.js";
 import type { EstadoDeRepo } from "./repos.js";
@@ -477,7 +477,12 @@ export async function anclasNoVigentes(): Promise<Hallazgo[]> {
 // que se calcularon antes porque necesitan git asíncrono (doctor --reverificar).
 export type OpcionesDeDiagnostico = { cliente?: Diagnostico["cliente"]; raices?: string[]; estadosDeRepos?: EstadosDeRepos; hallazgosExtra?: Hallazgo[] };
 
+// Con su caché del recuento de documentos por idioma: cada proyecto se cuenta una vez (manifiesto.ts).
 export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico {
+  return conCacheDelIdioma(() => diagnosticarSinCache(opciones));
+}
+
+function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
   const hallazgos: Hallazgo[] = [];
   const hallar = (severidad: Severidad, codigo: string, texto: string): void => {
     hallazgos.push({ severidad, codigo, texto });

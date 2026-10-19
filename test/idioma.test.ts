@@ -14,7 +14,7 @@ import { fijarLocaleDelSistema, fijarRaizDelPaquete, idiomaDeEtiqueta, idiomaDel
 import { diagnosticar } from "../src/diagnostico.js";
 import { enIdioma } from "../src/i18n/mensajes.js";
 import { idiomaParaManifiesto, manifiestoNuevo } from "../src/init.js";
-import { Manifiesto, conflictoDeIdioma, documentosPorIdioma, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto } from "../src/manifiesto.js";
+import { Manifiesto, conCacheDelIdioma, conflictoDeIdioma, documentosPorIdioma, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto } from "../src/manifiesto.js";
 import { textoDelPromptDeFase } from "../src/servidor.js";
 import { conectar, textoDe } from "./cliente.js";
 import { configTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
@@ -205,6 +205,35 @@ describe("idioma del proyecto: conflictos", () => {
     manifiesto(docs, { preset: "software" });
     crearTarea(docs, "P", "t", ES);
     assert.equal(conflictoDeIdioma("P"), null);
+  });
+
+  // Hallazgo 12 de la auditoría de la Etapa 6: el recuento no depende del sistema de archivos.
+  it("el recuento compara en NFC y sin mayúsculas, igual en todos los sistemas", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "minusculas", ["01 - technical analysis.md", "02 - DECISIONS.md"]);
+    crearTarea(docs, "P", "nfd", ["01 - Análisis Técnico.md".normalize("NFD")]);
+    crearTarea(docs, "P", "ajenos", ["notas.md", "01 - Analisis Tecnico.md"]);
+    const cuenta = documentosPorIdioma("P");
+    assert.deepEqual(cuenta.en, { documentos: 2, tareas: ["minusculas"] });
+    assert.deepEqual(cuenta.es, { documentos: 1, tareas: ["nfd"] });
+  });
+
+  // Hallazgo 3 de la auditoría de la Etapa 6: dentro de una llamada, cada proyecto se cuenta una vez.
+  it("la caché del recuento vale dentro de una llamada (conCacheDelIdioma) y no fuera", () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "a", ["00 - Initial Context.md"]);
+    conCacheDelIdioma(() => {
+      assert.equal(documentosPorIdioma("P").en.documentos, 1);
+      crearTarea(docs, "P", "b", EN);
+      assert.equal(documentosPorIdioma("P").en.documentos, 1, "la misma llamada no vuelve a contar");
+      // Lo que devuelve es una copia: tocarla no cambia lo guardado.
+      documentosPorIdioma("P").en.tareas.push("x");
+      assert.deepEqual(documentosPorIdioma("P").en.tareas, ["a"]);
+      // Una llamada anidada usa la de fuera.
+      assert.equal(conCacheDelIdioma(() => documentosPorIdioma("P").en.documentos), 1);
+    });
+    assert.equal(documentosPorIdioma("P").en.documentos, 4, "fuera de la llamada, el disco de ahora");
+    assert.equal(conCacheDelIdioma(() => documentosPorIdioma("P").en.documentos), 4, "una llamada nueva cuenta otra vez");
   });
 
   it("sin conflicto: documentos de un solo idioma, el mismo que el declarado", () => {

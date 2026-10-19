@@ -22,7 +22,7 @@ import { CLIENTES, detectarClientes, planDeArchivo, planDeClaude } from "../init
 import type { EntornoInit } from "../init.js";
 import { datosDeCommit } from "../git.js";
 import { VERIFICACIONES_A_LA_VEZ, enParalelo, estadoDeLotes, faseDeLotes, recibosDeLaTarea } from "../lotes.js";
-import { idiomaDelProyecto, leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
+import { conCacheDelIdioma, idiomaDelProyecto, leerManifiesto, presetsDisponibles, resolverRepos } from "../manifiesto.js";
 import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requireProjectFolder, rutaReal, validarSegmento } from "../paths.js";
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
@@ -679,8 +679,10 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
       const m = peticion.ruta.match(patron);
       if (!m) continue;
       if (peticion.metodo !== "GET") return { estado: 405, json: { error: mensaje("STUDIO-SOLO-GET") } };
+      // Una lectura recuenta los documentos por idioma una vez por proyecto. Las acciones y el SSE, no: escriben
+      // o viven más que una petición.
       try {
-        return { estado: 200, json: await atender(m, peticion) };
+        return { estado: 200, json: await conCacheDelIdioma(() => atender(m, peticion)) };
       } catch (error) {
         const codigo = estadoDe(error);
         return { estado: codigo, json: { error: codigo === 500 ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error) } };

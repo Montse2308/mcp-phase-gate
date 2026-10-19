@@ -287,7 +287,10 @@ la región e ignora `LANG` (validación V9).
 **Riesgos aceptados.**
 
 - Contar documentos recorre las carpetas de tarea del proyecto cada vez que se resuelve su idioma (unas
-  doce comprobaciones de existencia por tarea). Se hace solo con nombres de fábrica: una capa propia que
+  doce comprobaciones de existencia por tarea). *Matizado el 2026-10-19:* la auditoría midió que una sola
+  llamada lo repetía varias veces (con 600 tareas, `get_phase_prompt` pasaba de 235 a 3489 ms); ahora se
+  cuenta una vez por proyecto y por llamada (`conCacheDelIdioma`), con un `readdir` por tarea y los nombres
+  comparados en NFC y sin mayúsculas, igual en todos los sistemas. Se hace solo con nombres de fábrica: una capa propia que
   renombra los documentos no cuenta para la deducción, y conviene fijar `idioma` en el manifiesto.
 - La suite se escribió en español: `test/helpers.ts` fija `PHASE_GATE_LANG=es`, y el test que prueba otro
   idioma lo cambia. El idioma del sistema se prueba con `fijarLocaleDelSistema` y no con `LANG`, que en
