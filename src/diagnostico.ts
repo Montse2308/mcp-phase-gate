@@ -79,7 +79,10 @@ export type Diagnostico = {
     tareas: number;
     activa: { tarea: string; origen: "puntero" | "deducida"; fase: string } | null;
     // Desde la Etapa 3: su configuración.
-    manifiesto: string; // "válido", "ausente" o "inválido: <error>"
+    // Un valor canónico, sin texto dentro; el error, aparte y en el idioma de la llamada (hallazgo 20 de la
+    // auditoría de la Etapa 6: antes era "inválido: <error>").
+    manifiesto: "válido" | "ausente" | "inválido";
+    errorDelManifiesto: string | null;
     preset: { nombre: string; origen: string } | null; // null si no se pudo resolver
     reglas: { lotes: boolean; commits: string } | null;
     repos: { id: string; ruta: string | null; origen: string | null; existe: boolean; esGit: boolean; rama: string | null }[];
@@ -203,7 +206,7 @@ type ContextoDeConfiguracion = {
 // El estado de git de cada repo, por "<PROYECTO>/<id>". null: no respondió dentro del plazo.
 export type EstadosDeRepos = Map<string, EstadoDeRepo | null>;
 
-type ConfiguracionDiagnosticada = Pick<Diagnostico["proyectos"][number], "manifiesto" | "preset" | "reglas" | "repos" | "roots">;
+type ConfiguracionDiagnosticada = Pick<Diagnostico["proyectos"][number], "manifiesto" | "errorDelManifiesto" | "preset" | "reglas" | "repos" | "roots">;
 
 function configuracionDelProyecto(
   nombre: string,
@@ -292,7 +295,8 @@ function configuracionDelProyecto(
   }
 
   return {
-    manifiesto: lectura.estado === "valido" ? "válido" : lectura.estado === "ausente" ? "ausente" : `inválido: ${lectura.error}`,
+    manifiesto: lectura.estado === "valido" ? "válido" : lectura.estado === "ausente" ? "ausente" : "inválido",
+    errorDelManifiesto: lectura.estado === "invalido" ? lectura.error : null,
     preset: config ? { nombre: config.preset.nombre, origen: config.origenPreset } : null,
     reglas: config ? { lotes: config.reglas.lotes, commits: config.reglas.commits } : null,
     repos,

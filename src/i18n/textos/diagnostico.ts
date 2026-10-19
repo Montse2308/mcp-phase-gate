@@ -272,14 +272,14 @@ export const TEXTOS_DIAGNOSTICO = {
   },
   "DOCTOR-LINEA-CONFIGURACION": {
     es: (p: LineaConfiguracion) => {
-      const manifiesto = p.manifiesto.startsWith("inválido") ? "manifiesto inválido" : `manifiesto ${p.manifiesto}`;
+      const manifiesto = `manifiesto ${p.manifiesto}`;
       const preset = p.preset ? `preset ${p.preset.nombre} (${p.preset.origen})` : "preset sin resolver";
       const reglas = p.reglas ? ` · lotes ${siNoEs(p.reglas.lotes)} · commits ${p.reglas.commits}` : "";
       const raiz = p.fuerza ? ` · carpeta abierta: coincidencia ${p.fuerza}` : "";
       return `${manifiesto} · ${preset}${reglas}${raiz}`;
     },
     en: (p: LineaConfiguracion) => {
-      const manifiesto = p.manifiesto.startsWith("inválido") ? "invalid manifest" : p.manifiesto === "ausente" ? "no manifest" : `${en(p.manifiesto)} manifest`;
+      const manifiesto = p.manifiesto === "inválido" ? "invalid manifest" : p.manifiesto === "ausente" ? "no manifest" : `${en(p.manifiesto)} manifest`;
       const preset = p.preset ? `preset ${p.preset.nombre} (${en(p.preset.origen)})` : "preset unresolved";
       const reglas = p.reglas ? ` · batches ${siNoEn(p.reglas.lotes)} · commits ${p.reglas.commits}` : "";
       const raiz = p.fuerza ? ` · open folder: ${en(p.fuerza)} match` : "";

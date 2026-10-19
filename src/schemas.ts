@@ -423,7 +423,8 @@ export const diagnosticoShape = {
       activa: z
         .object({ tarea: z.string(), origen: z.enum(["puntero", "deducida"]), fase: z.string() })
         .nullable(),
-      manifiesto: z.string(),
+      manifiesto: z.enum(["válido", "ausente", "inválido"]),
+      errorDelManifiesto: z.string().nullable(),
       preset: z.object({ nombre: z.string(), origen: z.string() }).nullable(),
       reglas: z.object({ lotes: z.boolean(), commits: z.string() }).nullable(),
       repos: z.array(
