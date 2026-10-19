@@ -169,7 +169,7 @@ El disco va antes que el equipo a propósito: los proyectos de la 2.x no tienen 
 | 4 | `04 - Ejecución.md` y `04 - Ejecución/` | `04 - Execution.md` y `04 - Execution/` |
 | 5 | `05 - Auditoría.md` | `05 - Audit.md` |
 
-**Cambiar el idioma de un proyecto no renombra nada.** Si el manifiesto declara un idioma y hay tareas con documentos del otro, `doctor` avisa con `IDIOMA-CON-TAREAS` y `get_phase_prompt` se niega con el mismo mensaje, porque si no esas tareas aparecerían vacías. Devuelve el manifiesto a su idioma, o renombra esas carpetas a mano.
+**Cambiar el idioma de un proyecto no renombra nada.** Si el manifiesto declara un idioma y hay tareas con documentos del otro, `doctor` avisa con `IDIOMA-CON-TAREAS`, y `get_phase_prompt`, `start_task`, `record_batch`, `get_batch_status` y `write_central_doc` con el nombre de un documento de fase se niegan con el mismo mensaje, porque si no esas tareas aparecerían vacías y una tarea nueva mezclaría nombres de los dos idiomas; `list_tasks` lo enseña como aviso. Devuelve el manifiesto a su idioma, o renombra esas carpetas a mano.
 
 **Una tarea en el otro idioma.** En un proyecto en español, `start_task` con `redaccion: "en"` crea la tarea con los nombres y la estructura en español del proyecto, y el prompt le pide a la IA que escriba el contenido en inglés. Al revés es igual.
 

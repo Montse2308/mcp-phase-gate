@@ -44,7 +44,7 @@ import type { RepoResuelto } from "./manifiesto.js";
 import { bloqueDeCommitsConPlazo, estadoDeLotes, registrarLote } from "./lotes.js";
 import { comoManual } from "./recibos.js";
 import type { EstadoLote, TituloCondicional } from "./recibos.js";
-import { condicionalCanonica, estadoCanonico } from "./vocabulario.js";
+import { VOCABULARIO, condicionalCanonica, estadoCanonico } from "./vocabulario.js";
 import { columnaDeConfiguracion, estadoDeRepo, estadosConPlazo, leerArchivoDeRepo, lineaDeEstado, resolverRepo } from "./repos.js";
 import { asegurarCapacidadDePrompts, sincronizarPrompts, vigilarCapas } from "./prompts-mcp.js";
 import { registrarRecursos } from "./recursos.js";
@@ -80,6 +80,27 @@ function responder(texto: string): CallToolResult {
 function mensajeDe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+// IDIOMA-CON-TAREAS (§8.3): el manifiesto declara un idioma y hay tareas con documentos del otro. La
+// deducción daría esas tareas por "sin documentos", así que nada que lea o escriba documentos de fase sigue:
+// get_phase_prompt, start_task, record_batch, get_batch_status y write_central_doc con un nombre de documento
+// de fase se niegan con el texto de doctor (hallazgo 4 de la auditoría de la Etapa 6: antes solo se negaba
+// get_phase_prompt, start_task mezclaba nombres de los dos idiomas en el mismo proyecto y get_batch_status
+// decía que faltaba el plan). list_tasks, que solo lista, lo antepone como aviso.
+function conflictoConTareas(carpetaProyecto: string): string | null {
+  const conflicto = conflictoDeIdioma(carpetaProyecto);
+  return conflicto?.codigo === "IDIOMA-CON-TAREAS" ? `${conflicto.texto} (${conflicto.codigo})` : null;
+}
+
+function negarSiHayTareasDelOtroIdioma(carpetaProyecto: string): void {
+  const texto = conflictoConTareas(carpetaProyecto);
+  if (texto) throw new Error(texto);
+}
+
+// Los nombres de documento de fase de fábrica, en los dos idiomas, comparados sin mayúsculas.
+const DOCUMENTOS_DE_FASE = new Set(
+  (["es", "en"] as const).flatMap((idioma) => [VOCABULARIO[idioma].documentos.contextoInicial, ...VOCABULARIO[idioma].documentos.deFase]).map((n) => n.normalize("NFC").toLowerCase())
+);
 
 // La llamada ya sabe su proyecto, y existe: sus errores y su respuesta, en el idioma de ese proyecto. Un
 // manifiesto que no se puede leer no cambia qué error se lanza: el idioma se queda como estaba.
@@ -330,6 +351,8 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         estrenado = true;
       }
 
+      if (!estrenado) negarSiHayTareasDelOtroIdioma(carpetaProyecto);
+
       validarNombreVisible(taskName, "task_name");
       const carpetaTarea = taskFolderPath(carpetaProyecto, taskName);
       const contextoInicial = path.join(carpetaTarea, contextoInicialDe(carpetaProyecto));
@@ -486,7 +509,8 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
           return `${lineaDeTarea(tarea, phases)}${marca}`;
         });
 
-        bloques.push(mensaje("TOOL-LISTAR-BLOQUE", { carpetaProyecto, total: tareas.length, lineas: lineas.join("\n") }));
+        const aviso = conflictoConTareas(carpetaProyecto);
+        bloques.push(`${aviso ? `${aviso}\n\n` : ""}${mensaje("TOOL-LISTAR-BLOQUE", { carpetaProyecto, total: tareas.length, lineas: lineas.join("\n") })}`);
       }
 
       return responder(bloques.join("\n\n") || mensaje("TOOL-LISTAR-SIN-PROYECTOS"));
@@ -575,6 +599,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         throw fallo("TOOL-ESCRIBIR-FUERA-DE-TAREA");
       }
       fijarIdiomaDelProyecto(ubicacion.carpetaProyecto);
+      if (DOCUMENTOS_DE_FASE.has(ubicacion.relativo.normalize("NFC").toLowerCase())) negarSiHayTareasDelOtroIdioma(ubicacion.carpetaProyecto);
 
       // Con los nombres de documento de SU proyecto: uno que sustituye una fase con otro documento
       // protege ese.
@@ -643,6 +668,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       const args = sinNulos(entrada);
       const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe");
       const carpetaProyecto = requireProjectFolder(nombre);
+      negarSiHayTareasDelOtroIdioma(carpetaProyecto);
 
       // La tarea activa solo si es la que el usuario eligió: escribir en una deducida por fecha sería
       // escribir en la tarea equivocada sin que nadie lo diga.
@@ -683,6 +709,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       const args = sinNulos(entrada);
       const { nombre, deducido } = await proyectoDeLaLlamada(mcp, args.project, "lee");
       const carpetaProyecto = requireProjectFolder(nombre);
+      negarSiHayTareasDelOtroIdioma(carpetaProyecto);
 
       let taskName = args.task_name;
       let nota: string | null = null;
@@ -852,10 +879,7 @@ export async function textoDelPromptDeFase(
 
   // Un proyecto que declara un idioma y tiene tareas en el otro: la deducción las daría por sin
   // documentos, así que el prompt no se entrega (IDIOMA-CON-TAREAS, §8.3), con el mismo texto que doctor.
-  if (carpetaProyecto) {
-    const conflicto = conflictoDeIdioma(carpetaProyecto);
-    if (conflicto?.codigo === "IDIOMA-CON-TAREAS") throw new Error(`${conflicto.texto} (${conflicto.codigo})`);
-  }
+  if (carpetaProyecto) negarSiHayTareasDelOtroIdioma(carpetaProyecto);
 
   // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su
   // lugar sería el fallo silencioso que el manifiesto evita.

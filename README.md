@@ -169,7 +169,7 @@ The disk goes before the machine on purpose: projects from 2.x have no manifest 
 | 4 | `04 - Ejecución.md` and `04 - Ejecución/` | `04 - Execution.md` and `04 - Execution/` |
 | 5 | `05 - Auditoría.md` | `05 - Audit.md` |
 
-**Changing a project's language renames nothing.** If the manifest declares one language and some tasks have documents in the other, `doctor` reports `IDIOMA-CON-TAREAS` and `get_phase_prompt` refuses with the same message, because otherwise those tasks would look empty. Put the manifest back, or rename those folders by hand.
+**Changing a project's language renames nothing.** If the manifest declares one language and some tasks have documents in the other, `doctor` reports `IDIOMA-CON-TAREAS`, and `get_phase_prompt`, `start_task`, `record_batch`, `get_batch_status` and `write_central_doc` with a phase document name refuse with the same message, because otherwise those tasks would look empty and a new task would mix names from both languages; `list_tasks` shows it as a warning. Put the manifest back, or rename those folders by hand.
 
 **A task in the other language.** In a Spanish project, `start_task` with `redaccion: "en"` creates the task with the project's Spanish names and structure, and the prompt asks the AI to write the content in English. The reverse works the same way.
 

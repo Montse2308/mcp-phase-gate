@@ -236,6 +236,37 @@ describe("idioma del proyecto: conflictos", () => {
     assert.equal(conCacheDelIdioma(() => documentosPorIdioma("P").en.documentos), 4, "una llamada nueva cuenta otra vez");
   });
 
+  // Hallazgo 4 de la auditoría de la Etapa 6: antes solo se negaba get_phase_prompt.
+  it("IDIOMA-CON-TAREAS: start_task, record_batch, get_batch_status y write_central_doc de un documento de fase también se niegan; list_tasks avisa", async () => {
+    const { docs } = instalacion();
+    crearTarea(docs, "P", "vieja", ES);
+    manifiesto(docs, { idioma: "en" });
+    const { cliente, cerrar } = await conectar();
+    try {
+      const negada = async (name: string, args: Record<string, unknown>): Promise<void> => {
+        const r = await cliente.callTool({ name, arguments: { project: "P", ...args } });
+        assert.equal(r.isError, true, name);
+        assert.match(textoDe(r), /\(IDIOMA-CON-TAREAS\)$/, name);
+      };
+      await negada("start_task", { task_name: "nueva", initial_context: "x" });
+      assert.equal(fs.existsSync(path.join(docs, "P", "Proyectos", "nueva")), false, "no mezcla nombres de dos idiomas");
+      await negada("record_batch", { task_name: "vieja", lote: 1, estado: "verified", que_se_hizo: "x" });
+      await negada("get_batch_status", { task_name: "vieja" });
+      await negada("write_central_doc", { task_name: "vieja", file_name: "02 - Decisions.md", content: "x" });
+      await negada("write_central_doc", { task_name: "vieja", file_name: "02 - decisiones.md", content: "x" });
+
+      // Un archivo que no es un documento de fase sí se escribe: la escotilla para arreglar a mano sigue.
+      const notas = await cliente.callTool({ name: "write_central_doc", arguments: { project: "P", task_name: "vieja", file_name: "notas.md", content: "x" } });
+      assert.equal(notas.isError, undefined, textoDe(notas));
+
+      const lista = await cliente.callTool({ name: "list_tasks", arguments: { project: "P" } });
+      assert.equal(lista.isError, undefined);
+      assert.match(textoDe(lista), /^P declares "idioma": "en".*\(IDIOMA-CON-TAREAS\)\n\n/s);
+    } finally {
+      await cerrar();
+    }
+  });
+
   it("sin conflicto: documentos de un solo idioma, el mismo que el declarado", () => {
     const { docs } = instalacion();
     crearTarea(docs, "P", "t", ES);

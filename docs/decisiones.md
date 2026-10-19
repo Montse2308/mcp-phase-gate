@@ -267,7 +267,10 @@ regenera): sin `idioma`, se deduce.
 - **`doctor`** da `IDIOMA-MIXTO` (error) si, sin idioma declarado, hay documentos de los dos idiomas, e
   `IDIOMA-CON-TAREAS` (error) si el manifiesto declara uno y hay tareas con documentos del otro.
   `get_phase_prompt` se niega con ese mismo texto: la deducción daría esas tareas por "sin documentos".
-  Cambiar el idioma no renombra nada (P7).
+  Cambiar el idioma no renombra nada (P7). *Ampliado el 2026-10-19:* también se niegan `start_task` (creaba
+  la tarea nueva con los nombres del idioma declarado, y el proyecto mezclaba los dos), `record_batch`,
+  `get_batch_status` y `write_central_doc` con el nombre de un documento de fase; `list_tasks` lo antepone
+  como aviso (hallazgo 4 de la auditoría de la Etapa 6).
 - **`init --migrate`** escribe siempre `idioma` en los manifiestos que crea: el de los documentos del
   proyecto si los tiene (nunca el del sistema), y si no, `--idioma` o lo que se conteste a la pregunta (por
   defecto, el del equipo; sin terminal o con `--yes`, el del equipo sin preguntar). Con `--solo-este-equipo`,
