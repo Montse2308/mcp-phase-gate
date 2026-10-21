@@ -57,7 +57,7 @@
     "diff": "9.0.0",
     "dompurify": "3.4.16",
     "marked": "18.0.14",
-    "preact": "10.29.8",
+    "preact": "11.0.1",
     "typescript": "^6.0.3",
     "vite": "8.3.1"
   }
