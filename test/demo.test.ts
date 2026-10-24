@@ -357,7 +357,9 @@ describe("demo: borrar, preparar y activar", () => {
     fs.writeFileSync(path.join(repo, "a.txt"), "a\n", "utf-8");
     gitEnLaDemo(raiz, repo, ["add", "a.txt"], cuando);
     gitEnLaDemo(raiz, repo, ["commit", "-q", "-m", "a"], cuando);
-    const objeto = fs.readdirSync(path.join(repo, ".git", "objects"), { recursive: true, withFileTypes: true }).find((e) => e.isFile())!;
+    // El auto-mantenimiento de git puede dejar un maintenance.lock efímero en objects/: se elige un
+    // objeto de verdad (los bloqueos de git acaban en .lock) para no chmod un archivo que ya se fue.
+    const objeto = fs.readdirSync(path.join(repo, ".git", "objects"), { recursive: true, withFileTypes: true }).find((e) => e.isFile() && !e.name.endsWith(".lock"))!;
     fs.chmodSync(path.join(objeto.parentPath, objeto.name), 0o444);
     // Un enlace dentro de la demo a una carpeta de fuera: se quita el enlace, no lo que hay detrás.
     const fuera = carpetaTemporal("fuera");
