@@ -99,8 +99,15 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # Como root, el nombre de usuario es "root" y ese texto aparece en la demo inglesa ("root
+      # cause"): la comprobación de que el export no lleva datos del equipo da un falso positivo.
+      # El resto corre como un usuario sin privilegios, igual que en un equipo de verdad.
+      - run: |
+          useradd --create-home corredor
+          chown -R corredor:corredor "$GITHUB_WORKSPACE"
 
-      - run: npm run build
+      - run: su corredor -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && PATH='$PATH' npm ci"
 
-      - run: npm test
+      - run: su corredor -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && PATH='$PATH' npm run build"
+
+      - run: su corredor -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && PATH='$PATH' npm test && id -u"
