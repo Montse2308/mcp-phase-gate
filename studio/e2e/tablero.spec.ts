@@ -90,11 +90,15 @@ test("el visor: un clic en una estación o en un vagón enseña el Markdown y el
 });
 
 test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe la CSP", async ({ page, servidor, registro }) => {
-  // Dos avisos que vienen de las cargas y no del Studio: al analizar el HTML hostil, DOMPurify usa un
-  // documento de DOMParser, que hereda la CSP de la página; un atributo style o un <base href> en ese
-  // documento se bloquean (y se avisan) antes de que DOMPurify los quite. Nada de eso llega a aplicarse.
+  // Tres avisos que vienen del análisis y no del Studio: al analizar el HTML hostil, DOMPurify usa un
+  // documento de DOMParser, que hereda la CSP de la página. Un atributo style o un <base href> en ese
+  // documento se bloquean (y se avisan) antes de que DOMPurify los quite, y con el Chromium nuevo lo
+  // mismo pasa con los atributos on…=: el navegador avisa del manejador en línea antes de que DOMPurify
+  // quite el atributo. Nada de eso llega a ejecutarse ni a quedar en la página (las aserciones de abajo
+  // lo comprueban).
   registro.permitidos.push(/^Applying inline style violates the following Content Security Policy directive 'style-src 'self''/);
   registro.permitidos.push(/^Setting the document's base URI to '.*' violates the following Content Security Policy directive: "base-uri 'none'"/);
+  registro.permitidos.push(/^Executing inline event handler violates the following Content Security Policy directive 'script-src 'self''/);
   const dialogos: string[] = [];
   page.on("dialog", (d) => {
     dialogos.push(d.message());
