@@ -81,7 +81,7 @@ jobs:
   # atributo dateTime de la Bitácora y los bytes del sitio exportado. En ubuntu:24.04 (git 2.43) se
   # reproduce el formato antiguo, que los sistemas con un git más reciente ya no enseñan: así un cambio
   # de formato no se cuela por probar solo en máquinas modernas.
-  git-2.43:
+  git-2-43:
     runs-on: ubuntu-latest
     container: ubuntu:24.04
 
