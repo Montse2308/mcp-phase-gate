@@ -77,10 +77,9 @@ jobs:
 
       - run: npm run test:e2e
 
-  # La fecha de un commit la escribe git de una manera que cambia entre versiones, y de eso depende el
-  # atributo dateTime de la Bitácora y los bytes del sitio exportado. En ubuntu:24.04 (git 2.43) se
-  # reproduce el formato antiguo, que los sistemas con un git más reciente ya no enseñan: así un cambio
-  # de formato no se cuela por probar solo en máquinas modernas.
+  # La fecha de un commit la escribe git de una manera que cambia entre versiones. En ubuntu:24.04
+  # (git 2.43) se reproduce el formato antiguo, que los sistemas con un git más reciente ya no enseñan:
+  # así vigila que la suite no vuelva a depender del formato con que git escribe las fechas.
   git-2-43:
     runs-on: ubuntu-latest
     container: ubuntu:24.04
@@ -90,14 +89,14 @@ jobs:
       # tendría repositorio que probar.
       - run: apt-get update && apt-get install -y git ca-certificates
 
-      - run: git --version && id -u
+      # Imprime la versión y el uid, y falla si no es la 2.43 que el nombre del check promete.
+      - run: git --version && id -u && git --version | grep -q '^git version 2\.43\.'
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: npm
 
       # Como root, el nombre de usuario es "root" y ese texto aparece en la demo inglesa ("root
       # cause"): la comprobación de que el export no lleva datos del equipo da un falso positivo.
@@ -106,7 +105,7 @@ jobs:
           useradd --create-home corredor
           chown -R corredor:corredor "$GITHUB_WORKSPACE"
 
-      - run: su corredor -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && PATH='$PATH' npm ci"
+      - run: su corredor -s /bin/bash -c "id -u && cd '$GITHUB_WORKSPACE' && PATH='$PATH' npm ci"
 
       - run: su corredor -s /bin/bash -c "cd '$GITHUB_WORKSPACE' && PATH='$PATH' npm run build"
 
