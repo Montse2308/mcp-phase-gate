@@ -34,10 +34,3 @@
   --carril: #c7d2dc;
   --traviesa: #6b5a43;
 }
-
-:root[data-modo="cabina"] .estacion {
-  box-shadow: inset 0 3px 0 var(--acento);
-}
-:root[data-modo="cabina"] .estacion-cabecera h2 {
-  text-transform: uppercase;
-}
