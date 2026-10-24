@@ -292,7 +292,13 @@ describe("demo: gitEnLaDemo, la única escritura en git", () => {
     gitEnLaDemo(raiz, repo, ["add", "a.txt"], cuando);
     gitEnLaDemo(raiz, repo, ["commit", "-q", "-m", "a"], cuando);
     assert.equal(fs.existsSync(marcaDelHook), false, "el hook no se ejecutó");
-    assert.equal(git(repo, "log", "--format=%an <%ae> %aI|%cn %cI", "-1"), "Demo <demo@example.invalid> 2026-03-02T10:00:00Z|Demo 2026-03-02T10:00:00Z");
+    // Las fechas se comparan como instantes y no como texto: la misma fecha la escribe git distinta según
+    // su versión (%aI y %cI pueden decir Z o +00:00 para el mismo instante).
+    const [autor = "", fechaAutor = "", committer = "", fechaCommitter = ""] = git(repo, "log", "--format=%an <%ae>|%aI|%cn <%ce>|%cI", "-1").split("|");
+    assert.equal(autor, "Demo <demo@example.invalid>");
+    assert.equal(committer, "Demo <demo@example.invalid>");
+    assert.equal(Date.parse(fechaAutor), Date.parse("2026-03-02T10:00:00.000Z"));
+    assert.equal(Date.parse(fechaCommitter), Date.parse("2026-03-02T10:00:00.000Z"));
 
     // Control: el mismo hook, con git a secas (sin la configuración de quien corre los tests), sí corre y
     // tumba el commit.
