@@ -1,11 +1,12 @@
 name: CI
 
-# En cada PR, y en master al mergear. No se corre en cada push a una rama suelta a propósito:
-# el flujo de este repo siempre pasa por un PR, así que un push a una rama sin PR abierto se
-# revisaría dos veces al abrirlo y ninguna antes.
+# En cada PR, y en master y v4/integracion al mergear. No se corre en cada push a una rama
+# suelta a propósito: el flujo de este repo siempre pasa por un PR, así que un push a una rama
+# sin PR abierto se revisaría dos veces al abrirlo y ninguna antes. v4/integracion es una rama
+# protegida como master: los merges por PR caen ahí y la CI tiene que correr sobre el resultado.
 on:
   push:
-    branches: [master]
+    branches: [master, v4/integracion]
   pull_request:
 
 jobs:
