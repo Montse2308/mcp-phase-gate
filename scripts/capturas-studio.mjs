@@ -1,11 +1,12 @@
-// Las capturas del Studio para los README: el tablero de cupones-de-descuento, en Cabina y en Sobrio, sacadas
-// del sitio estático (la demo, sin datos de nadie) con el Chromium de Playwright, sin abrir ningún navegador
-// a la vista. Se escriben en docs/medios/ y los README las enlazan con una URL absoluta, que también se ve
-// en npmjs.com.
+// Las capturas del Studio: se sacan del sitio estático (la demo, sin datos de nadie) con el Chromium de
+// Playwright, sin abrir ningún navegador a la vista. Por defecto capturan el tablero de cupones-de-descuento,
+// en Cabina y en Sobrio, y se escriben en docs/medios/, desde donde las enlazan los README con una URL
+// absoluta (que también se ve en npmjs.com). --vistas elige qué vistas capturar y --salida, la carpeta.
 //
 // Uso, después de `npm run build` y con Chromium instalado
 // (PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium):
 //   node scripts/capturas-studio.mjs
+//   node scripts/capturas-studio.mjs --vistas red,tablero,taller,vigia,bitacora --salida ../v4-trabajo/capturas/lote-0.2
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -18,8 +19,24 @@ process.env.PLAYWRIGHT_BROWSERS_PATH ??= "0";
 const { chromium } = await import("@playwright/test");
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const salida = path.join(raiz, "docs", "medios");
 const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
+
+// Cada vista: el hash de la demo y qué esperar antes de la foto, algo que solo aparece cuando la vista
+// ya cargó sus datos del sitio estático. La tarea de la demo es TIENDA/cupones-de-descuento.
+const VISTAS = {
+  red: { hash: (sobrio) => `#/red${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByText("TIENDA").first().waitFor(); } },
+  tablero: { hash: (sobrio) => `#/tablero/TIENDA/cupones-de-descuento${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByText("ANULADO").or(pagina.getByText("descartado")).first().waitFor(); } },
+  taller: { hash: (sobrio) => `#/taller/TIENDA?fase=4&tarea=cupones-de-descuento${sobrio ? "&sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByRole("list", { name: "Ranuras" }).waitFor(); } },
+  vigia: { hash: (sobrio) => `#/vigia${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByRole("heading", { name: "Diagnóstico" }).waitFor(); } },
+  bitacora: { hash: (sobrio) => `#/bitacora/TIENDA/cupones-de-descuento${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByRole("list", { name: "Eventos de la tarea" }).waitFor(); } },
+};
+
+// --vistas y --salida. Sin --vistas se captura solo el tablero, como antes de que existieran las opciones.
+const argumentos = process.argv.slice(2);
+const valorDe = (bandera) => (argumentos.includes(bandera) ? argumentos[argumentos.indexOf(bandera) + 1] : undefined);
+const vistas = (valorDe("--vistas") ?? "tablero").split(",").map((v) => v.trim()).filter(Boolean);
+for (const vista of vistas) if (!(vista in VISTAS)) throw new Error(`Vista desconocida: ${vista}. Valores: ${Object.keys(VISTAS).join(", ")}.`);
+const salida = valorDe("--salida") ? path.resolve(valorDe("--salida")) : path.join(raiz, "docs", "medios");
 
 const trabajo = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-phase-gate-capturas-"));
 const servidor = http.createServer((req, res) => {
@@ -44,23 +61,24 @@ try {
   const navegador = await chromium.launch();
   try {
     fs.mkdirSync(salida, { recursive: true });
-    for (const [modo, sufijo] of [["cabina", ""], ["sobrio", "?sobrio=1"]]) {
-      const contexto = await navegador.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce", colorScheme: modo === "sobrio" ? "light" : "dark" });
-      const pagina = await contexto.newPage();
-      pagina.on("request", (peticion) => {
-        if (!peticion.url().startsWith(`${origen}/`) && !peticion.url().startsWith("data:")) throw new Error(`Petición fuera de 127.0.0.1: ${peticion.url()}`);
-      });
-      await pagina.goto(`${origen}/#/tablero/TIENDA/cupones-de-descuento${sufijo}`);
-      await pagina.locator("html").getAttribute("data-modo").then(async (actual) => {
+    for (const vista of vistas) {
+      for (const [modo, sobrio] of [["cabina", false], ["sobrio", true]]) {
+        const contexto = await navegador.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce", colorScheme: modo === "sobrio" ? "light" : "dark" });
+        const pagina = await contexto.newPage();
+        pagina.on("request", (peticion) => {
+          if (!peticion.url().startsWith(`${origen}/`) && !peticion.url().startsWith("data:")) throw new Error(`Petición fuera de 127.0.0.1: ${peticion.url()}`);
+        });
+        await pagina.goto(`${origen}/${VISTAS[vista].hash(sobrio)}`);
+        const actual = await pagina.locator("html").getAttribute("data-modo");
         if (actual !== modo) await pagina.getByRole("button", { name: /^Modo:/ }).click();
-      });
-      await pagina.locator(`html[data-modo="${modo}"]`).waitFor();
-      await pagina.getByText("ANULADO").or(pagina.getByText("descartado")).first().waitFor();
-      await pagina.evaluate(() => document.fonts.ready);
-      const archivo = path.join(salida, `tablero-${modo}.png`);
-      await pagina.screenshot({ path: archivo });
-      console.log(`${path.relative(raiz, archivo)}: ${fs.statSync(archivo).size} bytes`);
-      await contexto.close();
+        await pagina.locator(`html[data-modo="${modo}"]`).waitFor();
+        await VISTAS[vista].listo(pagina);
+        await pagina.evaluate(() => document.fonts.ready);
+        const archivo = path.join(salida, `${vista}-${modo}.png`);
+        await pagina.screenshot({ path: archivo });
+        console.log(`${path.relative(raiz, archivo)}: ${fs.statSync(archivo).size} bytes`);
+        await contexto.close();
+      }
     }
   } finally {
     await navegador.close();
