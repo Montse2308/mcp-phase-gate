@@ -184,12 +184,27 @@ export async function ramasQueContienen(dir: string, sha: string): Promise<strin
   return salida.split(/\r?\n/).map((rama) => rama.trim()).filter(Boolean);
 }
 
+// `%ct` is the commit date in seconds since the Unix epoch: formatting it here — instead of letting git
+// write `%cI` — keeps the result identical to the second, in UTC and ending in Z, whatever git version and
+// whatever timezone stored the commit. `toISOString` would add milliseconds; the slice drops them.
+function isoDeUnix(segundos: string): string {
+  if (!segundos) return "";
+  const instante = Number(segundos) * 1000;
+  if (!Number.isFinite(instante)) return "";
+  const fecha = new Date(instante);
+  if (Number.isNaN(fecha.getTime())) return "";
+  const texto = fecha.toISOString();
+  // Outside years 0000-9999 Date writes "+010000-…", which is not AAAA-MM-DDTHH:MM:SSZ: there is no
+  // canonical text for that instant, so it is left empty instead of making one up.
+  return /^\d{4}-\d{2}-\d{2}T/.test(texto) ? texto.slice(0, 19) + "Z" : "";
+}
+
 // --no-show-signature: con log.showSignature en la configuración, `show` verifica la firma y ejecuta
 // gpg.program, que también puede venir en .git/config.
 export async function datosDeCommit(dir: string, sha: string): Promise<{ sha: string; corto: string; fecha: string; asunto: string }> {
-  const salida = await git(dir, ["show", "-s", "--no-show-signature", "--format=%H%n%h%n%cI%n%s", "--abbrev=7", sha]);
-  const [completo = "", corto = "", fecha = "", ...asunto] = salida.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
-  return { sha: completo.trim(), corto: corto.trim(), fecha: fecha.trim(), asunto: asunto.join("\n").trim() };
+  const salida = await git(dir, ["show", "-s", "--no-show-signature", "--format=%H%n%h%n%ct%n%s", "--abbrev=7", sha]);
+  const [completo = "", corto = "", segundos = "", ...asunto] = salida.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+  return { sha: completo.trim(), corto: corto.trim(), fecha: isoDeUnix(segundos.trim()), asunto: asunto.join("\n").trim() };
 }
 
 // Los archivos que toca un commit, con / y tal como los guarda git. -z: sin comillas ni escapes en los
@@ -251,7 +266,9 @@ export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string
     GIT_TERMINAL_PROMPT: "0",
     LC_ALL: "C",
   };
-  const fijos = [...ARGUMENTOS_FIJOS, "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", "-c", `core.hooksPath=${path.join(raizDemo, ".sin-hooks")}`];
+  // The demo is ephemeral: git's auto-maintenance is disabled so a commit does not leave a
+  // `git maintenance run --auto` writing into the folder after it returns (racing with its removal).
+  const fijos = [...ARGUMENTOS_FIJOS, "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", `core.hooksPath=${path.join(raizDemo, ".sin-hooks")}`];
   return execFileSync("git", [...fijos, ...args], { cwd: dir, env, timeout: ESPERA_DE_GIT_MS, maxBuffer: SALIDA_MAXIMA, windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
