@@ -124,6 +124,14 @@ test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe
     await expect(visor.locator(etiqueta)).toHaveCount(0);
   }
   await expect(visor.locator("[style], [onerror], [onload], [onclick], [onmouseover], [ontoggle]")).toHaveCount(0);
+  // Ningún atributo que empiece por "on" queda en el visor: la lista de arriba es lo que trae el documento
+  // hostil, pero un manejador nuevo (onfocus, onanimationstart…) se colaría si no se mira el nombre entero.
+  expect(
+    await visor.evaluate((el) => {
+      const nombres = [el, ...el.querySelectorAll("*")].flatMap((n) => [...n.attributes].map((a) => a.name));
+      return nombres.filter((n) => n.toLowerCase().startsWith("on"));
+    })
+  ).toEqual([]);
   // Ninguna imagen se carga: la externa, la relativa y el svg incrustado quedan como texto.
   await expect(visor.locator("img")).toHaveCount(0);
   expect(await visor.locator(".imagen-externa").count()).toBeGreaterThanOrEqual(3);
