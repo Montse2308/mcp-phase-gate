@@ -191,7 +191,12 @@ function isoDeUnix(segundos: string): string {
   if (!segundos) return "";
   const instante = Number(segundos) * 1000;
   if (!Number.isFinite(instante)) return "";
-  return new Date(instante).toISOString().slice(0, 19) + "Z";
+  const fecha = new Date(instante);
+  if (Number.isNaN(fecha.getTime())) return "";
+  const texto = fecha.toISOString();
+  // Outside years 0000-9999 Date writes "+010000-…", which is not AAAA-MM-DDTHH:MM:SSZ: there is no
+  // canonical text for that instant, so it is left empty instead of making one up.
+  return /^\d{4}-\d{2}-\d{2}T/.test(texto) ? texto.slice(0, 19) + "Z" : "";
 }
 
 // --no-show-signature: con log.showSignature en la configuración, `show` verifica la firma y ejecuta
@@ -261,7 +266,9 @@ export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string
     GIT_TERMINAL_PROMPT: "0",
     LC_ALL: "C",
   };
-  const fijos = [...ARGUMENTOS_FIJOS, "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", "-c", `core.hooksPath=${path.join(raizDemo, ".sin-hooks")}`];
+  // The demo is ephemeral: git's auto-maintenance is disabled so a commit does not leave a
+  // `git maintenance run --auto` writing into the folder after it returns (racing with its removal).
+  const fijos = [...ARGUMENTOS_FIJOS, "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", `core.hooksPath=${path.join(raizDemo, ".sin-hooks")}`];
   return execFileSync("git", [...fijos, ...args], { cwd: dir, env, timeout: ESPERA_DE_GIT_MS, maxBuffer: SALIDA_MAXIMA, windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
