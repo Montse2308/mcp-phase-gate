@@ -116,7 +116,7 @@ const vista = (hash) => `${origen}/#${hash}${hash.includes("?") ? "&" : "?"}lang
 const listo = (pagina) => pagina.evaluate(() => document.fonts.ready);
 
 try {
-  // 3. La Red: los tres proyectos de la demo como estaciones, con sus vías (repos y rama).
+  // 3. La Red: los tres proyectos de la demo, una fila cada uno con su preset, sus repos y su rama.
   await escena(3, TAMANO, async (p) => {
     await p.goto(vista("/red"));
     for (const proyecto of guion.proyectos) await p.getByRole("heading", { name: proyecto.nombre }).waitFor();
