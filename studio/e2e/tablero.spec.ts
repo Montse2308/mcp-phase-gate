@@ -90,11 +90,15 @@ test("el visor: un clic en una estación o en un vagón enseña el Markdown y el
 });
 
 test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe la CSP", async ({ page, servidor, registro }) => {
-  // Dos avisos que vienen de las cargas y no del Studio: al analizar el HTML hostil, DOMPurify usa un
-  // documento de DOMParser, que hereda la CSP de la página; un atributo style o un <base href> en ese
-  // documento se bloquean (y se avisan) antes de que DOMPurify los quite. Nada de eso llega a aplicarse.
+  // Tres avisos que vienen del análisis y no del Studio: al analizar el HTML hostil, DOMPurify usa un
+  // documento de DOMParser, que hereda la CSP de la página. Un atributo style o un <base href> en ese
+  // documento se bloquean (y se avisan) antes de que DOMPurify los quite, y con el Chromium nuevo lo
+  // mismo pasa con los atributos on…=: el navegador avisa del manejador en línea antes de que DOMPurify
+  // quite el atributo. Nada de eso llega a ejecutarse ni a quedar en la página (las aserciones de abajo
+  // lo comprueban).
   registro.permitidos.push(/^Applying inline style violates the following Content Security Policy directive 'style-src 'self''/);
   registro.permitidos.push(/^Setting the document's base URI to '.*' violates the following Content Security Policy directive: "base-uri 'none'"/);
+  registro.permitidos.push(/^Executing inline event handler violates the following Content Security Policy directive 'script-src 'self''/);
   const dialogos: string[] = [];
   page.on("dialog", (d) => {
     dialogos.push(d.message());
@@ -120,6 +124,14 @@ test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe
     await expect(visor.locator(etiqueta)).toHaveCount(0);
   }
   await expect(visor.locator("[style], [onerror], [onload], [onclick], [onmouseover], [ontoggle]")).toHaveCount(0);
+  // Ningún atributo que empiece por "on" queda en el visor: la lista de arriba es lo que trae el documento
+  // hostil, pero un manejador nuevo (onfocus, onanimationstart…) se colaría si no se mira el nombre entero.
+  expect(
+    await visor.evaluate((el) => {
+      const nombres = [el, ...el.querySelectorAll("*")].flatMap((n) => [...n.attributes].map((a) => a.name));
+      return nombres.filter((n) => n.toLowerCase().startsWith("on"));
+    })
+  ).toEqual([]);
   // Ninguna imagen se carga: la externa, la relativa y el svg incrustado quedan como texto.
   await expect(visor.locator("img")).toHaveCount(0);
   expect(await visor.locator(".imagen-externa").count()).toBeGreaterThanOrEqual(3);

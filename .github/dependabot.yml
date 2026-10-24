@@ -16,6 +16,10 @@ updates:
       # con los de una versión más nueva se podría usar sin aviso una API que en 22 no existe.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # Preact 11 se deja para más adelante: su salto mayor se revisa aparte, no como
+      # mantenimiento semanal.
+      - dependency-name: preact
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: weekly }

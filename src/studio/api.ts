@@ -443,7 +443,7 @@ function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string,
 // La línea de tiempo de la tarea (§7.7.5), de lo más reciente a lo más antiguo:
 //   documento     el mtime de cada documento que existe (creado o modificado: el disco no distingue);
 //   recibo        el `registrado` del frontmatter de cada recibo (o su mtime, si es de la 2.x);
-//   commit        la fecha del commit anclado (%cI), con su asunto y su SHA corto (datosDeCommit);
+//   commit        la fecha del commit anclado (%ct, en UTC), con su asunto y su SHA corto (datosDeCommit);
 //   reanclaje     la fecha de cada línea "Reanclado el …" de la sección "Verificación del commit";
 //   fase-cerrada  el `registrado` más reciente de los recibos, si la fase tiene su documento.
 // Una escritura con confirmación (force o elicitation) no deja rastro propio en el disco —un recibo de la
