@@ -184,12 +184,22 @@ export async function ramasQueContienen(dir: string, sha: string): Promise<strin
   return salida.split(/\r?\n/).map((rama) => rama.trim()).filter(Boolean);
 }
 
+// `%ct` is the commit date in seconds since the Unix epoch: formatting it here — instead of letting git
+// write `%cI` — keeps the result identical to the second, in UTC and ending in Z, whatever git version and
+// whatever timezone stored the commit. `toISOString` would add milliseconds; the slice drops them.
+function isoDeUnix(segundos: string): string {
+  if (!segundos) return "";
+  const instante = Number(segundos) * 1000;
+  if (!Number.isFinite(instante)) return "";
+  return new Date(instante).toISOString().slice(0, 19) + "Z";
+}
+
 // --no-show-signature: con log.showSignature en la configuración, `show` verifica la firma y ejecuta
 // gpg.program, que también puede venir en .git/config.
 export async function datosDeCommit(dir: string, sha: string): Promise<{ sha: string; corto: string; fecha: string; asunto: string }> {
-  const salida = await git(dir, ["show", "-s", "--no-show-signature", "--format=%H%n%h%n%cI%n%s", "--abbrev=7", sha]);
-  const [completo = "", corto = "", fecha = "", ...asunto] = salida.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
-  return { sha: completo.trim(), corto: corto.trim(), fecha: fecha.trim(), asunto: asunto.join("\n").trim() };
+  const salida = await git(dir, ["show", "-s", "--no-show-signature", "--format=%H%n%h%n%ct%n%s", "--abbrev=7", sha]);
+  const [completo = "", corto = "", segundos = "", ...asunto] = salida.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+  return { sha: completo.trim(), corto: corto.trim(), fecha: isoDeUnix(segundos.trim()), asunto: asunto.join("\n").trim() };
 }
 
 // Los archivos que toca un commit, con / y tal como los guarda git. -z: sin comillas ni escapes en los
