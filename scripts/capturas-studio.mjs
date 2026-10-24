@@ -40,7 +40,9 @@ const { values: argumentos } = parseArgs({
 const vistas = (argumentos.vistas ?? "tablero").split(",").map((v) => v.trim()).filter(Boolean);
 if (vistas.length === 0) throw new Error("--vistas necesita al menos una vista: red, tablero, taller, vigia, bitacora.");
 for (const vista of vistas) if (!Object.hasOwn(VISTAS, vista)) throw new Error(`Vista desconocida: ${vista}. Valores: ${Object.keys(VISTAS).join(", ")}.`);
-const salida = argumentos.salida ? path.resolve(argumentos.salida) : path.join(raiz, "docs", "medios");
+// Un --salida vacío (--salida= o una variable sin definir) es un error: si no, las capturas caerían en docs/medios/.
+if (argumentos.salida !== undefined && !argumentos.salida.trim()) throw new Error("--salida necesita una carpeta.");
+const salida = argumentos.salida !== undefined ? path.resolve(argumentos.salida) : path.join(raiz, "docs", "medios");
 const paginaCompleta = argumentos.vistas !== undefined;
 
 const trabajo = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-phase-gate-capturas-"));
