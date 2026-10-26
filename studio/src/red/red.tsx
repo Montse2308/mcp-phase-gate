@@ -1,10 +1,11 @@
 // La Red: una fila por proyecto, en una lista que se despliega. Plegada, cada fila dice el preset y de dónde
-// sale, el git de cada repo, la tarea activa y qué sesión MCP lo tiene abierto; desplegada, añade el
-// manifiesto, las reglas, el rol de cada repo y las acciones. El nombre va en un h2 que envuelve el botón que
-// despliega la fila. Cada estado lleva su forma y su texto, nunca solo color. La misma estructura en los dos
-// modos: solo cambian los colores.
+// sale (con un aviso si el manifiesto es inválido o la configuración falla), el git y el rol de cada repo, la
+// tarea activa y qué sesión MCP lo tiene abierto; desplegada, añade el manifiesto, las reglas y las acciones.
+// Con muchos repos, la fila plegada dice cuántos hay en cada estado y la lista completa va al detalle. El
+// nombre va en un h2 que envuelve el botón que despliega la fila. Cada estado lleva su forma y su texto, nunca
+// solo color. La misma estructura en los dos modos: solo cambian los colores.
 
-import { useState } from "preact/hooks";
+import { useId, useState } from "preact/hooks";
 
 import type { ProyectoApi, ProyectosRespuesta, RepoApi } from "../../../src/studio/contrato.js";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
@@ -12,6 +13,7 @@ import { Marca } from "../comun/marcas";
 import type { Forma, Tono } from "../comun/marcas";
 import { AccionesDeProyecto } from "./acciones";
 import { t, tn } from "../i18n/idioma";
+import type { ClavePlural } from "../i18n/idioma";
 import { enlace } from "../rutas";
 
 type Estado = { forma: Forma; tono: Tono; texto: string };
@@ -52,20 +54,26 @@ export function origenDelPreset(origen: string): string {
   return clave ? t(clave) : origen;
 }
 
+// Lo que tiene que verse sin desplegar la fila: un manifiesto inválido, o un error de configuración.
+export function alertaDelProyecto(p: ProyectoApi): Estado | null {
+  if (p.manifiesto.estado === "invalido") return estadoDelManifiesto(p);
+  if (p.errorDeConfiguracion) return { forma: "triangulo", tono: "ambar", texto: t("red.configuracionConError") };
+  return null;
+}
+
 function presetDe(p: ProyectoApi): string {
   return p.preset ? `${p.preset.nombre} · ${origenDelPreset(p.preset.origen)}` : t("red.presetSinResolver");
 }
 
-function LineaDeEstado({ estado }: { estado: Estado }) {
+function LineaDeEstado({ estado, clase }: { estado: Estado; clase?: string }) {
   return (
-    <p class={`linea tono-${estado.tono}`}>
+    <p class={`linea tono-${estado.tono}${clase ? ` ${clase}` : ""}`}>
       <Marca forma={estado.forma} tono={estado.tono} /> {estado.texto}
     </p>
   );
 }
 
-// El rol de cada repo solo se dice con la fila desplegada.
-function Repos({ p, abierto }: { p: ProyectoApi; abierto: boolean }) {
+function Repos({ p }: { p: ProyectoApi }) {
   if (!p.repos.length) return <p class="linea secundaria">{t("red.sinRepos")}</p>;
   return (
     <ul class="repos" aria-label={t("red.repositoriosDe", { proyecto: p.nombre })}>
@@ -74,11 +82,42 @@ function Repos({ p, abierto }: { p: ProyectoApi; abierto: boolean }) {
         return (
           <li key={r.id} class={`tono-${e.tono}`}>
             <Marca forma={e.forma} tono={e.tono} /> <code>{r.id}</code>
-            {abierto && r.rol ? <span class="secundaria"> ({r.rol})</span> : null} · {e.texto}
+            {r.rol ? <span class="secundaria"> ({r.rol})</span> : null} · {e.texto}
           </li>
         );
       })}
     </ul>
+  );
+}
+
+// Con más repos que estos, la fila plegada dice cuántos hay en cada estado, y la lista va al detalle.
+export const REPOS_EN_LA_FILA = 6;
+
+// Los estados de un repo, de más grave a menos, con su texto para el resumen.
+const GRUPOS_DE_REPOS: { forma: Forma; tono: Tono; clave: ClavePlural }[] = [
+  { forma: "rombo", tono: "rojo", clave: "red.reposNoExisten" },
+  { forma: "triangulo", tono: "ambar", clave: "red.reposConError" },
+  { forma: "anillo", tono: "ambar", clave: "red.reposConCambios" },
+  { forma: "raya", tono: "apagado", clave: "red.reposSinGit" },
+  { forma: "lleno", tono: "verde", clave: "red.reposLimpios" },
+];
+
+function ResumenDeRepos({ p }: { p: ProyectoApi }) {
+  const formas = p.repos.map((r) => estadoDelRepo(r).forma);
+  return (
+    <>
+      <p class="linea">{tn("red.reposTotal", p.repos.length)}</p>
+      <ul class="repos" aria-label={t("red.resumenDeRepositorios", { proyecto: p.nombre })}>
+        {GRUPOS_DE_REPOS.map((g) => {
+          const n = formas.filter((f) => f === g.forma).length;
+          return n ? (
+            <li key={g.forma} class={`tono-${g.tono}`}>
+              <Marca forma={g.forma} tono={g.tono} /> {tn(g.clave, n)}
+            </li>
+          ) : null;
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -105,17 +144,49 @@ function Flecha() {
   );
 }
 
+// Las filas desplegadas se recuerdan mientras dure la pestaña: al ir a otra vista y volver, siguen abiertas.
+// sessionStorage puede fallar (almacenamiento bloqueado): entonces solo se recuerdan mientras dure la página.
+const CLAVE_DESPLEGADAS = "pg-red-desplegadas";
+
+function leerDesplegadas(): Set<string> {
+  try {
+    const valor: unknown = JSON.parse(window.sessionStorage.getItem(CLAVE_DESPLEGADAS) ?? "[]");
+    return new Set(Array.isArray(valor) ? valor.filter((v): v is string => typeof v === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+const desplegadas = leerDesplegadas();
+
+function recordar(nombre: string, abierto: boolean): void {
+  if (abierto) desplegadas.add(nombre);
+  else desplegadas.delete(nombre);
+  try {
+    window.sessionStorage.setItem(CLAVE_DESPLEGADAS, JSON.stringify([...desplegadas]));
+  } catch {
+    // sin almacenamiento, el despliegue dura lo que la página
+  }
+}
+
 function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: string[]; recargar: () => void }) {
-  const [abierto, setAbierto] = useState(false);
-  const sufijo = p.nombre.replace(/[^\w-]/g, "_");
-  const titulo = `proyecto-${sufijo}`;
-  const detalle = `detalle-${sufijo}`;
+  const [abierto, setAbierto] = useState(() => desplegadas.has(p.nombre));
+  // Con useId, dos nombres que solo difieren en espacios o acentos no comparten id.
+  const id = useId();
+  const titulo = `${id}-titulo`;
+  const detalle = `${id}-detalle`;
+  const alerta = alertaDelProyecto(p);
+  const muchos = p.repos.length > REPOS_EN_LA_FILA;
+  const alternar = () => {
+    recordar(p.nombre, !abierto);
+    setAbierto(!abierto);
+  };
   return (
     <li>
       <article class="fila-proyecto" aria-labelledby={titulo}>
         <div class="fila-resumen">
           <h2 id={titulo}>
-            <button type="button" class="desplegar" aria-expanded={abierto} aria-controls={detalle} onClick={() => setAbierto(!abierto)}>
+            <button type="button" class="desplegar" aria-expanded={abierto} aria-controls={detalle} onClick={alternar}>
               <Flecha />
               {p.nombre}
             </button>
@@ -123,13 +194,14 @@ function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: str
           <dl class="campos">
             <div class="campo campo-preset">
               <dt>{t("red.campoPreset")}</dt>
-              <dd>{presetDe(p)}</dd>
+              <dd>
+                {presetDe(p)}
+                {alerta ? <LineaDeEstado estado={alerta} clase="alerta-proyecto" /> : null}
+              </dd>
             </div>
             <div class="campo campo-repos">
               <dt>{t("red.campoRepos")}</dt>
-              <dd>
-                <Repos p={p} abierto={abierto} />
-              </dd>
+              <dd>{muchos ? <ResumenDeRepos p={p} /> : <Repos p={p} />}</dd>
             </div>
             <div class="campo campo-tarea">
               <dt>{t("red.campoTareaActiva")}</dt>
@@ -159,6 +231,14 @@ function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: str
               <div class="campo campo-reglas">
                 <dt>{t("red.campoReglas")}</dt>
                 <dd>{t("red.reglas", { lotes: t(p.reglas.lotes ? "comun.si" : "comun.no"), commits: p.reglas.commits })}</dd>
+              </div>
+            ) : null}
+            {muchos ? (
+              <div class="campo campo-repos-todos">
+                <dt>{t("red.campoRepos")}</dt>
+                <dd>
+                  <Repos p={p} />
+                </dd>
               </div>
             ) : null}
           </dl>

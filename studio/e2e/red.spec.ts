@@ -1,6 +1,7 @@
 // La Red en Chromium real: una fila por proyecto, en una lista que se despliega, con la misma estructura en
-// los dos modos. Plegada dice el nombre, el preset, el git de cada repo, la tarea activa y la sesión;
-// desplegada, además, el manifiesto, las reglas, el rol de cada repo y las acciones.
+// los dos modos. Plegada dice el nombre, el preset (con el aviso de un manifiesto inválido o de un error de
+// configuración), el git y el rol de cada repo, la tarea activa y la sesión; desplegada, además, el
+// manifiesto, las reglas y las acciones.
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
@@ -14,7 +15,18 @@ const fila = (page: Page, nombre: string) => page.getByRole("article", { name: n
 // El nombre de cada proyecto va en un h2 que envuelve el botón que despliega su fila.
 const desplegar = (page: Page, nombre: string) => fila(page, nombre).getByRole("heading", { level: 2, name: nombre }).getByRole("button");
 
-test("plegada: cada fila dice el nombre, el preset, el git de cada repo con su forma, la tarea activa y la sesión", async ({ page, servidor, registro }) => {
+// Cambia en el navegador la respuesta de /api/proyectos: el servidor no llega a algunos estados con los fixtures.
+type Proyecto = { nombre: string; repos: Record<string, unknown>[] } & Record<string, unknown>;
+async function cambiarProyectos(page: Page, cambiar: (datos: { proyectos: Proyecto[]; error: string | null }) => void): Promise<void> {
+  await page.route("**/api/proyectos", async (route) => {
+    const respuesta = await route.fetch();
+    const datos = await respuesta.json();
+    cambiar(datos);
+    await route.fulfill({ response: respuesta, json: datos });
+  });
+}
+
+test("plegada: cada fila dice el nombre, el preset, el git y el rol de cada repo con su forma, la tarea activa, la sesión y el aviso del manifiesto inválido", async ({ page, servidor, registro }) => {
   await page.goto(`${servidor.origen}/#/red`);
   await expect(page.getByRole("heading", { level: 1, name: "Red de proyectos" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Proyectos de la Documentación" }).getByRole("article")).toHaveCount(5);
@@ -22,7 +34,7 @@ test("plegada: cada fila dice el nombre, el preset, el git de cada repo con su f
   await expect(desplegar(page, "TIENDA")).toHaveAttribute("aria-expanded", "false");
   await expect(tienda.locator(".campo-preset dd")).toHaveText("multi-repo-feature · del proyecto");
   const api = tienda.getByRole("listitem").filter({ hasText: "api" });
-  await expect(api).toHaveText("api · rama main · árbol limpio");
+  await expect(api).toHaveText("api (backend) · rama main · árbol limpio");
   await expect(api.locator("svg.marca-lleno")).toHaveCount(1);
   const web = tienda.getByRole("listitem").filter({ hasText: "web" });
   await expect(web).toHaveText("web · sin git");
@@ -37,14 +49,18 @@ test("plegada: cada fila dice el nombre, el preset, el git de cada repo con su f
   // Lo de la fila desplegada no se ve.
   await expect(tienda.locator(".campo-manifiesto")).toBeHidden();
   await expect(tienda.getByRole("button", { name: "Cambiar el preset: vista previa" })).toBeHidden();
-  await expect(tienda.getByText("(backend)")).toHaveCount(0);
+  await expect(tienda.locator(".alerta-proyecto")).toHaveCount(0);
 
   const investigacion = fila(page, "INVESTIGACION");
   await expect(investigacion.locator(".campo-tarea dd")).toContainText("costos (deducida, la más reciente)");
   await expect(investigacion.locator(".campo-repos dd")).toHaveText("Sin repos declarados.");
   await expect(investigacion.locator(".campo-sesion dd")).toHaveText("Ninguna sesión MCP lo tiene abierto");
   await expect(investigacion.locator(".campo-sesion svg.marca-vacio")).toHaveCount(1);
-  await expect(fila(page, "ROTO").locator(".campo-tarea dd")).toHaveText("Sin tareas todavía.");
+  const roto = fila(page, "ROTO");
+  await expect(roto.locator(".campo-tarea dd")).toHaveText("Sin tareas todavía.");
+  // El manifiesto inválido se ve sin desplegar, con su forma.
+  await expect(roto.locator(".campo-preset .alerta-proyecto")).toHaveText("phase-gate.json inválido");
+  await expect(roto.locator(".campo-preset .alerta-proyecto svg.marca-rombo")).toHaveCount(1);
   for (const modo of ["cabina", "sobrio"] as const) {
     await ponerModo(page, modo);
     await ningunEstadoSoloColor(page);
@@ -111,11 +127,11 @@ test("los estados que el árbol de prueba no tiene: cada forma de repo, el error
   await page.goto(`${servidor.origen}/#/red`);
   const tienda = fila(page, "TIENDA");
   const casos = [
-    ["perdido", "rombo", "perdido · no existe en este equipo"],
-    ["lento", "triangulo", "lento · git no respondió a tiempo"],
-    ["raro", "triangulo", "raro · fatal: algo raro"],
-    ["sucio", "anillo", "sucio · rama main · 3 cambios sin commit · 1 adelante, 2 atrás"],
-    ["suelto", "lleno", "suelto · separado en abc1234 · árbol limpio"],
+    ["perdido", "rombo", "perdido (backend) · no existe en este equipo"],
+    ["lento", "triangulo", "lento (backend) · git no respondió a tiempo"],
+    ["raro", "triangulo", "raro (backend) · fatal: algo raro"],
+    ["sucio", "anillo", "sucio (backend) · rama main · 3 cambios sin commit · 1 adelante, 2 atrás"],
+    ["suelto", "lleno", "suelto (backend) · separado en abc1234 · árbol limpio"],
   ] as const;
   for (const [id, forma, texto] of casos) {
     const repo = tienda.getByRole("listitem").filter({ hasText: id });
@@ -124,9 +140,94 @@ test("los estados que el árbol de prueba no tiene: cada forma de repo, el error
   }
   await expect(tienda.locator(".campo-tarea dd")).toHaveText("3 tareas, ninguna activa.");
   await expect(tienda.getByRole("link", { name: "Abrir tablero" })).toHaveCount(0);
+  // Plegada, el error de configuración se avisa junto al preset; desplegada, dice cuál es.
+  await expect(tienda.locator(".campo-preset .alerta-proyecto")).toHaveText("la configuración tiene un error");
+  await expect(tienda.locator(".campo-preset .alerta-proyecto svg.marca-triangulo")).toHaveCount(1);
   await desplegar(page, "TIENDA").click();
   await expect(tienda.locator(".campo-manifiesto .detalle-error")).toHaveText("la configuración de prueba no se pudo leer");
   await ningunEstadoSoloColor(page);
+});
+
+test("con muchos repos, la fila plegada dice cuántos hay en cada estado y la lista completa va al detalle", async ({ page, servidor }) => {
+  await cambiarProyectos(page, (datos) => {
+    const tienda = datos.proyectos.find((p) => p.nombre === "TIENDA")!;
+    const base = tienda.repos[0]!;
+    const limpios = Array.from({ length: 6 }, (_, i) => ({ ...base, id: `limpio-${i}`, rol: `rol-${i}` }));
+    tienda.repos = [...limpios, { ...base, id: "sucio", limpio: false, cambios: 1 }, { ...base, id: "perdido", existe: false }];
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${servidor.origen}/#/red`);
+  const tienda = fila(page, "TIENDA");
+  const resumen = tienda.getByRole("list", { name: "Resumen de los repositorios de TIENDA" });
+  await expect(tienda.locator(".campo-repos dd")).toContainText("8 repos");
+  // De más grave a menos, cada estado con su forma.
+  await expect(resumen.getByRole("listitem")).toHaveText(["1 no existe", "1 con cambios", "6 limpios"]);
+  await expect(resumen.getByRole("listitem").nth(0).locator("svg.marca-rombo")).toHaveCount(1);
+  await expect(resumen.getByRole("listitem").nth(1).locator("svg.marca-anillo")).toHaveCount(1);
+  await expect(resumen.getByRole("listitem").nth(2).locator("svg.marca-lleno")).toHaveCount(1);
+  const lista = tienda.getByRole("list", { name: "Repositorios de TIENDA", exact: true });
+  await expect(lista).toBeHidden();
+  await desplegar(page, "TIENDA").click();
+  await expect(lista.getByRole("listitem")).toHaveCount(8);
+  await expect(lista.getByRole("listitem").filter({ hasText: "limpio-0" })).toHaveText("limpio-0 (rol-0) · rama main · árbol limpio");
+  await ningunEstadoSoloColor(page);
+  await sinDesbordamiento(page, "la Red con muchos repos");
+  await sinViolacionesGraves(page, "la Red con muchos repos");
+});
+
+test("dos proyectos cuyo nombre solo difiere en un espacio o un acento: cada fila con sus ids, su nombre y su detalle", async ({ page, servidor }) => {
+  await cambiarProyectos(page, (datos) => {
+    const tienda = datos.proyectos.find((p) => p.nombre === "TIENDA")!;
+    datos.proyectos.push({ ...tienda, nombre: "mi proyecto" }, { ...tienda, nombre: "mi_proyecto" }, { ...tienda, nombre: "Diseño" }, { ...tienda, nombre: "Dise_o" });
+  });
+  await page.goto(`${servidor.origen}/#/red`);
+  await expect(page.getByRole("article")).toHaveCount(9);
+  const ids = await page.evaluate(() => [...document.querySelectorAll("[id]")].map((e) => e.id));
+  expect(ids.filter((id, i) => ids.indexOf(id) !== i), "ids repetidos").toEqual([]);
+  for (const nombre of ["mi proyecto", "mi_proyecto", "Diseño", "Dise_o"]) {
+    await expect(fila(page, nombre), nombre).toHaveCount(1);
+    await desplegar(page, nombre).click();
+    const controla = await desplegar(page, nombre).getAttribute("aria-controls");
+    await expect(fila(page, nombre).locator(`[id="${controla}"]`), nombre).toBeVisible();
+    await expect(fila(page, nombre).getByLabel("Preset", { exact: true }), nombre).toBeVisible();
+  }
+});
+
+test("sin proyectos, o con un error de la API: el aviso, y ninguna lista", async ({ page, servidor }) => {
+  let error: string | null = null;
+  await cambiarProyectos(page, (datos) => {
+    datos.proyectos = [];
+    datos.error = error;
+  });
+  await page.goto(`${servidor.origen}/#/red`);
+  await expect(page.getByText("No hay proyectos en la Documentación todavía.")).toBeVisible();
+  await expect(page.locator("ul.proyectos")).toHaveCount(0);
+  for (const modo of ["cabina", "sobrio"] as const) {
+    await ponerModo(page, modo);
+    await sinViolacionesGraves(page, `la Red vacía en modo ${modo}`);
+  }
+  error = "no se pudo leer la Documentación de prueba";
+  await page.reload();
+  await expect(page.getByRole("alert")).toHaveText("no se pudo leer la Documentación de prueba");
+  await expect(page.getByText("No hay proyectos en la Documentación todavía.")).toHaveCount(0);
+  await expect(page.locator("ul.proyectos")).toHaveCount(0);
+});
+
+test("la fila desplegada sigue desplegada al ir a otra vista y volver", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/red`);
+  await desplegar(page, "TALLER").click();
+  await expect(desplegar(page, "TALLER")).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("link", { name: "Tablero", exact: true }).click();
+  await expect(page).toHaveURL(/#\/tablero$/);
+  await page.getByRole("link", { name: "Red", exact: true }).click();
+  await expect(desplegar(page, "TALLER")).toHaveAttribute("aria-expanded", "true");
+  await expect(fila(page, "TALLER").locator(".campo-manifiesto dd")).toBeVisible();
+  await expect(desplegar(page, "TIENDA")).toHaveAttribute("aria-expanded", "false");
+  // Plegarla también se recuerda.
+  await desplegar(page, "TALLER").click();
+  await page.getByRole("link", { name: "Tablero", exact: true }).click();
+  await page.getByRole("link", { name: "Red", exact: true }).click();
+  await expect(desplegar(page, "TALLER")).toHaveAttribute("aria-expanded", "false");
 });
 
 test("Cabina y Sobrio pintan la misma lista, con una fila desplegada: solo cambian los colores; el modo se recuerda al recargar", async ({ page, servidor }) => {
@@ -180,20 +281,30 @@ test("con el teclado: saltar al contenido, desplegar y plegar una fila con Enter
   await expect(page.getByRole("link", { name: "Saltar al contenido" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Red", exact: true })).toBeFocused();
-  const boton = desplegar(page, "TIENDA");
-  const manifiesto = fila(page, "TIENDA").locator(".campo-manifiesto dd");
+  const investigacion = fila(page, "INVESTIGACION");
+  const boton = desplegar(page, "INVESTIGACION");
+  const abrir = investigacion.getByRole("link", { name: "Abrir tablero" });
+  const manifiesto = investigacion.locator(".campo-manifiesto dd");
   await boton.focus();
   await page.keyboard.press("Enter");
   await expect(boton).toHaveAttribute("aria-expanded", "true");
   await expect(manifiesto).toBeVisible();
+  // Desplegada, después del enlace de la tarea vienen las acciones del detalle.
+  await abrir.focus();
+  await page.keyboard.press("Tab");
+  await expect(investigacion.getByLabel("Preset del phase-gate.json nuevo")).toBeFocused();
+  await boton.focus();
   await page.keyboard.press("Space");
   await expect(boton).toHaveAttribute("aria-expanded", "false");
   await expect(manifiesto).toBeHidden();
-  // Plegada, lo siguiente con Tab es el enlace de su tarea activa: el detalle oculto no recibe el foco.
+  // Plegada, el detalle oculto no recibe el foco: del enlace se salta a la fila siguiente.
   await page.keyboard.press("Tab");
-  await expect(fila(page, "TIENDA").getByRole("link", { name: "Abrir tablero" })).toBeFocused();
+  await expect(abrir).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(desplegar(page, "NUEVO")).toBeFocused();
+  await abrir.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/tablero\/TIENDA\/cupones$/);
+  await expect(page).toHaveURL(/#\/tablero\/INVESTIGACION\/costos$/);
 });
 
 test("la acción de preset, desde la fila desplegada: su vista previa con el diff, y Cancelar no escribe nada", async ({ page, servidor }) => {

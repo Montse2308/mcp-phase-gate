@@ -32,6 +32,7 @@ test.describe("con el navegador en inglés", () => {
     await expect(tienda.locator(".campo-tarea dd")).toContainText("batch 2 of 2, pending commit");
     await expect(page.getByRole("article", { name: "INVESTIGACION" }).locator(".campo-tarea dd")).toContainText("(deduced, the most recent)");
     await expect(page.getByRole("article", { name: "INVESTIGACION" }).locator(".campo-sesion dd")).toHaveText("No MCP session has it open");
+    await expect(page.getByRole("article", { name: "ROTO" }).locator(".alerta-proyecto")).toHaveText("phase-gate.json invalid");
     await tienda.getByRole("heading", { level: 2, name: "TIENDA" }).getByRole("button").click();
     await expect(tienda.locator(".campo-manifiesto dd")).toHaveText("phase-gate.json valid");
     await expect(tienda.getByRole("listitem").filter({ hasText: "api" })).toContainText("api (backend)");

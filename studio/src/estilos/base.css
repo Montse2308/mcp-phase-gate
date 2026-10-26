@@ -353,6 +353,9 @@ main:focus {
 .campo .linea:first-child {
   margin-top: 0;
 }
+.alerta-proyecto {
+  margin: 0.25rem 0 0;
+}
 .repos {
   list-style: none;
   margin: 0;
