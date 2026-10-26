@@ -196,3 +196,17 @@ test("#?lang=en comparte el idioma por la URL, la elección se queda al navegar,
   await expect(page.getByRole("heading", { level: 1, name: "Vigía" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "es");
 });
+
+test("un cambio del hash justo después de cargar, antes de que corran los efectos, también cambia de vista", async ({ page, servidor }) => {
+  // Así va un runner lento: Preact corre los efectos tras el siguiente frame o, sin él, con un temporizador de
+  // 35 ms. Sin frames y con ese temporizador a 2 s, el hashchange llega antes de que la vista lo escuche.
+  await page.addInitScript(() => {
+    window.requestAnimationFrame = () => 0;
+    const original = window.setTimeout;
+    window.setTimeout = ((f: TimerHandler, ms?: number, ...resto: unknown[]) => original(f, ms === 35 ? 2000 : ms, ...resto)) as typeof window.setTimeout;
+  });
+  await page.goto(`${servidor.origen}/#/red?lang=es`);
+  await expect(page.locator("html")).toHaveAttribute("lang", "es");
+  await page.goto(`${servidor.origen}/#/vigia?lang=en`);
+  await expect(page.getByRole("heading", { level: 1, name: "Lookout" })).toBeVisible();
+});
