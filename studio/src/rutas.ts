@@ -4,7 +4,7 @@
 // Los hashes no se traducen (#/red, #/tablero…): un enlace sirve igual en los dos idiomas. El nombre de
 // cada vista sale del diccionario (`vista.<id>`).
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 
 export type Vista = "red" | "tablero" | "taller" | "vigia" | "bitacora";
 export const VISTAS: Vista[] = ["red", "tablero", "taller", "vigia", "bitacora"];
@@ -33,11 +33,14 @@ export function enlace(vista: Vista, ...partes: string[]): string {
 }
 
 export function useRuta(): Ruta {
-  const [ruta, setRuta] = useState(leerRuta());
+  const [hash, setHash] = useState(window.location.hash);
   useEffect(() => {
-    const cambiar = (): void => setRuta(leerRuta());
+    const cambiar = (): void => setHash(window.location.hash);
     window.addEventListener("hashchange", cambiar);
+    // El efecto corre después del primer render: un hashchange de ese hueco no se oyó, así que se relee.
+    // Si el hash no cambió, no se vuelve a pintar.
+    cambiar();
     return () => window.removeEventListener("hashchange", cambiar);
   }, []);
-  return ruta;
+  return useMemo(() => leerRuta(hash), [hash]);
 }
