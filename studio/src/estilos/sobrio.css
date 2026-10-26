@@ -11,7 +11,6 @@
   --fondo-tren: #f2f4f6;
   --texto: #1b1f24;
   --texto-secundario: #4d5965;
-  --texto-placa: #1b1f24;
   --borde: #d0d7de;
   --borde-fuerte: #8c959f;
   --acento: #0b5cad;
@@ -32,7 +31,6 @@
   --texto-banda-ambar: #1b1f24;
   --fondo-banda-ambar: #f5c542;
   --carril: #59636e;
-  --traviesa: #afb8c1;
 }
 
 :root[data-modo="sobrio"] h1,
