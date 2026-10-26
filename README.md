@@ -364,13 +364,13 @@ It opens a local web app with what the server sees, built from the same function
 
 | View | What it shows |
 |---|---|
-| **Network** | Each project as a station: its preset, its manifest, its repos with branch and pending changes, the active task with its phase, and which MCP client has it open right now |
+| **Network** | One row per project that expands: its preset (with a warning if the manifest is invalid), its repos with branch and pending changes, the active task with its phase, and which MCP client has it open right now; expanded, the manifest, the rules and the actions |
 | **Board** | A task's phases as a track with signals (closed, with pending items, gap, not yet), and the Phase 4 batches as wagons with their seal: VERIFIED (commit), SEALED (sha256), IN TRANSIT (commit pending), REJECTED (failed), VOID (discarded), MANUAL, and a cracked seal when an anchor is stale. Click to read the document or receipt |
 | **Workshop** | The prompt each phase receives, slot by slot: which layer and `file:line` won, a diff against the packaged text, and `eject` to edit it |
 | **Lookout** | `doctor`'s findings with how to fix each one, and what `init` would do in each client |
 | **Logbook** | The task's timeline: documents, receipts, commits with their subject, re-anchors and the phase 4 close |
 
-Everything has a **Plain** mode (tables, light theme) besides the default **Cockpit** mode, works with the keyboard and on a phone, and never expresses a state with colour alone. The interface is in English or Spanish, with the ES / EN selector in the top bar or `#?lang=en` in the link ([see Languages](#-languages)).
+Everything has a **Plain** mode (light theme; tables on the Board) besides the default **Cockpit** mode, works with the keyboard and on a phone, and never expresses a state with colour alone. The interface is in English or Spanish, with the ES / EN selector in the top bar or `#?lang=en` in the link ([see Languages](#-languages)).
 
 **It only writes configuration** — the preset, the rules, a new `phase-gate.json`, `eject`, `init` in a client — and always in two steps: a preview with the diff, and "Apply", which only writes if the disk hasn't changed since you saw it. It never writes task documents, receipts or anything in your repos.
 

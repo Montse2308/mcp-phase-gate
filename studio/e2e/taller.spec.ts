@@ -73,6 +73,7 @@ test("si el disco cambia entre la vista previa y Aplicar, 409: se dice y se pued
   await page.goto(`${servidor.origen}/#/red`);
   await ponerModo(page, "cabina");
   const taller = page.getByRole("article", { name: "TALLER" });
+  await taller.getByRole("heading", { level: 2, name: "TALLER" }).getByRole("button").click();
   await taller.getByLabel("Preset").selectOption("software-tdd");
   await taller.getByRole("button", { name: "Cambiar el preset: vista previa" }).click();
   await expect(taller.getByRole("region", { name: "Vista previa: Cambiar el preset" })).toContainText("software-tdd");
@@ -90,15 +91,16 @@ test("crear phase-gate.json desde la Red, con su vista previa", async ({ page, s
   await page.goto(`${servidor.origen}/#/red`);
   await ponerModo(page, "cabina");
   const nuevo = page.getByRole("article", { name: "NUEVO" });
-  await expect(nuevo).toContainText("sin phase-gate.json");
+  await nuevo.getByRole("heading", { level: 2, name: "NUEVO" }).getByRole("button").click();
+  await expect(nuevo.locator(".campo-manifiesto dd")).toHaveText("sin phase-gate.json");
   await nuevo.getByLabel("Preset del phase-gate.json nuevo").selectOption("research-ops");
   await nuevo.getByRole("button", { name: "Crear phase-gate.json: vista previa" }).click();
   const previa = nuevo.getByRole("region", { name: "Vista previa: Crear phase-gate.json" });
   await expect(previa).toContainText("Crea");
   await expect(previa.locator(".diff-mas").filter({ hasText: '"preset": "research-ops"' })).toHaveCount(1);
   await previa.getByRole("button", { name: "Aplicar" }).click();
-  await expect(nuevo).toContainText("phase-gate.json válido");
-  await expect(nuevo.locator(".placa")).toHaveText("research-ops · del proyecto");
+  await expect(nuevo.locator(".campo-manifiesto dd")).toHaveText("phase-gate.json válido");
+  await expect(nuevo.locator(".campo-preset dd")).toHaveText("research-ops · del proyecto");
 });
 
 test("el Taller en un teléfono (390×844) no desborda", async ({ page, servidor }) => {

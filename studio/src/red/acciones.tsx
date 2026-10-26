@@ -1,7 +1,7 @@
-// Las acciones de una estación de la Red (§7.7.1): cambiar el preset del proyecto, o crear su
-// phase-gate.json si no tiene. Las dos con el ciclo de huella.
+// Las acciones de un proyecto de la Red: cambiar su preset, o crear su phase-gate.json si no tiene. Las dos
+// con el ciclo de huella.
 
-import { useState } from "preact/hooks";
+import { useId, useState } from "preact/hooks";
 
 import type { ProyectoApi } from "../../../src/studio/contrato.js";
 import { Accion } from "../comun/accion";
@@ -9,8 +9,8 @@ import { t } from "../i18n/idioma";
 
 export function AccionesDeProyecto({ p, presets, alAplicar }: { p: ProyectoApi; presets: string[]; alAplicar: () => void }) {
   const [preset, setPreset] = useState(p.manifiesto.estado === "ausente" ? "software-replica" : (p.preset?.nombre ?? "software"));
+  const id = useId();
   if (p.manifiesto.estado === "invalido") return null;
-  const id = `preset-${p.nombre.replace(/[^\w-]/g, "_")}`;
   const crear = p.manifiesto.estado === "ausente";
   return (
     <div class="acciones-proyecto">

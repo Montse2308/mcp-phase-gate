@@ -270,105 +270,106 @@ main:focus {
 }
 
 /* ─── La Red ──────────────────────────────────────────────────────────── */
-.estaciones {
+/* Una fila por proyecto. Plegada, el nombre y sus campos en columnas, que en un teléfono se apilan;
+   desplegada, el detalle debajo. */
+.proyectos {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
-  gap: var(--espacio);
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.estacion {
+.fila-proyecto {
   background: var(--panel);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
-  padding: 0.85rem 1rem;
   min-width: 0;
 }
-.estacion-cabecera {
+.fila-resumen {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 0.75rem;
-  border-bottom: 1px solid var(--borde);
-  margin-bottom: 0.5rem;
+  align-items: flex-start;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem;
 }
-.estacion-cabecera h2 {
+.fila-resumen h2 {
+  flex: 0 1 13rem;
+  min-width: 0;
   margin: 0;
+  font-size: 1.3rem;
 }
-.placa {
-  font-family: var(--texto-codigo);
-  font-size: 0.8rem;
-  padding: 0.1rem 0.45rem;
-  border: 1px solid var(--borde-fuerte);
-  border-radius: 3px;
-  background: var(--placa);
-  color: var(--texto-placa);
-}
-.vias {
-  list-style: none;
-  margin: 0.5rem 0;
-  padding: 0;
-}
-.via {
-  display: flex;
+.desplegar {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0.25rem 0;
-}
-.via-dibujo .carril {
-  stroke: var(--carril);
-}
-.via-dibujo .traviesa {
-  fill: var(--traviesa);
-}
-.via-texto {
-  min-width: 0;
-}
-.tren {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin: 0.5rem 0;
-  padding: 0.5rem;
+  gap: 0.35rem;
+  max-width: 100%;
+  margin: -0.2rem -0.3rem;
+  padding: 0.2rem 0.3rem;
+  border: none;
   border-radius: var(--radio);
-  background: var(--fondo-tren);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
-.tren p {
+.desplegar:hover {
+  text-decoration: underline;
+}
+.flecha {
+  flex: none;
+  transition: transform 0.15s ease-out;
+}
+.flecha path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.desplegar[aria-expanded="true"] .flecha {
+  transform: rotate(90deg);
+}
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.5rem 1.5rem;
   margin: 0;
-  flex: 1 1 12rem;
 }
-.tren-dibujo .caja {
-  fill: var(--acento);
+.fila-resumen .campos {
+  flex: 1 1 32rem;
+  min-width: 0;
 }
-.tren-dibujo .ventana {
-  fill: var(--panel);
+.campo {
+  min-width: 0;
 }
-.tren-dibujo .rueda {
-  fill: var(--texto-secundario);
+.campo dt {
+  font-size: 0.8rem;
+  color: var(--texto-secundario);
 }
-.farol {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.campo dd {
+  margin: 0;
+}
+.campo .linea:first-child {
+  margin-top: 0;
+}
+.alerta-proyecto {
   margin: 0.25rem 0 0;
 }
-.farol-dibujo .cuerpo {
-  fill: var(--texto-secundario);
+.repos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.farol-dibujo .luz {
-  fill: var(--apagado);
+.repos li {
+  margin: 0 0 0.2rem;
 }
-.farol-encendido .luz {
-  fill: var(--ambar);
+.fila-detalle {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--borde);
 }
-.farol-encendido .halo {
-  fill: var(--ambar);
-  opacity: 0.25;
-  animation: brillo 2.4s ease-in-out infinite;
-}
-@keyframes brillo {
-  50% {
-    opacity: 0.55;
-  }
+.fila-detalle .campos {
+  margin-bottom: 0.5rem;
 }
 
 /* ─── Tablas (modo Sobrio y donde haga falta) ─────────────────────────── */

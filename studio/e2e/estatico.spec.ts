@@ -66,7 +66,9 @@ test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda, ningu
   await page.goto(sitio(servidor));
   await expect(page.locator(".banda-demo")).toHaveText("Demo: datos de ejemplo. Todo es de solo lectura.");
   for (const nombre of ["TIENDA", "ASISTENTE", "INVESTIGACION"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
-  await expect(page.getByText(SOLO_LECTURA).first()).toBeVisible();
+  // Las acciones van en la fila desplegada.
+  await page.getByRole("heading", { level: 2, name: "TIENDA" }).getByRole("button").click();
+  await expect(page.getByRole("article", { name: "TIENDA" }).getByText(SOLO_LECTURA)).toBeVisible();
   for (const boton of await page.locator(".accion-solo-lectura button").all()) await expect(boton).toBeDisabled();
   expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
   expect(registro.peticiones.filter((u) => u.includes("/api/")), "ni API ni SSE").toEqual([]);

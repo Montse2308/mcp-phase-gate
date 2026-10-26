@@ -364,13 +364,13 @@ Abre una aplicación web local con lo que ve el servidor, armada con las mismas 
 
 | Vista | Qué enseña |
 |---|---|
-| **Red** | Cada proyecto como una estación: su preset, su manifiesto, sus repos con rama y cambios pendientes, la tarea activa con su fase y qué cliente MCP lo tiene abierto ahora mismo |
+| **Red** | Una fila por proyecto, que se despliega: su preset (y un aviso si el manifiesto es inválido), sus repos con rama y cambios pendientes, la tarea activa con su fase y qué cliente MCP lo tiene abierto ahora mismo; al desplegarla, el manifiesto, las reglas y las acciones |
 | **Tablero** | Las fases de una tarea como una vía con semáforos (cerrada, con pendientes, hueco, pendiente), y los lotes de la Fase 4 como vagones con su sello: VERIFICADO (commit), SELLADO (sha256), EN VÍA (commit pendiente), RECHAZADO (fallido), ANULADO (descartado), MANUAL, y un sello agrietado cuando el ancla ya no está vigente. Un clic abre el documento o el recibo |
 | **Taller** | El prompt que recibe cada fase, ranura por ranura: qué capa y qué `archivo:línea` ganó, el diff frente al texto de fábrica y `eject` para editarlo |
 | **Vigía** | Los hallazgos de `doctor` con cómo se arregla cada uno, y lo que haría `init` en cada cliente |
 | **Bitácora** | La línea de tiempo de la tarea: documentos, recibos, commits con su asunto, reanclajes y el cierre de la Fase 4 |
 
-Todo tiene un modo **Sobrio** (tablas, tema claro) además del modo **Cabina** de siempre, funciona con el teclado y en el teléfono, y nunca expresa un estado solo con color. La interfaz está en español o en inglés, con el selector ES / EN de la barra de arriba o `#?lang=es` en el enlace ([ver Idiomas](#-idiomas)).
+Todo tiene un modo **Sobrio** (tema claro; en el Tablero, tablas) además del modo **Cabina** de siempre, funciona con el teclado y en el teléfono, y nunca expresa un estado solo con color. La interfaz está en español o en inglés, con el selector ES / EN de la barra de arriba o `#?lang=es` en el enlace ([ver Idiomas](#-idiomas)).
 
 **Solo escribe configuración** —el preset, las reglas, un `phase-gate.json` nuevo, `eject`, `init` en un cliente— y siempre en dos pasos: una vista previa con el diff, y "Aplicar", que solo escribe si el disco no cambió desde que lo viste. Nunca escribe documentos de tareas, recibos ni nada de tus repos.
 

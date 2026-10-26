@@ -11,7 +11,7 @@ const vagones = (page: import("@playwright/test").Page) => page.getByRole("list"
 test.describe("con el navegador en inglés", () => {
   test.use({ locale: "en-US" });
 
-  test("la Red: textos de la interfaz y del servidor en inglés, <html lang=en>, y axe en los dos modos", async ({ page, servidor }) => {
+  test("la Red: textos de la interfaz y del servidor en inglés, plegada y desplegada, <html lang=en>, y axe en los dos modos", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/red`);
     await ponerModo(page, "cabina");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
@@ -21,19 +21,29 @@ test.describe("con el navegador en inglés", () => {
     await expect(page.getByRole("button", { name: "Mode: Cockpit" })).toBeVisible();
     await expect(page.getByRole("group", { name: "Language" }).getByRole("button", { name: "EN" })).toHaveAttribute("aria-pressed", "true");
     const tienda = page.getByRole("article", { name: "TIENDA" });
-    await expect(tienda.locator(".placa")).toHaveText("multi-repo-feature · from the project");
-    await expect(tienda).toContainText("phase-gate.json valid");
+    await expect(page.getByRole("list", { name: "Projects of the Documentation" })).toBeVisible();
+    await expect(tienda.locator(".campo-preset dt")).toHaveText("Preset");
+    await expect(tienda.locator(".campo-preset dd")).toHaveText("multi-repo-feature · from the project");
     await expect(tienda.getByRole("listitem").filter({ hasText: "api" })).toContainText("branch main · clean tree");
-    await expect(tienda).toContainText("Open in cliente-e2e 1.0");
+    await expect(tienda.locator(".campo-sesion")).toContainText("MCP session");
+    await expect(tienda.locator(".campo-sesion dd")).toHaveText("Open in cliente-e2e 1.0");
     // describeEstado, del servidor: en inglés porque la petición lo pidió.
-    await expect(tienda).toContainText("batch 2 of 2, pending commit");
-    await expect(page.getByRole("article", { name: "ROTO" })).toContainText("is not valid JSON");
-    await expect(page.getByRole("article", { name: "INVESTIGACION" })).toContainText("No MCP session has it open");
+    await expect(tienda.locator(".campo-tarea")).toContainText("Active task");
+    await expect(tienda.locator(".campo-tarea dd")).toContainText("batch 2 of 2, pending commit");
+    await expect(page.getByRole("article", { name: "INVESTIGACION" }).locator(".campo-tarea dd")).toContainText("(deduced, the most recent)");
+    await expect(page.getByRole("article", { name: "INVESTIGACION" }).locator(".campo-sesion dd")).toHaveText("No MCP session has it open");
+    await expect(page.getByRole("article", { name: "ROTO" }).locator(".alerta-proyecto")).toHaveText("phase-gate.json invalid");
+    await tienda.getByRole("heading", { level: 2, name: "TIENDA" }).getByRole("button").click();
+    await expect(tienda.locator(".campo-manifiesto dd")).toHaveText("phase-gate.json valid");
+    await expect(tienda.getByRole("listitem").filter({ hasText: "api" })).toContainText("api (backend)");
+    const roto = page.getByRole("article", { name: "ROTO" });
+    await roto.getByRole("heading", { level: 2, name: "ROTO" }).getByRole("button").click();
+    await expect(roto.locator(".detalle-error")).toContainText("is not valid JSON");
     await ningunEstadoSoloColor(page);
     await sinViolacionesGraves(page, "la Red en inglés, modo cabina");
     await ponerModo(page, "sobrio");
     await expect(page.getByRole("button", { name: "Mode: Plain" })).toBeVisible();
-    await expect(page.getByRole("table", { name: "Projects of the Documentation" }).getByRole("row", { name: /TIENDA/ })).toContainText("api: branch main · clean tree");
+    await expect(tienda.getByRole("listitem").filter({ hasText: "api" })).toContainText("api (backend) · branch main · clean tree");
     await sinViolacionesGraves(page, "la Red en inglés, modo sobrio");
   });
 
