@@ -124,22 +124,23 @@ try {
     await quieto(4000);
   });
 
-  // 4. El tablero de la tarea terminada: semáforos en verde y la Fase 4 desplegada en vagones con sus sellos.
+  // 4. El tablero de la tarea terminada: las fases cerradas y la tabla de lotes de la Fase 4 con su estado; un clic
+  //    en el recibo de un lote lo abre en el visor.
   await escena(4, TAMANO, async (p) => {
     await p.goto(vista(`/tablero/${tienda.nombre}/${terminada.nombre}`));
-    await p.locator(".sello-verificado").nth(2).waitFor();
-    await p.locator(".sello-anulado").first().waitFor();
+    await p.locator(".estado-verificado").nth(2).waitFor();
+    await p.locator(".estado-descartado").first().waitFor();
     await listo(p);
     await quieto(2500);
-    await p.locator(".sello-verificado").first().click();
+    await p.getByRole("row").filter({ has: p.locator(".estado-verificado") }).first().getByRole("button").click();
     await quieto(3000);
   });
 
-  // 5. En vivo: el lote con el commit pendiente ("en vía") se commitea y se ancla con record_batch, y el sello
-  //    VERIFICADO llega por SSE sin recargar.
+  // 5. En vivo: el lote con el commit pendiente se commitea y se ancla con record_batch, y su estado
+  //    VERIFICADO llega por SSE sin recargar, con la fila resaltada.
   await escena(5, TAMANO, async (p) => {
     await p.goto(vista(`/tablero/${tienda.nombre}/${enCurso.nombre}`));
-    await p.locator(".sello-en-via").first().waitFor();
+    await p.locator(".estado-commit-pendiente").first().waitFor();
     await listo(p);
     await quieto(2000);
     const demo = carpetasDeDemo(raizDeLaDemo, idioma);
@@ -158,7 +159,7 @@ try {
       for (const clave of Object.keys(env)) delete process.env[clave];
       Object.assign(process.env, antes);
     }
-    await p.locator(".sello-nuevo").first().waitFor({ timeout: 30_000 });
+    await p.locator(".estado-nuevo").first().waitFor({ timeout: 30_000 });
     await quieto(3500);
   });
 
@@ -180,7 +181,7 @@ try {
     await listo(p);
     await quieto(1200);
     await p.goto(`${origenEstatico}#/tablero/${tienda.nombre}/${terminada.nombre}?lang=${idioma}`);
-    await p.locator(".sello-verificado, .sello-anulado").first().waitFor();
+    await p.locator(".estado-verificado, .estado-descartado").first().waitFor();
     await quieto(2000);
   });
 } finally {

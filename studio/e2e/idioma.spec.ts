@@ -4,9 +4,7 @@
 // los errores, el asistente de clientes) llega también en inglés, porque cada petición lleva el idioma.
 // Las pruebas de las vistas en español son las de siempre (el navegador va en es-ES, playwright.config.ts).
 
-import { expect, ningunEstadoSoloColor, ponerModo, sinViolacionesGraves, test } from "./ayudas";
-
-const vagones = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Batches of Phase 4" });
+import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinViolacionesGraves, test } from "./ayudas";
 
 test.describe("con el navegador en inglés", () => {
   test.use({ locale: "en-US" });
@@ -47,40 +45,38 @@ test.describe("con el navegador en inglés", () => {
     await sinViolacionesGraves(page, "la Red en inglés, modo sobrio");
   });
 
-  test("el Tablero: semáforos y sellos en inglés (VERIFIED, SEALED, WITH PENDING ITEMS, REJECTED, VOID, MANUAL, IN TRANSIT)", async ({ page, servidor }) => {
+  test("el Tablero: fases y estados de lote en inglés (VERIFIED, SEALED, WITH PENDING ITEMS, REJECTED, VOID, MANUAL, IN TRANSIT, stale)", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
     await ponerModo(page, "cabina");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    const lista = vagones(page).getByRole("listitem");
+    const lista = lotesDeLaFase(page, "Batches of Phase 4");
     await expect(lista).toHaveCount(6);
-    await expect(lista.nth(0).locator(".sello-sellado")).toContainText("SEALED");
-    await expect(lista.nth(1).locator(".sello-pendientes")).toContainText("VERIFIED");
-    await expect(lista.nth(1).locator(".sello-banda")).toHaveText("WITH PENDING ITEMS");
-    await expect(lista.nth(2).locator(".sello-rechazado")).toContainText("REJECTED");
-    await expect(lista.nth(3).locator(".sello-anulado")).toContainText("VOID");
-    await expect(lista.nth(4).locator(".sello-manual")).toContainText("MANUAL");
-    await expect(lista.nth(5)).toContainText("no receipt");
-    const estaciones = page.getByRole("list", { name: "Stations of the task" }).getByRole("listitem");
-    await expect(estaciones.nth(0)).toContainText("Initial context");
-    await expect(estaciones.nth(1)).toContainText("Phase 1");
-    await expect(estaciones.nth(1)).toContainText("closed");
+    await expect(lista.nth(0).locator(".estado-sellado")).toHaveText("SEALED");
+    await expect(lista.nth(1).locator(".estado-con-pendientes")).toHaveText("WITH PENDING ITEMS");
+    await expect(lista.nth(2).locator(".estado-rechazado")).toHaveText("REJECTED");
+    await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("VOID");
+    await expect(lista.nth(4).locator(".estado-manual")).toHaveText("MANUAL");
+    await expect(lista.nth(5).locator(".estado-sin-recibo")).toHaveText("no receipt");
+    await expect(page.getByRole("table", { name: "Batches of Phase 4" }).getByRole("columnheader")).toHaveText(["Batch", "Goal", "Repo", "State", "Detail", "Anchor", "Receipt"]);
+    const fases = fasesDeLaTarea(page, "Stations of the task");
+    await expect(fases.nth(0)).toContainText("Initial context");
+    await expect(fases.nth(1)).toContainText("Phase 1");
+    await expect(fases.nth(1)).toContainText("closed");
     await ningunEstadoSoloColor(page);
     await sinViolacionesGraves(page, "el tablero en inglés, modo cabina");
 
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-    await expect(vagones(page).getByRole("listitem").nth(1).locator(".sello-en-via")).toContainText("IN TRANSIT");
-    await expect(vagones(page).getByRole("listitem").nth(1)).toContainText("pending commit");
-    await expect(page.getByRole("list", { name: "Stations of the task" }).getByRole("listitem").nth(4)).toContainText("in progress");
+    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(1).locator(".estado-commit-pendiente")).toHaveText("IN TRANSIT");
+    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(1).locator(".estado-detalle")).toHaveText("pending commit");
+    await expect(fasesDeLaTarea(page, "Stations of the task").nth(4)).toContainText("in progress");
     await ponerModo(page, "sobrio");
-    const tabla = page.getByRole("table", { name: "Batches of Phase 4" });
-    await expect(tabla.getByRole("row", { name: /L01/ })).toContainText(/verified · [0-9a-f]{7}/);
-    await expect(tabla.getByRole("row", { name: /L02/ })).toContainText("pending");
+    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(0)).toContainText("VERIFIED");
     await sinViolacionesGraves(page, "el tablero en inglés, modo sobrio");
 
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/reescrita`);
     await page.getByRole("button", { name: "Re-verify anchors" }).click();
     await expect(page.getByText("Anchors re-verified against git and the disk.")).toBeVisible();
-    await expect(tabla.getByRole("row", { name: /L01/ })).toContainText("stale", { timeout: 15_000 });
+    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(0).locator(".estado-no-vigente")).toHaveText("stale", { timeout: 15_000 });
   });
 
   test("el Taller: ranuras con su alias inglés y el id canónico, y las capas en inglés", async ({ page, servidor }) => {

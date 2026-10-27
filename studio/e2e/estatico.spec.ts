@@ -9,7 +9,7 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { BINARIO, expect, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
+import { BINARIO, expect, lotesDeLaFase, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
 import type { Servidor } from "./ayudas";
 
 const PREFIJO = "/mcp-phase-gate/";
@@ -60,7 +60,6 @@ const test = base.extend<{}, { servidor: Servidor }>({
 });
 
 const sitio = (s: Servidor, hash = "") => `${s.origen}${PREFIJO}${hash}`;
-const vagones = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Lotes de la Fase 4" });
 
 test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda, ninguna petición a una API y las acciones de solo lectura", async ({ page, servidor, registro }) => {
   await page.goto(sitio(servidor));
@@ -88,21 +87,21 @@ test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH,
   expect(registro.peticiones.some((u) => u.endsWith("/datos/en/indice.json"))).toBe(true);
   await page.goto(sitio(servidor, "#/tablero/SHOP/discount-coupons?lang=en"));
   await ponerModo(page, "cabina");
-  const lista = page.getByRole("list", { name: /Phase 4/ }).getByRole("listitem");
+  const lista = lotesDeLaFase(page, "Phase 4");
   await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFIED");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("VOID");
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("VERIFIED");
+  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("VOID");
   await sinViolacionesGraves(page, "el tablero estático en inglés");
   expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
 });
 
-test("el tablero de cupones-de-descuento: cuatro vagones, el visor y Reverificar anclas, en los dos modos y con axe", async ({ page, servidor, registro }) => {
+test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar anclas, en los dos modos y con axe", async ({ page, servidor, registro }) => {
   await page.goto(sitio(servidor, "#/tablero/TIENDA/cupones-de-descuento"));
   await ponerModo(page, "cabina");
-  const lista = vagones(page).getByRole("listitem");
+  const lista = lotesDeLaFase(page);
   await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFICADO");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("ANULADO");
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("VERIFICADO");
+  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("ANULADO");
   await lista.nth(0).getByRole("button").click();
   const recibo = page.getByRole("complementary", { name: /04 - Ejecución\/L01/ });
   await expect(recibo.getByLabel("Frontmatter")).toContainText("commit");
@@ -111,7 +110,7 @@ test("el tablero de cupones-de-descuento: cuatro vagones, el visor y Reverificar
   await page.getByRole("button", { name: "Reverificar anclas" }).click();
   await expect(page.getByText("Anclas reverificadas contra git y el disco.")).toBeVisible();
   await ponerModo(page, "sobrio");
-  await expect(page.getByRole("table", { name: "Lotes de la Fase 4" }).getByRole("row", { name: /L04/ })).toContainText("descartado");
+  await expect(lotesDeLaFase(page).nth(3)).toContainText("ANULADO");
   await sinViolacionesGraves(page, "el tablero estático en modo sobrio");
   expect(registro.peticiones.filter((u) => u.includes("/api/"))).toEqual([]);
 });
@@ -135,6 +134,6 @@ test("en un teléfono (390×844), nada desborda", async ({ page, servidor }) => 
   await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
   await sinDesbordamiento(page, "la Red estática");
   await page.goto(sitio(servidor, "#/tablero/TIENDA/cupones-de-descuento"));
-  await expect(vagones(page).getByRole("listitem")).toHaveCount(4);
+  await expect(lotesDeLaFase(page)).toHaveCount(4);
   await sinDesbordamiento(page, "el tablero estático");
 });

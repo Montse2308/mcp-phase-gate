@@ -139,6 +139,16 @@ export async function ningunEstadoSoloColor(page: Page): Promise<void> {
   expect(solas).toEqual([]);
 }
 
+// Las tarjetas de fase de un Tablero y las filas de su tabla de lotes (sin la cabecera). Los nombres de la
+// lista y de la tabla cambian con el idioma.
+export function fasesDeLaTarea(page: Page, nombre = "Estaciones de la tarea") {
+  return page.getByRole("list", { name: nombre }).getByRole("listitem");
+}
+
+export function lotesDeLaFase(page: Page, nombre = "Lotes de la Fase 4") {
+  return page.getByRole("table", { name: nombre }).locator("tbody").getByRole("row");
+}
+
 // El interruptor dice "Modo: …" en español y "Mode: …" en inglés.
 export async function ponerModo(page: Page, modo: "cabina" | "sobrio"): Promise<void> {
   const boton = page.getByRole("button", { name: /^(?:Modo|Mode):/ });

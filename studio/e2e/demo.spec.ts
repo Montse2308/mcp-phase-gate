@@ -10,7 +10,7 @@ import * as path from "node:path";
 
 import { git } from "./arbol";
 import type { Arbol } from "./arbol";
-import { expect, lanzarUi, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
+import { expect, fasesDeLaTarea, lanzarUi, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
 import type { Servidor } from "./ayudas";
 import { huellaDeLosClientesReales } from "./entorno";
 
@@ -58,7 +58,6 @@ const test = base.extend<{}, { servidor: Servidor }>({
 });
 
 const banda = (page: import("@playwright/test").Page) => page.locator(".banda-demo");
-const vagones = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Lotes de la Fase 4" });
 
 test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documentación de quien la lanza, y la banda fija", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/`);
@@ -68,42 +67,37 @@ test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documenta
   await expect(page.getByText("MARCADOR")).toHaveCount(0);
 });
 
-test("el tablero de cupones-de-descuento: cuatro vagones, VERIFICADO tres veces y ANULADO; en sobrio, las mismas filas", async ({ page, servidor }) => {
+test("el tablero de cupones-de-descuento: cuatro lotes, VERIFICADO tres veces y ANULADO, las mismas filas en los dos modos", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento`);
-  await ponerModo(page, "cabina");
-  await expect(banda(page)).toBeVisible();
-  const lista = vagones(page).getByRole("listitem");
-  await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFICADO");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("ANULADO");
-  await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero de la demo en modo cabina");
-
-  await ponerModo(page, "sobrio");
-  await expect(banda(page)).toBeVisible();
-  const filas = page.getByRole("table", { name: "Lotes de la Fase 4" });
-  for (const lote of ["L01", "L02", "L03"]) await expect(filas.getByRole("row", { name: new RegExp(lote) })).toContainText(/verificado · [0-9a-f]{7}/);
-  await expect(filas.getByRole("row", { name: /L04/ })).toContainText("descartado");
-  await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero de la demo en modo sobrio");
+  for (const modo of ["cabina", "sobrio"] as const) {
+    await ponerModo(page, modo);
+    await expect(banda(page)).toBeVisible();
+    const lista = lotesDeLaFase(page);
+    await expect(lista).toHaveCount(4);
+    for (const i of [0, 1, 2]) {
+      await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("VERIFICADO");
+      await expect(lista.nth(i).locator(".estado-detalle").first()).toHaveText(/^[0-9a-f]{7}$/);
+    }
+    await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("ANULADO");
+    await ningunEstadoSoloColor(page);
+    await sinViolacionesGraves(page, `el tablero de la demo en modo ${modo}`);
+  }
 });
 
 test("las otras dos: la tarea de agente sellada por sha256 y la de investigación con pendientes en la Fase 1", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
-  await ponerModo(page, "cabina");
-  const sellados = vagones(page).getByRole("listitem");
+  const sellados = lotesDeLaFase(page);
   await expect(sellados).toHaveCount(2);
-  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".sello-sellado")).toContainText("SELLADO");
+  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".estado-sellado")).toHaveText("SELLADO");
   await page.goto(`${servidor.origen}/#/tablero/INVESTIGACION/costo-de-embeddings`);
-  await expect(page.getByRole("list", { name: "Estaciones de la tarea" }).getByRole("listitem").nth(1)).toContainText("con pendientes");
+  await expect(fasesDeLaTarea(page).nth(1)).toContainText("con pendientes");
 });
 
 test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sello llega por SSE sin recargar", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/envio-gratis`);
-  await ponerModo(page, "cabina");
-  const lote = vagones(page).getByRole("listitem").nth(1);
-  await expect(lote.locator(".sello-en-via")).toContainText("EN VÍA");
-  await expect(vagones(page).getByRole("listitem").nth(2)).toContainText("sin recibo");
+  const lote = lotesDeLaFase(page).nth(1);
+  await expect(lote.locator(".estado-commit-pendiente")).toHaveText("EN VÍA");
+  await expect(lotesDeLaFase(page).nth(2)).toContainText("sin recibo");
   await page.evaluate(() => ((window as unknown as { __sinRecargar: boolean }).__sinRecargar = true));
 
   // Lo que haría el agente: el commit en tienda-web (el cambio ya estaba sin commitear) y record_batch con
@@ -124,9 +118,9 @@ test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sell
     for (const clave of Object.keys(env)) delete process.env[clave];
     Object.assign(process.env, anterior);
   }
-  await expect(lote.locator(".sello-verificado")).toContainText("VERIFICADO", { timeout: 15_000 });
-  await expect(lote.locator(".sello-verificado .sello-detalle").first()).toHaveText(sha.slice(0, 7));
-  await expect(lote.locator(".sello-nuevo")).toHaveCount(1);
+  await expect(lote.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(lote.locator(".estado-detalle").first()).toHaveText(sha.slice(0, 7));
+  await expect(lote).toHaveClass(/estado-nuevo/);
   expect(await page.evaluate(() => (window as unknown as { __sinRecargar?: boolean }).__sinRecargar)).toBe(true);
 });
 
@@ -135,18 +129,18 @@ test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos
   await ponerModo(page, "cabina");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
-  const lista = page.getByRole("list", { name: "Batches of Phase 4" }).getByRole("listitem");
+  const lista = lotesDeLaFase(page, "Batches of Phase 4");
   await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFIED");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("VOID");
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("VERIFIED");
+  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("VOID");
   await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo cabina");
   await ponerModo(page, "sobrio");
-  await expect(page.getByRole("table", { name: "Batches of Phase 4" }).getByRole("row", { name: /L04/ })).toContainText("discarded");
+  await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(3)).toContainText("VOID");
   await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo sobrio");
   await ponerModo(page, "cabina");
   await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
-  const sellados = page.getByRole("list", { name: "Batches of Phase 4" }).getByRole("listitem");
-  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".sello-sellado")).toContainText("SEALED");
+  const sellados = lotesDeLaFase(page, "Batches of Phase 4");
+  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".estado-sellado")).toHaveText("SEALED");
 });
 
 test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en los dos modos", async ({ page, servidor }) => {
@@ -158,7 +152,7 @@ test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en
   for (const modo of ["cabina", "sobrio"] as const) {
     await ponerModo(page, modo);
     await expect(banda(page)).toBeVisible();
-    await expect(page.getByText("ANULADO").or(page.getByText("descartado")).first()).toBeVisible();
+    await expect(page.getByText("ANULADO").first()).toBeVisible();
     await sinDesbordamiento(page, `el tablero de la demo en ${modo}`);
   }
 });

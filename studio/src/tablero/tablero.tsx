@@ -1,96 +1,131 @@
-// El Tablero de una tarea (§7.7.2 del plan): una vía con una estación por documento, cada una con su
-// semáforo, y la fase de los lotes desplegada en vagones con su sello. Un clic abre el documento o el
-// recibo en el visor. En vivo: un documento o un recibo nuevo recarga lo suyo, y un sello que aparece por
-// un evento cae una sola vez (sin animación con prefers-reduced-motion).
+// El Tablero de una tarea: una lista de seis tarjetas, una por documento de fase, y debajo los lotes de la
+// Fase 4 en una tabla con su estado, su detalle, su ancla y su recibo. Un clic en una tarjeta o en un recibo
+// abre el documento en el visor. En vivo: un documento o un recibo nuevo recarga lo suyo, y la fila de un
+// lote que se sella por un evento se resalta un momento (sin animación con prefers-reduced-motion). La misma
+// estructura en los dos modos: solo cambian los colores.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { Estacion, FilaDeLote, LotesRespuesta, TareaRespuesta } from "../../../src/studio/contrato.js";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
+import { Marca } from "../comun/marcas";
+import type { Forma, Tono } from "../comun/marcas";
 import { Selector } from "../comun/selector";
-import { Tabla } from "../comun/tabla";
 import { ruta } from "../datos";
 import { t } from "../i18n/idioma";
-import { useModoVisual } from "../preferencias";
 import { enlace } from "../rutas";
 import { Visor } from "../visor/visor";
-import { Senal } from "./senal";
 import { selloDe } from "./sellos";
-import type { Sello, TipoDeSello } from "./sellos";
+import type { TipoDeSello } from "./sellos";
 
-const ESTAMPADOS = new Set<TipoDeSello>(["verificado", "sellado", "pendientes", "rechazado", "anulado", "manual", "nota"]);
+// Los estados que, al aparecer en una recarga, resaltan su fila.
+const ESTAMPADOS = new Set<TipoDeSello>(["verificado", "sellado", "con-pendientes", "rechazado", "descartado", "manual", "nota"]);
+
+// Cuánto dura el resaltado de la fila nueva.
+const MS_DE_RESALTADO = 4000;
 
 function etiquetaDe(e: Estacion): string {
   return e.numero === 0 ? "00" : t("tablero.fase", { n: e.numero });
 }
 
-// La señal de una estación es un valor del contrato (TextoDeSenal), en español: aquí se dice.
-const SENALES: Record<Estacion["texto"], "senal.cerrada" | "senal.conPendientes" | "senal.enCurso" | "senal.hueco" | "senal.pendiente"> = {
-  cerrada: "senal.cerrada",
-  "con pendientes": "senal.conPendientes",
-  "en curso": "senal.enCurso",
-  hueco: "senal.hueco",
-  pendiente: "senal.pendiente",
+// El estado de una fase es un valor del contrato (TextoDeSenal), en español: aquí se dice y se le da su forma.
+const FASES: Record<Estacion["texto"], { clase: string; clave: "senal.cerrada" | "senal.conPendientes" | "senal.enCurso" | "senal.hueco" | "senal.pendiente"; forma: Forma; tono: Tono }> = {
+  cerrada: { clase: "fase-cerrada", clave: "senal.cerrada", forma: "lleno", tono: "verde" },
+  "en curso": { clase: "fase-en-curso", clave: "senal.enCurso", forma: "anillo", tono: "ambar" },
+  "con pendientes": { clase: "fase-con-pendientes", clave: "senal.conPendientes", forma: "triangulo", tono: "ambar" },
+  hueco: { clase: "fase-hueco", clave: "senal.hueco", forma: "rombo", tono: "rojo" },
+  pendiente: { clase: "fase-pendiente", clave: "senal.pendiente", forma: "vacio", tono: "apagado" },
 };
 
-function textoDeSenal(e: Estacion): string {
-  return t(SENALES[e.texto]);
-}
+// Los detalles que son texto (el motivo, la nota, «commit pendiente»); los demás son SHA, sha256 o fechas.
+const DETALLE_EN_TEXTO = new Set<TipoDeSello>(["commit-pendiente", "no-vigente", "nota"]);
 
-function SelloVisible({ sello, nuevo }: { sello: Sello; nuevo: boolean }) {
-  if (!sello.palabra) return <span class="sello sello-vacio">{t("sello.sinRecibo")}</span>;
-  return (
-    <span class={`sello sello-${sello.tipo}${nuevo ? " sello-nuevo" : ""}`}>
-      {sello.marco ? <img class="sello-marco" src={`./sellos/${sello.marco}.svg`} alt="" width="120" height="60" /> : null}
-      {sello.tipo === "agrietado" ? <img class="sello-grieta" src="./sellos/grieta.svg" alt="" width="120" height="60" /> : null}
-      <span class="sello-palabra">{sello.palabra}</span>
-      {sello.banda ? <span class="sello-banda">{sello.banda}</span> : null}
-      {sello.detalle
-        ? sello.detalle.split(" · ").map((parte) => (
-            <span key={parte} class="sello-detalle">
-              {parte}
-            </span>
-          ))
-        : null}
-    </span>
-  );
-}
+// Lo que está abierto en el visor y el botón que lo abrió: solo ese botón queda pulsado, aunque otro
+// lleve al mismo archivo (el recibo de un lote único es también el documento de la Fase 4).
+type Abierto = { archivo: string; origen: string };
+type AlAbrir = (archivo: string, origen: string, boton: HTMLElement) => void;
 
-function Via({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir: (archivo: string) => void; abierto: string | null }) {
+// El archivo de cada fase entra en el nombre accesible de su tarjeta y el visor lo muestra; si el documento
+// no existe (no hay visor que abrir), se ve también en la tarjeta.
+function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir: AlAbrir; abierto: Abierto | null }) {
   return (
-    <ol class="via-tablero" aria-label={t("tablero.estaciones")}>
-      {estaciones.map((e) => (
-        <li key={e.numero} class={`estacion-via senal-${e.senal}`}>
-          <button type="button" class="estacion-boton" disabled={!e.existe} aria-pressed={abierto === e.documento} onClick={() => alAbrir(e.documento)}>
-            <Senal senal={e.senal} />
-            <span class="estacion-texto">
-              <span class="estacion-numero">{etiquetaDe(e)}</span>
-              <span class="estacion-titulo">{e.titulo}</span>
-              <span class="estacion-estado">{textoDeSenal(e)}</span>
-            </span>
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Vagones({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nuevos: Set<string>; alAbrir: (archivo: string) => void; abierto: string | null }) {
-  return (
-    <ol class="vagones" aria-label={t("tablero.lotesDeLaFase")}>
-      {filas.map((f) => {
-        const sello = selloDe(f);
+    <ol class="fases" aria-label={t("tablero.estaciones")}>
+      {estaciones.map((e) => {
+        const fase = FASES[e.texto];
+        const origen = `fase-${e.numero}`;
         return (
-          <li key={f.lote} class={`vagon vagon-${sello.tipo}`}>
-            <button type="button" class="vagon-boton" disabled={!f.recibo} aria-pressed={f.recibo !== null && abierto === f.recibo} onClick={() => f.recibo && alAbrir(f.recibo)}>
-              <span class="vagon-lote">{f.lote}</span>
-              {f.objetivo ? <span class="vagon-objetivo">{f.objetivo}</span> : null}
-              <SelloVisible sello={sello} nuevo={nuevos.has(f.lote)} />
+          <li key={e.numero} class={`fase ${fase.clase}`}>
+            <button type="button" class="fase-boton" disabled={!e.existe} aria-pressed={abierto?.origen === origen} onClick={(ev) => alAbrir(e.documento, origen, ev.currentTarget)}>
+              <span class="fase-numero">{etiquetaDe(e)}</span>
+              <span class="fase-titulo">{e.titulo}</span>
+              <span class={`fase-estado tono-${fase.tono}`}>
+                <Marca forma={fase.forma} tono={fase.tono} /> {t(fase.clave)}
+              </span>
+              <span class={e.existe ? "solo-lectura" : "fase-archivo"}>{e.documento}</span>
             </button>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nuevos: Set<string>; alAbrir: AlAbrir; abierto: Abierto | null }) {
+  const columnas = [t("tablero.colLote"), t("tablero.colObjetivo"), t("tablero.colRepo"), t("tablero.colEstado"), t("tablero.colDetalle"), t("tablero.colAncla"), t("tablero.colRecibo")];
+  return (
+    <div class="tabla-envoltura">
+      <table class="tabla tabla-lotes" role="table">
+        <caption>{t("tablero.lotesDeLaFase")}</caption>
+        <thead role="rowgroup">
+          <tr role="row">
+            {columnas.map((c) => (
+              <th key={c} scope="col" role="columnheader">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody role="rowgroup">
+          {filas.map((f) => {
+            const sello = selloDe(f);
+            const origen = `lote-${f.lote}`;
+            return (
+              <tr key={f.lote} role="row" class={nuevos.has(f.lote) ? "estado-nuevo" : undefined}>
+                <th scope="row" role="rowheader" data-etiqueta={columnas[0]}>
+                  {f.lote}
+                </th>
+                <td role="cell" data-etiqueta={columnas[1]}>
+                  {f.objetivo ?? "—"}
+                </td>
+                <td role="cell" data-etiqueta={columnas[2]}>
+                  {f.repo ?? "—"}
+                </td>
+                <td role="cell" data-etiqueta={columnas[3]}>
+                  <span class={`estado estado-${sello.tipo}`}>{sello.palabra}</span>
+                </td>
+                <td role="cell" class="celda-larga" data-etiqueta={columnas[4]}>
+                  {sello.detalle
+                    ? sello.detalle.split(" · ").map((parte, i) => (
+                        <span key={i} class={DETALLE_EN_TEXTO.has(sello.tipo) ? "estado-detalle estado-detalle-texto" : "estado-detalle"}>
+                          {parte}
+                        </span>
+                      ))
+                    : "—"}
+                </td>
+                <td role="cell" class="celda-larga" data-etiqueta={columnas[5]}>
+                  {f.ancla?.resumen ?? "—"}
+                </td>
+                <td role="cell" class="celda-larga" data-etiqueta={columnas[6]}>
+                  <button type="button" class="enlace-boton" disabled={!f.recibo} aria-pressed={abierto?.origen === origen} onClick={(ev) => f.recibo && alAbrir(f.recibo, origen, ev.currentTarget)}>
+                    {f.recibo ?? "—"}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -101,31 +136,51 @@ export function Tablero({ p, t: tarea }: { p: string | undefined; t: string | un
 }
 
 function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
-  const modo = useModoVisual();
-  const [abierto, setAbierto] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState<Abierto | null>(null);
   const [reverificar, setReverificar] = useState(false);
+
+  // Al cerrar el visor (con su botón o con Escape), el foco vuelve al botón que lo abrió.
+  const boton = useRef<HTMLElement | null>(null);
+  const abrir: AlAbrir = (archivo, origen, desde) => {
+    boton.current = desde;
+    setAbierto({ archivo, origen });
+  };
+  const cerrar = () => {
+    setAbierto(null);
+    if (boton.current?.isConnected) boton.current.focus();
+  };
+  // Escape se escucha en el propio Tablero (el foco está en el visor o en el botón que lo abrió), no con un
+  // efecto, que se registra después de pintar y perdería una tecla pulsada justo al abrir.
+  const alPulsar = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape" && abierto) cerrar();
+  };
   const deEsta = (_tipo: string, d: Record<string, string>): boolean => !d.p || (d.p === p && (!d.t || d.t === nombre));
   const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, nombre)}`, ["documento", "recibo", "config", "prompts"], deEsta);
   const lotes = useRecurso<LotesRespuesta>(`/api/tareas/${ruta(p, nombre)}/lotes${reverificar ? "?reverificar=1" : ""}`, ["documento", "recibo", "config"], deEsta);
 
-  // Un sello que aparece en una recarga (por un evento), y no estaba, cae una vez.
+  // El estado que aparece en una recarga (por un evento), y no estaba, resalta su fila un momento.
   const anteriores = useRef<Map<string, TipoDeSello> | null>(null);
   const [nuevos, setNuevos] = useState<Set<string>>(new Set());
+  const plazo = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     const datos = lotes.datos;
     if (!datos?.disponible) return;
     const ahora = new Map(datos.estado.lotes.map((f) => [f.lote, selloDe(f).tipo] as const));
-    if (anteriores.current) {
-      const aparecidos = [...ahora].filter(([lote, tipo]) => ESTAMPADOS.has(tipo) && anteriores.current!.get(lote) !== tipo).map(([lote]) => lote);
-      setNuevos(new Set(aparecidos));
-    }
+    const previos = anteriores.current;
     anteriores.current = ahora;
+    if (!previos) return;
+    const aparecidos = [...ahora].filter(([lote, tipo]) => ESTAMPADOS.has(tipo) && previos.get(lote) !== tipo).map(([lote]) => lote);
+    if (!aparecidos.length) return; // otra recarga del mismo estado no apaga el resaltado en curso
+    setNuevos((antes) => new Set([...antes, ...aparecidos]));
+    clearTimeout(plazo.current);
+    plazo.current = setTimeout(() => setNuevos(new Set()), MS_DE_RESALTADO);
   }, [lotes.datos]);
+  useEffect(() => () => clearTimeout(plazo.current), []);
 
   const datos = tarea.datos;
   const filas = lotes.datos?.disponible ? lotes.datos.estado.lotes : [];
   return (
-    <div class={`tablero${abierto ? " con-visor" : ""}`}>
+    <div class={`tablero${abierto ? " con-visor" : ""}`} onKeyDown={alPulsar}>
       <section class="vista vista-tablero" aria-labelledby="titulo-tablero">
         <p class="miga">
           <a href={enlace("red")}>{t("vista.red")}</a> › {p}
@@ -146,28 +201,7 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
                 {t("tablero.pendientes")}
               </p>
             ) : null}
-            {modo === "sobrio" ? (
-              <Tabla
-                titulo={t("tablero.tablaEstaciones")}
-                columnas={[t("tablero.colEstacion"), t("tablero.colDocumento"), t("tablero.colSenal")]}
-                filas={datos.estaciones.map((e) => ({
-                  clave: String(e.numero),
-                  celdas: [
-                    `${etiquetaDe(e)} · ${e.titulo}`,
-                    e.existe ? (
-                      <button type="button" class="enlace-boton" onClick={() => setAbierto(e.documento)}>
-                        {e.documento}
-                      </button>
-                    ) : (
-                      e.documento
-                    ),
-                    textoDeSenal(e),
-                  ],
-                }))}
-              />
-            ) : (
-              <Via estaciones={datos.estaciones} alAbrir={setAbierto} abierto={abierto} />
-            )}
+            <Fases estaciones={datos.estaciones} alAbrir={abrir} abierto={abierto} />
           </>
         ) : null}
 
@@ -183,36 +217,12 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
                 {t(lotes.cargando ? "tablero.reverificando" : "tablero.reverificar")}
               </button>
               {lotes.datos.reverificado ? <span class="secundaria"> {t("tablero.reverificado")}</span> : null}
-              {modo === "sobrio" ? (
-                <Tabla
-                  titulo={t("tablero.lotesDeLaFase")}
-                  columnas={[t("tablero.colLote"), t("tablero.colObjetivo"), t("tablero.colRepo"), t("tablero.colSello"), t("tablero.colAncla"), t("tablero.colRecibo")]}
-                  filas={filas.map((f) => ({
-                    clave: f.lote,
-                    celdas: [
-                      f.lote,
-                      f.objetivo ?? "—",
-                      f.repo ?? "—",
-                      selloDe(f).sobrio,
-                      f.ancla?.resumen ?? "—",
-                      f.recibo ? (
-                        <button type="button" class="enlace-boton" onClick={() => setAbierto(f.recibo)}>
-                          {f.recibo}
-                        </button>
-                      ) : (
-                        "—"
-                      ),
-                    ],
-                  }))}
-                />
-              ) : (
-                <Vagones filas={filas} nuevos={nuevos} alAbrir={setAbierto} abierto={abierto} />
-              )}
+              <TablaDeLotes filas={filas} nuevos={nuevos} alAbrir={abrir} abierto={abierto} />
             </>
           ) : null}
         </section>
       </section>
-      {abierto ? <Visor p={p} t={nombre} archivo={abierto} alCerrar={() => setAbierto(null)} /> : null}
+      {abierto ? <Visor p={p} t={nombre} archivo={abierto.archivo} alCerrar={cerrar} /> : null}
     </div>
   );
 }
