@@ -1,0 +1,157 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Red de proyectos":
+    - heading "Red de proyectos" [level=1]
+    - list "Proyectos de la Documentación":
+      - listitem:
+        - article "INVESTIGACION":
+          - heading "INVESTIGACION" [level=2]:
+            - button "INVESTIGACION"
+          - term: Preset
+          - definition: software · por defecto
+          - term: Repos
+          - definition:
+            - paragraph: Sin repos declarados.
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: costos
+              - text: (deducida, la más reciente)
+            - paragraph: "va en Fase 2 (Decisiones); hechas: 1"
+            - link "Abrir tablero":
+              - /url: "#/tablero/INVESTIGACION/costos"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto
+      - listitem:
+        - article "NUEVO":
+          - heading "NUEVO" [level=2]:
+            - button "NUEVO"
+          - term: Preset
+          - definition: software · por defecto
+          - term: Repos
+          - definition:
+            - paragraph: Sin repos declarados.
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: primera
+              - text: (deducida, la más reciente)
+            - paragraph: va en Fase 1 (Descubrimiento); todavía sin documentos
+            - link "Abrir tablero":
+              - /url: "#/tablero/NUEVO/primera"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto
+      - listitem:
+        - article "ROTO":
+          - heading "ROTO" [level=2]:
+            - button "ROTO"
+          - term: Preset
+          - definition:
+            - text: preset sin resolver
+            - paragraph: phase-gate.json inválido
+          - term: Repos
+          - definition:
+            - paragraph: Sin repos declarados.
+          - term: Tarea activa
+          - definition:
+            - paragraph: Sin tareas todavía.
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto
+      - listitem:
+        - article "TALLER":
+          - heading "TALLER" [level=2]:
+            - button "TALLER"
+          - term: Preset
+          - definition: ai-agent-ops · del proyecto
+          - term: Repos
+          - definition:
+            - paragraph: Sin repos declarados.
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: afinar
+              - text: (deducida, la más reciente)
+            - paragraph: va en Fase 1 (Descubrimiento); todavía sin documentos
+            - link "Abrir tablero":
+              - /url: "#/tablero/TALLER/afinar"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto
+      - listitem:
+        - article "TIENDA":
+          - heading "TIENDA" [level=2]:
+            - button "TIENDA" [expanded]
+          - term: Preset
+          - definition: multi-repo-feature · del proyecto
+          - term: Repos
+          - definition:
+            - list "Repositorios de TIENDA":
+              - listitem:
+                - code: api
+                - text: (backend) · rama main · árbol limpio
+              - listitem:
+                - code: web
+                - text: · sin git
+              - listitem:
+                - code: pagos
+                - text: · rama main · árbol limpio
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: cupones
+            - paragraph: "va en Fase 4 (Ejecución, lote 2 de 2, commit pendiente); hechas: 1, 2, 3"
+            - link "Abrir tablero":
+              - /url: "#/tablero/TIENDA/cupones"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Abierto en cliente-e2e 1.0
+          - term: Manifiesto
+          - definition:
+            - paragraph: phase-gate.json válido
+          - term: Reglas
+          - definition: "Lotes: sí · Commits: agente-commitea-con-OK"
+          - text: Preset
+          - combobox "Preset":
+            - option "ai-agent-ops"
+            - option "multi-repo-feature"
+            - option "research-ops"
+            - option "software" [selected]
+            - option "software-replica"
+            - option "software-tdd"
+          - 'region "Vista previa: Cambiar el preset"':
+            - paragraph: El preset de TIENDA pasa a ser "software".
+            - list:
+              - listitem:
+                - text: Reescribe (deja copia .bak)
+                - code: <Documentación>/TIENDA/phase-gate.json
+            - text: <diff>
+            - paragraph:
+              - button "Aplicar"
+              - button "Cancelar"

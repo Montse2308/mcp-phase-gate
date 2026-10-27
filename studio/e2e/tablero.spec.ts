@@ -18,9 +18,9 @@ test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendient
   for (const i of [0, 1, 2, 3]) await expect(fases.nth(i)).toContainText("cerrada");
   await expect(fases.nth(4)).toContainText("en curso");
   await expect(fases.nth(5)).toContainText("pendiente");
-  await expect(fases.nth(0)).toHaveClass(/fase-cerrada/);
-  await expect(fases.nth(4)).toHaveClass(/fase-en-curso/);
-  await expect(fases.nth(5)).toHaveClass(/fase-pendiente/);
+  await expect(fases.nth(0).locator(".indicador")).toHaveClass(/fase-cerrada/);
+  await expect(fases.nth(4).locator(".indicador")).toHaveClass(/fase-en-curso/);
+  await expect(fases.nth(5).locator(".indicador")).toHaveClass(/fase-pendiente/);
   await expect(fases.nth(0).locator("svg.marca-lleno")).toHaveCount(1);
   await expect(fases.nth(4).locator("svg.marca-anillo")).toHaveCount(1);
   await expect(fases.nth(5).locator("svg.marca-vacio")).toHaveCount(1);
@@ -28,7 +28,7 @@ test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendient
 
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/con-hueco`);
   await expect(fasesDeLaTarea(page).nth(2)).toContainText("hueco");
-  await expect(fasesDeLaTarea(page).nth(2)).toHaveClass(/fase-hueco/);
+  await expect(fasesDeLaTarea(page).nth(2).locator(".indicador")).toHaveClass(/fase-hueco/);
   await expect(fasesDeLaTarea(page).nth(2).locator("svg.marca-rombo")).toHaveCount(1);
   await expect(fasesDeLaTarea(page).nth(2).getByRole("button")).toBeDisabled(); // sin documento no hay visor
   await expect(fasesDeLaTarea(page).nth(2).locator(".fase-archivo"), "el archivo que falta se ve en la tarjeta").toBeVisible();
@@ -37,7 +37,7 @@ test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendient
 
   await page.goto(`${servidor.origen}/#/tablero/INVESTIGACION/costos`);
   await expect(fasesDeLaTarea(page).nth(1)).toContainText("con pendientes");
-  await expect(fasesDeLaTarea(page).nth(1)).toHaveClass(/fase-con-pendientes/);
+  await expect(fasesDeLaTarea(page).nth(1).locator(".indicador")).toHaveClass(/fase-con-pendientes/);
   await expect(fasesDeLaTarea(page).nth(1).locator("svg.marca-triangulo")).toHaveCount(1);
   await ningunEstadoSoloColor(page);
   await sinViolacionesGraves(page, "las fases del tablero");

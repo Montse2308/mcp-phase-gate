@@ -17,7 +17,7 @@ test("la línea de tiempo: documentos, recibo, commit con su asunto, reanclaje y
   const fechas = await page.locator(".linea-de-tiempo time").evaluateAll((ts) => ts.map((t) => t.getAttribute("datetime")!));
   const momentos = fechas.map((f) => Date.parse(f.length === 10 ? `${f}T00:00:00` : f));
   expect(momentos).toEqual([...momentos].sort((a, b) => b - a));
-  await ningunEstadoSoloColor(page);
+  await ningunEstadoSoloColor(page, ".tipo-evento"); // la leyenda de la Bitácora conserva su marca, sin indicador
   await sinViolacionesGraves(page, "la Bitácora en tema oscuro");
   await ponerTema(page, "claro");
   await sinViolacionesGraves(page, "la Bitácora en tema claro");

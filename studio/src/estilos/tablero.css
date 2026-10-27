@@ -12,7 +12,7 @@
 }
 .miga {
   margin: 0;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 .descripcion {
   margin-top: 0;
@@ -38,24 +38,25 @@
   align-items: flex-start;
   gap: 0.15rem;
   padding: 0.6rem 0.75rem;
-  background: var(--panel);
+  background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-tarjeta);
   cursor: pointer;
   text-align: left;
 }
 .fase-boton:hover:not(:disabled),
 .fase-boton[aria-pressed="true"] {
-  border-color: var(--borde-fuerte);
+  border-color: var(--borde-control);
 }
+/* La fase abierta: fondo suave y borde en el acento, como la pestaña activa. El contorno queda para el foco. */
 .fase-boton[aria-pressed="true"] {
-  outline: 2px solid var(--acento);
+  border-color: var(--acento);
+  background: var(--acento-suave);
 }
 .fase-boton:disabled {
   cursor: default;
 }
 .fase-numero {
-  font-family: var(--texto-titulo);
   font-size: 1.1rem;
 }
 .fase-titulo {
@@ -65,23 +66,10 @@
   font-size: 0.85rem;
   font-weight: 700;
 }
-.fase-cerrada .fase-estado {
-  color: var(--verde);
-}
-.fase-en-curso .fase-estado,
-.fase-con-pendientes .fase-estado {
-  color: var(--ambar);
-}
-.fase-hueco .fase-estado {
-  color: var(--rojo);
-}
-.fase-pendiente .fase-estado {
-  color: var(--texto-secundario);
-}
 /* El archivo de una fase sin documento: no hay visor que lo enseñe. */
 .fase-archivo {
   font-size: 0.8rem;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
   overflow-wrap: anywhere;
 }
 @media (max-width: 640px) {
@@ -106,28 +94,7 @@
 }
 .estado {
   font-weight: 700;
-}
-.estado-verificado {
-  color: var(--verde);
-}
-.estado-sellado {
-  color: var(--azul);
-}
-.estado-con-pendientes,
-.estado-commit-pendiente {
-  color: var(--ambar);
-}
-.estado-rechazado,
-.estado-no-vigente {
-  color: var(--rojo);
-}
-.estado-descartado,
-.estado-sin-recibo {
-  color: var(--texto-secundario);
-}
-.estado-manual,
-.estado-nota {
-  color: var(--morado);
+  white-space: nowrap;
 }
 /* Un SHA, un sha256 o una fecha no se parten; el motivo y la nota van en texto normal. */
 .estado-detalle {
@@ -162,9 +129,9 @@
 
 /* ─── El visor ────────────────────────────────────────────────────────── */
 .visor {
-  background: var(--panel);
+  background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-contenedor);
   padding: 0.75rem 1rem;
   min-width: 0;
 }
@@ -186,7 +153,7 @@
   gap: 0.15rem 0.75rem;
   margin: 0.75rem 0;
   padding: 0.5rem;
-  background: var(--fondo-tren);
+  background: var(--superficie-2);
   border-radius: var(--radio);
   font-size: 0.85rem;
 }
@@ -195,7 +162,7 @@
 }
 .ficha dt {
   font-family: var(--texto-codigo);
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 .ficha dd {
   margin: 0;
@@ -206,7 +173,7 @@
 }
 .markdown pre {
   white-space: pre-wrap;
-  background: var(--fondo-tren);
+  background: var(--superficie-2);
   padding: 0.5rem;
   border-radius: var(--radio);
 }
@@ -227,7 +194,7 @@
 .imagen-externa {
   font-family: var(--texto-codigo);
   font-size: 0.85rem;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 
 .enlace-boton {
@@ -235,7 +202,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--enlace);
+  color: var(--acento);
   text-decoration: underline;
   cursor: pointer;
   text-align: left;
@@ -244,7 +211,7 @@
   font-weight: 700;
 }
 .enlace-boton:disabled {
-  color: var(--texto-secundario);
+  color: var(--texto-2);
   cursor: default;
   text-decoration: none;
 }

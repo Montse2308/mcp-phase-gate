@@ -12,6 +12,86 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-27 — El Studio adopta la dirección visual sobria: Inter y JetBrains Mono, un acento azul, un fondo gris, pizarra azulada en oscuro y un indicador para cada estado
+
+> **Reemplaza en parte** la §7.2 de `docs/plan-maestro-v3.md`, solo en la tipografía: las tres familias (Big
+> Shoulders Display, Atkinson Hyperlegible e IBM Plex Mono) quedan superadas por Inter y JetBrains Mono. Lo demás
+> de esa sección sigue vigente: las fuentes van autoalojadas en `studio/public/fuentes/`, con licencia OFL, y el
+> Studio no pide nada fuera de `127.0.0.1`. La entrada anterior (el modo Cabina que se elimina y los sellos SVG,
+> ya marcados allí) solo se cita: esta no decide nada sobre la estructura.
+
+**Decisión.** Es solo capa visual: CSS, fuentes y un componente de estado. Ningún dato, texto ni comportamiento
+cambia, y la estructura de cada vista es la misma que antes (una prueba compara el árbol de accesibilidad de
+cada vista con el de antes).
+
+- **Dirección sobria.** Fondo claro gris `#f3f5f7`, superficies blancas, bordes de 1 px, sin sombras, radios de
+  6 px en los controles, 8 en las tarjetas y 10 en los contenedores. El acento es azul: `#1d4ed8` en claro y
+  `#93c5fd` en oscuro.
+- **Tema oscuro pizarra azulada**, con fondo `#0b0d10`, de la misma temperatura que el gris claro.
+- **Los colores tienen nombre de función, no de metáfora** (`fondo`, `superficie`, `superficie-2`, `borde`,
+  `borde-control`, `texto`, `texto-2`, `acento`, `acento-suave`, `sobre-acento`, `banda`, `texto-banda`, `verde`,
+  `ámbar`, `rojo`, `violeta` y `apagado`), una vez en cada tema. `test/studio-tokens.test.ts` lee las hojas y
+  comprueba que toda variable usada está definida, que los dos bloques del oscuro dicen lo mismo, que el texto
+  llega a 4.5:1 sobre sus fondos y que el acento y el borde de los controles llegan a 3:1. El verde, el ámbar y
+  el apagado del tema claro son algo más oscuros que en los bocetos: con los de los bocetos, el ámbar daba 4.15:1
+  sobre `superficie-2`.
+- **Inter variable para el texto y JetBrains Mono variable para el código, los SHA y los lotes**, un solo archivo
+  `woff2` cada una (48,256 y 40,404 bytes) dentro del paquete, porque la CSP solo admite `font-src 'self'`. Pesan
+  menos que Inter 400 y 600 juntas y traen los pesos intermedios.
+- **Densidad cómoda.** El cuerpo mide 15 px (`0.9375rem`; la raíz sigue al 100 %), las celdas de las tablas
+  11 por 14 px, y ningún texto baja de 12 px: tampoco las cabeceras, las etiquetas ni la insignia. Un test lo mide
+  con `getComputedStyle` en cada vista y en los dos temas.
+- **Cada estado tiene una forma propia dentro de su vista y siempre va con su texto**: nunca se dice nada solo con
+  color. Lo pinta `IndicadorDeEstado`, que es la única tabla de qué forma, qué color y qué insignia lleva cada
+  estado. Solo lo que pide atención lleva insignia (el texto en mayúsculas con `text-transform`, con borde del
+  color del estado, en JetBrains Mono 600 de 12 px): fase con pendientes y con hueco; lote con pendientes, no
+  vigente y rechazado; manifiesto inválido, repo que no existe o con error de git, error de configuración; y
+  errores y avisos del Vigía. Dos excepciones: cuando la insignia lleva datos (el mensaje de git de un repo, el
+  nombre `phase-gate.json`) no los pasa a mayúsculas, porque una ruta o un nombre en mayúsculas ya no es el que
+  es; y en un título (los grupos del Vigía) toma el tamaño y la familia del título, para que los títulos del mismo
+  nivel midan lo mismo lleven insignia o no.
+- **Los colores de los lotes que cambian:** «commit pendiente» pasa de ámbar a violeta, para no confundirse con el
+  acento ni con «con pendientes»; «sellado» pasa de azul a verde, porque el azul es ahora el acento; y «manual» y
+  «nota» pasan de morado a apagado: el morado era su único color y ahora los distingue su forma. «Descartado» y
+  «sin recibo» siguen en gris, ahora `apagado`.
+- **La pestaña activa** lleva fondo `acento-suave`, una raya inferior de 2 px y peso 600: el fondo solo da 1.22:1
+  contra la barra, así que no es lo que la distingue.
+- **La fase abierta del Tablero** lleva fondo `acento-suave` y borde en el acento, como la pestaña activa, y el
+  contorno queda para el foco: antes los dos eran el mismo contorno, y la fase abierta parecía enfocada. Su texto
+  (el título, el archivo y el estado en su color) llega a 4.5:1 sobre `acento-suave`, y lo comprueba el test de
+  los tokens.
+- **`studio/e2e/tema.spec.ts` cambia en tres cosas, ninguna de estructura:** el fondo de cada tema se lee de las
+  hojas en vez de ir escrito (cualquier paleta nueva lo cambiaba); los nombres de variables admiten dígitos
+  (`--texto-2`, `--superficie-2`); y el Taller espera a que se llene el selector de proyectos antes de fotografiar
+  (una carrera que se vio en la CI de Windows y macOS). Las pruebas de estructura y la función que compara no
+  cambian.
+
+**Por qué.**
+
+- Una paleta con funciones y no con metáforas se puede comprobar con un test, y una sola estructura de estados
+  hace que el mismo estado se vea igual en todas las vistas.
+- Inter es legible a 15 px en pantalla, y JetBrains Mono distingue el 0 de la O y el 1 de la l y la I justo donde
+  la ambigüedad importa: los SHA y los lotes.
+- El oscuro de la misma temperatura que el claro evita que cambiar de tema se sienta como cambiar de producto.
+
+**Qué se descartó.**
+
+- **Atkinson Hyperlegible.** Se diseñó para baja visión y se pierde. Baja el cuerpo de 16 a 15 px, así que no se
+  compensa: es una reducción que se eligió viendo las capturas. Lo que sí ayuda es JetBrains Mono en SHA y lotes,
+  el mínimo de 12 px y el contraste, comprobados por tests.
+- **El cuerpo de 14 px.** Era una reducción más fuerte desde los 16 de antes, no una mitigación, y se quedó en 15.
+- **IBM Plex Sans y un acento índigo.** Se compararon en las láminas de la dirección y no se eligieron.
+- **Un oscuro de gris neutro puro.** Con el gris claro azulado, el oscuro tenía que ser de la misma temperatura.
+- **La insignia en todos los estados.** Con varios repos activos, «con cambios» (lo normal mientras se trabaja)
+  llenaría la Red de alertas, y una alerta que está en todas partes deja de avisar.
+- **La alternativa `ss02` de Inter.** En las capturas no cambiaba nada visible, y donde la ambigüedad importa ya
+  va JetBrains Mono.
+
+**Riesgo aceptado.** Atkinson se pierde, y Taller, Vigía y Bitácora no tenían lámina: su aspecto sale de los
+mismos tokens y se revisó con capturas. El GIF de la demo, que se graba con el Studio, tiene otro aspecto.
+
+---
+
 ## 2026-10-27 — El Studio tiene una sola estructura por vista, y el tema, claro u oscuro, solo cambia colores; el modo Cabina se elimina
 
 > **Reemplaza en parte** dos entradas, cada una solo en lo que dice de los modos del Studio. De "El Studio

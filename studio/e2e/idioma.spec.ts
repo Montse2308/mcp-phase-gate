@@ -128,7 +128,7 @@ test.describe("con el navegador en inglés", () => {
     await expect(eventos.filter({ hasText: "re-anchored:" }).first()).toBeVisible(); // el título, del servidor
     await expect(page.locator(".linea-de-tiempo time").first()).toHaveAttribute("title", /\b20\d\d\b/);
     await expect(page.getByRole("group", { name: "What to show" })).toBeVisible();
-    await ningunEstadoSoloColor(page);
+    await ningunEstadoSoloColor(page, ".tipo-evento"); // la leyenda de la Bitácora conserva su marca, sin indicador
     await sinViolacionesGraves(page, "la Bitácora en inglés, tema oscuro");
     await ponerTema(page, "claro");
     await sinViolacionesGraves(page, "la Bitácora en inglés, tema claro");

@@ -1,0 +1,125 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Taller de prompts":
+    - heading "Taller de prompts" [level=1]
+    - text: Proyecto
+    - combobox "Proyecto":
+      - option "INVESTIGACION"
+      - option "NUEVO"
+      - option "TALLER" [selected]
+      - option "TIENDA"
+    - text: Tarea
+    - combobox "Tarea":
+      - option "La activa (o ninguna)" [selected]
+      - option "afinar"
+    - text: Fase
+    - combobox "Fase":
+      - option "1 · Descubrimiento"
+      - option "2 · Decisiones"
+      - option "3 · Plan Técnico" [selected]
+      - option "4 · Ejecución"
+      - option "5 · Auditoría / Pre-PR"
+    - region "Capas":
+      - heading "Capas" [level=2]
+      - list:
+        - listitem:
+          - strong: fábrica
+          - text: existe
+          - code: <paquete>/prompts/es
+        - listitem:
+          - strong: preset
+          - text: existe
+          - code: <paquete>/presets/es/ai-agent-ops.md
+        - listitem:
+          - strong: proyecto
+          - text: no existe
+          - code: <raiz>/docs/TALLER/.phase-gate/prompts
+    - region "Ranuras de la Fase 3 (10, con las globales)":
+      - heading "Ranuras de la Fase 3 (10, con las globales)" [level=2]
+      - list "Ranuras":
+        - listitem:
+          - button "global/cero-rupturas fábrica despues (<paquete>/presets/es/ai-agent-ops.md:13)":
+            - code: global/cero-rupturas
+            - text: fábrica despues (<paquete>/presets/es/ai-agent-ops.md:13)
+        - listitem:
+          - 'button "global/evidencia preset: ai-agent-ops"':
+            - code: global/evidencia
+            - text: "preset: ai-agent-ops"
+          - text: <paquete>/presets/es/ai-agent-ops.md:20
+        - listitem:
+          - button "global/extra fábrica":
+            - code: global/extra
+            - text: fábrica
+        - listitem:
+          - button "fase-3/rol fábrica":
+            - code: fase-3/rol
+            - text: fábrica
+        - listitem:
+          - 'button "fase-3/comprobaciones preset: ai-agent-ops"':
+            - code: fase-3/comprobaciones
+            - text: "preset: ai-agent-ops"
+          - text: <paquete>/presets/es/ai-agent-ops.md:45
+        - listitem:
+          - button "fase-3/lotes fábrica":
+            - code: fase-3/lotes
+            - text: fábrica
+        - listitem:
+          - 'button "fase-3/pruebas preset: ai-agent-ops"':
+            - code: fase-3/pruebas
+            - text: "preset: ai-agent-ops"
+          - text: <paquete>/presets/es/ai-agent-ops.md:52
+        - listitem:
+          - button "fase-3/prohibido-lotes fábrica":
+            - code: fase-3/prohibido-lotes
+            - text: fábrica
+        - listitem:
+          - button "fase-3/ejemplos fábrica":
+            - code: fase-3/ejemplos
+            - text: fábrica
+        - listitem:
+          - button "fase-3/autoverificacion-lotes fábrica":
+            - code: fase-3/autoverificacion-lotes
+            - text: fábrica
+    - region "La Fase 3 entera":
+      - heading "La Fase 3 entera" [level=2]
+      - 'button "Editar la Fase 3 en la capa del proyecto: vista previa"'
+      - group: Ver prompt completo
+    - region "Reglas de TALLER":
+      - heading "Reglas de TALLER" [level=2]
+      - paragraph:
+        - text: "Preset:"
+        - strong: ai-agent-ops
+        - text: (del proyecto)
+      - paragraph:
+        - checkbox "Lotes" [checked]
+        - text: Lotes Política de commits
+        - combobox "Política de commits":
+          - option "agente-commitea-con-OK" [selected]
+          - option "agente-propone"
+          - option "auto"
+          - option "ninguno"
+      - 'button "Cambiar las reglas: vista previa" [disabled]'

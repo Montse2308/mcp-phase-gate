@@ -1,0 +1,131 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- note: "Demo: datos de ejemplo. Todo es de solo lectura."
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Taller de prompts":
+    - heading "Taller de prompts" [level=1]
+    - text: Proyecto
+    - combobox "Proyecto":
+      - option "ASISTENTE"
+      - option "INVESTIGACION"
+      - option "TIENDA" [selected]
+    - text: Tarea
+    - combobox "Tarea":
+      - option "La activa (o ninguna)"
+      - option "envio-gratis"
+      - option "cupones-de-descuento" [selected]
+    - text: Fase
+    - combobox "Fase":
+      - option "1 · Descubrimiento"
+      - option "2 · Decisiones"
+      - option "3 · Plan Técnico"
+      - option "4 · Ejecución" [selected]
+      - option "5 · Auditoría / Pre-PR"
+    - region "Capas":
+      - heading "Capas" [level=2]
+      - list:
+        - listitem:
+          - strong: fábrica
+          - text: existe
+          - code: <paquete>/prompts/es
+        - listitem:
+          - strong: preset
+          - text: existe
+          - code: <paquete>/presets/es/multi-repo-feature.md
+        - listitem:
+          - strong: proyecto
+          - text: no existe
+          - code: <Documentación>/TIENDA/.phase-gate/prompts
+    - region "Ranuras de la Fase 4 (11, con las globales)":
+      - heading "Ranuras de la Fase 4 (11, con las globales)" [level=2]
+      - list "Ranuras":
+        - listitem:
+          - button "global/cero-rupturas fábrica":
+            - code: global/cero-rupturas
+            - text: fábrica
+        - listitem:
+          - button "global/evidencia fábrica":
+            - code: global/evidencia
+            - text: fábrica
+        - listitem:
+          - button "global/extra fábrica":
+            - code: global/extra
+            - text: fábrica
+        - listitem:
+          - button "fase-4/rol fábrica":
+            - code: fase-4/rol
+            - text: fábrica
+        - listitem:
+          - button "fase-4/verificacion fábrica":
+            - code: fase-4/verificacion
+            - text: fábrica
+        - listitem:
+          - button "fase-4/pruebas fábrica":
+            - code: fase-4/pruebas
+            - text: fábrica
+        - listitem:
+          - button "fase-4/lotes fábrica":
+            - code: fase-4/lotes
+            - text: fábrica
+        - listitem:
+          - button "fase-4/commits fábrica":
+            - code: fase-4/commits
+            - text: fábrica
+        - listitem:
+          - button "fase-4/prohibido-commits fábrica":
+            - code: fase-4/prohibido-commits
+            - text: fábrica
+        - listitem:
+          - button "fase-4/ejemplos fábrica":
+            - code: fase-4/ejemplos
+            - text: fábrica
+        - listitem:
+          - button "fase-4/autoverificacion-commits fábrica":
+            - code: fase-4/autoverificacion-commits
+            - text: fábrica
+    - region "La Fase 4 entera":
+      - heading "La Fase 4 entera" [level=2]
+      - paragraph:
+        - button "Editar la Fase 4 en la capa del proyecto" [disabled]
+        - text: En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.
+      - group: Ver prompt completo
+    - region "Reglas de TIENDA":
+      - heading "Reglas de TIENDA" [level=2]
+      - paragraph:
+        - text: "Preset:"
+        - strong: multi-repo-feature
+        - text: (del proyecto)
+      - paragraph:
+        - checkbox "Lotes" [checked]
+        - text: Lotes Política de commits
+        - combobox "Política de commits":
+          - option "agente-commitea-con-OK" [selected]
+          - option "agente-propone"
+          - option "auto"
+          - option "ninguno"
+      - paragraph:
+        - button "Cambiar las reglas" [disabled]
+        - text: En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.

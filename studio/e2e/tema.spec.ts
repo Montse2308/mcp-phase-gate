@@ -17,8 +17,16 @@ import type { Foto, Nodo } from "./estructura";
 
 const ESTILOS = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "estilos");
 
-// El fondo de la página en cada tema (--fondo de tema-claro.css y de tema-oscuro.css).
-const FONDO = { claro: "rgb(255, 255, 255)", oscuro: "rgb(12, 19, 27)" };
+// El fondo de la página en cada tema: el --fondo de tema-claro.css y de tema-oscuro.css, leído de la hoja para
+// que una paleta nueva no toque esta prueba (los dos bloques del oscuro dicen lo mismo: lo comprueba
+// test/studio-tokens.test.ts).
+function fondoDeLaHoja(archivo: string): string {
+  const hex = /--fondo\s*:\s*#([0-9a-f]{6})\s*;/i.exec(fs.readFileSync(path.join(ESTILOS, archivo), "utf-8"))?.[1];
+  if (!hex) throw new Error(`${archivo} no declara --fondo como #rrggbb`);
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+const FONDO = { claro: fondoDeLaHoja("tema-claro.css"), oscuro: fondoDeLaHoja("tema-oscuro.css") };
 
 const boton = (page: Page) => page.getByRole("button", { name: "Tema oscuro" });
 const fondo = (page: Page) => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
@@ -140,7 +148,7 @@ test("tema-claro.css y tema-oscuro.css solo declaran custom properties y color-s
   expect(claro.map((b) => b.selector)).toEqual([':root:not([data-tema]), :root[data-tema="claro"]']);
   expect(oscuro.map((b) => b.selector)).toEqual([":root:not([data-tema])", ':root[data-tema="oscuro"]']);
   for (const b of [...claro, ...oscuro]) {
-    for (const nombre of Object.keys(b.declaraciones)) expect(nombre, `${b.selector}: ${nombre}`).toMatch(/^(?:--[a-z-]+|color-scheme)$/);
+    for (const nombre of Object.keys(b.declaraciones)) expect(nombre, `${b.selector}: ${nombre}`).toMatch(/^(?:--[a-z0-9-]+|color-scheme)$/);
   }
   const nombres = (b: { declaraciones: Record<string, string> }) => Object.keys(b.declaraciones).sort();
   expect(nombres(oscuro[0]!), "las dos paletas oscuras declaran lo mismo").toEqual(nombres(oscuro[1]!));
@@ -154,8 +162,8 @@ test("tema-claro.css y tema-oscuro.css solo declaran custom properties y color-s
 
 test("toda variable que usa un estilo está declarada en alguna hoja", () => {
   const hojas = fs.readdirSync(ESTILOS).filter((n) => n.endsWith(".css")).map((n) => leer(n));
-  const declaradas = new Set(hojas.flatMap((css) => [...css.matchAll(/(--[a-z-]+)\s*:/g)].map((m) => m[1]!)));
-  const usadas = new Set(hojas.flatMap((css) => [...css.matchAll(/var\((--[a-z-]+)/g)].map((m) => m[1]!)));
+  const declaradas = new Set(hojas.flatMap((css) => [...css.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]!)));
+  const usadas = new Set(hojas.flatMap((css) => [...css.matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1]!)));
   expect([...usadas].filter((v) => !declaradas.has(v)), "variables usadas y nunca declaradas").toEqual([]);
 });
 
@@ -349,6 +357,8 @@ const abrirElRecibo = async (p: Page) => {
 const tallerListo = async (p: Page) => {
   await expect(p.getByRole("list", { name: "Ranuras" }).getByRole("listitem").first()).toBeVisible();
   await expect(p.getByText("Política de commits")).toBeVisible();
+  // El selector de proyectos se llena cuando llega la lista de proyectos, después del resto de la vista.
+  await expect(p.locator("#taller-proyecto option")).not.toHaveCount(0);
 };
 const vigiaListo = async (p: Page) => {
   await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();

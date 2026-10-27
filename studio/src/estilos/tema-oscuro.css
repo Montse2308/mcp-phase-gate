@@ -1,62 +1,48 @@
 /* El tema oscuro: solo custom properties, sin reglas de componentes. Es el que se ve con la elección
    guardada, y sin ella cuando el sistema pide el oscuro: por eso la paleta va dos veces, bajo la consulta
-   de medios y bajo [data-tema="oscuro"], y las dos tienen que decir lo mismo. La paleta es provisional.
-   Todos los textos cumplen contraste AA sobre su fondo. */
+   de medios y bajo [data-tema="oscuro"], y las dos tienen que decir lo mismo. Pizarra azulada, de la misma
+   temperatura que el gris claro. Los contrastes los comprueba test/studio-tokens.test.ts. */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema]) {
     color-scheme: dark;
-    --texto-titulo: "Big Shoulders Display", "Atkinson Hyperlegible", system-ui, sans-serif;
-    --fondo: #0c131b;
-    --barra: #111c27;
-    --panel: #15212d;
-    --fondo-tren: #1b2a38;
-    --texto: #e9eef3;
-    --texto-secundario: #a9b7c4;
-    --borde: #2a3a4a;
-    --borde-fuerte: #4a6075;
-    --acento: #e0ac4b;
-    --enlace: #8fc8ff;
-    --foco: #ffd166;
-    --seleccion: #e0ac4b;
-    --texto-seleccion: #0c131b;
-    --boton: #233344;
-    --texto-boton: #e9eef3;
-    --banda: #e0ac4b;
-    --texto-banda: #0c131b;
-    --verde: #4bd88a;
-    --ambar: #f6bd46;
-    --rojo: #ff6d63;
-    --apagado: #8b9aa9;
-    --azul: #7fa6ff;
-    --morado: #b9a4ff;
+    --fondo: #0b0d10;
+    --superficie: #121620;
+    --superficie-2: #171c27;
+    --borde: #272d3a;
+    --borde-control: #636c7e;
+    --texto: #e9ecf1;
+    --texto-2: #a3abb8;
+    --acento: #93c5fd;
+    --acento-suave: #172a46;
+    --sobre-acento: #0b0d10;
+    --banda: #3a2c0e;
+    --texto-banda: #fbe7b5;
+    --verde: #4ade80;
+    --ambar: #fbbf24;
+    --rojo: #fca5a5;
+    --violeta: #c4b5fd;
+    --apagado: #8b93a1;
   }
 }
 
 :root[data-tema="oscuro"] {
   color-scheme: dark;
-  --texto-titulo: "Big Shoulders Display", "Atkinson Hyperlegible", system-ui, sans-serif;
-  --fondo: #0c131b;
-  --barra: #111c27;
-  --panel: #15212d;
-  --fondo-tren: #1b2a38;
-  --texto: #e9eef3;
-  --texto-secundario: #a9b7c4;
-  --borde: #2a3a4a;
-  --borde-fuerte: #4a6075;
-  --acento: #e0ac4b;
-  --enlace: #8fc8ff;
-  --foco: #ffd166;
-  --seleccion: #e0ac4b;
-  --texto-seleccion: #0c131b;
-  --boton: #233344;
-  --texto-boton: #e9eef3;
-  --banda: #e0ac4b;
-  --texto-banda: #0c131b;
-  --verde: #4bd88a;
-  --ambar: #f6bd46;
-  --rojo: #ff6d63;
-  --apagado: #8b9aa9;
-  --azul: #7fa6ff;
-  --morado: #b9a4ff;
+  --fondo: #0b0d10;
+  --superficie: #121620;
+  --superficie-2: #171c27;
+  --borde: #272d3a;
+  --borde-control: #636c7e;
+  --texto: #e9ecf1;
+  --texto-2: #a3abb8;
+  --acento: #93c5fd;
+  --acento-suave: #172a46;
+  --sobre-acento: #0b0d10;
+  --banda: #3a2c0e;
+  --texto-banda: #fbe7b5;
+  --verde: #4ade80;
+  --ambar: #fbbf24;
+  --rojo: #fca5a5;
+  --violeta: #c4b5fd;
+  --apagado: #8b93a1;
 }

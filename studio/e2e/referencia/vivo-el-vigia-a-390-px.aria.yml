@@ -1,0 +1,163 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Vigía":
+    - heading "Vigía" [level=1]
+    - paragraph: "mcp-phase-gate <versión> · Node <versión> · Vigilancia activa: los cambios del disco llegan al momento"
+    - region "Diagnóstico":
+      - heading "Diagnóstico" [level=2]
+      - region "Errores (1)":
+        - heading "Errores (1)" [level=3]
+        - list:
+          - listitem:
+            - paragraph:
+              - code: MANIFIESTO-INVALIDO
+              - text: "phase-gate.json de ROTO no es válido (<raiz>/docs/ROTO/phase-gate.json): no es un JSON válido (Expected property name or '}' in JSON at position 2 (line 1 column 3))."
+            - paragraph:
+              - strong: "Cómo se arregla:"
+              - text: Corrige el phase-gate.json en la ruta que dice el error (el editor lo autocompleta con su $schema).
+      - region "Avisos (2)":
+        - heading "Avisos (2)" [level=3]
+        - list:
+          - listitem:
+            - paragraph:
+              - code: PRESET-IMPLICITO
+              - text: "INVESTIGACION no tiene phase-gate.json ni hay presetPorDefecto en machine.json: su tarea usa el preset `software`. Si se crearon con el flujo de la réplica (el de antes de la 3.0), consérvalo con `init --migrate` o con \"presetPorDefecto\": \"software-replica\" en machine.json."
+            - paragraph:
+              - strong: "Cómo se arregla:"
+              - text: "Crea el phase-gate.json del proyecto (\"Crear phase-gate.json\" en la Red, o `init --migrate`), o fija presetPorDefecto en machine.json."
+          - listitem:
+            - paragraph:
+              - code: PRESET-IMPLICITO
+              - text: "NUEVO no tiene phase-gate.json ni hay presetPorDefecto en machine.json: su tarea usa el preset `software`. Si se crearon con el flujo de la réplica (el de antes de la 3.0), consérvalo con `init --migrate` o con \"presetPorDefecto\": \"software-replica\" en machine.json."
+            - paragraph:
+              - strong: "Cómo se arregla:"
+              - text: "Crea el phase-gate.json del proyecto (\"Crear phase-gate.json\" en la Red, o `init --migrate`), o fija presetPorDefecto en machine.json."
+      - region "Información (1)":
+        - heading "Información (1)" [level=3]
+        - list:
+          - listitem:
+            - paragraph:
+              - code: RECIBO-MANUAL
+              - text: "TIENDA/variedad: el recibo de L05 se escribió a mano (sin `origen: servidor`). record_batch los lee igual y get_batch_status los marca como manuales."
+            - paragraph:
+              - strong: "Cómo se arregla:"
+              - text: "No hace falta nada: record_batch lo lee igual. Si quieres un recibo del servidor, regístralo con record_batch."
+    - region "Clientes MCP":
+      - heading "Clientes MCP" [level=2]
+      - paragraph: "Lo que haría `mcp-phase-gate init` en cada uno. Nada se escribe sin la vista previa y su \"Aplicar\"."
+      - article "Claude Code":
+        - heading "Claude Code" [level=3]
+        - paragraph: detectado en este equipo
+        - paragraph: Se registraría como «pg» (ámbito user).
+        - paragraph:
+          - text: "Comando:"
+          - code: claude mcp add pg --scope user --env PHASE_GATE_DOCS_PATH=<raiz>/docs --env PHASE_GATE_REPOS_PATH=<raiz>/repos -- npx -y mcp-phase-gate
+        - paragraph:
+          - checkbox "Copiar también los comandos de fase (/f1…/fN)"
+          - text: Copiar también los comandos de fase (/f1…/fN)
+        - 'button "Configurar Claude Code: vista previa"'
+      - article "Cursor":
+        - heading "Cursor" [level=3]
+        - paragraph: no detectado
+        - paragraph: Se registraría como «pg».
+        - paragraph:
+          - text: "Archivo:"
+          - code: ~/.cursor/mcp.json
+        - text: <diff>
+        - paragraph:
+          - checkbox "Copiar también los comandos de fase (/f1…/fN)"
+          - text: Copiar también los comandos de fase (/f1…/fN)
+        - 'button "Configurar Cursor: vista previa"'
+      - article "VS Code":
+        - heading "VS Code" [level=3]
+        - paragraph: no detectado
+        - paragraph: Se registraría como «pg».
+        - paragraph:
+          - text: "Archivo:"
+          - code: ~/<carpeta de VS Code>/mcp.json
+        - text: <diff>
+        - 'button "Configurar VS Code: vista previa"'
+    - region "Variables":
+      - heading "Variables" [level=2]
+      - table "Variables de entorno":
+        - caption: Variables de entorno
+        - rowgroup:
+          - row "Variable Nombre usado Valor De dónde sale Discrepancia":
+            - columnheader "Variable"
+            - columnheader "Nombre usado"
+            - columnheader "Valor"
+            - columnheader "De dónde sale"
+            - columnheader "Discrepancia"
+        - rowgroup:
+          - 'row "DOCS_PATH Nombre usado: PHASE_GATE_DOCS_PATH Valor: <raiz>/docs De dónde sale: entorno Discrepancia: —"':
+            - rowheader "DOCS_PATH"
+            - 'cell "Nombre usado: PHASE_GATE_DOCS_PATH"'
+            - 'cell "Valor: <raiz>/docs"'
+            - 'cell "De dónde sale: entorno"'
+            - 'cell "Discrepancia: —"'
+          - 'row "REPOS_PATH Nombre usado: PHASE_GATE_REPOS_PATH Valor: <raiz>/repos De dónde sale: entorno Discrepancia: —"':
+            - rowheader "REPOS_PATH"
+            - 'cell "Nombre usado: PHASE_GATE_REPOS_PATH"'
+            - 'cell "Valor: <raiz>/repos"'
+            - 'cell "De dónde sale: entorno"'
+            - 'cell "Discrepancia: —"'
+          - 'row "TASKS_SUBDIR Nombre usado: — Valor: — De dónde sale: sin definir Discrepancia: —"':
+            - rowheader "TASKS_SUBDIR"
+            - 'cell "Nombre usado: —"'
+            - 'cell "Valor: —"'
+            - 'cell "De dónde sale: sin definir"'
+            - 'cell "Discrepancia: —"'
+          - 'row "PROMPTS_PATH Nombre usado: — Valor: — De dónde sale: sin definir Discrepancia: —"':
+            - rowheader "PROMPTS_PATH"
+            - 'cell "Nombre usado: —"'
+            - 'cell "Valor: —"'
+            - 'cell "De dónde sale: sin definir"'
+            - 'cell "Discrepancia: —"'
+          - 'row "STATE_PATH Nombre usado: PHASE_GATE_STATE_PATH Valor: <raiz>/estado De dónde sale: entorno Discrepancia: —"':
+            - rowheader "STATE_PATH"
+            - 'cell "Nombre usado: PHASE_GATE_STATE_PATH"'
+            - 'cell "Valor: <raiz>/estado"'
+            - 'cell "De dónde sale: entorno"'
+            - 'cell "Discrepancia: —"'
+          - 'row "CONFIG_PATH Nombre usado: PHASE_GATE_CONFIG_PATH Valor: <raiz>/config De dónde sale: entorno Discrepancia: —"':
+            - rowheader "CONFIG_PATH"
+            - 'cell "Nombre usado: PHASE_GATE_CONFIG_PATH"'
+            - 'cell "Valor: <raiz>/config"'
+            - 'cell "De dónde sale: entorno"'
+            - 'cell "Discrepancia: —"'
+          - 'row "ELICITATION Nombre usado: — Valor: — De dónde sale: sin definir Discrepancia: —"':
+            - rowheader "ELICITATION"
+            - 'cell "Nombre usado: —"'
+            - 'cell "Valor: —"'
+            - 'cell "De dónde sale: sin definir"'
+            - 'cell "Discrepancia: —"'
+          - 'row "LANG Nombre usado: — Valor: — De dónde sale: sin definir Discrepancia: —"':
+            - rowheader "LANG"
+            - 'cell "Nombre usado: —"'
+            - 'cell "Valor: —"'
+            - 'cell "De dónde sale: sin definir"'
+            - 'cell "Discrepancia: —"'

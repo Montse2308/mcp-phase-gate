@@ -1,32 +1,25 @@
 /* El tema claro: solo custom properties, sin reglas de componentes. Es el que se ve con la elección
    guardada, y sin ella cuando el sistema no pide el oscuro (tema-oscuro.css, que va después, lo cambia
-   en ese caso). La paleta es provisional. */
+   en ese caso). */
 
 :root:not([data-tema]),
 :root[data-tema="claro"] {
   color-scheme: light;
-  --texto-titulo: "Atkinson Hyperlegible", system-ui, sans-serif;
-  --fondo: #ffffff;
-  --barra: #f2f4f6;
-  --panel: #ffffff;
-  --fondo-tren: #f2f4f6;
-  --texto: #1b1f24;
-  --texto-secundario: #4d5965;
-  --borde: #d0d7de;
-  --borde-fuerte: #8c959f;
-  --acento: #0b5cad;
-  --enlace: #0b5cad;
-  --foco: #0b5cad;
-  --seleccion: #0b5cad;
-  --texto-seleccion: #ffffff;
-  --boton: #f6f8fa;
-  --texto-boton: #1b1f24;
-  --banda: #fff1c2;
-  --texto-banda: #1b1f24;
-  --verde: #1a7f37;
-  --ambar: #8a5d00;
-  --rojo: #c42b2b;
-  --apagado: #59636e;
-  --azul: #1f4fb8;
-  --morado: #5b3cb0;
+  --fondo: #f3f5f7;
+  --superficie: #ffffff;
+  --superficie-2: #e9ecf0;
+  --borde: #dde2e8;
+  --borde-control: #7d8592;
+  --texto: #18181b;
+  --texto-2: #52525b;
+  --acento: #1d4ed8;
+  --acento-suave: #dbeafe;
+  --sobre-acento: #ffffff;
+  --banda: #fdecc8;
+  --texto-banda: #18181b;
+  --verde: #166534;
+  --ambar: #92560a;
+  --rojo: #b91c1c;
+  --violeta: #6d28d9;
+  --apagado: #5f6673;
 }

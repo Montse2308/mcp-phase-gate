@@ -8,8 +8,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { Estacion, FilaDeLote, LotesRespuesta, TareaRespuesta } from "../../../src/studio/contrato.js";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
-import { Marca } from "../comun/marcas";
-import type { Forma, Tono } from "../comun/marcas";
+import { IndicadorDeEstado } from "../comun/indicador";
+import type { ClaveDeEstado } from "../comun/indicador";
 import { Selector } from "../comun/selector";
 import { ruta } from "../datos";
 import { t } from "../i18n/idioma";
@@ -28,13 +28,14 @@ function etiquetaDe(e: Estacion): string {
   return e.numero === 0 ? "00" : t("tablero.fase", { n: e.numero });
 }
 
-// El estado de una fase es un valor del contrato (TextoDeSenal), en español: aquí se dice y se le da su forma.
-const FASES: Record<Estacion["texto"], { clase: string; clave: "fase.cerrada" | "fase.conPendientes" | "fase.enCurso" | "fase.hueco" | "fase.pendiente"; forma: Forma; tono: Tono }> = {
-  cerrada: { clase: "fase-cerrada", clave: "fase.cerrada", forma: "lleno", tono: "verde" },
-  "en curso": { clase: "fase-en-curso", clave: "fase.enCurso", forma: "anillo", tono: "ambar" },
-  "con pendientes": { clase: "fase-con-pendientes", clave: "fase.conPendientes", forma: "triangulo", tono: "ambar" },
-  hueco: { clase: "fase-hueco", clave: "fase.hueco", forma: "rombo", tono: "rojo" },
-  pendiente: { clase: "fase-pendiente", clave: "fase.pendiente", forma: "vacio", tono: "apagado" },
+// El estado de una fase es un valor del contrato (TextoDeSenal), en español: aquí se dice. Su forma y su color
+// salen del indicador.
+const FASES: Record<Estacion["texto"], { estado: ClaveDeEstado; clave: "fase.cerrada" | "fase.conPendientes" | "fase.enCurso" | "fase.hueco" | "fase.pendiente" }> = {
+  cerrada: { estado: "fase-cerrada", clave: "fase.cerrada" },
+  "en curso": { estado: "fase-en-curso", clave: "fase.enCurso" },
+  "con pendientes": { estado: "fase-con-pendientes", clave: "fase.conPendientes" },
+  hueco: { estado: "fase-hueco", clave: "fase.hueco" },
+  pendiente: { estado: "fase-pendiente", clave: "fase.pendiente" },
 };
 
 // Los detalles que son texto (el motivo, la nota); los demás son SHA, sha256 o fechas.
@@ -54,13 +55,11 @@ function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbr
         const fase = FASES[e.texto];
         const origen = `fase-${e.numero}`;
         return (
-          <li key={e.numero} class={`fase ${fase.clase}`}>
+          <li key={e.numero} class="fase">
             <button type="button" class="fase-boton" disabled={!e.existe} aria-pressed={abierto?.origen === origen} onClick={(ev) => alAbrir(e.documento, origen, ev.currentTarget)}>
               <span class="fase-numero">{etiquetaDe(e)}</span>
               <span class="fase-titulo">{e.titulo}</span>
-              <span class={`fase-estado tono-${fase.tono}`}>
-                <Marca forma={fase.forma} tono={fase.tono} /> {t(fase.clave)}
-              </span>
+              <IndicadorDeEstado estado={fase.estado} texto={t(fase.clave)} enColor clase="fase-estado" />
               <span class={e.existe ? "solo-lectura" : "fase-archivo"}>{e.documento}</span>
             </button>
           </li>
@@ -101,7 +100,7 @@ function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]
                   {f.repo ?? "—"}
                 </td>
                 <td role="cell" data-etiqueta={columnas[3]}>
-                  <span class={`estado estado-${sello.tipo}`}>{sello.palabra}</span>
+                  <IndicadorDeEstado estado={`estado-${sello.tipo}` as const} texto={sello.palabra} enColor clase="estado" />
                 </td>
                 <td role="cell" class="celda-larga" data-etiqueta={columnas[4]}>
                   {sello.detalle

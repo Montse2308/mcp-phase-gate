@@ -125,19 +125,23 @@ export async function sinDesbordamiento(page: Page, contexto: string): Promise<v
   expect(ancho, `desbordamiento horizontal en ${contexto}`).toBeLessThanOrEqual(vista);
 }
 
-// Cada estado lleva texto: ninguna marca de color va sola.
-export async function ningunEstadoSoloColor(page: Page): Promise<void> {
-  const solas = await page.evaluate(() =>
-    [...document.querySelectorAll("svg.marca")]
-      .map((marca) => marca.parentElement!)
-      .filter((padre) => {
-        const copia = padre.cloneNode(true) as HTMLElement;
+// Cada estado lleva su forma y su texto: ninguno va solo con color. Mira cada indicador de estado (o, con otro
+// selector, cada elemento que haga de uno, como la leyenda de la Bitácora) y falla si no encuentra ninguno: así
+// la prueba no pasa en vacío.
+export async function ningunEstadoSoloColor(page: Page, selector = ".indicador"): Promise<void> {
+  const { total, malos } = await page.evaluate((sel) => {
+    const estados = [...document.querySelectorAll(sel)];
+    const malos = estados
+      .filter((estado) => {
+        const copia = estado.cloneNode(true) as HTMLElement;
         copia.querySelectorAll("svg").forEach((s) => s.remove());
-        return copia.textContent!.trim() === "";
+        return estado.querySelector("svg.marca") === null || copia.textContent!.trim() === "";
       })
-      .map((padre) => padre.outerHTML.slice(0, 120))
-  );
-  expect(solas).toEqual([]);
+      .map((estado) => estado.outerHTML.slice(0, 120));
+    return { total: estados.length, malos };
+  }, selector);
+  expect(total, `no hay ningún ${selector} en la página: la prueba no vería nada`).toBeGreaterThan(0);
+  expect(malos, `${selector} sin forma o sin texto`).toEqual([]);
 }
 
 // Las tarjetas de fase de un Tablero y las filas de su tabla de lotes (sin la cabecera). Los nombres de la

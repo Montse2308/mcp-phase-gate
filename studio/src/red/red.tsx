@@ -9,36 +9,38 @@ import { useId, useState } from "preact/hooks";
 
 import type { ProyectoApi, ProyectosRespuesta, RepoApi } from "../../../src/studio/contrato.js";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
-import { Marca } from "../comun/marcas";
-import type { Forma, Tono } from "../comun/marcas";
+import { IndicadorDeEstado } from "../comun/indicador";
+import type { ClaveDeEstado } from "../comun/indicador";
 import { AccionesDeProyecto } from "./acciones";
 import { t, tn } from "../i18n/idioma";
 import type { ClavePlural } from "../i18n/idioma";
 import { enlace } from "../rutas";
 
-type Estado = { forma: Forma; tono: Tono; texto: string };
+// Cada estado es una clave del indicador (que sabe su forma, su color y su insignia) y las palabras que lo dicen;
+// `literal`, cuando esas palabras llevan datos que no se pueden pasar a mayúsculas.
+type Estado = { estado: ClaveDeEstado; texto: string; literal?: boolean };
 
 export function estadoDelManifiesto(p: ProyectoApi): Estado {
-  if (p.manifiesto.estado === "valido") return { forma: "lleno", tono: "verde", texto: t("red.manifiestoValido") };
-  if (p.manifiesto.estado === "ausente") return { forma: "vacio", tono: "apagado", texto: t("red.sinManifiesto") };
-  return { forma: "rombo", tono: "rojo", texto: t("red.manifiestoInvalido") };
+  if (p.manifiesto.estado === "valido") return { estado: "red-manifiesto-valido", texto: t("red.manifiestoValido") };
+  if (p.manifiesto.estado === "ausente") return { estado: "red-manifiesto-ausente", texto: t("red.sinManifiesto") };
+  return { estado: "red-manifiesto-invalido", texto: t("red.manifiestoInvalido"), literal: true };
 }
 
 export function estadoDelRepo(r: RepoApi): Estado {
-  if (!r.existe) return { forma: "rombo", tono: "rojo", texto: t("red.repoNoExiste") };
-  if (r.error) return { forma: "triangulo", tono: "ambar", texto: r.error };
-  if (!r.respondio) return { forma: "triangulo", tono: "ambar", texto: t("red.gitNoRespondio") };
-  if (!r.esGit) return { forma: "raya", tono: "apagado", texto: t("red.sinGit") };
+  if (!r.existe) return { estado: "red-repo-no-existe", texto: t("red.repoNoExiste") };
+  if (r.error) return { estado: "red-repo-con-error", texto: r.error, literal: true };
+  if (!r.respondio) return { estado: "red-repo-con-error", texto: t("red.gitNoRespondio") };
+  if (!r.esGit) return { estado: "red-repo-sin-git", texto: t("red.sinGit") };
   const donde = r.separado ? t("red.separado", { head: r.head ?? "?" }) : t("red.rama", { rama: r.rama ?? "?" });
   const pasos = [r.adelante ? t("red.adelante", { n: r.adelante }) : null, r.atras ? t("red.atras", { n: r.atras }) : null].filter(Boolean).join(", ");
-  if (r.limpio) return { forma: "lleno", tono: "verde", texto: `${donde} · ${t("red.arbolLimpio")}${pasos ? ` · ${pasos}` : ""}` };
+  if (r.limpio) return { estado: "red-repo-limpio", texto: `${donde} · ${t("red.arbolLimpio")}${pasos ? ` · ${pasos}` : ""}` };
   const total = r.cambios + r.sinSeguimiento;
-  return { forma: "anillo", tono: "ambar", texto: `${donde} · ${tn("red.cambiosSinCommit", total)}${pasos ? ` · ${pasos}` : ""}` };
+  return { estado: "red-repo-con-cambios", texto: `${donde} · ${tn("red.cambiosSinCommit", total)}${pasos ? ` · ${pasos}` : ""}` };
 }
 
 export function estadoDeLaSesion(p: ProyectoApi): Estado {
-  if (p.sesiones.length) return { forma: "lleno", tono: "verde", texto: t("red.abiertoEn", { clientes: p.sesiones.map((s) => s.cliente).join(", ") }) };
-  return { forma: "vacio", tono: "apagado", texto: t("red.ningunaSesion") };
+  if (p.sesiones.length) return { estado: "red-sesion-abierta", texto: t("red.abiertoEn", { clientes: p.sesiones.map((s) => s.cliente).join(", ") }) };
+  return { estado: "red-sesion-ninguna", texto: t("red.ningunaSesion") };
 }
 
 // El origen de un preset (OrigenDelPreset de capas.ts) es un valor del contrato, en español: aquí se dice.
@@ -57,7 +59,7 @@ export function origenDelPreset(origen: string): string {
 // Lo que tiene que verse sin desplegar la fila: un manifiesto inválido, o un error de configuración.
 export function alertaDelProyecto(p: ProyectoApi): Estado | null {
   if (p.manifiesto.estado === "invalido") return estadoDelManifiesto(p);
-  if (p.errorDeConfiguracion) return { forma: "triangulo", tono: "ambar", texto: t("red.configuracionConError") };
+  if (p.errorDeConfiguracion) return { estado: "red-configuracion-con-error", texto: t("red.configuracionConError") };
   return null;
 }
 
@@ -67,8 +69,8 @@ function presetDe(p: ProyectoApi): string {
 
 function LineaDeEstado({ estado, clase }: { estado: Estado; clase?: string }) {
   return (
-    <p class={`linea tono-${estado.tono}${clase ? ` ${clase}` : ""}`}>
-      <Marca forma={estado.forma} tono={estado.tono} /> {estado.texto}
+    <p class={`linea${clase ? ` ${clase}` : ""}`}>
+      <IndicadorDeEstado estado={estado.estado} texto={estado.texto} literal={estado.literal} />
     </p>
   );
 }
@@ -80,9 +82,18 @@ function Repos({ p }: { p: ProyectoApi }) {
       {p.repos.map((r) => {
         const e = estadoDelRepo(r);
         return (
-          <li key={r.id} class={`tono-${e.tono}`}>
-            <Marca forma={e.forma} tono={e.tono} /> <code>{r.id}</code>
-            {r.rol ? <span class="secundaria"> ({r.rol})</span> : null} · {e.texto}
+          <li key={r.id}>
+            <IndicadorDeEstado
+              estado={e.estado}
+              texto={e.texto}
+              literal={e.literal}
+              antes={
+                <>
+                  <code>{r.id}</code>
+                  {r.rol ? <span class="secundaria"> ({r.rol})</span> : null} ·{" "}
+                </>
+              }
+            />
           </li>
         );
       })}
@@ -94,25 +105,25 @@ function Repos({ p }: { p: ProyectoApi }) {
 export const REPOS_EN_LA_FILA = 6;
 
 // Los estados de un repo, de más grave a menos, con su texto para el resumen.
-const GRUPOS_DE_REPOS: { forma: Forma; tono: Tono; clave: ClavePlural }[] = [
-  { forma: "rombo", tono: "rojo", clave: "red.reposNoExisten" },
-  { forma: "triangulo", tono: "ambar", clave: "red.reposConError" },
-  { forma: "anillo", tono: "ambar", clave: "red.reposConCambios" },
-  { forma: "raya", tono: "apagado", clave: "red.reposSinGit" },
-  { forma: "lleno", tono: "verde", clave: "red.reposLimpios" },
+const GRUPOS_DE_REPOS: { estado: ClaveDeEstado; clave: ClavePlural }[] = [
+  { estado: "red-repo-no-existe", clave: "red.reposNoExisten" },
+  { estado: "red-repo-con-error", clave: "red.reposConError" },
+  { estado: "red-repo-con-cambios", clave: "red.reposConCambios" },
+  { estado: "red-repo-sin-git", clave: "red.reposSinGit" },
+  { estado: "red-repo-limpio", clave: "red.reposLimpios" },
 ];
 
 function ResumenDeRepos({ p }: { p: ProyectoApi }) {
-  const formas = p.repos.map((r) => estadoDelRepo(r).forma);
+  const estados = p.repos.map((r) => estadoDelRepo(r).estado);
   return (
     <>
       <p class="linea">{tn("red.reposTotal", p.repos.length)}</p>
       <ul class="repos" aria-label={t("red.resumenDeRepositorios", { proyecto: p.nombre })}>
         {GRUPOS_DE_REPOS.map((g) => {
-          const n = formas.filter((f) => f === g.forma).length;
+          const n = estados.filter((e) => e === g.estado).length;
           return n ? (
-            <li key={g.forma} class={`tono-${g.tono}`}>
-              <Marca forma={g.forma} tono={g.tono} /> {tn(g.clave, n)}
+            <li key={g.estado}>
+              <IndicadorDeEstado estado={g.estado} texto={tn(g.clave, n)} />
             </li>
           ) : null;
         })}

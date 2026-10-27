@@ -2,39 +2,31 @@
    salen de las variables de cada tema (tema-claro.css y tema-oscuro.css). Sin estilos en línea: la CSP no
    admite 'unsafe-inline'. */
 
+/* Las dos fuentes son variables: un solo archivo cada una, con todos los pesos. */
 @font-face {
-  font-family: "Big Shoulders Display";
+  font-family: "Inter";
   font-style: normal;
-  font-weight: 700;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("/fuentes/big-shoulders-display-latin-700-normal.woff2") format("woff2");
+  src: url("/fuentes/inter-latin-wght-normal.woff2") format("woff2-variations");
 }
 @font-face {
-  font-family: "Atkinson Hyperlegible";
+  font-family: "JetBrains Mono";
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 800;
   font-display: swap;
-  src: url("/fuentes/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Atkinson Hyperlegible";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fuentes/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fuentes/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+  src: url("/fuentes/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
 }
 
+/* Lo que no depende del tema: las familias, los radios y el espacio. Los colores, en tema-claro.css y
+   tema-oscuro.css. Radios de 6 px en los controles, 8 en las tarjetas y 10 en los contenedores; bordes de
+   1 px y ninguna sombra. */
 :root {
-  --texto-cuerpo: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --texto-codigo: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --texto-cuerpo: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --texto-codigo: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --radio: 6px;
+  --radio-tarjeta: 8px;
+  --radio-contenedor: 10px;
   --espacio: 1rem;
 }
 
@@ -56,6 +48,7 @@ html {
 body {
   margin: 0;
   min-width: 0;
+  font-size: 0.9375rem;
   overflow-wrap: break-word;
 }
 code,
@@ -66,7 +59,7 @@ code,
 h1,
 h2,
 h3 {
-  font-family: var(--texto-titulo);
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.15;
   margin: 0 0 0.5rem;
@@ -89,11 +82,11 @@ kbd {
 }
 
 a {
-  color: var(--enlace);
+  color: var(--acento);
 }
 
 :focus-visible {
-  outline: 3px solid var(--foco);
+  outline: 2px solid var(--acento);
   outline-offset: 2px;
 }
 
@@ -102,7 +95,7 @@ a {
   left: 0.5rem;
   top: -3rem;
   padding: 0.5rem 0.75rem;
-  background: var(--panel);
+  background: var(--superficie);
   color: var(--texto);
   z-index: 10;
 }
@@ -126,12 +119,11 @@ main:focus {
   align-items: center;
   gap: 0.5rem 1rem;
   padding: 0.5rem var(--espacio);
-  background: var(--barra);
-  border-bottom: 2px solid var(--borde-fuerte);
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
 }
 .marca-studio {
   margin: 0;
-  font-family: var(--texto-titulo);
   font-size: 1.35rem;
   letter-spacing: 0.04em;
 }
@@ -149,15 +141,17 @@ main:focus {
 .barra nav a {
   display: inline-block;
   padding: 0.35rem 0.6rem;
-  border-radius: var(--radio);
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radio) var(--radio) 0 0;
   text-decoration: none;
   color: var(--texto);
 }
+/* La pestaña activa: el fondo suave solo da 1.22:1 contra la barra, así que la raya inferior y el peso son
+   lo que la distingue. */
 .barra nav a[aria-current="page"] {
-  background: var(--seleccion);
-  color: var(--texto-seleccion);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  background: var(--acento-suave);
+  border-bottom-color: var(--acento);
+  font-weight: 600;
 }
 .interruptor,
 .idioma,
@@ -166,9 +160,9 @@ main:focus {
   display: inline-block;
   padding: 0.35rem 0.75rem;
   border-radius: var(--radio);
-  border: 1px solid var(--borde-fuerte);
-  background: var(--boton);
-  color: var(--texto-boton);
+  border: 1px solid var(--borde-control);
+  background: var(--superficie);
+  color: var(--texto);
   cursor: pointer;
   text-decoration: none;
 }
@@ -195,8 +189,8 @@ main:focus {
   border-left: none;
 }
 .idioma[aria-pressed="true"] {
-  background: var(--seleccion);
-  color: var(--texto-seleccion);
+  background: var(--acento);
+  color: var(--sobre-acento);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
@@ -204,6 +198,18 @@ main:focus {
 .boton[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.75;
+}
+/* Los campos de los formularios, con el borde de los controles. */
+select,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]) {
+  font: inherit;
+  max-width: 100%;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
 }
 
 .banda-demo {
@@ -220,7 +226,7 @@ main:focus {
   margin-top: 0.25rem;
 }
 .secundaria {
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 .linea {
   margin: 0.25rem 0;
@@ -237,8 +243,8 @@ main:focus {
 .aviso {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radio);
-  border-left: 4px solid var(--borde-fuerte);
-  background: var(--panel);
+  border-left: 4px solid var(--borde-control);
+  background: var(--superficie);
 }
 .aviso-error {
   border-left-color: var(--rojo);
@@ -247,7 +253,7 @@ main:focus {
   margin: 0.25rem 0;
   font-family: var(--texto-codigo);
   font-size: 0.85rem;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 
 .marca {
@@ -272,9 +278,66 @@ main:focus {
 .marca.tono-rojo {
   color: var(--rojo);
 }
+.tono-violeta > .marca,
+.marca.tono-violeta {
+  color: var(--violeta);
+}
 .tono-apagado > .marca,
 .marca.tono-apagado {
   color: var(--apagado);
+}
+.tono-neutro > .marca,
+.marca.tono-neutro {
+  color: var(--texto-2);
+}
+
+/* El texto de un estado en su color: la insignia siempre, y el resto cuando la vista lo pide. */
+.tono-verde {
+  --tono: var(--verde);
+}
+.tono-ambar {
+  --tono: var(--ambar);
+}
+.tono-rojo {
+  --tono: var(--rojo);
+}
+.tono-violeta {
+  --tono: var(--violeta);
+}
+.tono-apagado {
+  --tono: var(--apagado);
+}
+.tono-neutro {
+  --tono: var(--texto-2);
+}
+.indicador-texto {
+  color: var(--tono);
+}
+/* La insignia de lo que pide atención: el texto del estado en su color, con borde del mismo color y sin
+   fondo propio. Va en mayúsculas con text-transform: el texto y el nombre accesible no cambian. */
+.insignia {
+  display: inline-block;
+  padding: 0 0.4em;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  color: var(--tono);
+  font-family: var(--texto-codigo);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+/* Una insignia con datos (un mensaje de git, un nombre de archivo) los deja como son. */
+.insignia-literal {
+  text-transform: none;
+}
+/* En un título, la insignia toma el tamaño y la familia del título: dos títulos del mismo nivel se ven del mismo
+   tamaño, lleven insignia o no. */
+h2 .insignia,
+h3 .insignia {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.15;
 }
 
 /* ─── La Red ──────────────────────────────────────────────────────────── */
@@ -288,9 +351,9 @@ main:focus {
   padding: 0;
 }
 .fila-proyecto {
-  background: var(--panel);
+  background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-contenedor);
   min-width: 0;
 }
 .fila-resumen {
@@ -353,7 +416,7 @@ main:focus {
 }
 .campo dt {
   font-size: 0.8rem;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 .campo dd {
   margin: 0;
@@ -387,7 +450,7 @@ main:focus {
 .tabla {
   border-collapse: collapse;
   width: 100%;
-  background: var(--panel);
+  background: var(--superficie);
 }
 .tabla caption {
   text-align: left;
@@ -397,12 +460,12 @@ main:focus {
 .tabla th,
 .tabla td {
   border: 1px solid var(--borde);
-  padding: 0.4rem 0.55rem;
+  padding: 0.6875rem 0.875rem;
   text-align: left;
   vertical-align: top;
 }
 .tabla thead th {
-  background: var(--barra);
+  background: var(--superficie-2);
 }
 
 /* En un teléfono, cada fila es una ficha: la etiqueta de la columna va delante de cada celda. */
@@ -427,7 +490,7 @@ main:focus {
   }
   .tabla tr {
     border: 1px solid var(--borde);
-    border-radius: var(--radio);
+    border-radius: var(--radio-tarjeta);
     margin: 0 0 0.75rem;
   }
   .tabla th,

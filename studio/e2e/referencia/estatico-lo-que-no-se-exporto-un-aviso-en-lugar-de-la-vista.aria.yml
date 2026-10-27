@@ -1,0 +1,43 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- note: "Demo: datos de ejemplo. Todo es de solo lectura."
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Taller de prompts":
+    - heading "Taller de prompts" [level=1]
+    - text: Proyecto
+    - combobox "Proyecto":
+      - option "ASISTENTE"
+      - option "INVESTIGACION"
+      - option "TIENDA" [selected]
+    - text: Tarea
+    - combobox "Tarea":
+      - option "La activa (o ninguna)" [selected]
+      - option "envio-gratis"
+      - option "cupones-de-descuento"
+    - text: Fase
+    - combobox "Fase":
+      - option "9" [selected]
+    - alert: Esto no está en la demo publicada. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.
