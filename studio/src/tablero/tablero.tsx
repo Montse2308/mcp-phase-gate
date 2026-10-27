@@ -37,21 +37,31 @@ const FASES: Record<Estacion["texto"], { clase: string; clave: "senal.cerrada" |
   pendiente: { clase: "fase-pendiente", clave: "senal.pendiente", forma: "vacio", tono: "apagado" },
 };
 
-// El archivo de cada fase no se ve en la tarjeta, pero entra en su nombre accesible; el visor lo muestra.
-function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir: (archivo: string) => void; abierto: string | null }) {
+// Los detalles que son texto (el motivo, la nota, «commit pendiente»); los demás son SHA, sha256 o fechas.
+const DETALLE_EN_TEXTO = new Set<TipoDeSello>(["commit-pendiente", "no-vigente", "nota"]);
+
+// Lo que está abierto en el visor y el botón que lo abrió: solo ese botón queda pulsado, aunque otro
+// lleve al mismo archivo (el recibo de un lote único es también el documento de la Fase 4).
+type Abierto = { archivo: string; origen: string };
+type AlAbrir = (archivo: string, origen: string, boton: HTMLElement) => void;
+
+// El archivo de cada fase entra en el nombre accesible de su tarjeta y el visor lo muestra; si el documento
+// no existe (no hay visor que abrir), se ve también en la tarjeta.
+function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir: AlAbrir; abierto: Abierto | null }) {
   return (
     <ol class="fases" aria-label={t("tablero.estaciones")}>
       {estaciones.map((e) => {
         const fase = FASES[e.texto];
+        const origen = `fase-${e.numero}`;
         return (
           <li key={e.numero} class={`fase ${fase.clase}`}>
-            <button type="button" class="fase-boton" disabled={!e.existe} aria-pressed={abierto === e.documento} onClick={() => alAbrir(e.documento)}>
+            <button type="button" class="fase-boton" disabled={!e.existe} aria-pressed={abierto?.origen === origen} onClick={(ev) => alAbrir(e.documento, origen, ev.currentTarget)}>
               <span class="fase-numero">{etiquetaDe(e)}</span>
               <span class="fase-titulo">{e.titulo}</span>
               <span class={`fase-estado tono-${fase.tono}`}>
                 <Marca forma={fase.forma} tono={fase.tono} /> {t(fase.clave)}
               </span>
-              <span class="solo-lectura">{e.documento}</span>
+              <span class={e.existe ? "solo-lectura" : "fase-archivo"}>{e.documento}</span>
             </button>
           </li>
         );
@@ -60,7 +70,7 @@ function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbr
   );
 }
 
-function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nuevos: Set<string>; alAbrir: (archivo: string) => void; abierto: string | null }) {
+function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]; nuevos: Set<string>; alAbrir: AlAbrir; abierto: Abierto | null }) {
   const columnas = [t("tablero.colLote"), t("tablero.colObjetivo"), t("tablero.colRepo"), t("tablero.colEstado"), t("tablero.colDetalle"), t("tablero.colAncla"), t("tablero.colRecibo")];
   return (
     <div class="tabla-envoltura">
@@ -78,6 +88,7 @@ function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]
         <tbody role="rowgroup">
           {filas.map((f) => {
             const sello = selloDe(f);
+            const origen = `lote-${f.lote}`;
             return (
               <tr key={f.lote} role="row" class={nuevos.has(f.lote) ? "estado-nuevo" : undefined}>
                 <th scope="row" role="rowheader" data-etiqueta={columnas[0]}>
@@ -95,7 +106,7 @@ function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]
                 <td role="cell" data-etiqueta={columnas[4]}>
                   {sello.detalle
                     ? sello.detalle.split(" · ").map((parte, i) => (
-                        <span key={i} class="estado-detalle">
+                        <span key={i} class={DETALLE_EN_TEXTO.has(sello.tipo) ? "estado-detalle estado-detalle-texto" : "estado-detalle"}>
                           {parte}
                         </span>
                       ))
@@ -105,7 +116,7 @@ function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]
                   {f.ancla?.resumen ?? "—"}
                 </td>
                 <td role="cell" data-etiqueta={columnas[6]}>
-                  <button type="button" class="enlace-boton" disabled={!f.recibo} aria-pressed={f.recibo !== null && abierto === f.recibo} onClick={() => f.recibo && alAbrir(f.recibo)}>
+                  <button type="button" class="enlace-boton" disabled={!f.recibo} aria-pressed={abierto?.origen === origen} onClick={(ev) => f.recibo && alAbrir(f.recibo, origen, ev.currentTarget)}>
                     {f.recibo ?? "—"}
                   </button>
                 </td>
@@ -125,8 +136,27 @@ export function Tablero({ p, t: tarea }: { p: string | undefined; t: string | un
 }
 
 function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
-  const [abierto, setAbierto] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState<Abierto | null>(null);
   const [reverificar, setReverificar] = useState(false);
+
+  // Al cerrar el visor (con su botón o con Escape), el foco vuelve al botón que lo abrió.
+  const boton = useRef<HTMLElement | null>(null);
+  const abrir: AlAbrir = (archivo, origen, desde) => {
+    boton.current = desde;
+    setAbierto({ archivo, origen });
+  };
+  const cerrar = () => {
+    setAbierto(null);
+    if (boton.current?.isConnected) boton.current.focus();
+  };
+  useEffect(() => {
+    if (!abierto) return;
+    const alPulsar = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") cerrar();
+    };
+    document.addEventListener("keydown", alPulsar);
+    return () => document.removeEventListener("keydown", alPulsar);
+  }, [abierto]);
   const deEsta = (_tipo: string, d: Record<string, string>): boolean => !d.p || (d.p === p && (!d.t || d.t === nombre));
   const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, nombre)}`, ["documento", "recibo", "config", "prompts"], deEsta);
   const lotes = useRecurso<LotesRespuesta>(`/api/tareas/${ruta(p, nombre)}/lotes${reverificar ? "?reverificar=1" : ""}`, ["documento", "recibo", "config"], deEsta);
@@ -174,7 +204,7 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
                 {t("tablero.pendientes")}
               </p>
             ) : null}
-            <Fases estaciones={datos.estaciones} alAbrir={setAbierto} abierto={abierto} />
+            <Fases estaciones={datos.estaciones} alAbrir={abrir} abierto={abierto} />
           </>
         ) : null}
 
@@ -190,12 +220,12 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
                 {t(lotes.cargando ? "tablero.reverificando" : "tablero.reverificar")}
               </button>
               {lotes.datos.reverificado ? <span class="secundaria"> {t("tablero.reverificado")}</span> : null}
-              <TablaDeLotes filas={filas} nuevos={nuevos} alAbrir={setAbierto} abierto={abierto} />
+              <TablaDeLotes filas={filas} nuevos={nuevos} alAbrir={abrir} abierto={abierto} />
             </>
           ) : null}
         </section>
       </section>
-      {abierto ? <Visor p={p} t={nombre} archivo={abierto} alCerrar={() => setAbierto(null)} /> : null}
+      {abierto ? <Visor p={p} t={nombre} archivo={abierto.archivo} alCerrar={cerrar} /> : null}
     </div>
   );
 }

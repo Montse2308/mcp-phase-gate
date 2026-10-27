@@ -78,6 +78,12 @@
 .fase-pendiente .fase-estado {
   color: var(--texto-secundario);
 }
+/* El archivo de una fase sin documento: no hay visor que lo enseñe. */
+.fase-archivo {
+  font-size: 0.8rem;
+  color: var(--texto-secundario);
+  overflow-wrap: anywhere;
+}
 @media (max-width: 640px) {
   .fases {
     grid-template-columns: minmax(0, 1fr);
@@ -88,9 +94,11 @@
 .tabla-lotes {
   margin: 0.75rem 0;
 }
+/* `anywhere` (no `break-word`) para que una URL o una ruta sin espacios no ensanche la tabla: con el visor
+   abierto, la tabla tiene que caber en su columna. */
 .tabla-lotes th,
 .tabla-lotes td {
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .estado {
   font-weight: 700;
@@ -117,10 +125,17 @@
 .estado-nota {
   color: var(--morado);
 }
+/* Un SHA, un sha256 o una fecha no se parten; el motivo y la nota van en texto normal. */
 .estado-detalle {
   display: block;
   font-family: var(--texto-codigo);
   font-size: 0.85rem;
+  white-space: nowrap;
+}
+.estado-detalle-texto {
+  font-family: inherit;
+  font-size: inherit;
+  white-space: normal;
 }
 
 /* El lote que se acaba de sellar resalta su fila un momento; sin movimiento, la fila queda marcada. */

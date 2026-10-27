@@ -31,6 +31,8 @@ test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendient
   await expect(fasesDeLaTarea(page).nth(2)).toHaveClass(/fase-hueco/);
   await expect(fasesDeLaTarea(page).nth(2).locator("svg.marca-rombo")).toHaveCount(1);
   await expect(fasesDeLaTarea(page).nth(2).getByRole("button")).toBeDisabled(); // sin documento no hay visor
+  await expect(fasesDeLaTarea(page).nth(2).locator(".fase-archivo"), "el archivo que falta se ve en la tarjeta").toBeVisible();
+  await expect(fasesDeLaTarea(page).nth(1).locator(".fase-archivo")).toHaveCount(0);
   await expect(page.getByRole("note").filter({ hasText: "hueco" })).toBeVisible();
 
   await page.goto(`${servidor.origen}/#/tablero/INVESTIGACION/costos`);
@@ -52,7 +54,8 @@ test("cada tarjeta de fase dice su archivo en su nombre accesible, y su botón a
   await expect(page.getByRole("complementary", { name: "03 - Plan Técnico.md" })).toBeVisible();
 });
 
-// Los diez tipos de lote: cada uno con su clase estable, su palabra, su detalle y su recibo.
+// Ocho tipos de lote, cada uno con su clase estable, su palabra, su detalle y su recibo. Los otros dos, la
+// nota y el no vigente, tienen su propio test.
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const CASOS: { tipo: string; tarea: string; fila: number; palabra: string; detalle: (string | RegExp)[]; ancla: RegExp; recibo: boolean }[] = [
   { tipo: "verificado", tarea: "cupones", fila: 0, palabra: "VERIFICADO", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
@@ -99,6 +102,7 @@ test("el lote con nota: su ancla es una nota y el texto va en el detalle", async
   const fila = lotesDeLaFase(page).nth(0);
   await expect(fila.locator(".estado-nota")).toHaveText("NOTA");
   await expect(fila.locator(".estado-detalle")).toHaveText(["sin commits en esta política"]);
+  await expect(fila.locator(".estado-detalle")).toHaveClass(/estado-detalle-texto/); // la nota, en texto normal
   await expect(fila.getByRole("cell").nth(4)).toHaveText("nota: sin commits en esta política");
   await expect(fila.getByRole("button")).toBeEnabled();
   await ningunEstadoSoloColor(page);
@@ -146,6 +150,61 @@ test("el visor: un clic en una tarjeta de fase o en el recibo de un lote enseña
   await recibo.getByRole("button", { name: "Cerrar el visor" }).click();
   await expect(page.getByRole("complementary")).toHaveCount(0);
   await expect(boton).toHaveAttribute("aria-pressed", "false");
+  await expect(boton, "al cerrar, el foco vuelve al botón que abrió el visor").toBeFocused();
+
+  // Con el teclado: Enter en la tarjeta abre, Escape cierra y el foco vuelve a la tarjeta.
+  const tarjeta = fasesDeLaTarea(page).nth(3).getByRole("button");
+  await tarjeta.focus();
+  await page.keyboard.press("Enter");
+  await expect(visor).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("complementary")).toHaveCount(0);
+  await expect(tarjeta).toBeFocused();
+});
+
+test("el visor: solo queda pulsado el botón que lo abrió, aunque otro lleve al mismo documento", async ({ page, servidor }) => {
+  // En una tarea de un solo lote, el recibo del lote es también el documento de la Fase 4.
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cerrada`);
+  const recibo = lotesDeLaFase(page).nth(0).getByRole("button");
+  const fase4 = fasesDeLaTarea(page).nth(4).getByRole("button");
+  await expect(recibo).toHaveText("04 - Ejecución.md");
+  await expect(fase4).toHaveAccessibleName(/04 - Ejecución\.md/);
+  await recibo.click();
+  await expect(page.getByRole("complementary")).toBeVisible();
+  await expect(page.getByRole("main").locator('[aria-pressed="true"]')).toHaveCount(1);
+  await expect(recibo).toHaveAttribute("aria-pressed", "true");
+  await fase4.click();
+  await expect(page.getByRole("main").locator('[aria-pressed="true"]')).toHaveCount(1);
+  await expect(fase4).toHaveAttribute("aria-pressed", "true");
+});
+
+test("textos sin espacios (una URL en la nota) no ensanchan la tabla: a 390 px nada desborda, y a 1280 px el visor no la tapa", async ({ page, servidor }) => {
+  const URL_LARGA = "https://github.com/organizacion/repositorio/pull/1234/files#diff-0123456789abcdef0123456789abcdef";
+  await page.route("**/api/tareas/TIENDA/variedad/lotes*", async (ruta) => {
+    const respuesta = await ruta.fetch();
+    const cuerpo = await respuesta.json();
+    Object.assign(cuerpo.estado.lotes[0], { ancla: { tipo: "nota", resumen: `nota: ver ${URL_LARGA}` }, sello: { corto: null, sha256: null, fecha: null }, origen: "servidor", vigente: null });
+    Object.assign(cuerpo.estado.lotes[1], { ancla: { tipo: "nota", resumen: `nota: ${"x".repeat(200)}` }, sello: { corto: null, sha256: null, fecha: null }, origen: "servidor", vigente: null });
+    await ruta.fulfill({ response: respuesta, json: cuerpo });
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
+  await expect(lotesDeLaFase(page).nth(0).locator(".estado-detalle")).toHaveText([`ver ${URL_LARGA}`]);
+  for (const modo of ["cabina", "sobrio"] as const) {
+    await ponerModo(page, modo);
+    await sinDesbordamiento(page, `la tabla con una URL en la nota, en ${modo}`);
+  }
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await lotesDeLaFase(page).nth(2).getByRole("button").click();
+  await expect(page.getByRole("complementary")).toBeVisible();
+  await sinDesbordamiento(page, "la tabla con el visor abierto");
+  const { tabla, visor } = await page.evaluate(() => ({
+    tabla: document.querySelector(".tabla-lotes")!.getBoundingClientRect().right,
+    visor: document.querySelector(".visor")!.getBoundingClientRect().left,
+  }));
+  expect(tabla, "la tabla acaba antes de que empiece el visor").toBeLessThanOrEqual(visor);
 });
 
 test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe la CSP", async ({ page, servidor, registro }) => {
