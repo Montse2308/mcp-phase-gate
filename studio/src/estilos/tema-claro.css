@@ -1,13 +1,14 @@
-/* Modo Sobrio / Ingeniería: fondo claro, sin decoración, tablas. Mismos datos, mismas formas y textos:
-   solo cambia el aspecto. */
+/* El tema claro: solo custom properties, sin reglas de componentes. Es el que se ve con la elección
+   guardada, y sin ella cuando el sistema no pide el oscuro (tema-oscuro.css, que va después, lo cambia
+   en ese caso). La paleta es provisional. */
 
-:root[data-modo="sobrio"] {
+:root:not([data-tema]),
+:root[data-tema="claro"] {
   color-scheme: light;
   --texto-titulo: "Atkinson Hyperlegible", system-ui, sans-serif;
   --fondo: #ffffff;
   --barra: #f2f4f6;
   --panel: #ffffff;
-  --placa: #f2f4f6;
   --fondo-tren: #f2f4f6;
   --texto: #1b1f24;
   --texto-secundario: #4d5965;
@@ -28,12 +29,4 @@
   --apagado: #59636e;
   --azul: #1f4fb8;
   --morado: #5b3cb0;
-  --texto-banda-ambar: #1b1f24;
-  --fondo-banda-ambar: #f5c542;
-  --carril: #59636e;
-}
-
-:root[data-modo="sobrio"] h1,
-:root[data-modo="sobrio"] h2 {
-  letter-spacing: 0;
 }

@@ -3,13 +3,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { expect, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 
 const api = (page: import("@playwright/test").Page, ruta: string) => page.evaluate((r) => fetch(r).then((x) => x.json()), ruta);
 
 test("la procedencia de cada ranura de la fase, con su ficha de origen y el diff frente a la fábrica", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/taller/TALLER?fase=3`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   const lista = page.getByRole("list", { name: "Ranuras" });
   const datos = await api(page, "./api/prompts/TALLER/3");
   await expect(lista.getByRole("listitem")).toHaveCount(datos.ranuras.length);
@@ -22,9 +22,9 @@ test("la procedencia de cada ranura de la fase, con su ficha de origen y el diff
   await expect(diff.locator(".diff-mas").first()).toBeVisible();
   await expect(diff.locator(".diff-menos").first()).toBeVisible();
   await expect(page.getByRole("list").filter({ hasText: "fábrica" }).first()).toBeVisible();
-  await sinViolacionesGraves(page, "el Taller en modo cabina");
-  await ponerModo(page, "sobrio");
-  await sinViolacionesGraves(page, "el Taller en modo sobrio");
+  await sinViolacionesGraves(page, "el Taller en tema oscuro");
+  await ponerTema(page, "claro");
+  await sinViolacionesGraves(page, "el Taller en tema claro");
 });
 
 test("ver el prompt completo: el mismo texto que get_phase_prompt, y se puede copiar", async ({ page, servidor, context }) => {
@@ -71,7 +71,7 @@ test("editar una ranura: eject a la capa del proyecto con vista previa, y despu�
 test("si el disco cambia entre la vista previa y Aplicar, 409: se dice y se puede volver a ver el cambio", async ({ page, servidor, registro }) => {
   registro.permitidos.push(/the server responded with a status of 409/);
   await page.goto(`${servidor.origen}/#/red`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   const taller = page.getByRole("article", { name: "TALLER" });
   await taller.getByRole("heading", { level: 2, name: "TALLER" }).getByRole("button").click();
   await taller.getByLabel("Preset").selectOption("software-tdd");
@@ -89,7 +89,7 @@ test("si el disco cambia entre la vista previa y Aplicar, 409: se dice y se pued
 
 test("crear phase-gate.json desde la Red, con su vista previa", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/red`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   const nuevo = page.getByRole("article", { name: "NUEVO" });
   await nuevo.getByRole("heading", { level: 2, name: "NUEVO" }).getByRole("button").click();
   await expect(nuevo.locator(".campo-manifiesto dd")).toHaveText("sin phase-gate.json");
@@ -108,9 +108,9 @@ test("el Taller en un teléfono (390×844) no desborda", async ({ page, servidor
   await page.goto(`${servidor.origen}/#/taller/TALLER?fase=3`);
   await page.getByRole("list", { name: "Ranuras" }).getByRole("button").first().click();
   await page.getByText("Ver prompt completo").click();
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await expect(page.getByLabel("Prompt completo")).toBeVisible();
-    await sinDesbordamiento(page, `el Taller en ${modo}`);
+    await sinDesbordamiento(page, `el Taller en tema ${tema}`);
   }
 });

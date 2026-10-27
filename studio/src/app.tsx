@@ -1,11 +1,11 @@
-// La estructura de la página: la barra con las cinco vistas, el interruptor Cabina / Sobrio y el selector
+// La estructura de la página: la barra con las cinco vistas, el botón del tema y el selector
 // ES / EN, la banda de la demo y la vista que toca según el hash. Al cambiar de idioma se vuelve a pintar
 // todo sin recargar, y cada vista vuelve a pedir sus datos en el idioma nuevo (useRecurso).
 
 import { Bitacora } from "./bitacora/bitacora";
 import { MODO, textoDeLaBanda } from "./datos";
 import { IDIOMAS_UI, NOMBRE_DEL_IDIOMA, cambiarIdioma, t, useIdioma } from "./i18n/idioma";
-import { cambiarModoVisual, useModoVisual } from "./preferencias";
+import { cambiarTema, useTemaOscuro } from "./preferencias";
 import { Red } from "./red/red";
 import { VISTAS, useRuta } from "./rutas";
 import { Tablero } from "./tablero/tablero";
@@ -56,7 +56,7 @@ function SelectorDeIdioma() {
 
 export function App() {
   const ruta = useRuta();
-  const modo = useModoVisual();
+  const oscuro = useTemaOscuro();
   useIdioma(); // al cambiar, se vuelve a pintar todo con el diccionario nuevo
   return (
     <>
@@ -84,8 +84,8 @@ export function App() {
           </ul>
         </nav>
         <div class="preferencias">
-          <button type="button" class="interruptor" aria-pressed={modo === "sobrio"} onClick={cambiarModoVisual}>
-            {t("modo.boton", { modo: t(modo === "sobrio" ? "modo.sobrio" : "modo.cabina") })}
+          <button type="button" class="interruptor" aria-pressed={oscuro} onClick={cambiarTema}>
+            {t("tema.oscuro")}
           </button>
           <SelectorDeIdioma />
         </div>

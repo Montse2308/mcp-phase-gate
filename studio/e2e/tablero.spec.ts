@@ -1,12 +1,12 @@
 // El Tablero en Chromium real: las fases en tarjetas, los lotes en una tabla con su estado, el visor, el
-// sello que llega en vivo y el documento malicioso. La misma estructura en los dos modos.
+// sello que llega en vivo y el documento malicioso. La misma estructura en los dos temas.
 
 import * as path from "node:path";
 
 import type { Locator } from "@playwright/test";
 
 import { commit } from "./arbol";
-import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 import type { Servidor } from "./ayudas";
 
 test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendiente, cada una con su forma y su texto", async ({ page, servidor }) => {
@@ -58,13 +58,13 @@ test("cada tarjeta de fase dice su archivo en su nombre accesible, y su botón a
 // nota y el no vigente, tienen su propio test.
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const CASOS: { tipo: string; tarea: string; fila: number; palabra: string; detalle: (string | RegExp)[]; ancla: RegExp; recibo: boolean }[] = [
-  { tipo: "verificado", tarea: "cupones", fila: 0, palabra: "VERIFICADO", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
-  { tipo: "sellado", tarea: "variedad", fila: 0, palabra: "SELLADO", detalle: [/^[0-9a-f]{8}$/, FECHA], ancla: /^sha256 `[0-9a-f]{12}…` de `repo:web\/dist\/web\.txt`/, recibo: true },
-  { tipo: "con-pendientes", tarea: "variedad", fila: 1, palabra: "CON PENDIENTES", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
-  { tipo: "rechazado", tarea: "variedad", fila: 2, palabra: "RECHAZADO", detalle: [FECHA], ancla: /./, recibo: true },
-  { tipo: "descartado", tarea: "variedad", fila: 3, palabra: "ANULADO", detalle: [FECHA], ancla: /./, recibo: true },
-  { tipo: "manual", tarea: "variedad", fila: 4, palabra: "MANUAL", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
-  { tipo: "commit-pendiente", tarea: "cupones", fila: 1, palabra: "EN VÍA", detalle: ["commit pendiente"], ancla: /^commit pendiente$/, recibo: true },
+  { tipo: "verificado", tarea: "cupones", fila: 0, palabra: "verificado", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "sellado", tarea: "variedad", fila: 0, palabra: "sellado", detalle: [/^[0-9a-f]{8}$/, FECHA], ancla: /^sha256 `[0-9a-f]{12}…` de `repo:web\/dist\/web\.txt`/, recibo: true },
+  { tipo: "con-pendientes", tarea: "variedad", fila: 1, palabra: "con pendientes", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "rechazado", tarea: "variedad", fila: 2, palabra: "rechazado", detalle: [FECHA], ancla: /./, recibo: true },
+  { tipo: "descartado", tarea: "variedad", fila: 3, palabra: "descartado", detalle: [FECHA], ancla: /./, recibo: true },
+  { tipo: "manual", tarea: "variedad", fila: 4, palabra: "manual", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "commit-pendiente", tarea: "cupones", fila: 1, palabra: "commit pendiente", detalle: [], ancla: /^commit pendiente$/, recibo: true },
   { tipo: "sin-recibo", tarea: "variedad", fila: 5, palabra: "sin recibo", detalle: [], ancla: /^—$/, recibo: false },
 ];
 
@@ -100,7 +100,7 @@ test("el lote con nota: su ancla es una nota y el texto va en el detalle", async
   });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
   const fila = lotesDeLaFase(page).nth(0);
-  await expect(fila.locator(".estado-nota")).toHaveText("NOTA");
+  await expect(fila.locator(".estado-nota")).toHaveText("nota");
   await expect(fila.locator(".estado-detalle")).toHaveText(["sin commits en esta política"]);
   await expect(fila.locator(".estado-detalle")).toHaveClass(/estado-detalle-texto/); // la nota, en texto normal
   await expect(fila.getByRole("cell").nth(4)).toHaveText("nota: sin commits en esta política");
@@ -109,7 +109,7 @@ test("el lote con nota: su ancla es una nota y el texto va en el detalle", async
   await sinViolacionesGraves(page, "el lote con nota");
 });
 
-test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el mismo en Cabina y en Sobrio", async ({ page, servidor }) => {
+test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el mismo en el tema oscuro y en el claro", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
   const tabla = page.getByRole("table", { name: "Lotes de la Fase 4" });
   await expect(tabla.getByRole("columnheader")).toHaveText(["Lote", "Objetivo", "Repo", "Estado", "Detalle", "Ancla", "Recibo"]);
@@ -119,16 +119,16 @@ test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el 
   await expect(lotesDeLaFase(page).nth(0).getByRole("cell").nth(1)).toHaveText("web");
   await expect(lotesDeLaFase(page).nth(2).getByRole("cell").nth(1)).toHaveText("api");
 
-  await ponerModo(page, "cabina");
-  const cabina = await page.locator("main").innerHTML();
-  const fondoCabina = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
-  await ponerModo(page, "sobrio");
-  expect(await page.locator("main").innerHTML(), "el DOM del Tablero no cambia con el modo").toBe(cabina);
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), "los colores sí cambian").not.toBe(fondoCabina);
+  await ponerTema(page, "oscuro");
+  const oscuro = await page.locator("main").innerHTML();
+  const fondoOscuro = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+  await ponerTema(page, "claro");
+  expect(await page.locator("main").innerHTML(), "el DOM del Tablero no cambia con el tema").toBe(oscuro);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), "los colores sí cambian").not.toBe(fondoOscuro);
   await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero en modo sobrio");
-  await ponerModo(page, "cabina");
-  await sinViolacionesGraves(page, "el tablero en modo cabina");
+  await sinViolacionesGraves(page, "el tablero en tema claro");
+  await ponerTema(page, "oscuro");
+  await sinViolacionesGraves(page, "el tablero en tema oscuro");
 });
 
 test("el visor: un clic en una tarjeta de fase o en el recibo de un lote enseña el Markdown y el frontmatter como ficha", async ({ page, servidor }) => {
@@ -191,9 +191,9 @@ test("textos sin espacios (una URL en la nota) no ensanchan la tabla: a 390 px n
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
   await expect(lotesDeLaFase(page).nth(0).locator(".estado-detalle")).toHaveText([`ver ${URL_LARGA}`]);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinDesbordamiento(page, `la tabla con una URL en la nota, en ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinDesbordamiento(page, `la tabla con una URL en la nota, en tema ${tema}`);
   }
 
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -290,7 +290,7 @@ test("en vivo: un recibo nuevo aparece por SSE, sin recargar, y su fila se resal
   await page.evaluate(() => ((window as unknown as { __sinRecargar: boolean }).__sinRecargar = true));
 
   await registrarEnVivo(servidor, "en-vivo", "llega en vivo");
-  await expect(fila.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(fila.locator(".estado-verificado")).toHaveText("verificado", { timeout: 15_000 });
   await expect(fila).toHaveClass(/estado-nuevo/);
   expect(await animacionDe(fila)).toBe("resaltar");
   await expect(fila.locator(".estado-detalle").first()).toHaveText(/^[0-9a-f]{7}$/);
@@ -309,7 +309,7 @@ test("en vivo, con prefers-reduced-motion: la fila nueva se marca, pero sin anim
   expect(await fondoDe(fila)).toBe(SIN_FONDO);
 
   await registrarEnVivo(servidor, "en-vivo-quieto", "llega sin movimiento");
-  await expect(fila.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(fila.locator(".estado-verificado")).toHaveText("verificado", { timeout: 15_000 });
   await expect(fila).toHaveClass(/estado-nuevo/);
   expect(await animacionDe(fila)).toBe("none");
   expect(await fondoDe(fila), "la marca queda fija en lugar de animarse").not.toBe(SIN_FONDO);
@@ -331,7 +331,7 @@ test("reverificar anclas: un commit que ya no está en la rama sale como no vige
   await sinViolacionesGraves(page, "el lote no vigente");
 });
 
-test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se vuelven fichas y nada desborda, en los dos modos", async ({ page, servidor }) => {
+test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se vuelven fichas y nada desborda, en los dos temas", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
   const fases = fasesDeLaTarea(page);
@@ -341,9 +341,9 @@ test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se v
   expect(cajas.map((c) => c.y), "y se apilan de arriba abajo").toEqual([...cajas.map((c) => c.y)].sort((a, b) => a - b));
   expect(new Set(cajas.map((c) => c.y)).size).toBe(6);
   await expect(lotesDeLaFase(page)).toHaveCount(6);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinDesbordamiento(page, `el tablero en ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinDesbordamiento(page, `el tablero en tema ${tema}`);
     await ningunEstadoSoloColor(page);
   }
   await lotesDeLaFase(page).nth(0).getByRole("button").click();

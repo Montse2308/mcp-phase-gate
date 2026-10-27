@@ -1,4 +1,4 @@
-// Los textos de la interfaz en inglés (§8.6 del plan), con el glosario de docs/glosario.md. Se tipa contra
+// Los textos de la interfaz en inglés, con el glosario de docs/glosario.md. Se tipa contra
 // las claves del español: una clave que falta, o una que sobra, rompe el build.
 
 import type { es } from "./es.js";
@@ -13,9 +13,7 @@ export const en = {
   "vista.taller": "Workshop",
   "vista.vigia": "Lookout",
   "vista.bitacora": "Logbook",
-  "modo.boton": "Mode: {modo}",
-  "modo.cabina": "Cockpit",
-  "modo.sobrio": "Plain",
+  "tema.oscuro": "Dark theme",
   "idioma.grupo": "Language",
   "banda.demo": "Demo: sample data.",
   "banda.demoEn": "Demo: sample data in {raiz}",
@@ -112,7 +110,7 @@ export const en = {
 
   // ─── Tablero ───
   "tablero.fase": "Phase {n}",
-  "tablero.estaciones": "Stations of the task",
+  "tablero.fases": "Phases of the task",
   "tablero.hueco": "There is a gap: the gate would warn when the next phase is requested.",
   "tablero.pendientes": "The previous phase left pending items: the next phase's prompt will name them.",
   "tablero.lotes": "Batches",
@@ -128,34 +126,25 @@ export const en = {
   "tablero.colDetalle": "Detail",
   "tablero.colAncla": "Anchor",
   "tablero.colRecibo": "Receipt",
-  "senal.cerrada": "closed",
-  "senal.conPendientes": "with pending items",
-  "senal.enCurso": "in progress",
-  "senal.hueco": "gap",
-  "senal.pendiente": "pending",
+  "fase.cerrada": "closed",
+  "fase.conPendientes": "with pending items",
+  "fase.enCurso": "in progress",
+  "fase.hueco": "gap",
+  "fase.pendiente": "pending",
 
-  // ─── Sellos (la tabla de §8.6) ───
-  "sello.verificado": "VERIFIED",
-  "sello.sellado": "SEALED",
-  "sello.enVia": "IN TRANSIT",
-  "sello.rechazado": "REJECTED",
-  "sello.anulado": "VOID",
-  "sello.manual": "MANUAL",
-  "sello.nota": "NOTE",
-  "sello.banda": "WITH PENDING ITEMS",
-  "sello.sinRecibo": "no receipt",
-  "sello.commitPendiente": "pending commit",
-  "sello.yaNoEnLaRama": "no longer on the branch",
-  "sello.artefactoCambio": "the artifact changed",
-  "sobrio.verificado": "verified · {corto}",
-  "sobrio.sha256": "sha256 · {hash}",
-  "sobrio.pendiente": "pending",
-  "sobrio.fallido": "failed",
-  "sobrio.descartado": "discarded",
-  "sobrio.manual": "manual",
-  "sobrio.conPendientes": "with pending items",
-  "sobrio.noVigente": "stale",
-  "sobrio.nota": "note",
+  // ─── El estado de un lote ───
+  "estado.verificado": "verified",
+  "estado.sellado": "sealed",
+  "estado.conPendientes": "with pending items",
+  "estado.commitPendiente": "pending commit",
+  "estado.noVigente": "stale",
+  "estado.rechazado": "rejected",
+  "estado.descartado": "discarded",
+  "estado.manual": "manual",
+  "estado.nota": "note",
+  "estado.sinRecibo": "no receipt",
+  "estado.yaNoEnLaRama": "no longer on the branch",
+  "estado.artefactoCambio": "the artifact changed",
 
   // ─── Visor ───
   "visor.cerrar": "Close the viewer",

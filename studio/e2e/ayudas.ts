@@ -3,9 +3,10 @@
 // cookie. Cada página registra sus peticiones y su consola: al terminar, ninguna petición puede salir de
 // 127.0.0.1 ni puede haber errores (tampoco violaciones de la CSP).
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
+import * as http from "node:http";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -141,7 +142,7 @@ export async function ningunEstadoSoloColor(page: Page): Promise<void> {
 
 // Las tarjetas de fase de un Tablero y las filas de su tabla de lotes (sin la cabecera). Los nombres de la
 // lista y de la tabla cambian con el idioma.
-export function fasesDeLaTarea(page: Page, nombre = "Estaciones de la tarea") {
+export function fasesDeLaTarea(page: Page, nombre = "Fases de la tarea") {
   return page.getByRole("list", { name: nombre }).getByRole("listitem");
 }
 
@@ -149,9 +150,62 @@ export function lotesDeLaFase(page: Page, nombre = "Lotes de la Fase 4") {
   return page.getByRole("table", { name: nombre }).locator("tbody").getByRole("row");
 }
 
-// El interruptor dice "Modo: …" en español y "Mode: …" en inglés.
-export async function ponerModo(page: Page, modo: "cabina" | "sobrio"): Promise<void> {
-  const boton = page.getByRole("button", { name: /^(?:Modo|Mode):/ });
-  if ((await boton.getAttribute("aria-pressed")) !== String(modo === "sobrio")) await boton.click();
-  await expect(page.locator("html")).toHaveAttribute("data-modo", modo);
+// El botón del tema se llama «Tema oscuro» (o «Dark theme») y está pulsado cuando el tema activo es el oscuro,
+// sea por la elección guardada o por el sistema. Después de pulsarlo, el tema se comprueba en el estilo.
+export async function ponerTema(page: Page, tema: "claro" | "oscuro"): Promise<void> {
+  const boton = page.getByRole("button", { name: /^(?:Tema oscuro|Dark theme)$/ });
+  if ((await boton.getAttribute("aria-pressed")) !== String(tema === "oscuro")) await boton.click();
+  await expect(boton).toHaveAttribute("aria-pressed", String(tema === "oscuro"));
+  await expect(page.locator("html")).toHaveCSS("color-scheme", tema === "oscuro" ? "dark" : "light");
 }
+
+// El sitio estático: `ui --export-static` del binario compilado, como en el workflow de Pages, servido bajo un
+// subdirectorio (/mcp-phase-gate/) por un servidor de archivos sin nada más, como GitHub Pages: sin API, sin SSE
+// y sin CSP. Todo lo que pide la página fuera del subdirectorio es un 404.
+export const PREFIJO = "/mcp-phase-gate/";
+const TIPOS: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
+
+function servirCarpeta(raiz: string): Promise<{ servidor: http.Server; puerto: number }> {
+  const servidor = http.createServer((req, res) => {
+    const crudo = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+    if (crudo === PREFIJO.slice(0, -1)) {
+      res.writeHead(301, { Location: PREFIJO }).end();
+      return;
+    }
+    if (!crudo.startsWith(PREFIJO)) {
+      res.writeHead(404).end();
+      return;
+    }
+    const relativa = crudo.slice(PREFIJO.length) || "index.html";
+    const ruta = path.resolve(raiz, relativa);
+    if (path.relative(raiz, ruta).startsWith("..") || !fs.statSync(ruta, { throwIfNoEntry: false })?.isFile()) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": TIPOS[path.extname(ruta)] ?? "application/octet-stream" }).end(fs.readFileSync(ruta));
+  });
+  return new Promise((resolver) => servidor.listen(0, "127.0.0.1", () => resolver({ servidor, puerto: (servidor.address() as { port: number }).port })));
+}
+
+export const testEstatico = test.extend<{}, { servidor: Servidor }>({
+  servidor: [
+    async ({}, use) => {
+      const raiz = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "pg-e2e-estatico-"));
+      const carpetas = ["docs", "repos", "estado", "config"].map((n) => path.join(raiz, n));
+      for (const c of carpetas) fs.mkdirSync(c);
+      const [docs, repos, estado, config] = carpetas as [string, string, string, string];
+      const sitio = path.join(raiz, "sitio");
+      const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(PHASE_GATE_|ORQUESTADOR_)/i.test(k)));
+      const r = spawnSync(process.execPath, [BINARIO, "ui", "--export-static", sitio], { env: { ...env, PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config }, encoding: "utf-8", timeout: 120_000 });
+      expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
+      const { servidor, puerto } = await servirCarpeta(sitio);
+      const origen = `http://127.0.0.1:${puerto}`;
+      await use({ origen, puerto, cookie: { name: "sin-sesion", value: "1" }, arbol: { raiz, docs, repos, estado, config, env: {} }, falso: { env: {}, casa: raiz, llamadas: () => [] } });
+      await new Promise((r2) => servidor.close(r2));
+      fs.rmSync(raiz, { recursive: true, force: true, maxRetries: 3 });
+    },
+    { scope: "worker" },
+  ],
+});
+
+export const sitio = (s: Servidor, hash = "") => `${s.origen}${PREFIJO}${hash}`;

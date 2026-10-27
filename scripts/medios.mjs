@@ -34,7 +34,7 @@ const VHS = process.env.VHS ?? "vhs";
 const MB = 1024 * 1024;
 const TOPE_GIF = 5 * MB;
 const TOPE_MP4 = 8 * MB;
-const FONDO = "0x0c131b"; // el fondo de la cabina, para el marco del teléfono
+const FONDO = "0x0c131b"; // el fondo del tema oscuro (--fondo de tema-oscuro.css), para el marco del teléfono
 
 const ejecutar = (comando, args, opciones = {}) => {
   const r = spawnSync(comando, args, { encoding: "utf-8", maxBuffer: 64 * MB, ...opciones });
@@ -109,7 +109,7 @@ try {
     const piezas = [path.join(aqui, "terminal.mp4"), ...[3, 4, 5, 6, 7].map((n) => path.join(escenas, `escena-${n}.webm`))];
     const normales = piezas.map((pieza, i) => {
       const destino = path.join(aqui, `pieza-${i}.mp4`);
-      // La del teléfono (390×844) va centrada, a la altura del video, sobre el fondo de la cabina.
+      // La del teléfono (390×844) va centrada, a la altura del video, sobre el fondo del tema oscuro.
       const filtro = `scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=${FONDO},fps=30,format=yuv420p`;
       ffmpeg(["-i", pieza, "-vf", filtro, "-an", "-c:v", "libx264", "-preset", "slow", "-crf", "26", destino]);
       return destino;

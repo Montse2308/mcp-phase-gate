@@ -1,4 +1,4 @@
-// El Studio en los dos idiomas (§8.6 del plan). Los diccionarios de la interfaz tienen las mismas claves y
+// El Studio en los dos idiomas. Los diccionarios de la interfaz tienen las mismas claves y
 // los mismos huecos (el tipo de en.ts ya lo exige al compilar el frontend; aquí, además, que no sobre ni
 // quede vacía ninguna), las tablas de arreglos del Vigía también; y el servidor habla en el idioma que manda
 // la interfaz en X-Phase-Gate-Lang, sin que eso cambie la huella de una acción ni el filtro de seguridad.
@@ -48,19 +48,26 @@ describe("Studio: los diccionarios de la interfaz", () => {
     }
   });
 
-  it("los sellos de la tabla de §8.6", () => {
-    const sellos: [keyof typeof es, string, string][] = [
-      ["sello.verificado", "VERIFICADO", "VERIFIED"],
-      ["sello.sellado", "SELLADO", "SEALED"],
-      ["sello.enVia", "EN VÍA", "IN TRANSIT"],
-      ["sello.rechazado", "RECHAZADO", "REJECTED"],
-      ["sello.anulado", "ANULADO", "VOID"],
-      ["sello.manual", "MANUAL", "MANUAL"],
-      ["sello.nota", "NOTA", "NOTE"],
-      ["sello.banda", "CON PENDIENTES", "WITH PENDING ITEMS"],
-      ["sobrio.noVigente", "no vigente", "stale"],
+  it("el estado de un lote, en minúscula y en los dos idiomas", () => {
+    const estados: [keyof typeof es, string, string][] = [
+      ["estado.verificado", "verificado", "verified"],
+      ["estado.sellado", "sellado", "sealed"],
+      ["estado.conPendientes", "con pendientes", "with pending items"],
+      ["estado.commitPendiente", "commit pendiente", "pending commit"],
+      ["estado.noVigente", "no vigente", "stale"],
+      ["estado.rechazado", "rechazado", "rejected"],
+      ["estado.descartado", "descartado", "discarded"],
+      ["estado.manual", "manual", "manual"],
+      ["estado.nota", "nota", "note"],
+      ["estado.sinRecibo", "sin recibo", "no receipt"],
     ];
-    for (const [clave, enEspanol, enIngles] of sellos) assert.deepEqual([es[clave], en[clave]], [enEspanol, enIngles], clave);
+    for (const [clave, enEspanol, enIngles] of estados) assert.deepEqual([es[clave], en[clave]], [enEspanol, enIngles], clave);
+  });
+
+  it("ningún texto de la interfaz usa el vocabulario de la vía", () => {
+    for (const [idioma, diccionario] of [["es", es], ["en", en]] as const) {
+      for (const [clave, texto] of Object.entries(diccionario)) assert.doesNotMatch(texto, /estaci[oó]n|se[ñn]al|station|signal|en v[ií]a|in transit/i, `${idioma} ${clave}: ${texto}`);
+    }
   });
 
   it("las tablas de arreglos del Vigía tienen los mismos códigos en los dos idiomas, ninguna línea vacía", () => {

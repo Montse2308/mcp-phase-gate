@@ -29,16 +29,16 @@ function etiquetaDe(e: Estacion): string {
 }
 
 // El estado de una fase es un valor del contrato (TextoDeSenal), en español: aquí se dice y se le da su forma.
-const FASES: Record<Estacion["texto"], { clase: string; clave: "senal.cerrada" | "senal.conPendientes" | "senal.enCurso" | "senal.hueco" | "senal.pendiente"; forma: Forma; tono: Tono }> = {
-  cerrada: { clase: "fase-cerrada", clave: "senal.cerrada", forma: "lleno", tono: "verde" },
-  "en curso": { clase: "fase-en-curso", clave: "senal.enCurso", forma: "anillo", tono: "ambar" },
-  "con pendientes": { clase: "fase-con-pendientes", clave: "senal.conPendientes", forma: "triangulo", tono: "ambar" },
-  hueco: { clase: "fase-hueco", clave: "senal.hueco", forma: "rombo", tono: "rojo" },
-  pendiente: { clase: "fase-pendiente", clave: "senal.pendiente", forma: "vacio", tono: "apagado" },
+const FASES: Record<Estacion["texto"], { clase: string; clave: "fase.cerrada" | "fase.conPendientes" | "fase.enCurso" | "fase.hueco" | "fase.pendiente"; forma: Forma; tono: Tono }> = {
+  cerrada: { clase: "fase-cerrada", clave: "fase.cerrada", forma: "lleno", tono: "verde" },
+  "en curso": { clase: "fase-en-curso", clave: "fase.enCurso", forma: "anillo", tono: "ambar" },
+  "con pendientes": { clase: "fase-con-pendientes", clave: "fase.conPendientes", forma: "triangulo", tono: "ambar" },
+  hueco: { clase: "fase-hueco", clave: "fase.hueco", forma: "rombo", tono: "rojo" },
+  pendiente: { clase: "fase-pendiente", clave: "fase.pendiente", forma: "vacio", tono: "apagado" },
 };
 
-// Los detalles que son texto (el motivo, la nota, «commit pendiente»); los demás son SHA, sha256 o fechas.
-const DETALLE_EN_TEXTO = new Set<TipoDeSello>(["commit-pendiente", "no-vigente", "nota"]);
+// Los detalles que son texto (el motivo, la nota); los demás son SHA, sha256 o fechas.
+const DETALLE_EN_TEXTO = new Set<TipoDeSello>(["no-vigente", "nota"]);
 
 // Lo que está abierto en el visor y el botón que lo abrió: solo ese botón queda pulsado, aunque otro
 // lleve al mismo archivo (el recibo de un lote único es también el documento de la Fase 4).
@@ -49,7 +49,7 @@ type AlAbrir = (archivo: string, origen: string, boton: HTMLElement) => void;
 // no existe (no hay visor que abrir), se ve también en la tarjeta.
 function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbrir: AlAbrir; abierto: Abierto | null }) {
   return (
-    <ol class="fases" aria-label={t("tablero.estaciones")}>
+    <ol class="fases" aria-label={t("tablero.fases")}>
       {estaciones.map((e) => {
         const fase = FASES[e.texto];
         const origen = `fase-${e.numero}`;

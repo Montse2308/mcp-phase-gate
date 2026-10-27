@@ -1,5 +1,5 @@
 // La Red en Chromium real: una fila por proyecto, en una lista que se despliega, con la misma estructura en
-// los dos modos. Plegada dice el nombre, el preset (con el aviso de un manifiesto inválido o de un error de
+// los dos temas. Plegada dice el nombre, el preset (con el aviso de un manifiesto inválido o de un error de
 // configuración), el git y el rol de cada repo, la tarea activa y la sesión; desplegada, además, el
 // manifiesto, las reglas y las acciones.
 
@@ -9,7 +9,7 @@ import * as path from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import { expect, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 
 const fila = (page: Page, nombre: string) => page.getByRole("article", { name: nombre });
 // El nombre de cada proyecto va en un h2 que envuelve el botón que despliega su fila.
@@ -61,10 +61,10 @@ test("plegada: cada fila dice el nombre, el preset, el git y el rol de cada repo
   // El manifiesto inválido se ve sin desplegar, con su forma.
   await expect(roto.locator(".campo-preset .alerta-proyecto")).toHaveText("phase-gate.json inválido");
   await expect(roto.locator(".campo-preset .alerta-proyecto svg.marca-rombo")).toHaveCount(1);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await ningunEstadoSoloColor(page);
-    await sinViolacionesGraves(page, `la Red plegada en modo ${modo}`);
+    await sinViolacionesGraves(page, `la Red plegada en tema ${tema}`);
   }
   test.info().annotations.push({ type: "peticiones", description: `${registro.peticiones.length}: ${registro.peticiones.map((u) => new URL(u).pathname).join(" ")}` });
 });
@@ -202,9 +202,9 @@ test("sin proyectos, o con un error de la API: el aviso, y ninguna lista", async
   await page.goto(`${servidor.origen}/#/red`);
   await expect(page.getByText("No hay proyectos en la Documentación todavía.")).toBeVisible();
   await expect(page.locator("ul.proyectos")).toHaveCount(0);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinViolacionesGraves(page, `la Red vacía en modo ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinViolacionesGraves(page, `la Red vacía en tema ${tema}`);
   }
   error = "no se pudo leer la Documentación de prueba";
   await page.reload();
@@ -230,45 +230,38 @@ test("la fila desplegada sigue desplegada al ir a otra vista y volver", async ({
   await expect(desplegar(page, "TALLER")).toHaveAttribute("aria-expanded", "false");
 });
 
-test("Cabina y Sobrio pintan la misma lista, con una fila desplegada: solo cambian los colores; el modo se recuerda al recargar", async ({ page, servidor }) => {
+test("el tema oscuro y el claro pintan la misma lista, con una fila desplegada: solo cambian los colores; la elección se recuerda al recargar", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/red`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   await desplegar(page, "TIENDA").click();
   await expect(fila(page, "TIENDA").locator(".campo-manifiesto dd")).toBeVisible();
   const lista = page.getByRole("list", { name: "Proyectos de la Documentación" });
-  const enCabina = await page.locator("main").innerHTML();
-  const fondoEnCabina = await fila(page, "TIENDA").evaluate((e) => getComputedStyle(e).backgroundColor);
-  await ponerModo(page, "sobrio");
-  expect(await page.locator("main").innerHTML(), "el mismo DOM en los dos modos").toBe(enCabina);
-  expect(await fila(page, "TIENDA").evaluate((e) => getComputedStyle(e).backgroundColor), "otros colores").not.toBe(fondoEnCabina);
+  const enOscuro = await page.locator("main").innerHTML();
+  const fondoEnOscuro = await fila(page, "TIENDA").evaluate((e) => getComputedStyle(e).backgroundColor);
+  await ponerTema(page, "claro");
+  expect(await page.locator("main").innerHTML(), "el mismo DOM en los dos temas").toBe(enOscuro);
+  expect(await fila(page, "TIENDA").evaluate((e) => getComputedStyle(e).backgroundColor), "otros colores").not.toBe(fondoEnOscuro);
   await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-modo", "sobrio");
+  await expect(page.locator("html")).toHaveAttribute("data-tema", "claro");
   await expect(lista.getByRole("article")).toHaveCount(5);
 });
 
-test("#?sobrio=1 comparte el modo por la URL, y sobrio=0 lo devuelve a cabina", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/red?sobrio=1`);
-  await expect(page.locator("html")).toHaveAttribute("data-modo", "sobrio");
-  await page.goto(`${servidor.origen}/#/red?sobrio=0`);
-  await expect(page.locator("html")).toHaveAttribute("data-modo", "cabina");
-});
-
-test("en un teléfono (390×844), plegada y desplegada, los campos se apilan y no hay desbordamiento horizontal en ningún modo", async ({ page, servidor }) => {
+test("en un teléfono (390×844), plegada y desplegada, los campos se apilan y no hay desbordamiento horizontal en ningún tema", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/red`);
   // Se mide con los datos ya pintados, no solo con el título.
   await expect(fila(page, "TIENDA").locator(".campo-sesion dd")).toBeVisible();
   const izquierdas = await fila(page, "TIENDA").locator(".fila-resumen .campo").evaluateAll((campos) => campos.map((c) => Math.round(c.getBoundingClientRect().left)));
   expect(new Set(izquierdas).size, "los cuatro campos, uno debajo de otro").toBe(1);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinDesbordamiento(page, `la Red plegada en ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinDesbordamiento(page, `la Red plegada en tema ${tema}`);
   }
   for (const nombre of ["TIENDA", "ROTO"]) await desplegar(page, nombre).click();
   await expect(fila(page, "ROTO").locator(".detalle-error")).toBeVisible();
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinDesbordamiento(page, `la Red desplegada en ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinDesbordamiento(page, `la Red desplegada en tema ${tema}`);
   }
   await page.setViewportSize({ width: 360, height: 740 });
   await sinDesbordamiento(page, "la Red a 360 px");

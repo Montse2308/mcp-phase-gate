@@ -1,71 +1,68 @@
-// Cabina o Sobrio: se recuerda en localStorage y se comparte con #?sobrio=1 (o sobrio=0). localStorage
-// puede fallar (ventana privada, almacenamiento bloqueado): entonces solo vale para esta visita.
+// El tema, claro u oscuro. Sin elección guardada, el CSS sigue al del sistema (prefers-color-scheme) y el
+// <html> no lleva data-tema; el botón lo cambia y la elección se recuerda en localStorage, que puede fallar
+// (ventana privada, almacenamiento bloqueado): entonces solo vale para esta visita.
 
 import { useEffect, useState } from "preact/hooks";
 
-export type ModoVisual = "cabina" | "sobrio";
-const CLAVE = "pg-modo";
+export type Tema = "claro" | "oscuro";
+const CLAVE = "pg-tema";
+const SISTEMA_OSCURO = "(prefers-color-scheme: dark)";
 
-function guardado(): ModoVisual | null {
+function guardado(): Tema | null {
   try {
     const valor = window.localStorage.getItem(CLAVE);
-    return valor === "sobrio" || valor === "cabina" ? valor : null;
+    return valor === "claro" || valor === "oscuro" ? valor : null;
   } catch {
     return null;
   }
 }
 
-function guardar(modo: ModoVisual): void {
+function guardar(tema: Tema): void {
   try {
-    window.localStorage.setItem(CLAVE, modo);
+    window.localStorage.setItem(CLAVE, tema);
   } catch {
-    // sin almacenamiento, el modo dura lo que la página
+    // sin almacenamiento, la elección dura lo que la página
   }
 }
 
-function delEnlace(): ModoVisual | null {
-  const hash = window.location.hash;
-  const corte = hash.indexOf("?");
-  if (corte === -1) return null;
-  const valor = new URLSearchParams(hash.slice(corte + 1)).get("sobrio");
-  return valor === "1" ? "sobrio" : valor === "0" ? "cabina" : null;
+let elegido: Tema | null = guardado();
+const suscritos = new Set<() => void>();
+
+// El tema que se está viendo: la elección, o el del sistema si no hay ninguna.
+function temaActual(): Tema {
+  return elegido ?? (window.matchMedia(SISTEMA_OSCURO).matches ? "oscuro" : "claro");
 }
 
-let actual: ModoVisual = delEnlace() ?? guardado() ?? "cabina";
-const suscritos = new Set<(m: ModoVisual) => void>();
-
-function aplicar(modo: ModoVisual): void {
-  actual = modo;
-  document.documentElement.dataset.modo = modo;
-  for (const s of suscritos) s(modo);
+function aplicar(): void {
+  if (elegido) document.documentElement.dataset.tema = elegido;
+  else delete document.documentElement.dataset.tema;
+  for (const s of suscritos) s();
 }
 
-export function iniciarModoVisual(): void {
-  const delHash = delEnlace();
-  if (delHash) guardar(delHash);
-  aplicar(actual);
-  window.addEventListener("hashchange", () => {
-    const nuevo = delEnlace();
-    if (nuevo && nuevo !== actual) {
-      guardar(nuevo);
-      aplicar(nuevo);
-    }
+export function iniciarTema(): void {
+  aplicar();
+  // Sin elección, un cambio del sistema repinta el botón; con ella, el CSS ya no lo sigue.
+  window.matchMedia(SISTEMA_OSCURO).addEventListener("change", () => {
+    for (const s of suscritos) s();
   });
 }
 
-export function cambiarModoVisual(): void {
-  const nuevo: ModoVisual = actual === "cabina" ? "sobrio" : "cabina";
-  guardar(nuevo);
-  aplicar(nuevo);
+export function cambiarTema(): void {
+  elegido = temaActual() === "oscuro" ? "claro" : "oscuro";
+  guardar(elegido);
+  aplicar();
 }
 
-export function useModoVisual(): ModoVisual {
-  const [modo, setModo] = useState(actual);
+// Si el tema que se ve es el oscuro: lo que dice el botón con aria-pressed.
+export function useTemaOscuro(): boolean {
+  const [oscuro, setOscuro] = useState(() => temaActual() === "oscuro");
   useEffect(() => {
-    suscritos.add(setModo);
+    const alCambiar = () => setOscuro(temaActual() === "oscuro");
+    suscritos.add(alCambiar);
+    alCambiar();
     return () => {
-      suscritos.delete(setModo);
+      suscritos.delete(alCambiar);
     };
   }, []);
-  return modo;
+  return oscuro;
 }

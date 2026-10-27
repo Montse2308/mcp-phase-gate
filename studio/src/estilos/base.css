@@ -1,6 +1,6 @@
-/* La base del Studio: fuentes autoalojadas, maquetación y lo que vale en los dos modos. Los colores
-   salen de las variables de cada modo (cabina.css y sobrio.css). Sin estilos en línea: la CSP no admite
-   'unsafe-inline'. */
+/* La base del Studio: fuentes autoalojadas, maquetación y lo que vale en los dos temas. Los colores
+   salen de las variables de cada tema (tema-claro.css y tema-oscuro.css). Sin estilos en línea: la CSP no
+   admite 'unsafe-inline'. */
 
 @font-face {
   font-family: "Big Shoulders Display";
@@ -33,7 +33,6 @@
 
 :root {
   --texto-cuerpo: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --texto-titulo: "Big Shoulders Display", "Atkinson Hyperlegible", system-ui, sans-serif;
   --texto-codigo: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --radio: 6px;
   --espacio: 1rem;
@@ -173,7 +172,7 @@ main:focus {
   cursor: pointer;
   text-decoration: none;
 }
-/* El interruptor Cabina / Sobrio y el selector ES / EN, juntos al final de la barra. */
+/* El botón del tema y el selector ES / EN, juntos al final de la barra. */
 .preferencias {
   display: flex;
   flex-wrap: wrap;
@@ -381,7 +380,7 @@ main:focus {
   margin-bottom: 0.5rem;
 }
 
-/* ─── Tablas (modo Sobrio y donde haga falta) ─────────────────────────── */
+/* ─── Tablas ──────────────────────────────────────────────────────────── */
 .tabla-envoltura {
   max-width: 100%;
 }

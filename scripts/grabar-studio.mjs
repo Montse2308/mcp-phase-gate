@@ -137,7 +137,7 @@ try {
   });
 
   // 5. En vivo: el lote con el commit pendiente se commitea y se ancla con record_batch, y su estado
-  //    VERIFICADO llega por SSE sin recargar, con la fila resaltada.
+  //    verificado llega por SSE sin recargar, con la fila resaltada.
   await escena(5, TAMANO, async (p) => {
     await p.goto(vista(`/tablero/${tienda.nombre}/${enCurso.nombre}`));
     await p.locator(".estado-commit-pendiente").first().waitFor();

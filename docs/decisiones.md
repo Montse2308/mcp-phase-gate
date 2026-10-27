@@ -12,10 +12,75 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-27 — El Studio tiene una sola estructura por vista, y el tema, claro u oscuro, solo cambia colores; el modo Cabina se elimina
+
+> **Reemplaza en parte** dos entradas, cada una solo en lo que dice de los modos del Studio. De "El Studio
+> elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo"
+> (2026-10-19): los sellos SVG y "En modo Sobrio, solo el texto"; lo del idioma sigue vigente. De "El README
+> principal pasa a inglés" (2026-10-18): solo la mención de las capturas `tablero-cabina.png` y
+> `tablero-sobrio.png`.
+
+**Decisión.**
+
+- **El modo Cabina se elimina.** El Studio pintaba cada vista de dos maneras, Cabina (una vía con semáforos,
+  vagones con su sello SVG) y Sobrio (tablas), y un botón «Modo» pasaba de una a otra. Ahora cada vista tiene
+  una sola estructura, y el botón «Tema oscuro», con `aria-pressed`, solo cambia los colores.
+- **La estructura de cada vista.** La Red es una lista de filas que se despliegan: plegada, el nombre, el preset,
+  los repos con su rol, la tarea activa y la sesión; desplegada, además, el manifiesto, las reglas y las
+  acciones. Las fases del Tablero son seis tarjetas, y los lotes, una tabla con lote, objetivo, repo, estado,
+  detalle, ancla y recibo. Ningún dato ni acción de los dos modos se pierde: lo que solo tenía uno de ellos
+  pasó a la estructura única.
+- **El tema.** Sin elección guardada, el tema es el del sistema (`prefers-color-scheme`), y lo resuelve solo el
+  CSS: no hay script en línea, porque la CSP del servidor local no lo admite, y no hay destello aunque el
+  JavaScript se cargue tarde. El botón lo cambia y la elección se recuerda en `localStorage` (`pg-tema`, `claro`
+  u `oscuro`); `<html data-tema>` solo existe cuando hay una elección, y con ella un cambio del sistema no la
+  pisa. `tema-claro.css` y `tema-oscuro.css` solo declaran custom properties y `color-scheme`.
+- **Lo viejo no se migra.** `pg-modo` y `#?sobrio=` dejan de leerse: quien tenía Cabina o Sobrio guardados
+  vuelve al tema del sistema.
+- **El vocabulario.** Ningún texto visible ni `aria-label` usa la metáfora de la vía («Estación», «Señal»,
+  «EN VÍA»): las fases son «Fases de la tarea». «Sello» se queda, porque es el término del motor: «recibo
+  sellado». El estado de un lote se dice en minúscula, con un solo conjunto de palabras (verificado, sellado,
+  con pendientes, commit pendiente, no vigente, rechazado, descartado, manual, nota, sin recibo), en las claves
+  `estado.*` y en las clases `estado-*`; las fases, en `fase.*` y `fase-*`.
+- **Lo que deja de usarse se borra**: la vía, los vagones, los semáforos y los sellos SVG (`studio/public/sellos/`;
+  el sitio exportado ya no los lleva), con su CSS y sus variables.
+- **Una prueba comprueba que el tema no toca la estructura**: compara el árbol del DOM y el de accesibilidad
+  en claro y en oscuro, en cada vista a 1280 y a 390 px, con el visor abierto, con la vista previa de una
+  acción abierta, con un error de la API y en el sitio estático. Su función de comparación tiene su propia
+  prueba con árboles sintéticos.
+
+**Por qué.**
+
+- Dos estructuras por vista eran dos interfaces que mantener y probar, y Sobrio tenía menos funciones que
+  Cabina, no solo otro aspecto: quedarse con él sin más habría perdido datos.
+- El tema del sistema es lo que la persona ya eligió en su equipo, y que lo resuelva el CSS lo hace valer
+  también sin JavaScript.
+- Con una sola estructura, que el tema solo cambia colores se puede probar y se queda probado.
+
+**Qué se descartó.**
+
+- Cabina como tercer tema: seguiría pidiendo su propia estructura, o sería solo otra paleta sin razón para
+  distinguirse de las dos que quedan.
+- Todo en tablas: la Red y las fases perdían lo que cabe mal en una fila, y en un teléfono las tarjetas y la
+  lista que se despliega se apilan mejor.
+- Un script en `index.html` que fije el tema antes del primer pintado: la CSP lo prohíbe, y no se toca.
+- Migrar la elección de modo guardada: Cabina ya no existe, y Sobrio y el tema claro no son lo mismo.
+
+**Riesgo aceptado.** La paleta y la tipografía son todavía las de antes: el tema oscuro usa los colores de
+Cabina sobre la estructura nueva y puede verse raro, y los títulos aún cambian de fuente con el tema
+(`--texto-titulo`). Con una elección guardada distinta del tema del sistema, el primer pintado puede enseñar el
+otro tema un instante, hasta que corre el JavaScript.
+
+---
+
 ## 2026-10-19 — El Studio elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo
 
 > Registra decisiones de la Etapa 6 (L07) que se tomaron en el código sin ADR (auditoría externa de la Etapa 6,
 > §8). **Matiza** §8.6 del plan, que pedía el texto de los sellos dentro del SVG.
+
+> **Reemplazada en parte** el 2026-10-27 por "El Studio tiene una sola estructura por vista, y el tema, claro
+> u oscuro, solo cambia colores; el modo Cabina se elimina": los sellos SVG y "En modo Sobrio, solo el texto"
+> ya no valen. Lo del idioma sigue vigente.
 
 **Decisión.**
 
@@ -28,6 +93,7 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
   lleva texto. El filtro de seguridad no la lee: sus respuestas salen en el idioma del proceso.
 - **Los sellos** son un marco SVG sin texto (`studio/public/sellos/`) con la palabra encima, en HTML y del
   diccionario de la interfaz (VERIFICADO / VERIFIED, SELLADO / SEALED…). En modo Sobrio, solo el texto.
+  *Reemplazado el 2026-10-27: los sellos SVG y los modos ya no existen; el estado de un lote es solo texto.*
 
 **Por qué.**
 
@@ -100,6 +166,10 @@ en una línea o con otro formato cambia de forma (no de contenido). Queda la cop
 > duplicación": los dos README siguen completos y cambiar uno obliga a cambiar el otro; lo que cambia es
 > cuál es el principal.
 
+> **Reemplazada en parte** el 2026-10-27 por "El Studio tiene una sola estructura por vista, y el tema, claro
+> u oscuro, solo cambia colores; el modo Cabina se elimina": las capturas `tablero-cabina.png` y
+> `tablero-sobrio.png` enseñaban dos modos que ya no existen. El resto sigue vigente.
+
 **Decisión.** `README.md`, en inglés, es el principal: el que fija la estructura y el primero que se
 actualiza. `README.es.md` es su gemelo completo, con las mismas secciones en el mismo orden, las mismas
 tablas, el mismo esquema de enlaces y anclas, y los diagramas Mermaid traducidos. Los dos abren igual:
@@ -132,7 +202,8 @@ estudio sigue la misma regla: `docs/case-study.md` y su gemelo `docs/caso-de-est
 - Un solo README con los dos idiomas intercalados: el doble de largo para cualquiera de los dos lectores.
 - Imágenes con ruta relativa al repo: npmjs.com las rompe, porque `docs/medios/` no viaja en el paquete
   (§8.1 del plan). La captura de `tablero-cabina.png` sale de la cabecera y la de `tablero-sobrio.png` de
-  la sección del Studio: las dos enseñan la interfaz de antes del selector de idioma.
+  la sección del Studio: las dos enseñan la interfaz de antes del selector de idioma. *Reemplazado el
+  2026-10-27: los dos modos que enseñan esas capturas ya no existen.*
 
 **Riesgo aceptado.** El de siempre: dos documentos largos que cambian juntos. Ningún test compara su
 estructura (`test/docs.test.ts` solo vigila los comandos de fase); la mitigación sigue siendo la línea de

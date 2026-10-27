@@ -1,6 +1,6 @@
 // Las capturas del Studio: se sacan del sitio estático (la demo, sin datos de nadie) con el Chromium de
 // Playwright, sin abrir ningún navegador a la vista. Por defecto capturan el tablero de cupones-de-descuento,
-// en Cabina y en Sobrio, y se escriben en docs/medios/. Con --vistas se capturan otras vistas y, en ese caso,
+// en el tema oscuro y en el claro, y se escriben en docs/medios/. Con --vistas se capturan otras vistas y, en ese caso,
 // la página completa (para no cortar el contenido al comparar); --salida elige la carpeta.
 //
 // Uso, después de `npm run build` y con Chromium instalado
@@ -25,11 +25,11 @@ const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
 // Cada vista: el hash de la demo y qué esperar antes de la foto, algo que solo aparece cuando la vista
 // ya cargó sus datos del sitio estático. La tarea de la demo es TIENDA/cupones-de-descuento.
 const VISTAS = {
-  red: { hash: (sobrio) => `#/red${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByText("TIENDA").first().waitFor(); } },
-  tablero: { hash: (sobrio) => `#/tablero/TIENDA/cupones-de-descuento${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByText("ANULADO").or(pagina.getByText("descartado")).first().waitFor(); } },
-  taller: { hash: (sobrio) => `#/taller/TIENDA?fase=4&tarea=cupones-de-descuento${sobrio ? "&sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByRole("list", { name: "Ranuras" }).waitFor(); } },
-  vigia: { hash: (sobrio) => `#/vigia${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByRole("heading", { name: "Diagnóstico" }).waitFor(); } },
-  bitacora: { hash: (sobrio) => `#/bitacora/TIENDA/cupones-de-descuento${sobrio ? "?sobrio=1" : ""}`, listo: async (pagina) => { await pagina.getByRole("list", { name: "Eventos de la tarea" }).waitFor(); } },
+  red: { hash: "#/red", listo: async (pagina) => { await pagina.getByText("TIENDA").first().waitFor(); } },
+  tablero: { hash: "#/tablero/TIENDA/cupones-de-descuento", listo: async (pagina) => { await pagina.getByText("descartado").first().waitFor(); } },
+  taller: { hash: "#/taller/TIENDA?fase=4&tarea=cupones-de-descuento", listo: async (pagina) => { await pagina.getByRole("list", { name: "Ranuras" }).waitFor(); } },
+  vigia: { hash: "#/vigia", listo: async (pagina) => { await pagina.getByRole("heading", { name: "Diagnóstico" }).waitFor(); } },
+  bitacora: { hash: "#/bitacora/TIENDA/cupones-de-descuento", listo: async (pagina) => { await pagina.getByRole("list", { name: "Eventos de la tarea" }).waitFor(); } },
 };
 
 // --vistas y --salida. Sin --vistas se captura solo el tablero, como antes de que existieran las opciones.
@@ -76,19 +76,20 @@ try {
   try {
     fs.mkdirSync(salida, { recursive: true });
     for (const vista of vistas) {
-      for (const [modo, sobrio] of [["cabina", false], ["sobrio", true]]) {
-        const contexto = await navegador.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce", colorScheme: modo === "sobrio" ? "light" : "dark", locale: "es-ES" });
+      // Sin elección guardada, el tema es el del sistema: basta con el colorScheme del navegador.
+      for (const [tema, esquema] of [["oscuro", "dark"], ["claro", "light"]]) {
+        const contexto = await navegador.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce", colorScheme: esquema, locale: "es-ES" });
         const pagina = await contexto.newPage();
         pagina.on("request", (peticion) => {
           if (!peticion.url().startsWith(`${origen}/`) && !peticion.url().startsWith("data:")) throw new Error(`Petición fuera de 127.0.0.1: ${peticion.url()}`);
         });
-        await pagina.goto(`${origen}/${VISTAS[vista].hash(sobrio)}`);
-        const actual = await pagina.locator("html").getAttribute("data-modo");
-        if (actual !== modo) await pagina.getByRole("button", { name: /^Modo:/ }).click();
-        await pagina.locator(`html[data-modo="${modo}"]`).waitFor();
+        await pagina.goto(`${origen}/${VISTAS[vista].hash}`);
+        await pagina.getByRole("button", { name: "Tema oscuro" }).waitFor();
+        const oscuro = await pagina.getByRole("button", { name: "Tema oscuro" }).getAttribute("aria-pressed");
+        if (oscuro !== String(tema === "oscuro")) throw new Error(`La captura de ${vista} salió en otro tema que el ${tema}.`);
         await VISTAS[vista].listo(pagina);
         await pagina.evaluate(() => document.fonts.ready);
-        const archivo = path.join(salida, `${vista}-${modo}.png`);
+        const archivo = path.join(salida, `${vista}-${tema}.png`);
         await pagina.screenshot({ path: archivo, ...(paginaCompleta ? { fullPage: true } : {}) });
         console.log(`${path.relative(raiz, archivo)}: ${fs.statSync(archivo).size} bytes`);
         await contexto.close();

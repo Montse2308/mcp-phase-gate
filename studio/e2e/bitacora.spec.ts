@@ -1,12 +1,12 @@
 // La Bitácora (§7.7.5 del plan) en Chromium real.
 
-import { expect, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 
 const eventos = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Eventos de la tarea" }).getByRole("listitem");
 
 test("la línea de tiempo: documentos, recibo, commit con su asunto, reanclaje y cierre, de lo más reciente a lo más antiguo", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/bitacora/TIENDA/cerrada`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   await expect(page.getByRole("heading", { level: 1, name: "Bitácora de cerrada" })).toBeVisible();
   for (const tipo of ["Documento", "Recibo", "Commit", "Reanclaje", "Fase cerrada"]) {
     await expect(eventos(page).filter({ hasText: tipo }).first(), tipo).toBeVisible();
@@ -18,9 +18,9 @@ test("la línea de tiempo: documentos, recibo, commit con su asunto, reanclaje y
   const momentos = fechas.map((f) => Date.parse(f.length === 10 ? `${f}T00:00:00` : f));
   expect(momentos).toEqual([...momentos].sort((a, b) => b - a));
   await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "la Bitácora en modo cabina");
-  await ponerModo(page, "sobrio");
-  await sinViolacionesGraves(page, "la Bitácora en modo sobrio");
+  await sinViolacionesGraves(page, "la Bitácora en tema oscuro");
+  await ponerTema(page, "claro");
+  await sinViolacionesGraves(page, "la Bitácora en tema claro");
 });
 
 test("los filtros por tipo, y cada evento abre su documento o su recibo", async ({ page, servidor }) => {
@@ -43,9 +43,9 @@ test("sin tarea elegida ofrece las de cada proyecto, y en un teléfono no desbor
   await page.getByRole("region", { name: "TIENDA" }).getByRole("link", { name: "cerrada" }).click();
   await expect(page).toHaveURL(/#\/bitacora\/TIENDA\/cerrada$/);
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await expect(eventos(page).first()).toBeVisible();
-    await sinDesbordamiento(page, `la Bitácora en ${modo}`);
+    await sinDesbordamiento(page, `la Bitácora en tema ${tema}`);
   }
 });
