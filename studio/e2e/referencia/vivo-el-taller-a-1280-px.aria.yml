@@ -49,11 +49,11 @@
         - listitem:
           - strong: fábrica
           - text: existe
-          - code: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\prompts\es
+          - code: <paquete>/prompts/es
         - listitem:
           - strong: preset
           - text: existe
-          - code: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md
+          - code: <paquete>/presets/es/ai-agent-ops.md
         - listitem:
           - strong: proyecto
           - text: no existe
@@ -62,14 +62,14 @@
       - heading "Ranuras de la Fase 3 (10, con las globales)" [level=2]
       - list "Ranuras":
         - listitem:
-          - button "global/cero-rupturas fábrica despues (C:\\proyectos\\yo\\MCP PHASE GATE\\mcp-phase-gate\\presets\\es\\ai-agent-ops.md:13)":
+          - button "global/cero-rupturas fábrica despues (<paquete>/presets/es/ai-agent-ops.md:13)":
             - code: global/cero-rupturas
-            - text: fábrica despues (C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:13)
+            - text: fábrica despues (<paquete>/presets/es/ai-agent-ops.md:13)
         - listitem:
           - 'button "global/evidencia preset: ai-agent-ops"':
             - code: global/evidencia
             - text: "preset: ai-agent-ops"
-          - text: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:20
+          - text: <paquete>/presets/es/ai-agent-ops.md:20
         - listitem:
           - button "global/extra fábrica":
             - code: global/extra
@@ -82,7 +82,7 @@
           - 'button "fase-3/comprobaciones preset: ai-agent-ops"':
             - code: fase-3/comprobaciones
             - text: "preset: ai-agent-ops"
-          - text: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:45
+          - text: <paquete>/presets/es/ai-agent-ops.md:45
         - listitem:
           - button "fase-3/lotes fábrica":
             - code: fase-3/lotes
@@ -91,7 +91,7 @@
           - 'button "fase-3/pruebas preset: ai-agent-ops"':
             - code: fase-3/pruebas
             - text: "preset: ai-agent-ops"
-          - text: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:52
+          - text: <paquete>/presets/es/ai-agent-ops.md:52
         - listitem:
           - button "fase-3/prohibido-lotes fábrica":
             - code: fase-3/prohibido-lotes

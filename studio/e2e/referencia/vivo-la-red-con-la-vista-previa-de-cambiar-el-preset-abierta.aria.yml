@@ -150,8 +150,8 @@
             - list:
               - listitem:
                 - text: Reescribe (deja copia .bak)
-                - code: <Documentación>\TIENDA\phase-gate.json
-            - text: "--- <Documentación>\\TIENDA\\phase-gate.json { \"version\": 1, - \"preset\": \"multi-repo-feature\", + \"preset\": \"software\", \"repos\": [ { \"id\": \"api\", \"dir\": \"api\", \"rol\": \"backend\" }, { \"id\": \"web\", \"dir\": \"web\" }, { \"id\": \"pagos\", \"dir\": \"pagos\" } ] }"
+                - code: <Documentación>/TIENDA/phase-gate.json
+            - text: <diff>
             - paragraph:
               - button "Aplicar"
               - button "Cancelar"

@@ -87,7 +87,7 @@
           - term: Manifiesto
           - definition:
             - paragraph: phase-gate.json inválido
-            - paragraph: "phase-gate.json de ROTO no es válido (<Documentación>\\ROTO\\phase-gate.json): no es un JSON válido (Expected property name or '}' in JSON at position 2 (line 1 column 3))."
+            - paragraph: "phase-gate.json de ROTO no es válido (<Documentación>/ROTO/phase-gate.json): no es un JSON válido (Expected property name or '}' in JSON at position 2 (line 1 column 3))."
       - listitem:
         - article "TALLER":
           - heading "TALLER" [level=2]:

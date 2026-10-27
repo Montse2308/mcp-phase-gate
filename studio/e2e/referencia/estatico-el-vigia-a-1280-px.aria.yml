@@ -33,7 +33,7 @@
       - paragraph: "Sin hallazgos: todo en orden."
     - region "Clientes MCP":
       - heading "Clientes MCP" [level=2]
-      - paragraph: "Lo que haría `mcp-phase-gate init` en cada uno. Nada se escribe sin la vista previa y su \"Aplicar\"."
+      - paragraph: "Lo que haría `mcp-phase-gate init` en cada uno. Nada se escribe sin la vista previa y su /"Aplicar/"."
       - article "Claude Code":
         - heading "Claude Code" [level=3]
         - paragraph: no detectado
@@ -51,7 +51,7 @@
         - paragraph:
           - text: "Archivo:"
           - code: ~/.cursor/mcp.json
-        - text: "+ { + \"command\": \"npx\", + \"args\": [ + \"-y\", + \"mcp-phase-gate\" + ], + \"env\": { + \"PHASE_GATE_DOCS_PATH\": \"<Documentación>\", + \"PHASE_GATE_REPOS_PATH\": \"<repos>\", + \"PHASE_GATE_ELICITATION\": \"off\" + } + }"
+        - text: <diff>
         - paragraph:
           - checkbox "Copiar también los comandos de fase (/f1…/fN)"
           - text: Copiar también los comandos de fase (/f1…/fN)
@@ -65,7 +65,7 @@
         - paragraph:
           - text: "Archivo:"
           - code: ~/<carpeta de VS Code>/mcp.json
-        - text: "+ { + \"type\": \"stdio\", + \"command\": \"npx\", + \"args\": [ + \"-y\", + \"mcp-phase-gate\" + ], + \"env\": { + \"PHASE_GATE_DOCS_PATH\": \"<Documentación>\", + \"PHASE_GATE_REPOS_PATH\": \"<repos>\" + } + }"
+        - text: <diff>
         - paragraph:
           - button "Configurar VS Code" [disabled]
           - text: En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.

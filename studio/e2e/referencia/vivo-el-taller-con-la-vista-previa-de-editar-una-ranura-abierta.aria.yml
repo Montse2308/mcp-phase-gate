@@ -49,11 +49,11 @@
         - listitem:
           - strong: fábrica
           - text: existe
-          - code: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\prompts\es
+          - code: <paquete>/prompts/es
         - listitem:
           - strong: preset
           - text: existe
-          - code: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md
+          - code: <paquete>/presets/es/ai-agent-ops.md
         - listitem:
           - strong: proyecto
           - text: no existe
@@ -62,14 +62,14 @@
       - heading "Ranuras de la Fase 3 (10, con las globales)" [level=2]
       - list "Ranuras":
         - listitem:
-          - button "global/cero-rupturas fábrica despues (C:\\proyectos\\yo\\MCP PHASE GATE\\mcp-phase-gate\\presets\\es\\ai-agent-ops.md:13)":
+          - button "global/cero-rupturas fábrica despues (<paquete>/presets/es/ai-agent-ops.md:13)":
             - code: global/cero-rupturas
-            - text: fábrica despues (C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:13)
+            - text: fábrica despues (<paquete>/presets/es/ai-agent-ops.md:13)
         - listitem:
           - 'button "global/evidencia preset: ai-agent-ops"':
             - code: global/evidencia
             - text: "preset: ai-agent-ops"
-          - text: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:20
+          - text: <paquete>/presets/es/ai-agent-ops.md:20
         - listitem:
           - button "global/extra fábrica":
             - code: global/extra
@@ -82,7 +82,7 @@
           - 'button "fase-3/comprobaciones preset: ai-agent-ops"':
             - code: fase-3/comprobaciones
             - text: "preset: ai-agent-ops"
-          - text: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:45
+          - text: <paquete>/presets/es/ai-agent-ops.md:45
         - listitem:
           - button "fase-3/lotes fábrica":
             - code: fase-3/lotes
@@ -91,7 +91,7 @@
           - 'button "fase-3/pruebas preset: ai-agent-ops" [pressed]':
             - code: fase-3/pruebas
             - text: "preset: ai-agent-ops"
-          - text: C:\proyectos\yo\MCP PHASE GATE\mcp-phase-gate\presets\es\ai-agent-ops.md:52
+          - text: <paquete>/presets/es/ai-agent-ops.md:52
         - listitem:
           - button "fase-3/prohibido-lotes fábrica":
             - code: fase-3/prohibido-lotes
@@ -106,7 +106,7 @@
             - text: fábrica
     - region "fase-3/pruebas":
       - heading "fase-3/pruebas" [level=2]
-      - paragraph: "Contenido de preset: ai-agent-ops (C:\\proyectos\\yo\\MCP PHASE GATE\\mcp-phase-gate\\presets\\es\\ai-agent-ops.md:52), frente al de fábrica:"
+      - paragraph: "Contenido de preset: ai-agent-ops (<paquete>/presets/es/ai-agent-ops.md:52), frente al de fábrica:"
       - text: "- Si el repositorio tiene suite de pruebas automatizadas, el plan la usa: el criterio de salida - de cada lote dice qué comando corre y qué debe dar, y si el cambio merece una prueba nueva, el - plan dice cuál, en qué archivo y calcada de qué prueba existente. + La verificación de un agente es una **batería de casos**, definida aquí antes de tocar nada: - Si no tiene suite, **no inventes una sección de tests ni propongas escribir la primera del - módulo como parte de esta tarea**. El criterio de salida usa lo que sí se puede ejecutar: - compilar, el linter, un script, una salida observable. Dilo en una línea y sigue. + | # | Tipo | Entrada | Salida esperada | Restricción que vigila | + |---|---|---|---|---| + + - **De oro:** los casos de uso reales que tienen que seguir funcionando igual. + - **Borde:** entradas raras pero legítimas. + - **Adversariales:** intentos de sacar al agente de sus restricciones (formato, tono, tools + permitidas, seguridad). + + Cada lote dice qué casos de la batería prueba. El criterio de salida es la tabla + `Entrada | Salida antes | Salida después` sin regresiones en los casos de oro y con las + restricciones globales intactas en todos."
       - 'button "Editar fase-3/pruebas en la capa del proyecto: vista previa"'
       - 'region "Vista previa: Editar fase-3/pruebas en la capa global"':
@@ -114,8 +114,8 @@
         - list:
           - listitem:
             - text: Crea
-            - code: <configuración>\prompts\bloques.md
-        - text: "+++ <configuración>\\prompts\\bloques.md (nuevo) + <!-- bloque: fase-3/pruebas --> + Si el repositorio tiene suite de pruebas automatizadas, el plan la usa: el criterio de salida + de cada lote dice qué comando corre y qué debe dar, y si el cambio merece una prueba nueva, el + plan dice cuál, en qué archivo y calcada de qué prueba existente. + + Si no tiene suite, **no inventes una sección de tests ni propongas escribir la primera del + módulo como parte de esta tarea**. El criterio de salida usa lo que sí se puede ejecutar: + compilar, el linter, un script, una salida observable. Dilo en una línea y sigue. + <!-- /bloque -->"
+            - code: <configuración>/prompts/bloques.md
+        - text: <diff>
         - paragraph:
           - button "Aplicar"
           - button "Cancelar"

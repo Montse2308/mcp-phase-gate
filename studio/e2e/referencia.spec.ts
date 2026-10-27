@@ -16,7 +16,10 @@ import { expect, fasesDeLaTarea, lotesDeLaFase, sitio, test, testEstatico } from
 import type { Registro } from "./ayudas";
 import { fotografiar } from "./estructura";
 
-const CARPETA = path.join(path.dirname(fileURLToPath(import.meta.url)), "referencia");
+const AQUI = path.dirname(fileURLToPath(import.meta.url));
+const CARPETA = path.join(AQUI, "referencia");
+// Donde está el paquete: las rutas de los presets y de los prompts de fábrica salen en el Taller.
+const PAQUETE = path.join(AQUI, "..", "..");
 const ACTUALIZAR = process.env.ACTUALIZAR_REFERENCIA === "1";
 
 type Escenario = {
@@ -31,17 +34,24 @@ type Escenario = {
 };
 
 // Lo que cambia de una corrida a otra o de un sistema a otro, y no es estructura: la carpeta temporal de la
-// prueba y sus separadores, los SHA de los commits que la prueba acaba de hacer y las fechas, que salen de la
-// hora de la corrida y de la zona horaria de quien la corre.
+// prueba y la del paquete, con sus separadores; los SHA de los commits que la prueba acaba de hacer; las fechas,
+// que salen de la hora de la corrida y de la zona horaria de quien la corre; y el contenido de los diffs de las
+// vistas previas, que lleva las rutas del sistema, el idioma del servidor y las variables PHASE_GATE_* del
+// entorno de quien corre la prueba. De cada diff queda que hay un texto, no cuál es.
 function normalizar(aria: string, raiz: string, ordenar: boolean): string {
   let texto = aria;
   // En Windows, la ruta llega con barras invertidas, y dentro de un JSON mostrado, con las barras escapadas
   // una y otra vez: cada separador es una racha de `\` o de `/`.
   const separador = "[\\\\/]+";
-  const ruta = raiz.split(/[\\/]+/).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  texto = texto.replace(new RegExp(ruta.join(separador), "g"), "<raiz>");
-  texto = texto.replace(/<raiz>([^\s"'`]*)/g, (_, resto: string) => `<raiz>${resto.replace(/\\+/g, "/")}`);
+  for (const [carpeta, nombre] of [[raiz, "<raiz>"], [PAQUETE, "<paquete>"]] as const) {
+    const ruta = carpeta.split(/[\\/]+/).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    texto = texto.replace(new RegExp(ruta.join(separador), "g"), nombre);
+  }
   texto = texto
+    .replace(/^( *- text: )"(?:\+\+\+|---|\+ )[^\n]*$/gm, "$1<diff>")
+    .replace(/\\+/g, "/")
+    // `claude mcp add --env "X=ruta"`: las comillas solo salen si la ruta lleva espacios.
+    .replace(/--env "([^"]*)"/g, "--env $1")
     .replace(/~\/(?:AppData\/Roaming|\.config|Library\/Application Support)\/Code\/User\/mcp\.json/g, "~/<carpeta de VS Code>/mcp.json")
     .replace(/mcp-phase-gate \d+\.\d+\.\d+(?:-[\w.]+)?(?: \(clon\))?/g, "mcp-phase-gate <versión>")
     .replace(/Node v\d+\.\d+\.\d+/g, "Node <versión>")
@@ -122,6 +132,8 @@ const abrirElRecibo = async (p: Page) => {
 const tallerListo = async (p: Page) => {
   await expect(p.getByRole("list", { name: "Ranuras" }).getByRole("listitem").first()).toBeVisible();
   await expect(p.getByText("Política de commits")).toBeVisible();
+  // El selector de proyectos se llena cuando llega la lista de proyectos, después del resto de la vista.
+  await expect(p.locator("#taller-proyecto option")).not.toHaveCount(0);
 };
 const vigiaListo = async (p: Page) => {
   await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
