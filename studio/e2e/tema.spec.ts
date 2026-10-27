@@ -349,6 +349,8 @@ const abrirElRecibo = async (p: Page) => {
 const tallerListo = async (p: Page) => {
   await expect(p.getByRole("list", { name: "Ranuras" }).getByRole("listitem").first()).toBeVisible();
   await expect(p.getByText("Política de commits")).toBeVisible();
+  // El selector de proyectos se llena cuando llega la lista de proyectos, después del resto de la vista.
+  await expect(p.locator("#taller-proyecto option")).not.toHaveCount(0);
 };
 const vigiaListo = async (p: Page) => {
   await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
