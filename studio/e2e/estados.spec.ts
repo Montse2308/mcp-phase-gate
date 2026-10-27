@@ -4,6 +4,10 @@
 // lo dice. Los estados que el árbol de prueba no tiene (un repo que no existe, un lote no vigente…) se
 // consiguen cambiando en el navegador la respuesta de la API.
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, test } from "./ayudas";
@@ -12,8 +16,9 @@ type Forma = "lleno" | "anillo" | "rombo" | "vacio" | "cuadro" | "triangulo" | "
 type Tono = "verde" | "ambar" | "rojo" | "violeta" | "apagado";
 
 // Una fila de la tabla: la clave que lleva el indicador, su forma, su color, si lleva insignia, el texto que
-// dice y dónde está en la página.
-type Caso = { clave: string; forma: Forma; tono: Tono; insignia: boolean; texto: string; donde: (p: Page) => Locator };
+// dice y dónde está en la página. `literal`: la insignia lleva datos (un mensaje de git, un nombre de archivo) y
+// no los pasa a mayúsculas. `titulo`: la insignia está en un título y toma su tamaño y su familia.
+type Caso = { clave: string; forma: Forma; tono: Tono; insignia: boolean; texto: string; literal?: boolean; titulo?: boolean; donde: (p: Page) => Locator };
 
 // ─── La tabla ────────────────────────────────────────────────────────────────────────────────────────
 const FASES: Omit<Caso, "donde">[] = [
@@ -38,20 +43,20 @@ const LOTES: Omit<Caso, "donde">[] = [
 const RED: Omit<Caso, "donde">[] = [
   { clave: "red-manifiesto-valido", forma: "lleno", tono: "verde", insignia: false, texto: "phase-gate.json válido" },
   { clave: "red-manifiesto-ausente", forma: "vacio", tono: "apagado", insignia: false, texto: "sin phase-gate.json" },
-  { clave: "red-manifiesto-invalido", forma: "rombo", tono: "rojo", insignia: true, texto: "phase-gate.json inválido" },
+  { clave: "red-manifiesto-invalido", forma: "rombo", tono: "rojo", insignia: true, texto: "phase-gate.json inválido", literal: true },
   { clave: "red-repo-limpio", forma: "lleno", tono: "verde", insignia: false, texto: "rama main · árbol limpio" },
   { clave: "red-repo-con-cambios", forma: "anillo", tono: "ambar", insignia: false, texto: "rama main · 3 cambios sin commit" },
   { clave: "red-repo-sin-git", forma: "raya", tono: "apagado", insignia: false, texto: "sin git" },
   { clave: "red-repo-no-existe", forma: "rombo", tono: "rojo", insignia: true, texto: "no existe en este equipo" },
-  { clave: "red-repo-con-error", forma: "triangulo", tono: "ambar", insignia: true, texto: "fatal: algo raro" },
+  { clave: "red-repo-con-error", forma: "triangulo", tono: "ambar", insignia: true, texto: "fatal: algo raro", literal: true },
   { clave: "red-repo-con-error", forma: "triangulo", tono: "ambar", insignia: true, texto: "git no respondió a tiempo" }, // el mismo estado, otro motivo
   { clave: "red-sesion-abierta", forma: "lleno", tono: "verde", insignia: false, texto: "Abierto en cliente-e2e 1.0" },
   { clave: "red-sesion-ninguna", forma: "vacio", tono: "apagado", insignia: false, texto: "Ninguna sesión MCP lo tiene abierto" },
   { clave: "red-configuracion-con-error", forma: "triangulo", tono: "ambar", insignia: true, texto: "la configuración tiene un error" },
 ];
 const VIGIA: Omit<Caso, "donde">[] = [
-  { clave: "vigia-errores", forma: "rombo", tono: "rojo", insignia: true, texto: "Errores (1)" },
-  { clave: "vigia-avisos", forma: "triangulo", tono: "ambar", insignia: true, texto: "Avisos (2)" },
+  { clave: "vigia-errores", forma: "rombo", tono: "rojo", insignia: true, texto: "Errores (1)", titulo: true },
+  { clave: "vigia-avisos", forma: "triangulo", tono: "ambar", insignia: true, texto: "Avisos (2)", titulo: true },
   { clave: "vigia-info", forma: "vacio", tono: "apagado", insignia: false, texto: "Información (1)" },
   { clave: "vigia-cliente-detectado", forma: "lleno", tono: "verde", insignia: false, texto: "detectado en este equipo" },
   { clave: "vigia-cliente-no-detectado", forma: "vacio", tono: "apagado", insignia: false, texto: "no detectado" },
@@ -77,13 +82,23 @@ async function comprobar(page: Page, caso: Caso): Promise<void> {
     // Chrome ajusta el borde calculado a píxeles del dispositivo (a 1×, 1.5 px sale como 1 px): el ancho que
     // pide la hoja se lee de su regla.
     const regla = [...document.styleSheets].flatMap((h) => [...h.cssRules]).find((r) => r instanceof CSSStyleRule && r.selectorText === ".insignia") as CSSStyleRule | undefined;
-    return { transformacion: e.textTransform, bordeDeclarado: regla?.style.borderTopWidth, bordeCalculado: parseFloat(e.borderTopWidth), estilo: e.borderTopStyle, radio: e.borderTopLeftRadius, tamano: e.fontSize, peso: e.fontWeight, familia: e.fontFamily, fondo: e.backgroundColor, colorDelBorde: e.borderTopColor, colorDelTexto: e.color, visible: (el as HTMLElement).innerText };
+    const titulo = el.closest("h1, h2, h3, h4, h5, h6");
+    return { transformacion: e.textTransform, bordeDeclarado: regla?.style.borderTopWidth, bordeCalculado: parseFloat(e.borderTopWidth), estilo: e.borderTopStyle, radio: e.borderTopLeftRadius, tamano: e.fontSize, peso: e.fontWeight, familia: e.fontFamily, fondo: e.backgroundColor, colorDelBorde: e.borderTopColor, colorDelTexto: e.color, visible: (el as HTMLElement).innerText, tamanoDelTitulo: titulo ? getComputedStyle(titulo).fontSize : null };
   });
-  expect(estilo, `${nombre}: el estilo de la insignia`).toMatchObject({ transformacion: "uppercase", bordeDeclarado: "1.5px", estilo: "solid", radio: "4px", tamano: "12px", peso: "600", fondo: "rgba(0, 0, 0, 0)" });
+  expect(estilo, `${nombre}: el estilo de la insignia`).toMatchObject({ transformacion: caso.literal ? "none" : "uppercase", bordeDeclarado: "1.5px", estilo: "solid", radio: "4px", peso: "600", fondo: "rgba(0, 0, 0, 0)" });
   expect(estilo.bordeCalculado, `${nombre}: el borde se ve`).toBeGreaterThanOrEqual(1);
-  expect(estilo.familia, `${nombre}: JetBrains Mono`).toMatch(/JetBrains Mono/);
   expect(estilo.colorDelBorde, `${nombre}: el borde, del color del texto`).toBe(estilo.colorDelTexto);
-  expect(estilo.visible, `${nombre}: en mayúsculas`).toBe(estilo.visible.toUpperCase());
+  if (caso.titulo) {
+    // En un título, la insignia mide lo que el título y va en su familia.
+    expect(estilo.tamanoDelTitulo, `${nombre}: dentro de un título`).not.toBeNull();
+    expect(estilo.tamano, `${nombre}: del tamaño del título`).toBe(estilo.tamanoDelTitulo);
+    expect(estilo.familia, `${nombre}: la familia del título`).toMatch(/^Inter,/);
+  } else {
+    expect(estilo.tamano, `${nombre}: 12 px`).toBe("12px");
+    expect(estilo.familia, `${nombre}: JetBrains Mono`).toMatch(/JetBrains Mono/);
+  }
+  if (caso.literal) expect(estilo.visible, `${nombre}: el dato tal cual`).toBe(caso.texto.replace(/^rama main · /, ""));
+  else expect(estilo.visible, `${nombre}: en mayúsculas`).toBe(estilo.visible.toUpperCase());
 }
 
 // Cada indicador de la página es de un estado de la tabla, y cada uno lleva forma y texto.
@@ -217,6 +232,11 @@ test("el Vigía: errores, avisos e información, y los clientes detectados y no 
 });
 
 test("la tabla cubre cada estado que puede pintar el código: ni uno de más ni uno de menos", async () => {
+  // Las claves del registro de indicador.tsx, leídas del código: una clave nueva allí, sin su fila aquí, falla.
+  const fuente = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "comun", "indicador.tsx"), "utf-8");
+  const delCodigo = [...fuente.matchAll(/^\s*"([a-z-]+)": \{ forma:/gm)].map((m) => m[1]!);
+  expect(delCodigo.length, "leo las claves de indicador.tsx").toBeGreaterThan(0);
+  expect([...CLAVES].sort()).toEqual([...new Set(delCodigo)].sort());
   // 5 fases, 10 lotes, 11 estados de la Red y 5 del Vigía (el repo con error de git y el que no respondió son uno).
   expect(FASES).toHaveLength(5);
   expect(LOTES).toHaveLength(10);

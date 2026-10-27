@@ -16,18 +16,19 @@ import { t, tn } from "../i18n/idioma";
 import type { ClavePlural } from "../i18n/idioma";
 import { enlace } from "../rutas";
 
-// Cada estado es una clave del indicador (que sabe su forma, su color y su insignia) y las palabras que lo dicen.
-type Estado = { estado: ClaveDeEstado; texto: string };
+// Cada estado es una clave del indicador (que sabe su forma, su color y su insignia) y las palabras que lo dicen;
+// `literal`, cuando esas palabras llevan datos que no se pueden pasar a mayúsculas.
+type Estado = { estado: ClaveDeEstado; texto: string; literal?: boolean };
 
 export function estadoDelManifiesto(p: ProyectoApi): Estado {
   if (p.manifiesto.estado === "valido") return { estado: "red-manifiesto-valido", texto: t("red.manifiestoValido") };
   if (p.manifiesto.estado === "ausente") return { estado: "red-manifiesto-ausente", texto: t("red.sinManifiesto") };
-  return { estado: "red-manifiesto-invalido", texto: t("red.manifiestoInvalido") };
+  return { estado: "red-manifiesto-invalido", texto: t("red.manifiestoInvalido"), literal: true };
 }
 
 export function estadoDelRepo(r: RepoApi): Estado {
   if (!r.existe) return { estado: "red-repo-no-existe", texto: t("red.repoNoExiste") };
-  if (r.error) return { estado: "red-repo-con-error", texto: r.error };
+  if (r.error) return { estado: "red-repo-con-error", texto: r.error, literal: true };
   if (!r.respondio) return { estado: "red-repo-con-error", texto: t("red.gitNoRespondio") };
   if (!r.esGit) return { estado: "red-repo-sin-git", texto: t("red.sinGit") };
   const donde = r.separado ? t("red.separado", { head: r.head ?? "?" }) : t("red.rama", { rama: r.rama ?? "?" });
@@ -69,7 +70,7 @@ function presetDe(p: ProyectoApi): string {
 function LineaDeEstado({ estado, clase }: { estado: Estado; clase?: string }) {
   return (
     <p class={`linea${clase ? ` ${clase}` : ""}`}>
-      <IndicadorDeEstado estado={estado.estado} texto={estado.texto} />
+      <IndicadorDeEstado estado={estado.estado} texto={estado.texto} literal={estado.literal} />
     </p>
   );
 }
@@ -85,6 +86,7 @@ function Repos({ p }: { p: ProyectoApi }) {
             <IndicadorDeEstado
               estado={e.estado}
               texto={e.texto}
+              literal={e.literal}
               antes={
                 <>
                   <code>{r.id}</code>

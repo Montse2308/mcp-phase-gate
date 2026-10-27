@@ -60,15 +60,18 @@ type Propiedades = {
   antes?: ComponentChildren;
   // Pinta el texto con el color del estado (las fases y los lotes); sin esto solo se colorea la forma.
   enColor?: boolean;
+  // El texto lleva datos (un mensaje de git, un nombre de archivo): la insignia no lo pasa a mayúsculas, porque
+  // una ruta o un nombre en mayúsculas ya no es el que es.
+  literal?: boolean | undefined;
   clase?: string;
 };
 
-export function IndicadorDeEstado({ estado, texto, antes, enColor, clase }: Propiedades) {
+export function IndicadorDeEstado({ estado, texto, antes, enColor, literal, clase }: Propiedades) {
   const e: Definicion = ESTADOS[estado];
   return (
     <span class={`indicador ${estado} tono-${e.tono}${clase ? ` ${clase}` : ""}`}>
       <Marca forma={e.forma} tono={e.tono} /> {antes}
-      <span class={e.insignia ? "insignia" : enColor ? "indicador-texto" : undefined}>{texto}</span>
+      <span class={e.insignia ? `insignia${literal ? " insignia-literal" : ""}` : enColor ? "indicador-texto" : undefined}>{texto}</span>
     </span>
   );
 }

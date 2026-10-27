@@ -327,6 +327,18 @@ input:not([type="checkbox"]):not([type="radio"]) {
   line-height: 1.4;
   text-transform: uppercase;
 }
+/* Una insignia con datos (un mensaje de git, un nombre de archivo) los deja como son. */
+.insignia-literal {
+  text-transform: none;
+}
+/* En un título, la insignia toma el tamaño y la familia del título: dos títulos del mismo nivel se ven del mismo
+   tamaño, lleven insignia o no. */
+h2 .insignia,
+h3 .insignia {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.15;
+}
 
 /* ─── La Red ──────────────────────────────────────────────────────────── */
 /* Una fila por proyecto. Plegada, el nombre y sus campos en columnas, que en un teléfono se apilan;
