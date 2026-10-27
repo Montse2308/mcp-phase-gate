@@ -1,4 +1,4 @@
-// Los textos de la interfaz en español (§8.6 del plan). Es el diccionario de referencia: el inglés (en.ts)
+// Los textos de la interfaz en español. Es el diccionario de referencia: el inglés (en.ts)
 // se tipa contra sus claves, así que una clave que falta allí rompe el build, no la pantalla.
 //
 // Convenciones:
@@ -6,7 +6,7 @@
 //   - una clave con plural tiene sus formas como `<clave>.one` y `<clave>.other` (las categorías de
 //     Intl.PluralRules), y se pide con `tn(clave, n)`;
 //   - lo que dice el servidor (describeEstado, los hallazgos, los errores) no está aquí: llega ya en el
-//     idioma de la interfaz. Lo que sí está son las fichas fijas del contrato (la señal de una estación, el
+//     idioma de la interfaz. Lo que sí está son las fichas fijas del contrato (el estado de una fase, el
 //     origen de un preset, la etiqueta de una capa), que el servidor manda como valores y aquí se dicen.
 
 export const es = {
@@ -119,7 +119,7 @@ export const es = {
 
   // ─── Tablero ───
   "tablero.fase": "Fase {n}",
-  "tablero.estaciones": "Estaciones de la tarea",
+  "tablero.fases": "Fases de la tarea",
   "tablero.hueco": "Hay un hueco: la compuerta avisaría al pedir la fase siguiente.",
   "tablero.pendientes": "La fase anterior dejó pendientes: el prompt de la siguiente los nombrará.",
   "tablero.lotes": "Lotes",
@@ -135,36 +135,26 @@ export const es = {
   "tablero.colDetalle": "Detalle",
   "tablero.colAncla": "Ancla",
   "tablero.colRecibo": "Recibo",
-  // La señal de una estación (TextoDeSenal del contrato).
-  "senal.cerrada": "cerrada",
-  "senal.conPendientes": "con pendientes",
-  "senal.enCurso": "en curso",
-  "senal.hueco": "hueco",
-  "senal.pendiente": "pendiente",
+  // El estado de una fase (TextoDeSenal del contrato).
+  "fase.cerrada": "cerrada",
+  "fase.conPendientes": "con pendientes",
+  "fase.enCurso": "en curso",
+  "fase.hueco": "hueco",
+  "fase.pendiente": "pendiente",
 
-  // ─── Sellos (la tabla de §8.6) ───
-  "sello.verificado": "VERIFICADO",
-  "sello.sellado": "SELLADO",
-  "sello.enVia": "EN VÍA",
-  "sello.rechazado": "RECHAZADO",
-  "sello.anulado": "ANULADO",
-  "sello.manual": "MANUAL",
-  "sello.nota": "NOTA",
-  "sello.banda": "CON PENDIENTES",
-  "sello.sinRecibo": "sin recibo",
-  "sello.commitPendiente": "commit pendiente",
-  "sello.yaNoEnLaRama": "ya no está en la rama",
-  "sello.artefactoCambio": "el artefacto cambió",
-  // El sello dicho en el modo Sobrio.
-  "sobrio.verificado": "verificado · {corto}",
-  "sobrio.sha256": "sha256 · {hash}",
-  "sobrio.pendiente": "pendiente",
-  "sobrio.fallido": "fallido",
-  "sobrio.descartado": "descartado",
-  "sobrio.manual": "manual",
-  "sobrio.conPendientes": "con pendientes",
-  "sobrio.noVigente": "no vigente",
-  "sobrio.nota": "nota",
+  // ─── El estado de un lote ───
+  "estado.verificado": "verificado",
+  "estado.sellado": "sellado",
+  "estado.conPendientes": "con pendientes",
+  "estado.commitPendiente": "commit pendiente",
+  "estado.noVigente": "no vigente",
+  "estado.rechazado": "rechazado",
+  "estado.descartado": "descartado",
+  "estado.manual": "manual",
+  "estado.nota": "nota",
+  "estado.sinRecibo": "sin recibo",
+  "estado.yaNoEnLaRama": "ya no está en la rama",
+  "estado.artefactoCambio": "el artefacto cambió",
 
   // ─── Visor ───
   "visor.cerrar": "Cerrar el visor",

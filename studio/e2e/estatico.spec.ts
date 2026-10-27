@@ -89,8 +89,8 @@ test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH,
   await ponerModo(page, "cabina");
   const lista = lotesDeLaFase(page, "Phase 4");
   await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("VERIFIED");
-  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("VOID");
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verified");
+  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("discarded");
   await sinViolacionesGraves(page, "el tablero estático en inglés");
   expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
 });
@@ -100,8 +100,8 @@ test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar a
   await ponerModo(page, "cabina");
   const lista = lotesDeLaFase(page);
   await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("VERIFICADO");
-  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("ANULADO");
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verificado");
+  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("descartado");
   await lista.nth(0).getByRole("button").click();
   const recibo = page.getByRole("complementary", { name: /04 - Ejecución\/L01/ });
   await expect(recibo.getByLabel("Frontmatter")).toContainText("commit");
@@ -110,7 +110,7 @@ test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar a
   await page.getByRole("button", { name: "Reverificar anclas" }).click();
   await expect(page.getByText("Anclas reverificadas contra git y el disco.")).toBeVisible();
   await ponerModo(page, "sobrio");
-  await expect(lotesDeLaFase(page).nth(3)).toContainText("ANULADO");
+  await expect(lotesDeLaFase(page).nth(3)).toContainText("descartado");
   await sinViolacionesGraves(page, "el tablero estático en modo sobrio");
   expect(registro.peticiones.filter((u) => u.includes("/api/"))).toEqual([]);
 });

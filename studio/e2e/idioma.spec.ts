@@ -45,20 +45,20 @@ test.describe("con el navegador en inglés", () => {
     await sinViolacionesGraves(page, "la Red en inglés, modo sobrio");
   });
 
-  test("el Tablero: fases y estados de lote en inglés (VERIFIED, SEALED, WITH PENDING ITEMS, REJECTED, VOID, MANUAL, IN TRANSIT, stale)", async ({ page, servidor }) => {
+  test("el Tablero: fases y estados de lote en inglés (verified, sealed, with pending items, rejected, discarded, manual, pending commit, stale)", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
     await ponerModo(page, "cabina");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     const lista = lotesDeLaFase(page, "Batches of Phase 4");
     await expect(lista).toHaveCount(6);
-    await expect(lista.nth(0).locator(".estado-sellado")).toHaveText("SEALED");
-    await expect(lista.nth(1).locator(".estado-con-pendientes")).toHaveText("WITH PENDING ITEMS");
-    await expect(lista.nth(2).locator(".estado-rechazado")).toHaveText("REJECTED");
-    await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("VOID");
-    await expect(lista.nth(4).locator(".estado-manual")).toHaveText("MANUAL");
+    await expect(lista.nth(0).locator(".estado-sellado")).toHaveText("sealed");
+    await expect(lista.nth(1).locator(".estado-con-pendientes")).toHaveText("with pending items");
+    await expect(lista.nth(2).locator(".estado-rechazado")).toHaveText("rejected");
+    await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("discarded");
+    await expect(lista.nth(4).locator(".estado-manual")).toHaveText("manual");
     await expect(lista.nth(5).locator(".estado-sin-recibo")).toHaveText("no receipt");
     await expect(page.getByRole("table", { name: "Batches of Phase 4" }).getByRole("columnheader")).toHaveText(["Batch", "Goal", "Repo", "State", "Detail", "Anchor", "Receipt"]);
-    const fases = fasesDeLaTarea(page, "Stations of the task");
+    const fases = fasesDeLaTarea(page, "Phases of the task");
     await expect(fases.nth(0)).toContainText("Initial context");
     await expect(fases.nth(1)).toContainText("Phase 1");
     await expect(fases.nth(1)).toContainText("closed");
@@ -66,11 +66,10 @@ test.describe("con el navegador en inglés", () => {
     await sinViolacionesGraves(page, "el tablero en inglés, modo cabina");
 
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(1).locator(".estado-commit-pendiente")).toHaveText("IN TRANSIT");
-    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(1).locator(".estado-detalle")).toHaveText("pending commit");
-    await expect(fasesDeLaTarea(page, "Stations of the task").nth(4)).toContainText("in progress");
+    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(1).locator(".estado-commit-pendiente")).toHaveText("pending commit");
+    await expect(fasesDeLaTarea(page, "Phases of the task").nth(4)).toContainText("in progress");
     await ponerModo(page, "sobrio");
-    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(0)).toContainText("VERIFIED");
+    await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(0)).toContainText("verified");
     await sinViolacionesGraves(page, "el tablero en inglés, modo sobrio");
 
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/reescrita`);

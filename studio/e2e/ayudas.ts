@@ -141,7 +141,7 @@ export async function ningunEstadoSoloColor(page: Page): Promise<void> {
 
 // Las tarjetas de fase de un Tablero y las filas de su tabla de lotes (sin la cabecera). Los nombres de la
 // lista y de la tabla cambian con el idioma.
-export function fasesDeLaTarea(page: Page, nombre = "Estaciones de la tarea") {
+export function fasesDeLaTarea(page: Page, nombre = "Fases de la tarea") {
   return page.getByRole("list", { name: nombre }).getByRole("listitem");
 }
 

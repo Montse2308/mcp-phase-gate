@@ -58,13 +58,13 @@ test("cada tarjeta de fase dice su archivo en su nombre accesible, y su botón a
 // nota y el no vigente, tienen su propio test.
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const CASOS: { tipo: string; tarea: string; fila: number; palabra: string; detalle: (string | RegExp)[]; ancla: RegExp; recibo: boolean }[] = [
-  { tipo: "verificado", tarea: "cupones", fila: 0, palabra: "VERIFICADO", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
-  { tipo: "sellado", tarea: "variedad", fila: 0, palabra: "SELLADO", detalle: [/^[0-9a-f]{8}$/, FECHA], ancla: /^sha256 `[0-9a-f]{12}…` de `repo:web\/dist\/web\.txt`/, recibo: true },
-  { tipo: "con-pendientes", tarea: "variedad", fila: 1, palabra: "CON PENDIENTES", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
-  { tipo: "rechazado", tarea: "variedad", fila: 2, palabra: "RECHAZADO", detalle: [FECHA], ancla: /./, recibo: true },
-  { tipo: "descartado", tarea: "variedad", fila: 3, palabra: "ANULADO", detalle: [FECHA], ancla: /./, recibo: true },
-  { tipo: "manual", tarea: "variedad", fila: 4, palabra: "MANUAL", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
-  { tipo: "commit-pendiente", tarea: "cupones", fila: 1, palabra: "EN VÍA", detalle: ["commit pendiente"], ancla: /^commit pendiente$/, recibo: true },
+  { tipo: "verificado", tarea: "cupones", fila: 0, palabra: "verificado", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "sellado", tarea: "variedad", fila: 0, palabra: "sellado", detalle: [/^[0-9a-f]{8}$/, FECHA], ancla: /^sha256 `[0-9a-f]{12}…` de `repo:web\/dist\/web\.txt`/, recibo: true },
+  { tipo: "con-pendientes", tarea: "variedad", fila: 1, palabra: "con pendientes", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "rechazado", tarea: "variedad", fila: 2, palabra: "rechazado", detalle: [FECHA], ancla: /./, recibo: true },
+  { tipo: "descartado", tarea: "variedad", fila: 3, palabra: "descartado", detalle: [FECHA], ancla: /./, recibo: true },
+  { tipo: "manual", tarea: "variedad", fila: 4, palabra: "manual", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "commit-pendiente", tarea: "cupones", fila: 1, palabra: "commit pendiente", detalle: [], ancla: /^commit pendiente$/, recibo: true },
   { tipo: "sin-recibo", tarea: "variedad", fila: 5, palabra: "sin recibo", detalle: [], ancla: /^—$/, recibo: false },
 ];
 
@@ -100,7 +100,7 @@ test("el lote con nota: su ancla es una nota y el texto va en el detalle", async
   });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
   const fila = lotesDeLaFase(page).nth(0);
-  await expect(fila.locator(".estado-nota")).toHaveText("NOTA");
+  await expect(fila.locator(".estado-nota")).toHaveText("nota");
   await expect(fila.locator(".estado-detalle")).toHaveText(["sin commits en esta política"]);
   await expect(fila.locator(".estado-detalle")).toHaveClass(/estado-detalle-texto/); // la nota, en texto normal
   await expect(fila.getByRole("cell").nth(4)).toHaveText("nota: sin commits en esta política");
@@ -290,7 +290,7 @@ test("en vivo: un recibo nuevo aparece por SSE, sin recargar, y su fila se resal
   await page.evaluate(() => ((window as unknown as { __sinRecargar: boolean }).__sinRecargar = true));
 
   await registrarEnVivo(servidor, "en-vivo", "llega en vivo");
-  await expect(fila.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(fila.locator(".estado-verificado")).toHaveText("verificado", { timeout: 15_000 });
   await expect(fila).toHaveClass(/estado-nuevo/);
   expect(await animacionDe(fila)).toBe("resaltar");
   await expect(fila.locator(".estado-detalle").first()).toHaveText(/^[0-9a-f]{7}$/);
@@ -309,7 +309,7 @@ test("en vivo, con prefers-reduced-motion: la fila nueva se marca, pero sin anim
   expect(await fondoDe(fila)).toBe(SIN_FONDO);
 
   await registrarEnVivo(servidor, "en-vivo-quieto", "llega sin movimiento");
-  await expect(fila.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(fila.locator(".estado-verificado")).toHaveText("verificado", { timeout: 15_000 });
   await expect(fila).toHaveClass(/estado-nuevo/);
   expect(await animacionDe(fila)).toBe("none");
   expect(await fondoDe(fila), "la marca queda fija en lugar de animarse").not.toBe(SIN_FONDO);
