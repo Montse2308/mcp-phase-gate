@@ -1,0 +1,158 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "variedad":
+    - paragraph:
+      - link "Red":
+        - /url: "#/red"
+      - text: › TIENDA
+    - heading "variedad" [level=1]
+    - paragraph: "va en Fase 4 (Ejecución, lote 3 de 6); hechas: 1, 2, 3"
+    - list "Fases de la tarea":
+      - listitem:
+        - button "00 Contexto inicial cerrada 00 - Contexto Inicial.md"
+      - listitem:
+        - button "Fase 1 Descubrimiento cerrada 01 - Análisis Técnico.md"
+      - listitem:
+        - button "Fase 2 Decisiones cerrada 02 - Decisiones.md"
+      - listitem:
+        - button "Fase 3 Plan Técnico cerrada 03 - Plan Técnico.md"
+      - listitem:
+        - button "Fase 4 Ejecución en curso 04 - Ejecución.md" [disabled]
+      - listitem:
+        - button "Fase 5 Auditoría / Pre-PR pendiente 05 - Auditoría.md" [disabled]
+    - region "Lotes":
+      - heading "Lotes" [level=2]
+      - paragraph: "4 de 6 cerrados · Siguiente: L03 falló: reintenta o descártalo con `cerrar_fase`."
+      - button "Reverificar anclas"
+      - table "Lotes de la Fase 4":
+        - caption: Lotes de la Fase 4
+        - rowgroup:
+          - row "Lote Objetivo Repo Estado Detalle Ancla Recibo":
+            - columnheader "Lote"
+            - columnheader "Objetivo"
+            - columnheader "Repo"
+            - columnheader "Estado"
+            - columnheader "Detalle"
+            - columnheader "Ancla"
+            - columnheader "Recibo"
+        - rowgroup:
+          - 'row "L01 Empaquetar la web web sellado <sha> <fecha> sha256 `<sha>…` de `repo:web/dist/web.txt` 04 - Ejecución/L01 - Empaquetar la web.md"':
+            - rowheader "L01"
+            - cell "Empaquetar la web"
+            - cell "web"
+            - cell "sellado"
+            - cell "<sha> <fecha>"
+            - 'cell "sha256 `<sha>…` de `repo:web/dist/web.txt`"'
+            - cell "04 - Ejecución/L01 - Empaquetar la web.md":
+              - button "04 - Ejecución/L01 - Empaquetar la web.md" [pressed]
+          - 'row "L02 Con pendientes api con pendientes <sha> <fecha> commit <sha> en `api` (main) 04 - Ejecución/L02 - Con pendientes.md"':
+            - rowheader "L02"
+            - cell "Con pendientes"
+            - cell "api"
+            - cell "con pendientes"
+            - cell "<sha> <fecha>"
+            - 'cell "commit <sha> en `api` (main)"'
+            - cell "04 - Ejecución/L02 - Con pendientes.md":
+              - button "04 - Ejecución/L02 - Con pendientes.md"
+          - 'row "L03 Fallido api rechazado <fecha> nota: el test de integración no pasó 04 - Ejecución/L03 - Fallido.md"':
+            - rowheader "L03"
+            - cell "Fallido"
+            - cell "api"
+            - cell "rechazado"
+            - cell "<fecha>"
+            - 'cell "nota: el test de integración no pasó"'
+            - cell "04 - Ejecución/L03 - Fallido.md":
+              - button "04 - Ejecución/L03 - Fallido.md"
+          - 'row "L04 Descartado api descartado <fecha> nota: ya no hace falta 04 - Ejecución/L04 - Descartado.md"':
+            - rowheader "L04"
+            - cell "Descartado"
+            - cell "api"
+            - cell "descartado"
+            - cell "<fecha>"
+            - 'cell "nota: ya no hace falta"'
+            - cell "04 - Ejecución/L04 - Descartado.md":
+              - button "04 - Ejecución/L04 - Descartado.md"
+          - 'row "L05 A mano api manual <sha> <fecha> commit <sha> en `api` (main) 04 - Ejecución/L05 - A mano.md"':
+            - rowheader "L05"
+            - cell "A mano"
+            - cell "api"
+            - cell "manual"
+            - cell "<sha> <fecha>"
+            - 'cell "commit <sha> en `api` (main)"'
+            - cell "04 - Ejecución/L05 - A mano.md":
+              - button "04 - Ejecución/L05 - A mano.md"
+          - row "L06 Sin empezar api sin recibo — — —":
+            - rowheader "L06"
+            - cell "Sin empezar"
+            - cell "api"
+            - cell "sin recibo"
+            - cell "—"
+            - cell "—"
+            - cell "—":
+              - button "—" [disabled]
+  - complementary "04 - Ejecución/L01 - Empaquetar la web.md":
+    - heading "04 - Ejecución/L01 - Empaquetar la web.md" [level=2]
+    - button "Cerrar el visor"
+    - term: lote
+    - definition: L01
+    - term: de
+    - definition: "6"
+    - term: repo
+    - definition: web
+    - term: rama
+    - definition: —
+    - term: estado
+    - definition: verificado
+    - term: commit
+    - definition: no aplica
+    - term: fecha
+    - definition: <fecha>
+    - term: ancla
+    - definition: sha256
+    - term: artefacto
+    - definition: repo:web/dist/web.txt
+    - term: sha256
+    - definition: <sha>
+    - term: bytes
+    - definition: "19"
+    - term: registrado
+    - definition: <fecha>
+    - term: origen
+    - definition: servidor
+    - heading "L01 — Empaquetar la web" [level=1]
+    - heading "Qué se hizo" [level=2]
+    - paragraph: Hecho.
+    - heading "Archivos" [level=2]
+    - paragraph: Ninguno.
+    - heading "Verificación ejecutada" [level=2]
+    - paragraph: test
+    - heading "Espera al usuario" [level=2]
+    - paragraph: Ninguna.
+    - heading "Desvíos del plan" [level=2]
+    - paragraph: Ninguno.
+    - heading "Decisiones" [level=2]
+    - paragraph: Ninguna.

@@ -1,0 +1,116 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- note: "Demo: datos de ejemplo. Todo es de solo lectura."
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Bitácora de cupones-de-descuento":
+    - paragraph:
+      - link "Red":
+        - /url: "#/red"
+      - text: ›
+      - link "TIENDA › cupones-de-descuento":
+        - /url: "#/tablero/TIENDA/cupones-de-descuento"
+    - heading "Bitácora de cupones-de-descuento" [level=1]
+    - group "Qué enseñar":
+      - text: Qué enseñar
+      - checkbox "Documentos" [checked]
+      - text: Documentos
+      - checkbox "Recibos" [checked]
+      - text: Recibos
+      - checkbox "Commits" [checked]
+      - text: Commits
+      - checkbox "Reanclajes" [checked]
+      - text: Reanclajes
+      - checkbox "Cierres de fase" [checked]
+      - text: Cierres de fase
+    - list "Eventos de la tarea":
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 5 · Auditoría / Pre-PR: 05 - Auditoría.md"
+        - button "Ver 05 - Auditoría.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 4 · Ejecución: 04 - Ejecución.md"
+        - button "Ver 04 - Ejecución.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Recibo L04 · Cupón por correo: descartado"
+        - button "Ver 04 - Ejecución/L04 - Cupón por correo.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Fase cerrada Fase 4 (Ejecución) cerrada: 04 - Ejecución.md"
+        - button "Ver 04 - Ejecución.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Recibo L03 · Campo del cupón en el carrito: verificado"
+        - code: <sha>
+        - text: "feat(web): campo para escribir el cupón en el carrito"
+        - button "Ver 04 - Ejecución/L03 - Campo del cupón en el carrito.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Commit feat(web): campo para escribir el cupón en el carrito"
+        - code: <sha>
+        - text: "feat(web): campo para escribir el cupón en el carrito"
+        - button "Ver 04 - Ejecución/L03 - Campo del cupón en el carrito.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Recibo L02 · Aplicar el descuento al total: verificado"
+        - code: <sha>
+        - text: "feat(api): aplicar el descuento del cupón al total"
+        - button "Ver 04 - Ejecución/L02 - Aplicar el descuento al total.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Commit feat(api): aplicar el descuento del cupón al total"
+        - code: <sha>
+        - text: "feat(api): aplicar el descuento del cupón al total"
+        - button "Ver 04 - Ejecución/L02 - Aplicar el descuento al total.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Recibo L01 · Validar el cupón: verificado"
+        - code: <sha>
+        - text: "feat(api): validar el código del cupón"
+        - button "Ver 04 - Ejecución/L01 - Validar el cupón.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Commit feat(api): validar el código del cupón"
+        - code: <sha>
+        - text: "feat(api): validar el código del cupón"
+        - button "Ver 04 - Ejecución/L01 - Validar el cupón.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 3 · Plan Técnico: 03 - Plan Técnico.md"
+        - button "Ver 03 - Plan Técnico.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 2 · Decisiones: 02 - Decisiones.md"
+        - button "Ver 02 - Decisiones.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 1 · Descubrimiento: 01 - Análisis Técnico.md"
+        - button "Ver 01 - Análisis Técnico.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento 00 · Contexto inicial: 00 - Contexto Inicial.md"
+        - button "Ver 00 - Contexto Inicial.md"

@@ -1,0 +1,96 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- note: "Demo: datos de ejemplo. Todo es de solo lectura."
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Red de proyectos":
+    - heading "Red de proyectos" [level=1]
+    - list "Proyectos de la Documentación":
+      - listitem:
+        - article "ASISTENTE":
+          - heading "ASISTENTE" [level=2]:
+            - button "ASISTENTE"
+          - term: Preset
+          - definition: ai-agent-ops · del proyecto
+          - term: Repos
+          - definition:
+            - list "Repositorios de ASISTENTE":
+              - listitem:
+                - code: agente
+                - text: (prompt y configuración del agente) · sin git
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: tono-en-reclamos
+            - paragraph: "va en Fase 5 (Auditoría / Pre-PR); hechas: 1, 2, 3, 4"
+            - link "Abrir tablero":
+              - /url: "#/tablero/ASISTENTE/tono-en-reclamos"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto
+      - listitem:
+        - article "INVESTIGACION":
+          - heading "INVESTIGACION" [level=2]:
+            - button "INVESTIGACION"
+          - term: Preset
+          - definition: research-ops · del proyecto
+          - term: Repos
+          - definition:
+            - paragraph: Sin repos declarados.
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: costo-de-embeddings
+            - paragraph: "va en Fase 2 (Decisiones); hechas: 1"
+            - link "Abrir tablero":
+              - /url: "#/tablero/INVESTIGACION/costo-de-embeddings"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto
+      - listitem:
+        - article "TIENDA":
+          - heading "TIENDA" [level=2]:
+            - button "TIENDA"
+          - term: Preset
+          - definition: multi-repo-feature · del proyecto
+          - term: Repos
+          - definition:
+            - list "Repositorios de TIENDA":
+              - listitem:
+                - code: api
+                - text: (backend) · rama main · árbol limpio
+              - listitem:
+                - code: web
+                - text: (frontend) · rama main · 1 cambio sin commit
+          - term: Tarea activa
+          - definition:
+            - paragraph:
+              - strong: envio-gratis
+            - paragraph: "va en Fase 4 (Ejecución, lote 2 de 3, commit pendiente); hechas: 1, 2, 3"
+            - link "Abrir tablero":
+              - /url: "#/tablero/TIENDA/envio-gratis"
+          - term: Sesión MCP
+          - definition:
+            - paragraph: Ninguna sesión MCP lo tiene abierto

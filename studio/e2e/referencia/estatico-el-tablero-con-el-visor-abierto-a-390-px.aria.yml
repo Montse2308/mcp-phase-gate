@@ -1,0 +1,163 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- note: "Demo: datos de ejemplo. Todo es de solo lectura."
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "cupones-de-descuento":
+    - paragraph:
+      - link "Red":
+        - /url: "#/red"
+      - text: › TIENDA
+    - heading "cupones-de-descuento" [level=1]
+    - paragraph: "terminada: todas las fases dejaron su documento"
+    - list "Fases de la tarea":
+      - listitem:
+        - button "00 Contexto inicial cerrada 00 - Contexto Inicial.md"
+      - listitem:
+        - button "Fase 1 Descubrimiento cerrada 01 - Análisis Técnico.md"
+      - listitem:
+        - button "Fase 2 Decisiones cerrada 02 - Decisiones.md"
+      - listitem:
+        - button "Fase 3 Plan Técnico cerrada 03 - Plan Técnico.md"
+      - listitem:
+        - button "Fase 4 Ejecución con pendientes 04 - Ejecución.md"
+      - listitem:
+        - button "Fase 5 Auditoría / Pre-PR cerrada 05 - Auditoría.md"
+    - region "Lotes":
+      - heading "Lotes" [level=2]
+      - paragraph: "4 de 4 cerrados · Siguiente: Todos los lotes cerrados: la Fase 4 está cerrada."
+      - button "Reverificar anclas"
+      - table "Lotes de la Fase 4":
+        - caption: Lotes de la Fase 4
+        - rowgroup:
+          - row "Lote Objetivo Repo Estado Detalle Ancla Recibo":
+            - columnheader "Lote"
+            - columnheader "Objetivo"
+            - columnheader "Repo"
+            - columnheader "Estado"
+            - columnheader "Detalle"
+            - columnheader "Ancla"
+            - columnheader "Recibo"
+        - rowgroup:
+          - 'row "L01 Objetivo: Validar el cupón Repo: api Estado: verificado Detalle: <sha> <fecha> Ancla: commit <sha> en `api` (main) Recibo: 04 - Ejecución/L01 - Validar el cupón.md"':
+            - rowheader "L01"
+            - 'cell "Objetivo: Validar el cupón"'
+            - 'cell "Repo: api"'
+            - 'cell "Estado: verificado"'
+            - 'cell "Detalle: <sha> <fecha>"'
+            - 'cell "Ancla: commit <sha> en `api` (main)"'
+            - 'cell "Recibo: 04 - Ejecución/L01 - Validar el cupón.md"':
+              - text: "Recibo:"
+              - button "04 - Ejecución/L01 - Validar el cupón.md" [pressed]
+          - 'row "L02 Objetivo: Aplicar el descuento al total Repo: api Estado: verificado Detalle: <sha> <fecha> Ancla: commit <sha> en `api` (main) Recibo: 04 - Ejecución/L02 - Aplicar el descuento al total.md"':
+            - rowheader "L02"
+            - 'cell "Objetivo: Aplicar el descuento al total"'
+            - 'cell "Repo: api"'
+            - 'cell "Estado: verificado"'
+            - 'cell "Detalle: <sha> <fecha>"'
+            - 'cell "Ancla: commit <sha> en `api` (main)"'
+            - 'cell "Recibo: 04 - Ejecución/L02 - Aplicar el descuento al total.md"':
+              - text: "Recibo:"
+              - button "04 - Ejecución/L02 - Aplicar el descuento al total.md"
+          - 'row "L03 Objetivo: Campo del cupón en el carrito Repo: web Estado: verificado Detalle: <sha> <fecha> Ancla: commit <sha> en `web` (main) Recibo: 04 - Ejecución/L03 - Campo del cupón en el carrito.md"':
+            - rowheader "L03"
+            - 'cell "Objetivo: Campo del cupón en el carrito"'
+            - 'cell "Repo: web"'
+            - 'cell "Estado: verificado"'
+            - 'cell "Detalle: <sha> <fecha>"'
+            - 'cell "Ancla: commit <sha> en `web` (main)"'
+            - 'cell "Recibo: 04 - Ejecución/L03 - Campo del cupón en el carrito.md"':
+              - text: "Recibo:"
+              - button "04 - Ejecución/L03 - Campo del cupón en el carrito.md"
+          - 'row "L04 Objetivo: Cupón por correo Repo: api Estado: descartado Detalle: <fecha> Ancla: nota: El cupón por correo se pasa a otra tarea: necesita el servicio de correo. Recibo: 04 - Ejecución/L04 - Cupón por correo.md"':
+            - rowheader "L04"
+            - 'cell "Objetivo: Cupón por correo"'
+            - 'cell "Repo: api"'
+            - 'cell "Estado: descartado"'
+            - 'cell "Detalle: <fecha>"'
+            - 'cell "Ancla: nota: El cupón por correo se pasa a otra tarea: necesita el servicio de correo."'
+            - 'cell "Recibo: 04 - Ejecución/L04 - Cupón por correo.md"':
+              - text: "Recibo:"
+              - button "04 - Ejecución/L04 - Cupón por correo.md"
+  - complementary "04 - Ejecución/L01 - Validar el cupón.md":
+    - heading "04 - Ejecución/L01 - Validar el cupón.md" [level=2]
+    - button "Cerrar el visor"
+    - term: ancla
+    - definition: commit
+    - term: asunto
+    - definition: "feat(api): validar el código del cupón"
+    - term: commit
+    - definition: <sha>
+    - term: commit_completo
+    - definition: <sha>
+    - term: de
+    - definition: "4"
+    - term: estado
+    - definition: verificado
+    - term: fecha
+    - definition: <fecha>
+    - term: lote
+    - definition: L01
+    - term: origen
+    - definition: servidor
+    - term: rama
+    - definition: main
+    - term: registrado
+    - definition: <fecha>
+    - term: repo
+    - definition: api
+    - heading "L01 — Validar el cupón" [level=1]
+    - heading "Qué se hizo" [level=2]
+    - paragraph: El cupón se valida en el servidor, sin distinguir mayúsculas ni espacios.
+    - heading "Archivos" [level=2]
+    - table:
+      - rowgroup:
+        - row "Archivo Qué cambió":
+          - columnheader "Archivo"
+          - columnheader "Qué cambió"
+      - rowgroup:
+        - row "src/cupones.js modificado":
+          - cell "src/cupones.js"
+          - cell "modificado"
+    - heading "Verificación ejecutada" [level=2]
+    - paragraph:
+      - code: npm test
+      - text: ": 4 casos de validar() (válido, en minúsculas, con espacios, inexistente), los cuatro en verde."
+    - heading "Espera al usuario" [level=2]
+    - table:
+      - rowgroup:
+        - row "Prueba Resultado esperado":
+          - columnheader "Prueba"
+          - columnheader "Resultado esperado"
+      - rowgroup:
+        - 'row "POST /cupones/validar con «bienvenida » 200 y { valido: true }"':
+          - cell "POST /cupones/validar con «bienvenida »"
+          - 'cell "200 y { valido: true }"'
+    - heading "Desvíos del plan" [level=2]
+    - paragraph: Ninguno.
+    - heading "Decisiones" [level=2]
+    - paragraph: Ninguna.
+    - heading "Verificación del commit" [level=2]
+    - paragraph: El commit toca exactamente el archivo declarado.

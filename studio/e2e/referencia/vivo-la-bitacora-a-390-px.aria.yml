@@ -1,0 +1,87 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Bitácora de cerrada":
+    - paragraph:
+      - link "Red":
+        - /url: "#/red"
+      - text: ›
+      - link "TIENDA › cerrada":
+        - /url: "#/tablero/TIENDA/cerrada"
+    - heading "Bitácora de cerrada" [level=1]
+    - group "Qué enseñar":
+      - text: Qué enseñar
+      - checkbox "Documentos" [checked]
+      - text: Documentos
+      - checkbox "Recibos" [checked]
+      - text: Recibos
+      - checkbox "Commits" [checked]
+      - text: Commits
+      - checkbox "Reanclajes" [checked]
+      - text: Reanclajes
+      - checkbox "Cierres de fase" [checked]
+      - text: Cierres de fase
+    - list "Eventos de la tarea":
+      - listitem:
+        - time: <fecha>
+        - text: "Commit feat(api): cerrar la fase, rehecho"
+        - code: <sha>
+        - text: "feat(api): cerrar la fase, rehecho"
+        - button "Ver 04 - Ejecución.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento 00 · Contexto inicial: 00 - Contexto Inicial.md"
+        - button "Ver 00 - Contexto Inicial.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 1 · Descubrimiento: 01 - Análisis Técnico.md"
+        - button "Ver 01 - Análisis Técnico.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 2 · Decisiones: 02 - Decisiones.md"
+        - button "Ver 02 - Decisiones.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 3 · Plan Técnico: 03 - Plan Técnico.md"
+        - button "Ver 03 - Plan Técnico.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Documento Fase 4 · Ejecución: 04 - Ejecución.md"
+        - button "Ver 04 - Ejecución.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Fase cerrada Fase 4 (Ejecución) cerrada: 04 - Ejecución.md"
+        - button "Ver 04 - Ejecución.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Reanclaje L01 reanclado: <sha> → <sha>"
+        - button "Ver 04 - Ejecución.md"
+      - listitem:
+        - time: <fecha>
+        - text: "Recibo L01 · Cerrar la fase: verificado"
+        - code: <sha>
+        - text: "feat(api): cerrar la fase, rehecho"
+        - button "Ver 04 - Ejecución.md"

@@ -1,0 +1,82 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Tablero":
+    - heading "Tablero" [level=1]
+    - paragraph: Elige una tarea.
+    - region "INVESTIGACION":
+      - heading "INVESTIGACION" [level=2]
+      - list:
+        - listitem:
+          - link "costos":
+            - /url: "#/tablero/INVESTIGACION/costos"
+          - text: (activa)
+    - region "NUEVO":
+      - heading "NUEVO" [level=2]
+      - list:
+        - listitem:
+          - link "primera":
+            - /url: "#/tablero/NUEVO/primera"
+          - text: (activa)
+    - region "ROTO":
+      - heading "ROTO" [level=2]
+      - paragraph: "Su phase-gate.json no es válido: arréglalo para ver sus tareas."
+      - paragraph: Sin tareas.
+    - region "TALLER":
+      - heading "TALLER" [level=2]
+      - list:
+        - listitem:
+          - link "afinar":
+            - /url: "#/tablero/TALLER/afinar"
+          - text: (activa)
+    - region "TIENDA":
+      - heading "TIENDA" [level=2]
+      - list:
+        - listitem:
+          - link "cerrada":
+            - /url: "#/tablero/TIENDA/cerrada"
+        - listitem:
+          - link "con-hueco":
+            - /url: "#/tablero/TIENDA/con-hueco"
+        - listitem:
+          - link "cupones":
+            - /url: "#/tablero/TIENDA/cupones"
+          - text: (activa)
+        - listitem:
+          - link "en-vivo":
+            - /url: "#/tablero/TIENDA/en-vivo"
+        - listitem:
+          - link "en-vivo-quieto":
+            - /url: "#/tablero/TIENDA/en-vivo-quieto"
+        - listitem:
+          - link "malicioso":
+            - /url: "#/tablero/TIENDA/malicioso"
+        - listitem:
+          - link "reescrita":
+            - /url: "#/tablero/TIENDA/reescrita"
+        - listitem:
+          - link "variedad":
+            - /url: "#/tablero/TIENDA/variedad"
