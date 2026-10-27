@@ -3,63 +3,9 @@
 // más, como GitHub Pages: sin API, sin SSE y sin CSP. Todo lo que pide la página fuera del subdirectorio es
 // un 404, y el fixture no admite ni un error en la consola ni una petición fuera de 127.0.0.1.
 
-import { spawnSync } from "node:child_process";
-import * as fs from "node:fs";
-import * as http from "node:http";
-import * as os from "node:os";
-import * as path from "node:path";
+import { PREFIJO, expect, lotesDeLaFase, ponerTema, sinDesbordamiento, sinViolacionesGraves, sitio, testEstatico as test } from "./ayudas";
 
-import { BINARIO, expect, lotesDeLaFase, ponerTema, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
-import type { Servidor } from "./ayudas";
-
-const PREFIJO = "/mcp-phase-gate/";
 const SOLO_LECTURA = "En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.";
-const TIPOS: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
-
-function servirCarpeta(raiz: string): Promise<{ servidor: http.Server; puerto: number }> {
-  const servidor = http.createServer((req, res) => {
-    const crudo = decodeURIComponent((req.url ?? "/").split("?")[0]!);
-    if (crudo === PREFIJO.slice(0, -1)) {
-      res.writeHead(301, { Location: PREFIJO }).end();
-      return;
-    }
-    if (!crudo.startsWith(PREFIJO)) {
-      res.writeHead(404).end();
-      return;
-    }
-    const relativa = crudo.slice(PREFIJO.length) || "index.html";
-    const ruta = path.resolve(raiz, relativa);
-    if (path.relative(raiz, ruta).startsWith("..") || !fs.statSync(ruta, { throwIfNoEntry: false })?.isFile()) {
-      res.writeHead(404).end();
-      return;
-    }
-    res.writeHead(200, { "Content-Type": TIPOS[path.extname(ruta)] ?? "application/octet-stream" }).end(fs.readFileSync(ruta));
-  });
-  return new Promise((resolver) => servidor.listen(0, "127.0.0.1", () => resolver({ servidor, puerto: (servidor.address() as { port: number }).port })));
-}
-
-const test = base.extend<{}, { servidor: Servidor }>({
-  servidor: [
-    async ({}, use) => {
-      const raiz = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "pg-e2e-estatico-"));
-      const carpetas = ["docs", "repos", "estado", "config"].map((n) => path.join(raiz, n));
-      for (const c of carpetas) fs.mkdirSync(c);
-      const [docs, repos, estado, config] = carpetas as [string, string, string, string];
-      const sitio = path.join(raiz, "sitio");
-      const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(PHASE_GATE_|ORQUESTADOR_)/i.test(k)));
-      const r = spawnSync(process.execPath, [BINARIO, "ui", "--export-static", sitio], { env: { ...env, PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config }, encoding: "utf-8", timeout: 120_000 });
-      expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
-      const { servidor, puerto } = await servirCarpeta(sitio);
-      const origen = `http://127.0.0.1:${puerto}`;
-      await use({ origen, puerto, cookie: { name: "sin-sesion", value: "1" }, arbol: { raiz, docs, repos, estado, config, env: {} }, falso: { env: {}, casa: raiz, llamadas: () => [] } });
-      await new Promise((r2) => servidor.close(r2));
-      fs.rmSync(raiz, { recursive: true, force: true, maxRetries: 3 });
-    },
-    { scope: "worker" },
-  ],
-});
-
-const sitio = (s: Servidor, hash = "") => `${s.origen}${PREFIJO}${hash}`;
 
 test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda, ninguna petición a una API y las acciones de solo lectura", async ({ page, servidor, registro }) => {
   await page.goto(sitio(servidor));
