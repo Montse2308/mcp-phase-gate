@@ -4,19 +4,19 @@
 // los errores, el asistente de clientes) llega también en inglés, porque cada petición lleva el idioma.
 // Las pruebas de las vistas en español son las de siempre (el navegador va en es-ES, playwright.config.ts).
 
-import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinViolacionesGraves, test } from "./ayudas";
+import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerTema, sinViolacionesGraves, test } from "./ayudas";
 
 test.describe("con el navegador en inglés", () => {
   test.use({ locale: "en-US" });
 
-  test("la Red: textos de la interfaz y del servidor en inglés, plegada y desplegada, <html lang=en>, y axe en los dos modos", async ({ page, servidor }) => {
+  test("la Red: textos de la interfaz y del servidor en inglés, plegada y desplegada, <html lang=en>, y axe en los dos temas", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/red`);
-    await ponerModo(page, "cabina");
+    await ponerTema(page, "oscuro");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1, name: "Project network" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "Network" })).toHaveAttribute("aria-current", "page");
     for (const vista of ["Board", "Workshop", "Lookout", "Logbook"]) await expect(page.getByRole("link", { name: vista, exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Mode: Cockpit" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Dark theme" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByRole("group", { name: "Language" }).getByRole("button", { name: "EN" })).toHaveAttribute("aria-pressed", "true");
     const tienda = page.getByRole("article", { name: "TIENDA" });
     await expect(page.getByRole("list", { name: "Projects of the Documentation" })).toBeVisible();
@@ -38,16 +38,16 @@ test.describe("con el navegador en inglés", () => {
     await roto.getByRole("heading", { level: 2, name: "ROTO" }).getByRole("button").click();
     await expect(roto.locator(".detalle-error")).toContainText("is not valid JSON");
     await ningunEstadoSoloColor(page);
-    await sinViolacionesGraves(page, "la Red en inglés, modo cabina");
-    await ponerModo(page, "sobrio");
-    await expect(page.getByRole("button", { name: "Mode: Plain" })).toBeVisible();
+    await sinViolacionesGraves(page, "la Red en inglés, tema oscuro");
+    await ponerTema(page, "claro");
+    await expect(page.getByRole("button", { name: "Dark theme" })).toHaveAttribute("aria-pressed", "false");
     await expect(tienda.getByRole("listitem").filter({ hasText: "api" })).toContainText("api (backend) · branch main · clean tree");
-    await sinViolacionesGraves(page, "la Red en inglés, modo sobrio");
+    await sinViolacionesGraves(page, "la Red en inglés, tema claro");
   });
 
   test("el Tablero: fases y estados de lote en inglés (verified, sealed, with pending items, rejected, discarded, manual, pending commit, stale)", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
-    await ponerModo(page, "cabina");
+    await ponerTema(page, "oscuro");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     const lista = lotesDeLaFase(page, "Batches of Phase 4");
     await expect(lista).toHaveCount(6);
@@ -63,14 +63,14 @@ test.describe("con el navegador en inglés", () => {
     await expect(fases.nth(1)).toContainText("Phase 1");
     await expect(fases.nth(1)).toContainText("closed");
     await ningunEstadoSoloColor(page);
-    await sinViolacionesGraves(page, "el tablero en inglés, modo cabina");
+    await sinViolacionesGraves(page, "el tablero en inglés, tema oscuro");
 
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
     await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(1).locator(".estado-commit-pendiente")).toHaveText("pending commit");
     await expect(fasesDeLaTarea(page, "Phases of the task").nth(4)).toContainText("in progress");
-    await ponerModo(page, "sobrio");
+    await ponerTema(page, "claro");
     await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(0)).toContainText("verified");
-    await sinViolacionesGraves(page, "el tablero en inglés, modo sobrio");
+    await sinViolacionesGraves(page, "el tablero en inglés, tema claro");
 
     await page.goto(`${servidor.origen}/#/tablero/TIENDA/reescrita`);
     await page.getByRole("button", { name: "Re-verify anchors" }).click();
@@ -80,7 +80,7 @@ test.describe("con el navegador en inglés", () => {
 
   test("el Taller: ranuras con su alias inglés y el id canónico, y las capas en inglés", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/taller/TALLER?fase=3`);
-    await ponerModo(page, "cabina");
+    await ponerTema(page, "oscuro");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1, name: "Prompt workshop" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Slots of Phase 3/ })).toContainText("including the global ones");
@@ -91,14 +91,14 @@ test.describe("con el navegador en inglés", () => {
     await ranuras.getByRole("button", { name: /phase-3\/tests/ }).click();
     await expect(page.getByRole("button", { name: "Edit phase-3/tests (fase-3/pruebas) in the project layer: preview" })).toBeVisible();
     await expect(page.getByText("Commit policy")).toBeVisible();
-    await sinViolacionesGraves(page, "el Taller en inglés, modo cabina");
-    await ponerModo(page, "sobrio");
-    await sinViolacionesGraves(page, "el Taller en inglés, modo sobrio");
+    await sinViolacionesGraves(page, "el Taller en inglés, tema oscuro");
+    await ponerTema(page, "claro");
+    await sinViolacionesGraves(page, "el Taller en inglés, tema claro");
   });
 
   test("el Vigía: los hallazgos por código, con el texto del servidor y el arreglo en inglés", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/vigia`);
-    await ponerModo(page, "cabina");
+    await ponerTema(page, "oscuro");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1, name: "Lookout" })).toBeVisible();
     const errores = page.getByRole("region", { name: /^Errors/ });
@@ -113,14 +113,14 @@ test.describe("con el navegador en inglés", () => {
     await expect(cursor).toContainText(/It would be registered as "pg"\.|No changes: already registered as "pg"\./);
     await expect(page.getByRole("table", { name: "Environment variables" })).toBeVisible();
     await ningunEstadoSoloColor(page);
-    await sinViolacionesGraves(page, "el Vigía en inglés, modo cabina");
-    await ponerModo(page, "sobrio");
-    await sinViolacionesGraves(page, "el Vigía en inglés, modo sobrio");
+    await sinViolacionesGraves(page, "el Vigía en inglés, tema oscuro");
+    await ponerTema(page, "claro");
+    await sinViolacionesGraves(page, "el Vigía en inglés, tema claro");
   });
 
   test("la Bitácora: tipos y títulos de los eventos en inglés, y la fecha completa en el title", async ({ page, servidor }) => {
     await page.goto(`${servidor.origen}/#/bitacora/TIENDA/cerrada`);
-    await ponerModo(page, "cabina");
+    await ponerTema(page, "oscuro");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1, name: "Logbook of cerrada" })).toBeVisible();
     const eventos = page.getByRole("list", { name: "Events of the task" }).getByRole("listitem");
@@ -129,9 +129,9 @@ test.describe("con el navegador en inglés", () => {
     await expect(page.locator(".linea-de-tiempo time").first()).toHaveAttribute("title", /\b20\d\d\b/);
     await expect(page.getByRole("group", { name: "What to show" })).toBeVisible();
     await ningunEstadoSoloColor(page);
-    await sinViolacionesGraves(page, "la Bitácora en inglés, modo cabina");
-    await ponerModo(page, "sobrio");
-    await sinViolacionesGraves(page, "la Bitácora en inglés, modo sobrio");
+    await sinViolacionesGraves(page, "la Bitácora en inglés, tema oscuro");
+    await ponerTema(page, "claro");
+    await sinViolacionesGraves(page, "la Bitácora en inglés, tema claro");
   });
 
   test("un error de la API llega en inglés", async ({ page, servidor, registro }) => {

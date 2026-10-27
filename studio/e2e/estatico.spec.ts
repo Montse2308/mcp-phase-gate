@@ -9,7 +9,7 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { BINARIO, expect, lotesDeLaFase, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
+import { BINARIO, expect, lotesDeLaFase, ponerTema, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
 import type { Servidor } from "./ayudas";
 
 const PREFIJO = "/mcp-phase-gate/";
@@ -86,7 +86,7 @@ test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH,
   await expect(page.getByRole("heading", { name: "TIENDA" })).toHaveCount(0);
   expect(registro.peticiones.some((u) => u.endsWith("/datos/en/indice.json"))).toBe(true);
   await page.goto(sitio(servidor, "#/tablero/SHOP/discount-coupons?lang=en"));
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   const lista = lotesDeLaFase(page, "Phase 4");
   await expect(lista).toHaveCount(4);
   for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verified");
@@ -95,9 +95,9 @@ test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH,
   expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
 });
 
-test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar anclas, en los dos modos y con axe", async ({ page, servidor, registro }) => {
+test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar anclas, en los dos temas y con axe", async ({ page, servidor, registro }) => {
   await page.goto(sitio(servidor, "#/tablero/TIENDA/cupones-de-descuento"));
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   const lista = lotesDeLaFase(page);
   await expect(lista).toHaveCount(4);
   for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verificado");
@@ -105,13 +105,13 @@ test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar a
   await lista.nth(0).getByRole("button").click();
   const recibo = page.getByRole("complementary", { name: /04 - Ejecución\/L01/ });
   await expect(recibo.getByLabel("Frontmatter")).toContainText("commit");
-  await sinViolacionesGraves(page, "el tablero estático en modo cabina");
+  await sinViolacionesGraves(page, "el tablero estático en tema oscuro");
   await recibo.getByRole("button", { name: "Cerrar el visor" }).click();
   await page.getByRole("button", { name: "Reverificar anclas" }).click();
   await expect(page.getByText("Anclas reverificadas contra git y el disco.")).toBeVisible();
-  await ponerModo(page, "sobrio");
+  await ponerTema(page, "claro");
   await expect(lotesDeLaFase(page).nth(3)).toContainText("descartado");
-  await sinViolacionesGraves(page, "el tablero estático en modo sobrio");
+  await sinViolacionesGraves(page, "el tablero estático en tema claro");
   expect(registro.peticiones.filter((u) => u.includes("/api/"))).toEqual([]);
 });
 

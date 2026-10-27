@@ -4,11 +4,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { expect, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 
 test("el diagnóstico agrupado por severidad, cada hallazgo con su código y cómo se arregla", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/vigia`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   const errores = page.getByRole("region", { name: /^Errores/ });
   await expect(errores).toBeVisible();
   await expect(errores.getByRole("listitem").filter({ hasText: "MANIFIESTO-INVALIDO" })).toContainText("Cómo se arregla: Corrige el phase-gate.json");
@@ -20,9 +20,9 @@ test("el diagnóstico agrupado por severidad, cada hallazgo con su código y có
   await expect(page.getByText(/Vigilancia activa/)).toBeVisible();
   await expect(page.getByRole("table", { name: "Variables de entorno" }).getByRole("row", { name: /DOCS_PATH/ })).toContainText("PHASE_GATE_DOCS_PATH");
   await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el Vigía en modo cabina");
-  await ponerModo(page, "sobrio");
-  await sinViolacionesGraves(page, "el Vigía en modo sobrio");
+  await sinViolacionesGraves(page, "el Vigía en tema oscuro");
+  await ponerTema(page, "claro");
+  await sinViolacionesGraves(page, "el Vigía en tema claro");
 });
 
 test("el asistente de clientes: una tarjeta por cliente con el comando o el diff de su mcp.json", async ({ page, servidor }) => {
@@ -69,9 +69,9 @@ test("Aplicar en Claude Code ejecuta el claude de mentira, no el de verdad", asy
 test("el Vigía en un teléfono (390×844) no desborda", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/vigia`);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await expect(page.getByRole("article", { name: "Cursor" })).toBeVisible();
-    await sinDesbordamiento(page, `el Vigía en ${modo}`);
+    await sinDesbordamiento(page, `el Vigía en tema ${tema}`);
   }
 });

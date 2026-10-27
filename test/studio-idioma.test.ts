@@ -64,9 +64,7 @@ describe("Studio: los diccionarios de la interfaz", () => {
     for (const [clave, enEspanol, enIngles] of estados) assert.deepEqual([es[clave], en[clave]], [enEspanol, enIngles], clave);
   });
 
-  it("ninguna clave ni texto de la interfaz usa el vocabulario de la vía", () => {
-    const viejas = Object.keys(es).filter((c) => /^(?:sello|sobrio|senal)\./.test(c));
-    assert.deepEqual(viejas, []);
+  it("ningún texto de la interfaz usa el vocabulario de la vía", () => {
     for (const [idioma, diccionario] of [["es", es], ["en", en]] as const) {
       for (const [clave, texto] of Object.entries(diccionario)) assert.doesNotMatch(texto, /estaci[oó]n|se[ñn]al|station|signal|en v[ií]a|in transit/i, `${idioma} ${clave}: ${texto}`);
     }

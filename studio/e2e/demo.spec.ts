@@ -10,7 +10,7 @@ import * as path from "node:path";
 
 import { git } from "./arbol";
 import type { Arbol } from "./arbol";
-import { expect, fasesDeLaTarea, lanzarUi, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
+import { expect, fasesDeLaTarea, lanzarUi, lotesDeLaFase, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
 import type { Servidor } from "./ayudas";
 import { huellaDeLosClientesReales } from "./entorno";
 
@@ -67,10 +67,10 @@ test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documenta
   await expect(page.getByText("MARCADOR")).toHaveCount(0);
 });
 
-test("el tablero de cupones-de-descuento: cuatro lotes, verificado tres veces y descartado, las mismas filas en los dos modos", async ({ page, servidor }) => {
+test("el tablero de cupones-de-descuento: cuatro lotes, verificado tres veces y descartado, las mismas filas en los dos temas", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento`);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await expect(banda(page)).toBeVisible();
     const lista = lotesDeLaFase(page);
     await expect(lista).toHaveCount(4);
@@ -80,7 +80,7 @@ test("el tablero de cupones-de-descuento: cuatro lotes, verificado tres veces y 
     }
     await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("descartado");
     await ningunEstadoSoloColor(page);
-    await sinViolacionesGraves(page, `el tablero de la demo en modo ${modo}`);
+    await sinViolacionesGraves(page, `el tablero de la demo en tema ${tema}`);
   }
 });
 
@@ -124,35 +124,35 @@ test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sell
   expect(await page.evaluate(() => (window as unknown as { __sinRecargar?: boolean }).__sinRecargar)).toBe(true);
 });
 
-test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos modos", async ({ page, servidor }) => {
+test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos temas", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
-  await ponerModo(page, "cabina");
+  await ponerTema(page, "oscuro");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
   const lista = lotesDeLaFase(page, "Batches of Phase 4");
   await expect(lista).toHaveCount(4);
   for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verified");
   await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("discarded");
-  await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo cabina");
-  await ponerModo(page, "sobrio");
+  await sinViolacionesGraves(page, "el tablero de la demo en inglés, tema oscuro");
+  await ponerTema(page, "claro");
   await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(3)).toContainText("discarded");
-  await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo sobrio");
-  await ponerModo(page, "cabina");
+  await sinViolacionesGraves(page, "el tablero de la demo en inglés, tema claro");
+  await ponerTema(page, "oscuro");
   await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
   const sellados = lotesDeLaFase(page, "Batches of Phase 4");
   for (const i of [0, 1]) await expect(sellados.nth(i).locator(".estado-sellado")).toHaveText("sealed");
 });
 
-test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en los dos modos", async ({ page, servidor }) => {
+test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en los dos temas", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/`);
   await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
   await sinDesbordamiento(page, "la Red de la demo");
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento`);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await expect(banda(page)).toBeVisible();
     await expect(page.getByText("descartado").first()).toBeVisible();
-    await sinDesbordamiento(page, `el tablero de la demo en ${modo}`);
+    await sinDesbordamiento(page, `el tablero de la demo en tema ${tema}`);
   }
 });

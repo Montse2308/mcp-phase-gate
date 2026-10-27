@@ -149,9 +149,11 @@ export function lotesDeLaFase(page: Page, nombre = "Lotes de la Fase 4") {
   return page.getByRole("table", { name: nombre }).locator("tbody").getByRole("row");
 }
 
-// El interruptor dice "Modo: …" en español y "Mode: …" en inglés.
-export async function ponerModo(page: Page, modo: "cabina" | "sobrio"): Promise<void> {
-  const boton = page.getByRole("button", { name: /^(?:Modo|Mode):/ });
-  if ((await boton.getAttribute("aria-pressed")) !== String(modo === "sobrio")) await boton.click();
-  await expect(page.locator("html")).toHaveAttribute("data-modo", modo);
+// El botón del tema se llama «Tema oscuro» (o «Dark theme») y está pulsado cuando el tema activo es el oscuro,
+// sea por la elección guardada o por el sistema. Después de pulsarlo, el tema se comprueba en el estilo.
+export async function ponerTema(page: Page, tema: "claro" | "oscuro"): Promise<void> {
+  const boton = page.getByRole("button", { name: /^(?:Tema oscuro|Dark theme)$/ });
+  if ((await boton.getAttribute("aria-pressed")) !== String(tema === "oscuro")) await boton.click();
+  await expect(boton).toHaveAttribute("aria-pressed", String(tema === "oscuro"));
+  await expect(page.locator("html")).toHaveCSS("color-scheme", tema === "oscuro" ? "dark" : "light");
 }

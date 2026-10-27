@@ -1,12 +1,12 @@
 // El Tablero en Chromium real: las fases en tarjetas, los lotes en una tabla con su estado, el visor, el
-// sello que llega en vivo y el documento malicioso. La misma estructura en los dos modos.
+// sello que llega en vivo y el documento malicioso. La misma estructura en los dos temas.
 
 import * as path from "node:path";
 
 import type { Locator } from "@playwright/test";
 
 import { commit } from "./arbol";
-import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 import type { Servidor } from "./ayudas";
 
 test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendiente, cada una con su forma y su texto", async ({ page, servidor }) => {
@@ -109,7 +109,7 @@ test("el lote con nota: su ancla es una nota y el texto va en el detalle", async
   await sinViolacionesGraves(page, "el lote con nota");
 });
 
-test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el mismo en Cabina y en Sobrio", async ({ page, servidor }) => {
+test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el mismo en el tema oscuro y en el claro", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
   const tabla = page.getByRole("table", { name: "Lotes de la Fase 4" });
   await expect(tabla.getByRole("columnheader")).toHaveText(["Lote", "Objetivo", "Repo", "Estado", "Detalle", "Ancla", "Recibo"]);
@@ -119,16 +119,16 @@ test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el 
   await expect(lotesDeLaFase(page).nth(0).getByRole("cell").nth(1)).toHaveText("web");
   await expect(lotesDeLaFase(page).nth(2).getByRole("cell").nth(1)).toHaveText("api");
 
-  await ponerModo(page, "cabina");
-  const cabina = await page.locator("main").innerHTML();
-  const fondoCabina = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
-  await ponerModo(page, "sobrio");
-  expect(await page.locator("main").innerHTML(), "el DOM del Tablero no cambia con el modo").toBe(cabina);
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), "los colores sí cambian").not.toBe(fondoCabina);
+  await ponerTema(page, "oscuro");
+  const oscuro = await page.locator("main").innerHTML();
+  const fondoOscuro = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+  await ponerTema(page, "claro");
+  expect(await page.locator("main").innerHTML(), "el DOM del Tablero no cambia con el tema").toBe(oscuro);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), "los colores sí cambian").not.toBe(fondoOscuro);
   await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero en modo sobrio");
-  await ponerModo(page, "cabina");
-  await sinViolacionesGraves(page, "el tablero en modo cabina");
+  await sinViolacionesGraves(page, "el tablero en tema claro");
+  await ponerTema(page, "oscuro");
+  await sinViolacionesGraves(page, "el tablero en tema oscuro");
 });
 
 test("el visor: un clic en una tarjeta de fase o en el recibo de un lote enseña el Markdown y el frontmatter como ficha", async ({ page, servidor }) => {
@@ -191,9 +191,9 @@ test("textos sin espacios (una URL en la nota) no ensanchan la tabla: a 390 px n
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
   await expect(lotesDeLaFase(page).nth(0).locator(".estado-detalle")).toHaveText([`ver ${URL_LARGA}`]);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinDesbordamiento(page, `la tabla con una URL en la nota, en ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinDesbordamiento(page, `la tabla con una URL en la nota, en tema ${tema}`);
   }
 
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -331,7 +331,7 @@ test("reverificar anclas: un commit que ya no está en la rama sale como no vige
   await sinViolacionesGraves(page, "el lote no vigente");
 });
 
-test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se vuelven fichas y nada desborda, en los dos modos", async ({ page, servidor }) => {
+test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se vuelven fichas y nada desborda, en los dos temas", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
   const fases = fasesDeLaTarea(page);
@@ -341,9 +341,9 @@ test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se v
   expect(cajas.map((c) => c.y), "y se apilan de arriba abajo").toEqual([...cajas.map((c) => c.y)].sort((a, b) => a - b));
   expect(new Set(cajas.map((c) => c.y)).size).toBe(6);
   await expect(lotesDeLaFase(page)).toHaveCount(6);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
-    await sinDesbordamiento(page, `el tablero en ${modo}`);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await sinDesbordamiento(page, `el tablero en tema ${tema}`);
     await ningunEstadoSoloColor(page);
   }
   await lotesDeLaFase(page).nth(0).getByRole("button").click();
