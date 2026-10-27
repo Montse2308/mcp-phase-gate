@@ -205,6 +205,14 @@ test("textos sin espacios (una URL en la nota) no ensanchan la tabla: a 390 px n
     visor: document.querySelector(".visor")!.getBoundingClientRect().left,
   }));
   expect(tabla, "la tabla acaba antes de que empiece el visor").toBeLessThanOrEqual(visor);
+  const partidas = await page.evaluate(() =>
+    [...document.querySelectorAll(".tabla-lotes thead th, .tabla-lotes tbody th")].filter((celda) => {
+      const rango = document.createRange();
+      rango.selectNodeContents(celda);
+      return new Set([...rango.getClientRects()].map((r) => Math.round(r.top))).size > 1;
+    }).map((celda) => celda.textContent)
+  );
+  expect(partidas, "las cabeceras y los nombres de lote no se parten a media palabra").toEqual([]);
 });
 
 test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe la CSP", async ({ page, servidor, registro }) => {

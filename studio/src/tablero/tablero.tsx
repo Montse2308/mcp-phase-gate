@@ -103,7 +103,7 @@ function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]
                 <td role="cell" data-etiqueta={columnas[3]}>
                   <span class={`estado estado-${sello.tipo}`}>{sello.palabra}</span>
                 </td>
-                <td role="cell" data-etiqueta={columnas[4]}>
+                <td role="cell" class="celda-larga" data-etiqueta={columnas[4]}>
                   {sello.detalle
                     ? sello.detalle.split(" · ").map((parte, i) => (
                         <span key={i} class={DETALLE_EN_TEXTO.has(sello.tipo) ? "estado-detalle estado-detalle-texto" : "estado-detalle"}>
@@ -112,10 +112,10 @@ function TablaDeLotes({ filas, nuevos, alAbrir, abierto }: { filas: FilaDeLote[]
                       ))
                     : "—"}
                 </td>
-                <td role="cell" data-etiqueta={columnas[5]}>
+                <td role="cell" class="celda-larga" data-etiqueta={columnas[5]}>
                   {f.ancla?.resumen ?? "—"}
                 </td>
-                <td role="cell" data-etiqueta={columnas[6]}>
+                <td role="cell" class="celda-larga" data-etiqueta={columnas[6]}>
                   <button type="button" class="enlace-boton" disabled={!f.recibo} aria-pressed={abierto?.origen === origen} onClick={(ev) => f.recibo && alAbrir(f.recibo, origen, ev.currentTarget)}>
                     {f.recibo ?? "—"}
                   </button>
@@ -149,14 +149,11 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
     setAbierto(null);
     if (boton.current?.isConnected) boton.current.focus();
   };
-  useEffect(() => {
-    if (!abierto) return;
-    const alPulsar = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") cerrar();
-    };
-    document.addEventListener("keydown", alPulsar);
-    return () => document.removeEventListener("keydown", alPulsar);
-  }, [abierto]);
+  // Escape se escucha en el propio Tablero (el foco está en el visor o en el botón que lo abrió), no con un
+  // efecto, que se registra después de pintar y perdería una tecla pulsada justo al abrir.
+  const alPulsar = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape" && abierto) cerrar();
+  };
   const deEsta = (_tipo: string, d: Record<string, string>): boolean => !d.p || (d.p === p && (!d.t || d.t === nombre));
   const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, nombre)}`, ["documento", "recibo", "config", "prompts"], deEsta);
   const lotes = useRecurso<LotesRespuesta>(`/api/tareas/${ruta(p, nombre)}/lotes${reverificar ? "?reverificar=1" : ""}`, ["documento", "recibo", "config"], deEsta);
@@ -183,7 +180,7 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
   const datos = tarea.datos;
   const filas = lotes.datos?.disponible ? lotes.datos.estado.lotes : [];
   return (
-    <div class={`tablero${abierto ? " con-visor" : ""}`}>
+    <div class={`tablero${abierto ? " con-visor" : ""}`} onKeyDown={alPulsar}>
       <section class="vista vista-tablero" aria-labelledby="titulo-tablero">
         <p class="miga">
           <a href={enlace("red")}>{t("vista.red")}</a> › {p}

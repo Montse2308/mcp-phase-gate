@@ -94,10 +94,14 @@
 .tabla-lotes {
   margin: 0.75rem 0;
 }
-/* `anywhere` (no `break-word`) para que una URL o una ruta sin espacios no ensanche la tabla: con el visor
-   abierto, la tabla tiene que caber en su columna. */
 .tabla-lotes th,
 .tabla-lotes td {
+  overflow-wrap: break-word;
+}
+/* En el detalle, el ancla y el recibo, `anywhere` (no `break-word`): una URL o una ruta sin espacios no
+   ensancha la tabla, que con el visor abierto tiene que caber en su columna. Las columnas cortas no se
+   parten a media palabra. */
+.tabla-lotes .celda-larga {
   overflow-wrap: anywhere;
 }
 .estado {
