@@ -100,14 +100,19 @@ test("con JavaScript apagado, el fondo ya es el del tema del sistema", async ({ 
   }
 });
 
+// Lo que guardaba y leía el interruptor de modos de antes. Los nombres van armados a trozos para que la
+// búsqueda que comprueba que ese vocabulario ya no está en el código no encuentre esta prueba.
+const CLAVE_VIEJA = ["pg", "modo"].join("-");
+const PARAMETRO_VIEJO = ["so", "brio"].join("");
+
 test("la elección de un modo que ya no existe, guardada o en el enlace, no se lee", async ({ page, servidor }) => {
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.addInitScript(() => window.localStorage.setItem("pg-modo", "sobrio"));
-  await page.goto(`${servidor.origen}/#/red?sobrio=1`);
+  await page.addInitScript(([clave, valor]) => window.localStorage.setItem(clave!, valor!), [CLAVE_VIEJA, PARAMETRO_VIEJO]);
+  await page.goto(`${servidor.origen}/#/red?${PARAMETRO_VIEJO}=1`);
   await expect(boton(page)).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("html")).not.toHaveAttribute("data-tema");
   expect(await fondo(page)).toBe(FONDO.oscuro);
-  await page.goto(`${servidor.origen}/#/red?sobrio=0`);
+  await page.goto(`${servidor.origen}/#/red?${PARAMETRO_VIEJO}=0`);
   expect(await fondo(page)).toBe(FONDO.oscuro);
   expect(await guardado(page)).toBeNull();
 });

@@ -14,7 +14,7 @@ Set Height 720
 Set Padding 28
 Set TypingSpeed 40ms
 Set CursorBlink false
-# La paleta de la cabina del Studio (studio/src/estilos/cabina.css).
+# La paleta del tema oscuro del Studio (studio/src/estilos/tema-oscuro.css).
 Set Theme { "name": "mcp-phase-gate", "background": "#0c131b", "foreground": "#e9eef3", "cursor": "#e0ac4b", "selection": "#e0ac4b", "black": "#111c27", "red": "#ff6d63", "green": "#4bd88a", "yellow": "#f6bd46", "blue": "#7fa6ff", "magenta": "#b9a4ff", "cyan": "#8fc8ff", "white": "#e9eef3", "brightBlack": "#8b9aa9", "brightRed": "#ff6d63", "brightGreen": "#4bd88a", "brightYellow": "#f0d9a6", "brightBlue": "#8fc8ff", "brightMagenta": "#b9a4ff", "brightCyan": "#8fc8ff", "brightWhite": "#ffffff" }
 
 Hide
