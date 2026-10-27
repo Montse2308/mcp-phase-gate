@@ -425,8 +425,8 @@ const VIVAS: Escenario[] = [
     listo: tallerListo,
     despues: async (p) => {
       await p.getByRole("list", { name: "Ranuras" }).getByRole("button", { name: /fase-3\/pruebas/ }).click();
-      await p.getByRole("button", { name: "Editar fase-3/pruebas en la capa del proyecto: vista previa" }).click();
-      await expect(p.getByRole("region", { name: /Vista previa: Editar fase-3\/pruebas en la capa del proyecto/ })).toBeVisible();
+      await p.getByRole("button", { name: "Editar fase-3/pruebas en la capa global: vista previa" }).click();
+      await expect(p.getByRole("region", { name: /Vista previa: Editar fase-3\/pruebas en la capa global/ })).toBeVisible();
     },
   },
   ...ANCHOS.map((ancho) => ({ nombre: `el Vigía a ${ancho} px`, hash: "#/vigia", ancho, contiene: "Diagnóstico", listo: vigiaListo })),
