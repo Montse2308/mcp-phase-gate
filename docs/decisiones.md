@@ -46,10 +46,25 @@ cada vista con el de antes).
   estado. Solo lo que pide atención lleva insignia (el texto en mayúsculas con `text-transform`, con borde del
   color del estado, en JetBrains Mono 600 de 12 px): fase con pendientes y con hueco; lote con pendientes, no
   vigente y rechazado; manifiesto inválido, repo que no existe o con error de git, error de configuración; y
-  errores y avisos del Vigía. «Commit pendiente» va en violeta para no confundirse con el acento, y
-  «descartado» pasa de rojo a apagado: es una decisión ya tomada, no un error.
+  errores y avisos del Vigía. Dos excepciones: cuando la insignia lleva datos (el mensaje de git de un repo, el
+  nombre `phase-gate.json`) no los pasa a mayúsculas, porque una ruta o un nombre en mayúsculas ya no es el que
+  es; y en un título (los grupos del Vigía) toma el tamaño y la familia del título, para que los títulos del mismo
+  nivel midan lo mismo lleven insignia o no.
+- **Los colores de los lotes que cambian:** «commit pendiente» pasa de ámbar a violeta, para no confundirse con el
+  acento ni con «con pendientes»; «sellado» pasa de azul a verde, porque el azul es ahora el acento; y «manual» y
+  «nota» pasan de morado a apagado: el morado era su único color y ahora los distingue su forma. «Descartado» y
+  «sin recibo» siguen en gris, ahora `apagado`.
 - **La pestaña activa** lleva fondo `acento-suave`, una raya inferior de 2 px y peso 600: el fondo solo da 1.22:1
   contra la barra, así que no es lo que la distingue.
+- **La fase abierta del Tablero** lleva fondo `acento-suave` y borde en el acento, como la pestaña activa, y el
+  contorno queda para el foco: antes los dos eran el mismo contorno, y la fase abierta parecía enfocada. Su texto
+  (el título, el archivo y el estado en su color) llega a 4.5:1 sobre `acento-suave`, y lo comprueba el test de
+  los tokens.
+- **`studio/e2e/tema.spec.ts` cambia en tres cosas, ninguna de estructura:** el fondo de cada tema se lee de las
+  hojas en vez de ir escrito (cualquier paleta nueva lo cambiaba); los nombres de variables admiten dígitos
+  (`--texto-2`, `--superficie-2`); y el Taller espera a que se llene el selector de proyectos antes de fotografiar
+  (una carrera que se vio en la CI de Windows y macOS). Las pruebas de estructura y la función que compara no
+  cambian.
 
 **Por qué.**
 
