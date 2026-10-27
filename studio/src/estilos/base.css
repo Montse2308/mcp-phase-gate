@@ -226,6 +226,15 @@ main:focus {
 .linea {
   margin: 0.25rem 0;
 }
+/* Texto que solo leen los lectores de pantalla. */
+.solo-lectura {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .aviso {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radio);

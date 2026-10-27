@@ -1,92 +1,151 @@
-// El Tablero (§7.7.2 del plan) en Chromium real: semáforos, vagones, sellos, el visor y el documento
-// malicioso, en los dos modos.
+// El Tablero en Chromium real: las fases en tarjetas, los lotes en una tabla con su estado, el visor, el
+// sello que llega en vivo y el documento malicioso. La misma estructura en los dos modos.
 
 import * as path from "node:path";
 
+import type { Locator } from "@playwright/test";
+
 import { commit } from "./arbol";
-import { expect, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import { expect, fasesDeLaTarea, lotesDeLaFase, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
+import type { Servidor } from "./ayudas";
 
-const via = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Estaciones de la tarea" });
-const vagones = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Lotes de la Fase 4" });
-
-test("los semáforos: cerrada, en curso, hueco, con pendientes y pendiente", async ({ page, servidor }) => {
+test("las fases en tarjetas: cerrada, en curso, hueco, con pendientes y pendiente, cada una con su forma y su texto", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-  await ponerModo(page, "cabina");
-  const estaciones = via(page).getByRole("listitem");
-  await expect(estaciones).toHaveCount(6);
-  await expect(estaciones.nth(0)).toContainText("00");
-  for (const i of [0, 1, 2, 3]) await expect(estaciones.nth(i)).toContainText("cerrada");
-  await expect(estaciones.nth(4)).toContainText("en curso");
-  await expect(estaciones.nth(5)).toContainText("pendiente");
-  await expect(estaciones.nth(4).locator("svg.senal-ambar")).toHaveCount(1);
-  await expect(estaciones.nth(0).locator("svg.senal-verde")).toHaveCount(1);
+  const fases = fasesDeLaTarea(page);
+  await expect(fases).toHaveCount(6);
+  await expect(fases.nth(0)).toContainText("00");
+  await expect(fases.nth(1)).toContainText("Fase 1");
+  for (const i of [0, 1, 2, 3]) await expect(fases.nth(i)).toContainText("cerrada");
+  await expect(fases.nth(4)).toContainText("en curso");
+  await expect(fases.nth(5)).toContainText("pendiente");
+  await expect(fases.nth(0)).toHaveClass(/fase-cerrada/);
+  await expect(fases.nth(4)).toHaveClass(/fase-en-curso/);
+  await expect(fases.nth(5)).toHaveClass(/fase-pendiente/);
+  await expect(fases.nth(0).locator("svg.marca-lleno")).toHaveCount(1);
+  await expect(fases.nth(4).locator("svg.marca-anillo")).toHaveCount(1);
+  await expect(fases.nth(5).locator("svg.marca-vacio")).toHaveCount(1);
+  expect(await fases.nth(4).locator("svg").count()).toBe(1); // ya no hay semáforo: solo la marca
 
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/con-hueco`);
-  await expect(via(page).getByRole("listitem").nth(2)).toContainText("hueco");
-  await expect(via(page).getByRole("listitem").nth(2).locator("svg.senal-rojo path")).toHaveCount(1); // un rombo
+  await expect(fasesDeLaTarea(page).nth(2)).toContainText("hueco");
+  await expect(fasesDeLaTarea(page).nth(2)).toHaveClass(/fase-hueco/);
+  await expect(fasesDeLaTarea(page).nth(2).locator("svg.marca-rombo")).toHaveCount(1);
+  await expect(fasesDeLaTarea(page).nth(2).getByRole("button")).toBeDisabled(); // sin documento no hay visor
   await expect(page.getByRole("note").filter({ hasText: "hueco" })).toBeVisible();
 
   await page.goto(`${servidor.origen}/#/tablero/INVESTIGACION/costos`);
-  await expect(via(page).getByRole("listitem").nth(1)).toContainText("con pendientes");
+  await expect(fasesDeLaTarea(page).nth(1)).toContainText("con pendientes");
+  await expect(fasesDeLaTarea(page).nth(1)).toHaveClass(/fase-con-pendientes/);
+  await expect(fasesDeLaTarea(page).nth(1).locator("svg.marca-triangulo")).toHaveCount(1);
   await ningunEstadoSoloColor(page);
+  await sinViolacionesGraves(page, "las fases del tablero");
 });
 
-test("los vagones y sus sellos: verificado, sellado, con pendientes, rechazado, anulado, manual, en vía y sin recibo", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
-  await ponerModo(page, "cabina");
-  const lista = vagones(page).getByRole("listitem");
-  await expect(lista).toHaveCount(6);
-  await expect(lista.nth(0).locator(".sello-sellado")).toContainText("SELLADO");
-  await expect(lista.nth(0).locator(".sello-detalle")).toHaveText([/^[0-9a-f]{8}$/, /^\d{4}-\d{2}-\d{2}$/]);
-  await expect(lista.nth(1).locator(".sello-pendientes")).toContainText("VERIFICADO");
-  await expect(lista.nth(1).locator(".sello-banda")).toHaveText("CON PENDIENTES");
-  await expect(lista.nth(2).locator(".sello-rechazado")).toContainText("RECHAZADO");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("ANULADO");
-  await expect(lista.nth(4).locator(".sello-manual")).toContainText("MANUAL");
-  await expect(lista.nth(5)).toContainText("sin recibo");
-  await expect(lista.nth(5).getByRole("button")).toBeDisabled();
-
+test("cada tarjeta de fase dice su archivo en su nombre accesible, y su botón abre el documento", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-  await expect(vagones(page).getByRole("listitem").nth(0).locator(".sello-verificado .sello-detalle")).toHaveText([/^[0-9a-f]{7}$/, /^\d{4}-\d{2}-\d{2}$/]);
-  await expect(vagones(page).getByRole("listitem").nth(1).locator(".sello-en-via")).toContainText("EN VÍA");
+  const tercera = fasesDeLaTarea(page).nth(3).getByRole("button");
+  await expect(tercera).toHaveAccessibleName(/Fase 3.*cerrada.*03 - Plan Técnico\.md/);
+  await expect(tercera).toHaveAttribute("aria-pressed", "false");
+  await tercera.click();
+  await expect(tercera).toHaveAttribute("aria-pressed", "true");
+  await expect(fasesDeLaTarea(page).nth(1).getByRole("button")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("complementary", { name: "03 - Plan Técnico.md" })).toBeVisible();
+});
+
+// Los diez tipos de lote: cada uno con su clase estable, su palabra, su detalle y su recibo.
+const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const CASOS: { tipo: string; tarea: string; fila: number; palabra: string; detalle: (string | RegExp)[]; ancla: RegExp; recibo: boolean }[] = [
+  { tipo: "verificado", tarea: "cupones", fila: 0, palabra: "VERIFICADO", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "sellado", tarea: "variedad", fila: 0, palabra: "SELLADO", detalle: [/^[0-9a-f]{8}$/, FECHA], ancla: /^sha256 `[0-9a-f]{12}…` de `repo:web\/dist\/web\.txt`/, recibo: true },
+  { tipo: "con-pendientes", tarea: "variedad", fila: 1, palabra: "CON PENDIENTES", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "rechazado", tarea: "variedad", fila: 2, palabra: "RECHAZADO", detalle: [FECHA], ancla: /./, recibo: true },
+  { tipo: "descartado", tarea: "variedad", fila: 3, palabra: "ANULADO", detalle: [FECHA], ancla: /./, recibo: true },
+  { tipo: "manual", tarea: "variedad", fila: 4, palabra: "MANUAL", detalle: [/^[0-9a-f]{7}$/, FECHA], ancla: /^commit [0-9a-f]{7} en `api`/, recibo: true },
+  { tipo: "commit-pendiente", tarea: "cupones", fila: 1, palabra: "EN VÍA", detalle: ["commit pendiente"], ancla: /^commit pendiente$/, recibo: true },
+  { tipo: "sin-recibo", tarea: "variedad", fila: 5, palabra: "sin recibo", detalle: [], ancla: /^—$/, recibo: false },
+];
+
+for (const caso of CASOS) {
+  test(`el lote ${caso.tipo}: su fila lleva su estado, su detalle, su ancla y su recibo`, async ({ page, servidor }) => {
+    await page.goto(`${servidor.origen}/#/tablero/TIENDA/${caso.tarea}`);
+    const fila = lotesDeLaFase(page).nth(caso.fila);
+    await expect(fila.locator(`.estado-${caso.tipo}`)).toHaveText(caso.palabra);
+    if (caso.detalle.length) await expect(fila.locator(".estado-detalle")).toHaveText(caso.detalle);
+    else await expect(fila.locator(".estado-detalle")).toHaveCount(0);
+    await expect(fila.getByRole("cell").nth(4)).toHaveText(caso.ancla);
+    const boton = fila.getByRole("button");
+    if (caso.recibo) {
+      await expect(boton).toBeEnabled();
+      await expect(boton).toHaveText(/^04 - Ejecución\/L0\d/);
+    } else {
+      await expect(boton).toBeDisabled();
+    }
+    await ningunEstadoSoloColor(page);
+    await sinViolacionesGraves(page, `el lote ${caso.tipo}`);
+  });
+}
+
+test("el lote con nota: su ancla es una nota y el texto va en el detalle", async ({ page, servidor }) => {
+  // Ningún lote del árbol de prueba trae un ancla nota (se registra con una política sin commits): la
+  // respuesta de los lotes se cambia para tenerlo.
+  await page.route("**/api/tareas/TIENDA/cupones/lotes*", async (ruta) => {
+    const respuesta = await ruta.fetch();
+    const cuerpo = await respuesta.json();
+    const lote = cuerpo.estado.lotes[0];
+    Object.assign(lote, { ancla: { tipo: "nota", resumen: "nota: sin commits en esta política" }, sello: { corto: null, sha256: null, fecha: "2026-05-04" }, origen: "servidor", vigente: null });
+    await ruta.fulfill({ response: respuesta, json: cuerpo });
+  });
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
+  const fila = lotesDeLaFase(page).nth(0);
+  await expect(fila.locator(".estado-nota")).toHaveText("NOTA");
+  await expect(fila.locator(".estado-detalle")).toHaveText(["sin commits en esta política"]);
+  await expect(fila.getByRole("cell").nth(4)).toHaveText("nota: sin commits en esta política");
+  await expect(fila.getByRole("button")).toBeEnabled();
+  await ningunEstadoSoloColor(page);
+  await sinViolacionesGraves(page, "el lote con nota");
+});
+
+test("la tabla de lotes dice el lote, su objetivo y su repo, y el Tablero es el mismo en Cabina y en Sobrio", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
+  const tabla = page.getByRole("table", { name: "Lotes de la Fase 4" });
+  await expect(tabla.getByRole("columnheader")).toHaveText(["Lote", "Objetivo", "Repo", "Estado", "Detalle", "Ancla", "Recibo"]);
+  await expect(lotesDeLaFase(page)).toHaveCount(6);
+  await expect(lotesDeLaFase(page).nth(0).getByRole("rowheader")).toHaveText("L01");
+  await expect(lotesDeLaFase(page).nth(0).getByRole("cell").nth(0)).toHaveText("Empaquetar la web");
+  await expect(lotesDeLaFase(page).nth(0).getByRole("cell").nth(1)).toHaveText("web");
+  await expect(lotesDeLaFase(page).nth(2).getByRole("cell").nth(1)).toHaveText("api");
+
+  await ponerModo(page, "cabina");
+  const cabina = await page.locator("main").innerHTML();
+  const fondoCabina = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+  await ponerModo(page, "sobrio");
+  expect(await page.locator("main").innerHTML(), "el DOM del Tablero no cambia con el modo").toBe(cabina);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), "los colores sí cambian").not.toBe(fondoCabina);
+  await ningunEstadoSoloColor(page);
+  await sinViolacionesGraves(page, "el tablero en modo sobrio");
+  await ponerModo(page, "cabina");
   await sinViolacionesGraves(page, "el tablero en modo cabina");
 });
 
-test("sobrio: tablas con las mismas estaciones y lotes, y los sellos como texto", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
-  await ponerModo(page, "sobrio");
-  const lotes = page.getByRole("table", { name: "Lotes de la Fase 4" });
-  await expect(lotes.getByRole("row", { name: /L01/ })).toContainText(/sha256 · [0-9a-f]{8}/);
-  await expect(lotes.getByRole("row", { name: /L02/ })).toContainText("con pendientes");
-  await expect(lotes.getByRole("row", { name: /L03/ })).toContainText("fallido");
-  await expect(lotes.getByRole("row", { name: /L04/ })).toContainText("descartado");
-  await expect(lotes.getByRole("row", { name: /L05/ })).toContainText("manual");
-  await expect(lotes.getByRole("row", { name: /L06/ })).toContainText("—");
-  await expect(page.getByRole("table", { name: "Estaciones" }).getByRole("row", { name: /Fase 4/ })).toContainText("en curso");
-  await expect(page.locator("img.sello-marco")).toHaveCount(0);
-  await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero en modo sobrio");
+test("el visor: un clic en una tarjeta de fase o en el recibo de un lote enseña el Markdown y el frontmatter como ficha", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-  await expect(page.getByRole("table", { name: "Lotes de la Fase 4" }).getByRole("row", { name: /L01/ })).toContainText(/verificado · [0-9a-f]{7}/);
-  await expect(page.getByRole("table", { name: "Lotes de la Fase 4" }).getByRole("row", { name: /L02/ })).toContainText("pendiente");
-});
-
-test("el visor: un clic en una estación o en un vagón enseña el Markdown y el frontmatter como ficha", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-  await ponerModo(page, "cabina");
-  await via(page).getByRole("listitem").nth(3).getByRole("button").click();
+  await fasesDeLaTarea(page).nth(3).getByRole("button").click();
   const visor = page.getByRole("complementary", { name: "03 - Plan Técnico.md" });
   await expect(visor).toBeVisible();
   await expect(visor.getByRole("heading", { name: "03 - Plan Técnico.md" })).toBeFocused();
   await expect(visor.getByLabel("Frontmatter")).toContainText("lotes");
   await expect(visor.getByRole("table")).toContainText("Validar el cupón");
-  await vagones(page).getByRole("listitem").nth(0).getByRole("button").click();
+  const boton = lotesDeLaFase(page).nth(0).getByRole("button");
+  await expect(boton).toHaveAttribute("aria-pressed", "false");
+  await boton.click();
+  await expect(boton).toHaveAttribute("aria-pressed", "true");
   const recibo = page.getByRole("complementary", { name: /04 - Ejecución\/L01/ });
   await expect(recibo.getByLabel("Frontmatter")).toContainText("ancla");
   await expect(recibo.getByLabel("Frontmatter")).toContainText("commit");
   await sinViolacionesGraves(page, "el tablero con el visor abierto");
   await recibo.getByRole("button", { name: "Cerrar el visor" }).click();
   await expect(page.getByRole("complementary")).toHaveCount(0);
+  await expect(boton).toHaveAttribute("aria-pressed", "false");
 });
 
 test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe la CSP", async ({ page, servidor, registro }) => {
@@ -105,7 +164,7 @@ test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe
     void d.dismiss();
   });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/malicioso`);
-  await via(page).getByRole("listitem").nth(1).getByRole("button").click();
+  await fasesDeLaTarea(page).nth(1).getByRole("button").click();
   const visor = page.getByRole("complementary", { name: "01 - Análisis Técnico.md" });
   await expect(visor).toContainText("Texto normal al final");
   await visor.locator(".raton").hover();
@@ -138,68 +197,91 @@ test("un documento con HTML malicioso no ejecuta nada, no sale a la red ni rompe
   await expect(visor.getByText("un párrafo con estilo en línea")).toBeVisible();
 });
 
-test("en vivo: un recibo nuevo aparece por SSE, sin recargar, y su sello cae una vez", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/en-vivo`);
-  await ponerModo(page, "cabina");
-  const lote = vagones(page).getByRole("listitem").nth(0);
-  await expect(lote).toContainText("sin recibo");
-  await page.evaluate(() => ((window as unknown as { __sinRecargar: boolean }).__sinRecargar = true));
-
+// Lo que haría el agente: el commit del lote y record_batch con su SHA, sobre el árbol de prueba.
+async function registrarEnVivo(servidor: Servidor, tarea: string, titulo: string): Promise<void> {
   const anterior = { ...process.env };
   Object.assign(process.env, servidor.arbol.env);
   try {
     const { registrarLote } = await import("../../build/lotes.js");
-    const sha = commit(path.join(servidor.arbol.repos, "api"), "en-vivo.txt", "feat(api): llega en vivo");
-    await registrarLote("TIENDA", "en-vivo", { lote: 1, repo: "api", titulo: "Llega en vivo", estado: "verificado", que_se_hizo: "Hecho.", verificacion: "test", commit: sha });
+    const sha = commit(path.join(servidor.arbol.repos, "api"), `${tarea}.txt`, `feat(api): ${titulo}`);
+    await registrarLote("TIENDA", tarea, { lote: 1, repo: "api", titulo, estado: "verificado", que_se_hizo: "Hecho.", verificacion: "test", commit: sha });
   } finally {
     for (const clave of Object.keys(servidor.arbol.env)) delete process.env[clave];
     Object.assign(process.env, anterior);
   }
-  await expect(lote.locator(".sello-verificado")).toContainText("VERIFICADO", { timeout: 15_000 });
-  await expect(lote.locator(".sello-nuevo")).toHaveCount(1);
-  expect(await lote.locator(".sello-nuevo").evaluate((e) => getComputedStyle(e).animationName)).toBe("estampar");
+}
+
+const animacionDe = (fila: Locator) => fila.evaluate((e) => getComputedStyle(e).animationName);
+const fondoDe = (fila: Locator) => fila.evaluate((e) => getComputedStyle(e).backgroundColor);
+const SIN_FONDO = "rgba(0, 0, 0, 0)";
+
+test("en vivo: un recibo nuevo aparece por SSE, sin recargar, y su fila se resalta un momento", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/en-vivo`);
+  const fila = lotesDeLaFase(page).nth(0);
+  await expect(fila).toContainText("sin recibo");
+  await expect(fila).not.toHaveClass(/estado-nuevo/);
+  await page.evaluate(() => ((window as unknown as { __sinRecargar: boolean }).__sinRecargar = true));
+
+  await registrarEnVivo(servidor, "en-vivo", "llega en vivo");
+  await expect(fila.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(fila).toHaveClass(/estado-nuevo/);
+  expect(await animacionDe(fila)).toBe("resaltar");
+  await expect(fila.locator(".estado-detalle").first()).toHaveText(/^[0-9a-f]{7}$/);
   expect(await page.evaluate(() => (window as unknown as { __sinRecargar?: boolean }).__sinRecargar)).toBe(true);
   // Con un solo lote, anclarlo cierra la fase: el recibo pasa a ser su documento.
-  await expect(via(page).getByRole("listitem").nth(4)).toContainText("cerrada");
+  await expect(fasesDeLaTarea(page).nth(4)).toContainText("cerrada");
+  // Es un momento: la fila vuelve a la normalidad sola, y las demás nunca se resaltaron.
+  await expect(fila).not.toHaveClass(/estado-nuevo/, { timeout: 10_000 });
 });
 
-test("reverificar anclas: un commit que ya no está en la rama sale con el sello agrietado", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/reescrita`);
-  await ponerModo(page, "cabina");
-  const lote = vagones(page).getByRole("listitem").nth(0);
-  await expect(lote.locator(".sello-verificado")).toBeVisible();
-  await page.getByRole("button", { name: "Reverificar anclas" }).click();
-  await expect(lote.locator(".sello-agrietado")).toContainText("ya no está en la rama", { timeout: 15_000 });
-  await expect(page.getByText("Anclas reverificadas contra git y el disco.")).toBeVisible();
-  await ponerModo(page, "sobrio");
-  await expect(page.getByRole("table", { name: "Lotes de la Fase 4" }).getByRole("row", { name: /L01/ })).toContainText("no vigente");
-});
-
-test("con prefers-reduced-motion, el sello no cae", async ({ page, servidor }) => {
+test("en vivo, con prefers-reduced-motion: la fila nueva se marca, pero sin animación", async ({ page, servidor }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones`);
-  await ponerModo(page, "cabina");
-  await expect(page.locator(".sello-verificado").first()).toBeVisible();
-  await page.evaluate(() => {
-    const s = document.querySelector(".sello-verificado")!;
-    s.classList.add("sello-nuevo");
-  });
-  expect(await page.locator(".sello-nuevo").evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/en-vivo-quieto`);
+  const fila = lotesDeLaFase(page).nth(0);
+  await expect(fila).toContainText("sin recibo");
+  expect(await fondoDe(fila)).toBe(SIN_FONDO);
+
+  await registrarEnVivo(servidor, "en-vivo-quieto", "llega sin movimiento");
+  await expect(fila.locator(".estado-verificado")).toHaveText("VERIFICADO", { timeout: 15_000 });
+  await expect(fila).toHaveClass(/estado-nuevo/);
+  expect(await animacionDe(fila)).toBe("none");
+  expect(await fondoDe(fila), "la marca queda fija en lugar de animarse").not.toBe(SIN_FONDO);
+  await expect(fila).not.toHaveClass(/estado-nuevo/, { timeout: 10_000 });
+  expect(await fondoDe(fila)).toBe(SIN_FONDO);
 });
 
-test("en un teléfono (390×844), la vía va en vertical y nada desborda, en los dos modos", async ({ page, servidor }) => {
+test("reverificar anclas: un commit que ya no está en la rama sale como no vigente, con su motivo", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/reescrita`);
+  const fila = lotesDeLaFase(page).nth(0);
+  await expect(fila.locator(".estado-verificado")).toBeVisible();
+  await page.getByRole("button", { name: "Reverificar anclas" }).click();
+  await expect(fila.locator(".estado-no-vigente")).toHaveText("no vigente", { timeout: 15_000 });
+  await expect(fila.locator(".estado-detalle")).toHaveText(["ya no está en la rama"]);
+  await expect(fila.getByRole("cell").nth(4)).toContainText(/^commit [0-9a-f]{7} en `pagos`/);
+  await expect(page.getByText("Anclas reverificadas contra git y el disco.")).toBeVisible();
+  await expect(fila).not.toHaveClass(/estado-nuevo/); // reverificar no es un sello nuevo
+  await ningunEstadoSoloColor(page);
+  await sinViolacionesGraves(page, "el lote no vigente");
+});
+
+test("en un teléfono (390×844), las tarjetas de fase se apilan, los lotes se vuelven fichas y nada desborda, en los dos modos", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/variedad`);
-  await ponerModo(page, "cabina");
-  await expect(vagones(page).getByRole("listitem")).toHaveCount(6);
-  expect(await via(page).evaluate((e) => getComputedStyle(e).flexDirection)).toBe("column");
-  await sinDesbordamiento(page, "el tablero en cabina");
-  await vagones(page).getByRole("listitem").nth(0).getByRole("button").click();
+  const fases = fasesDeLaTarea(page);
+  await expect(fases).toHaveCount(6);
+  const cajas = await fases.evaluateAll((lis) => lis.map((li) => li.getBoundingClientRect()).map((c) => ({ x: c.x, y: c.y, ancho: c.width })));
+  expect(new Set(cajas.map((c) => c.x)).size, "las tarjetas comparten columna").toBe(1);
+  expect(cajas.map((c) => c.y), "y se apilan de arriba abajo").toEqual([...cajas.map((c) => c.y)].sort((a, b) => a - b));
+  expect(new Set(cajas.map((c) => c.y)).size).toBe(6);
+  await expect(lotesDeLaFase(page)).toHaveCount(6);
+  for (const modo of ["cabina", "sobrio"] as const) {
+    await ponerModo(page, modo);
+    await sinDesbordamiento(page, `el tablero en ${modo}`);
+    await ningunEstadoSoloColor(page);
+  }
+  await lotesDeLaFase(page).nth(0).getByRole("button").click();
   await expect(page.getByRole("complementary")).toBeVisible();
   await sinDesbordamiento(page, "el tablero con el visor");
-  await ponerModo(page, "sobrio");
-  await expect(page.getByRole("table", { name: "Lotes de la Fase 4" })).toBeVisible();
-  await sinDesbordamiento(page, "el tablero en sobrio");
 });
 
 test("sin tarea elegida, el tablero ofrece las de cada proyecto", async ({ page, servidor }) => {
@@ -207,5 +289,5 @@ test("sin tarea elegida, el tablero ofrece las de cada proyecto", async ({ page,
   await expect(page.getByRole("heading", { level: 1, name: "Tablero" })).toBeVisible();
   await page.getByRole("region", { name: "TIENDA" }).getByRole("link", { name: "cupones" }).click();
   await expect(page).toHaveURL(/#\/tablero\/TIENDA\/cupones$/);
-  await expect(via(page)).toBeVisible();
+  await expect(fasesDeLaTarea(page)).toHaveCount(6);
 });

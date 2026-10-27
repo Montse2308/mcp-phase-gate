@@ -146,6 +146,8 @@ export async function crearArbol(raiz: string): Promise<Arbol> {
 
     // en-vivo: un lote sin registrar, para que un E2E lo registre y vea llegar el sello.
     tarea(docs, "TIENDA", "en-vivo", [...PREVIOS, ["03 - Plan Técnico.md", plan([["L01", "api", "Llega en vivo"]])]]);
+    // en-vivo-quieto: lo mismo, para la prueba con prefers-reduced-motion (la de en-vivo se consume al registrarla).
+    tarea(docs, "TIENDA", "en-vivo-quieto", [...PREVIOS, ["03 - Plan Técnico.md", plan([["L01", "api", "Llega sin movimiento"]])]]);
 
     // cerrada: un solo lote anclado (la fase se cierra) y reanclado después, como tras un rebase.
     tarea(docs, "TIENDA", "cerrada", [...PREVIOS, ["03 - Plan Técnico.md", plan([["L01", "api", "Cerrar la fase"]])]]);
