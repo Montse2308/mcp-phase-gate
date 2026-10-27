@@ -48,8 +48,10 @@
 .fase-boton[aria-pressed="true"] {
   border-color: var(--borde-control);
 }
+/* La fase abierta: fondo suave y borde en el acento, como la pestaña activa. El contorno queda para el foco. */
 .fase-boton[aria-pressed="true"] {
-  outline: 2px solid var(--acento);
+  border-color: var(--acento);
+  background: var(--acento-suave);
 }
 .fase-boton:disabled {
   cursor: default;

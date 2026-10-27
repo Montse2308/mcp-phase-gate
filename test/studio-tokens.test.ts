@@ -110,6 +110,8 @@ describe("Studio: el contraste de los tokens", () => {
       const lista: [string, string][] = [];
       for (const fondo of FONDOS) for (const texto of ["texto", "texto-2", ...ESTADOS]) lista.push([texto, fondo]);
       lista.push(["sobre-acento", "acento"], ["acento", "acento-suave"], ["texto", "acento-suave"], ["texto-banda", "banda"]);
+      // La fase abierta del Tablero: su título, su archivo y su estado en color, sobre el fondo suave.
+      for (const texto of ["texto-2", ...ESTADOS]) lista.push([texto, "acento-suave"]);
       assert.ok(lista.length >= 19);
       pares(tema, lista, 4.5, nombre);
     });

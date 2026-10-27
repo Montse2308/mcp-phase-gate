@@ -55,7 +55,7 @@ function Fases({ estaciones, alAbrir, abierto }: { estaciones: Estacion[]; alAbr
         const fase = FASES[e.texto];
         const origen = `fase-${e.numero}`;
         return (
-          <li key={e.numero} class={`fase ${fase.estado}`}>
+          <li key={e.numero} class="fase">
             <button type="button" class="fase-boton" disabled={!e.existe} aria-pressed={abierto?.origen === origen} onClick={(ev) => alAbrir(e.documento, origen, ev.currentTarget)}>
               <span class="fase-numero">{etiquetaDe(e)}</span>
               <span class="fase-titulo">{e.titulo}</span>
