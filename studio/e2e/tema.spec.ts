@@ -17,8 +17,16 @@ import type { Foto, Nodo } from "./estructura";
 
 const ESTILOS = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "estilos");
 
-// El fondo de la página en cada tema (--fondo de tema-claro.css y de tema-oscuro.css).
-const FONDO = { claro: "rgb(243, 245, 247)", oscuro: "rgb(11, 13, 16)" };
+// El fondo de la página en cada tema: el --fondo de tema-claro.css y de tema-oscuro.css, leído de la hoja para
+// que una paleta nueva no toque esta prueba (los dos bloques del oscuro dicen lo mismo: lo comprueba
+// test/studio-tokens.test.ts).
+function fondoDeLaHoja(archivo: string): string {
+  const hex = /--fondo\s*:\s*#([0-9a-f]{6})\s*;/i.exec(fs.readFileSync(path.join(ESTILOS, archivo), "utf-8"))?.[1];
+  if (!hex) throw new Error(`${archivo} no declara --fondo como #rrggbb`);
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+const FONDO = { claro: fondoDeLaHoja("tema-claro.css"), oscuro: fondoDeLaHoja("tema-oscuro.css") };
 
 const boton = (page: Page) => page.getByRole("button", { name: "Tema oscuro" });
 const fondo = (page: Page) => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);

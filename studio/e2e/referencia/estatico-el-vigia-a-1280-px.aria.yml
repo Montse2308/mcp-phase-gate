@@ -33,7 +33,7 @@
       - paragraph: "Sin hallazgos: todo en orden."
     - region "Clientes MCP":
       - heading "Clientes MCP" [level=2]
-      - paragraph: "Lo que haría `mcp-phase-gate init` en cada uno. Nada se escribe sin la vista previa y su /"Aplicar/"."
+      - paragraph: "Lo que haría `mcp-phase-gate init` en cada uno. Nada se escribe sin la vista previa y su \"Aplicar\"."
       - article "Claude Code":
         - heading "Claude Code" [level=3]
         - paragraph: no detectado

@@ -49,7 +49,9 @@ function normalizar(aria: string, raiz: string, ordenar: boolean): string {
   }
   texto = texto
     .replace(/^( *- text: )"(?:\+\+\+|---|\+ )[^\n]*$/gm, "$1<diff>")
-    .replace(/\\+/g, "/")
+    // Los separadores, solo dentro de las rutas (lo que sigue a `<raiz>`, `<paquete>`, `<Documentación>`… o a `~`):
+    // el resto del texto, como las comillas escapadas, se compara tal cual.
+    .replace(/(<[^<>\s]+>|~)((?:[\\/]+[^\s"'`\\/()]*)+)/g, (_, inicio: string, resto: string) => `${inicio}${resto.replace(/\\+/g, "/")}`)
     // `claude mcp add --env "X=ruta"`: las comillas solo salen si la ruta lleva espacios.
     .replace(/--env "([^"]*)"/g, "--env $1")
     .replace(/~\/(?:AppData\/Roaming|\.config|Library\/Application Support)\/Code\/User\/mcp\.json/g, "~/<carpeta de VS Code>/mcp.json")
