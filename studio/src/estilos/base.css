@@ -31,6 +31,8 @@
   src: url("/fuentes/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
 }
 
+/* Lo que no depende del tema: las familias, el radio y el espacio. Los colores, en tema-claro.css y
+   tema-oscuro.css. */
 :root {
   --texto-cuerpo: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
   --texto-codigo: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -66,7 +68,6 @@ code,
 h1,
 h2,
 h3 {
-  font-family: var(--texto-titulo);
   letter-spacing: 0.02em;
   line-height: 1.15;
   margin: 0 0 0.5rem;
@@ -89,11 +90,11 @@ kbd {
 }
 
 a {
-  color: var(--enlace);
+  color: var(--acento);
 }
 
 :focus-visible {
-  outline: 3px solid var(--foco);
+  outline: 3px solid var(--acento);
   outline-offset: 2px;
 }
 
@@ -102,7 +103,7 @@ a {
   left: 0.5rem;
   top: -3rem;
   padding: 0.5rem 0.75rem;
-  background: var(--panel);
+  background: var(--superficie);
   color: var(--texto);
   z-index: 10;
 }
@@ -126,12 +127,11 @@ main:focus {
   align-items: center;
   gap: 0.5rem 1rem;
   padding: 0.5rem var(--espacio);
-  background: var(--barra);
-  border-bottom: 2px solid var(--borde-fuerte);
+  background: var(--superficie);
+  border-bottom: 2px solid var(--borde-control);
 }
 .marca-studio {
   margin: 0;
-  font-family: var(--texto-titulo);
   font-size: 1.35rem;
   letter-spacing: 0.04em;
 }
@@ -154,8 +154,8 @@ main:focus {
   color: var(--texto);
 }
 .barra nav a[aria-current="page"] {
-  background: var(--seleccion);
-  color: var(--texto-seleccion);
+  background: var(--acento);
+  color: var(--sobre-acento);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
@@ -166,9 +166,9 @@ main:focus {
   display: inline-block;
   padding: 0.35rem 0.75rem;
   border-radius: var(--radio);
-  border: 1px solid var(--borde-fuerte);
-  background: var(--boton);
-  color: var(--texto-boton);
+  border: 1px solid var(--borde-control);
+  background: var(--superficie);
+  color: var(--texto);
   cursor: pointer;
   text-decoration: none;
 }
@@ -195,8 +195,8 @@ main:focus {
   border-left: none;
 }
 .idioma[aria-pressed="true"] {
-  background: var(--seleccion);
-  color: var(--texto-seleccion);
+  background: var(--acento);
+  color: var(--sobre-acento);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
@@ -220,7 +220,7 @@ main:focus {
   margin-top: 0.25rem;
 }
 .secundaria {
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 .linea {
   margin: 0.25rem 0;
@@ -237,8 +237,8 @@ main:focus {
 .aviso {
   padding: 0.5rem 0.75rem;
   border-radius: var(--radio);
-  border-left: 4px solid var(--borde-fuerte);
-  background: var(--panel);
+  border-left: 4px solid var(--borde-control);
+  background: var(--superficie);
 }
 .aviso-error {
   border-left-color: var(--rojo);
@@ -247,7 +247,7 @@ main:focus {
   margin: 0.25rem 0;
   font-family: var(--texto-codigo);
   font-size: 0.85rem;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 
 .marca {
@@ -288,7 +288,7 @@ main:focus {
   padding: 0;
 }
 .fila-proyecto {
-  background: var(--panel);
+  background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   min-width: 0;
@@ -353,7 +353,7 @@ main:focus {
 }
 .campo dt {
   font-size: 0.8rem;
-  color: var(--texto-secundario);
+  color: var(--texto-2);
 }
 .campo dd {
   margin: 0;
@@ -387,7 +387,7 @@ main:focus {
 .tabla {
   border-collapse: collapse;
   width: 100%;
-  background: var(--panel);
+  background: var(--superficie);
 }
 .tabla caption {
   text-align: left;
@@ -402,7 +402,7 @@ main:focus {
   vertical-align: top;
 }
 .tabla thead th {
-  background: var(--barra);
+  background: var(--superficie);
 }
 
 /* En un teléfono, cada fila es una ficha: la etiqueta de la columna va delante de cada celda. */
