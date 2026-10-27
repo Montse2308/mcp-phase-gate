@@ -10,16 +10,16 @@ import { useState } from "preact/hooks";
 import type { ClientesRespuesta, EstadoRespuesta, PlanDeClienteApi } from "../../../src/studio/contrato.js";
 import { Accion, Diff } from "../comun/accion";
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
-import { Marca } from "../comun/marcas";
-import type { Forma, Tono } from "../comun/marcas";
+import { IndicadorDeEstado } from "../comun/indicador";
+import type { ClaveDeEstado } from "../comun/indicador";
 import { Tabla } from "../comun/tabla";
 import { t } from "../i18n/idioma";
 import { arregloDe } from "./arreglos";
 
-const SEVERIDADES: { id: "error" | "aviso" | "info"; titulo: "vigia.errores" | "vigia.avisos" | "vigia.info"; forma: Forma; tono: Tono }[] = [
-  { id: "error", titulo: "vigia.errores", forma: "rombo", tono: "rojo" },
-  { id: "aviso", titulo: "vigia.avisos", forma: "triangulo", tono: "ambar" },
-  { id: "info", titulo: "vigia.info", forma: "vacio", tono: "apagado" },
+const SEVERIDADES: { id: "error" | "aviso" | "info"; titulo: "vigia.errores" | "vigia.avisos" | "vigia.info"; estado: ClaveDeEstado }[] = [
+  { id: "error", titulo: "vigia.errores", estado: "vigia-errores" },
+  { id: "aviso", titulo: "vigia.avisos", estado: "vigia-avisos" },
+  { id: "info", titulo: "vigia.info", estado: "vigia-info" },
 ];
 
 const VIGILANCIA = {
@@ -42,8 +42,8 @@ function TarjetaDeCliente({ c, recargar }: { c: PlanDeClienteApi; recargar: () =
   return (
     <article class="cliente" aria-labelledby={`cliente-${c.cliente}`}>
       <h3 id={`cliente-${c.cliente}`}>{c.nombre}</h3>
-      <p class={`linea ${c.detectado ? "tono-verde" : "tono-apagado"}`}>
-        <Marca forma={c.detectado ? "lleno" : "vacio"} tono={c.detectado ? "verde" : "apagado"} /> {t(c.detectado ? "vigia.detectado" : "vigia.noDetectado")}
+      <p class="linea">
+        <IndicadorDeEstado estado={c.detectado ? "vigia-cliente-detectado" : "vigia-cliente-no-detectado"} texto={t(c.detectado ? "vigia.detectado" : "vigia.noDetectado")} />
       </p>
       <p>{c.mensaje}</p>
       {c.archivo ? (
@@ -91,8 +91,8 @@ export function Vigia() {
               if (!lista.length) return null;
               return (
                 <section key={s.id} class={`severidad severidad-${s.id}`} aria-labelledby={`sev-${s.id}`}>
-                  <h3 id={`sev-${s.id}`} class={`tono-${s.tono}`}>
-                    <Marca forma={s.forma} tono={s.tono} /> {t(s.titulo)} ({lista.length})
+                  <h3 id={`sev-${s.id}`}>
+                    <IndicadorDeEstado estado={s.estado} texto={`${t(s.titulo)} (${lista.length})`} />
                   </h3>
                   <ul class="hallazgos">
                     {lista.map((h, i) => (

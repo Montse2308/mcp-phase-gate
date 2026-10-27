@@ -33,7 +33,9 @@ const oscuroCss = leerCss("tema-oscuro.css");
 const claro = bloque(claroCss, /:root:not\(\[data-tema\]\),\s*:root\[data-tema="claro"\]\s*\{([^}]*)\}/, "del tema claro");
 const oscuroDelSistema = bloque(oscuroCss, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-tema\]\)\s*\{([^}]*)\}\s*\}/, "del oscuro que sigue al sistema");
 const oscuroElegido = bloque(oscuroCss, /:root\[data-tema="oscuro"\]\s*\{([^}]*)\}/, "del oscuro elegido");
-const independientes = bloque(leerCss("base.css"), /(?:^|\})\s*:root\s*\{([^}]*)\}/, "de :root en base.css", 4);
+// Lo que declara base.css, en :root o en una clase (--tono): no depende del tema.
+const independientes = declaraciones(leerCss("base.css"));
+assert.ok(["--radio", "--espacio", "--texto-cuerpo", "--texto-codigo", "--tono"].every((n) => independientes.has(n)), "base.css no declara lo que no depende del tema");
 
 describe("Studio: los tokens de color", () => {
   it("cada variable que usa el código está definida en los dos temas, o en base.css si no depende del tema", () => {

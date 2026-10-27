@@ -261,9 +261,54 @@ main:focus {
 .marca.tono-rojo {
   color: var(--rojo);
 }
+.tono-violeta > .marca,
+.marca.tono-violeta {
+  color: var(--violeta);
+}
 .tono-apagado > .marca,
 .marca.tono-apagado {
   color: var(--apagado);
+}
+.tono-neutro > .marca,
+.marca.tono-neutro {
+  color: var(--texto-2);
+}
+
+/* El texto de un estado en su color: la insignia siempre, y el resto cuando la vista lo pide. */
+.tono-verde {
+  --tono: var(--verde);
+}
+.tono-ambar {
+  --tono: var(--ambar);
+}
+.tono-rojo {
+  --tono: var(--rojo);
+}
+.tono-violeta {
+  --tono: var(--violeta);
+}
+.tono-apagado {
+  --tono: var(--apagado);
+}
+.tono-neutro {
+  --tono: var(--texto-2);
+}
+.indicador-texto {
+  color: var(--tono);
+}
+/* La insignia de lo que pide atención: el texto del estado en su color, con borde del mismo color y sin
+   fondo propio. Va en mayúsculas con text-transform: el texto y el nombre accesible no cambian. */
+.insignia {
+  display: inline-block;
+  padding: 0 0.4em;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  color: var(--tono);
+  font-family: var(--texto-codigo);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
 }
 
 /* ─── La Red ──────────────────────────────────────────────────────────── */

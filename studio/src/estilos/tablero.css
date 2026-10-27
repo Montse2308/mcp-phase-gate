@@ -64,19 +64,6 @@
   font-size: 0.85rem;
   font-weight: 700;
 }
-.fase-cerrada .fase-estado {
-  color: var(--verde);
-}
-.fase-en-curso .fase-estado,
-.fase-con-pendientes .fase-estado {
-  color: var(--ambar);
-}
-.fase-hueco .fase-estado {
-  color: var(--rojo);
-}
-.fase-pendiente .fase-estado {
-  color: var(--texto-2);
-}
 /* El archivo de una fase sin documento: no hay visor que lo enseñe. */
 .fase-archivo {
   font-size: 0.8rem;
@@ -105,28 +92,6 @@
 }
 .estado {
   font-weight: 700;
-}
-.estado-verificado {
-  color: var(--verde);
-}
-.estado-sellado {
-  color: var(--verde);
-}
-.estado-con-pendientes,
-.estado-commit-pendiente {
-  color: var(--ambar);
-}
-.estado-rechazado,
-.estado-no-vigente {
-  color: var(--rojo);
-}
-.estado-descartado,
-.estado-sin-recibo {
-  color: var(--texto-2);
-}
-.estado-manual,
-.estado-nota {
-  color: var(--violeta);
 }
 /* Un SHA, un sha256 o una fecha no se parten; el motivo y la nota van en texto normal. */
 .estado-detalle {
