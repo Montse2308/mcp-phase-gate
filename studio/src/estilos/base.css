@@ -18,12 +18,15 @@
   src: url("/fuentes/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
 }
 
-/* Lo que no depende del tema: las familias, el radio y el espacio. Los colores, en tema-claro.css y
-   tema-oscuro.css. */
+/* Lo que no depende del tema: las familias, los radios y el espacio. Los colores, en tema-claro.css y
+   tema-oscuro.css. Radios de 6 px en los controles, 8 en las tarjetas y 10 en los contenedores; bordes de
+   1 px y ninguna sombra. */
 :root {
   --texto-cuerpo: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --texto-codigo: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --radio: 6px;
+  --radio-tarjeta: 8px;
+  --radio-contenedor: 10px;
   --espacio: 1rem;
 }
 
@@ -83,7 +86,7 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid var(--acento);
+  outline: 2px solid var(--acento);
   outline-offset: 2px;
 }
 
@@ -117,7 +120,7 @@ main:focus {
   gap: 0.5rem 1rem;
   padding: 0.5rem var(--espacio);
   background: var(--superficie);
-  border-bottom: 2px solid var(--borde-control);
+  border-bottom: 1px solid var(--borde);
 }
 .marca-studio {
   margin: 0;
@@ -138,15 +141,17 @@ main:focus {
 .barra nav a {
   display: inline-block;
   padding: 0.35rem 0.6rem;
-  border-radius: var(--radio);
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radio) var(--radio) 0 0;
   text-decoration: none;
   color: var(--texto);
 }
+/* La pestaña activa: el fondo suave solo da 1.22:1 contra la barra, así que la raya inferior y el peso son
+   lo que la distingue. */
 .barra nav a[aria-current="page"] {
-  background: var(--acento);
-  color: var(--sobre-acento);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  background: var(--acento-suave);
+  border-bottom-color: var(--acento);
+  font-weight: 600;
 }
 .interruptor,
 .idioma,
@@ -193,6 +198,18 @@ main:focus {
 .boton[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.75;
+}
+/* Los campos de los formularios, con el borde de los controles. */
+select,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]) {
+  font: inherit;
+  max-width: 100%;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
 }
 
 .banda-demo {
@@ -324,7 +341,7 @@ main:focus {
 .fila-proyecto {
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-contenedor);
   min-width: 0;
 }
 .fila-resumen {
@@ -431,12 +448,12 @@ main:focus {
 .tabla th,
 .tabla td {
   border: 1px solid var(--borde);
-  padding: 0.4rem 0.55rem;
+  padding: 0.6875rem 0.875rem;
   text-align: left;
   vertical-align: top;
 }
 .tabla thead th {
-  background: var(--superficie);
+  background: var(--superficie-2);
 }
 
 /* En un teléfono, cada fila es una ficha: la etiqueta de la columna va delante de cada celda. */
@@ -461,7 +478,7 @@ main:focus {
   }
   .tabla tr {
     border: 1px solid var(--borde);
-    border-radius: var(--radio);
+    border-radius: var(--radio-tarjeta);
     margin: 0 0 0.75rem;
   }
   .tabla th,

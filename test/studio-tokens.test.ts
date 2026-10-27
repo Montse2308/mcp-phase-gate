@@ -109,8 +109,8 @@ describe("Studio: el contraste de los tokens", () => {
     it(`el texto cumple 4.5:1 sobre su fondo (${nombre})`, () => {
       const lista: [string, string][] = [];
       for (const fondo of FONDOS) for (const texto of ["texto", "texto-2", ...ESTADOS]) lista.push([texto, fondo]);
-      lista.push(["sobre-acento", "acento"], ["acento", "acento-suave"], ["texto-banda", "banda"]);
-      assert.ok(lista.length >= 18);
+      lista.push(["sobre-acento", "acento"], ["acento", "acento-suave"], ["texto", "acento-suave"], ["texto-banda", "banda"]);
+      assert.ok(lista.length >= 19);
       pares(tema, lista, 4.5, nombre);
     });
 

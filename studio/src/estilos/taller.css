@@ -7,17 +7,6 @@
   gap: 0.5rem 0.75rem;
   margin: 0.5rem 0 1rem;
 }
-.selectores select,
-.acciones-proyecto select,
-.reglas select {
-  font: inherit;
-  max-width: 100%;
-  padding: 0.25rem 0.4rem;
-  border-radius: var(--radio);
-  border: 1px solid var(--borde-control);
-  background: var(--superficie);
-  color: var(--texto);
-}
 .taller {
   display: grid;
   gap: var(--espacio);
@@ -35,7 +24,7 @@
 .reglas {
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-contenedor);
   padding: 0.75rem 1rem;
   min-width: 0;
   margin-bottom: var(--espacio);
@@ -129,7 +118,7 @@
 }
 .vista-previa {
   border: 2px dashed var(--acento);
-  border-radius: var(--radio);
+  border-radius: var(--radio-tarjeta);
   padding: 0.5rem 0.75rem;
   margin-top: 0.5rem;
 }
@@ -143,8 +132,9 @@
 }
 .boton-principal {
   background: var(--acento);
+  border-color: var(--acento);
   color: var(--sobre-acento);
-  font-weight: 700;
+  font-weight: 600;
 }
 .aviso-hecho {
   border-left-color: var(--verde);
@@ -171,7 +161,7 @@
 .hallazgo {
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-tarjeta);
   padding: 0.5rem 0.75rem;
   margin: 0.5rem 0;
 }
@@ -192,7 +182,7 @@
 .cliente {
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-tarjeta);
   padding: 0.75rem 1rem;
   min-width: 0;
 }
@@ -203,7 +193,7 @@
   flex-wrap: wrap;
   gap: 0.25rem 1rem;
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-contenedor);
   margin: 0.5rem 0 1rem;
 }
 .linea-de-tiempo {
@@ -222,7 +212,7 @@
   margin: 0 0 0.6rem;
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: var(--radio-tarjeta);
 }
 .evento time {
   font-family: var(--texto-codigo);
