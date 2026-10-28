@@ -397,7 +397,7 @@ export const diagnosticoShape = {
       logica: z.enum(NOMBRES_LOGICOS as [NombreLogico, ...NombreLogico[]]),
       valor: z.string().optional(),
       usada: z.string().nullable(),
-      fuente: z.enum(["entorno", ".env", "sin definir"]),
+      fuente: z.enum(["entorno", ".env", "machine.json", "sin definir"]),
       discrepancia: z.string().nullable(),
     })
   ),

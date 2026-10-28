@@ -16,10 +16,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { DOCS, REPOS, configDir, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, raizPaquete, requireBasePath } from "./config.js";
+import { DOCS, REPOS, configDir, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, leerArchivoDeMaquina, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { ErrorConCodigo, mensaje } from "./i18n/mensajes.js";
-import { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, errorDeZod, interpretarMaquina, rutaDeError } from "./maquina.js";
+import { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, errorDeZod, rutaDeError } from "./maquina.js";
 import { tasksRootPath, validarSegmento } from "./paths.js";
 import { leerPromptNormalizado, separarFrontmatter } from "./phases.js";
 import { IDIOMAS, VOCABULARIO, valorDePreset } from "./vocabulario.js";
@@ -325,8 +325,8 @@ function contarDocumentos(raiz: string): DocumentosPorIdioma {
 // Los pasos 3 a 5: el idioma de este equipo, sin proyecto. Un machine.json inválido no tumba nada aquí:
 // lo dice doctor, y quien lo necesite para trabajar lo lee con maquinaDe.
 export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelIdioma, "del proyecto" | "de sus documentos"> } {
-  const maquina = leerMaquina();
-  if (maquina.config?.idiomaPorDefecto) return { idioma: maquina.config.idiomaPorDefecto, origen: "de machine.json" };
+  const deMaquina = idiomaDeMaquina();
+  if (deMaquina) return { idioma: deMaquina, origen: "de machine.json" };
   const delEntorno = idiomaDelEntorno();
   if (delEntorno) return { idioma: delEntorno, origen: "de PHASE_GATE_LANG" };
   return { idioma: idiomaDelSistema(), origen: "del sistema" };
@@ -419,31 +419,17 @@ function normalizarClave(clave: string): string {
 }
 
 export function leerMaquina(): LecturaMaquina {
-  const ruta = rutaMaquina();
+  const archivo = leerArchivoDeMaquina();
+  const { ruta } = archivo;
   const vacia = { config: null, repos: new Map<string, string>(), avisos: [] };
-  if (!fs.existsSync(ruta)) return { estado: "ausente", ruta, error: null, ...vacia };
-
-  const invalido = (error: string): LecturaMaquina => ({
-    estado: "invalido",
-    ruta,
-    error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error }),
-    ...vacia,
-  });
-
-  let texto: string;
-  try {
-    texto = fs.readFileSync(ruta, "utf-8");
-  } catch (error) {
-    return invalido(mensaje("MANIFIESTO-TXT-JSON-INVALIDO", { detalle: error instanceof Error ? error.message : String(error) }));
-  }
-
-  const leido = interpretarMaquina(texto);
-  if (!leido.ok) return invalido(leido.error);
+  if (archivo.estado === "ausente") return { estado: "ausente", ruta, error: null, ...vacia };
+  if (archivo.estado === "invalido") return { estado: "invalido", ruta, error: archivo.error, ...vacia };
+  const config = archivo.config!;
 
   // "proyecto-a/api" y "PROYECTO-A/api" son la misma clave. Si hay dos, vale la primera.
   const repos = new Map<string, string>();
   const avisos: Hallazgo[] = [];
-  for (const [clave, destino] of Object.entries(leido.config.repos)) {
+  for (const [clave, destino] of Object.entries(config.repos)) {
     const normalizada = normalizarClave(clave);
     if (repos.has(normalizada)) {
       avisos.push({
@@ -456,7 +442,7 @@ export function leerMaquina(): LecturaMaquina {
     repos.set(normalizada, path.resolve(destino));
   }
 
-  return { estado: "valido", ruta, config: leido.config, repos, error: null, avisos };
+  return { estado: "valido", ruta, config, repos, error: null, avisos };
 }
 
 // Para quien necesita machine.json para trabajar: un archivo inválido es un error, no un "no hay".

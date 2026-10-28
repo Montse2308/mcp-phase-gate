@@ -10,7 +10,7 @@ import * as os from "os";
 import * as path from "path";
 import { after } from "node:test";
 
-import { VARIABLES, reiniciarEnv } from "../src/config.js";
+import { VARIABLES, reiniciarEnv, reiniciarMaquina } from "../src/config.js";
 
 export const SUBDIR_POR_DEFECTO = "Proyectos";
 
@@ -127,6 +127,7 @@ export function estadoTemporal(): string {
 // borra, y entonces cae en la carpeta falsa de aislarCarpetasDelUsuario.
 export function limpiarEntorno(): void {
   reiniciarEnv();
+  reiniciarMaquina();
   for (const { principal, alias } of Object.values(VARIABLES)) {
     delete process.env[principal];
     if (alias) delete process.env[alias];
