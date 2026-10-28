@@ -49,7 +49,11 @@ export const MaquinaConfig = z
     // For projects that declare no language and have no documents that say it.
     idiomaPorDefecto: z.enum(["es", "en"]).optional(),
   })
-  .strict();
+  .strict()
+  // `rutas` is version 2: a version 1 file with it would be read differently by the 3.x, which rejects it.
+  .superRefine((maquina, ctx) => {
+    if (maquina.version === 1 && maquina.rutas !== undefined) ctx.addIssue({ code: "custom", path: ["rutas"], message: mensaje("MAQUINA-TXT-RUTAS-EN-V1") });
+  });
 
 export type MaquinaConfig = z.output<typeof MaquinaConfig>;
 

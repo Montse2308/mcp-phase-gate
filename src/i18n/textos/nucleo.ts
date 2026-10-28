@@ -292,6 +292,7 @@ export const TEXTOS_NUCLEO = {
       `(${ORIGENES_EN[origen] ?? origen}). That language can change on another machine. Add "idioma" to its ${archivo}, or run \`init --migrate\`.`,
   },
   "MAQUINA-TXT-RUTA-ABSOLUTA": { es: "tiene que ser una ruta absoluta", en: "must be an absolute path" },
+  "MAQUINA-TXT-RUTAS-EN-V1": { es: 'solo existe en la versión 2: pon "version": 2', en: 'only exists in version 2: set "version": 2' },
   "MAQUINA-TXT-INVALIDA": {
     es: ({ archivo, ruta, error }: { archivo: string; ruta: string; error: string }) => `${archivo} no es válido (${ruta}): ${error}`,
     en: ({ archivo, ruta, error }: { archivo: string; ruta: string; error: string }) => `${archivo} is not valid (${ruta}): ${error}`,

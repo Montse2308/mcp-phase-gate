@@ -225,6 +225,15 @@ describe("machine.json", () => {
     assert.match(leerMaquina().error ?? "", /rutas\.documentacion: tiene que ser una ruta absoluta/);
   });
 
+  it("`rutas` en un archivo versión 1 es un error que pide la versión 2: la 3.x lo leería distinto", () => {
+    maquina({ version: 1, rutas: { documentacion: carpetaTemporal("docs") } });
+    assert.equal(leerMaquina().estado, "invalido");
+    assert.match(leerMaquina().error ?? "", /rutas: solo existe en la versión 2: pon "version": 2/);
+
+    maquina({ version: 1, repos: {} });
+    assert.equal(leerMaquina().estado, "valido", "sin rutas, la versión 1 se sigue leyendo");
+  });
+
   it("un error de sintaxis dice su línea y su columna", () => {
     maquina('{\n  "version": 2,\n  "rutas": }');
     assert.match(leerMaquina().error ?? "", /no es un JSON válido: carácter inesperado «\}» \(línea 3, columna 12\)/);
