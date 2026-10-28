@@ -2,8 +2,10 @@
 // un `claude` de mentira: nunca toca la configuración real de quien corre los tests.
 
 import { strict as assert } from "node:assert";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it, mock } from "node:test";
 import * as fs from "node:fs";
+import fsDelSistema from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -425,6 +427,35 @@ describe("init --migrate", () => {
     assert.equal(escrito.version, 2);
     assert.deepEqual(escrito.repos, { "PROYECTO-A/api": destino });
     assert.ok(fs.readdirSync(config).some((n) => n.startsWith("machine.json.bak-")), "queda la copia de la versión 1");
+  });
+
+  it("machine.json se escribe con un temporal y un renombrado, no directo: un servidor abierto no lo lee a medias", async () => {
+    fijarRaizDelPaquete(RAIZ);
+    const r = rutas();
+    crearProyecto(r.docs, "PROYECTO-A");
+    const config = configTemporal();
+    const archivo = path.join(config, "machine.json");
+    fs.writeFileSync(archivo, JSON.stringify({ version: 1, repos: {} }), "utf-8");
+    const p = entornoDePrueba();
+
+    const escritos: string[] = [];
+    const original = fsDelSistema.writeFileSync;
+    const espia = mock.method(fsDelSistema, "writeFileSync", ((...args: Parameters<typeof original>) => {
+      escritos.push(String(args[0]));
+      return original(...args);
+    }) as typeof original);
+    syncBuiltinESMExports();
+    try {
+      assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true, soloEsteEquipo: true, yes: true }), p.entorno), 0, p.errores());
+    } finally {
+      espia.mock.restore();
+      syncBuiltinESMExports();
+    }
+
+    assert.ok(!escritos.includes(archivo), "no se escribió machine.json directamente");
+    assert.ok(escritos.some((ruta) => path.dirname(ruta) === config && /^\.machine\.json\..+\.tmp$/.test(path.basename(ruta))), `escrituras: ${escritos.join(", ")}`);
+    assert.deepEqual(fs.readdirSync(config).filter((nombre) => nombre.endsWith(".tmp")), [], "no queda ningún temporal");
+    assert.equal(leer(archivo).presetPorDefecto, "software-replica");
   });
 });
 

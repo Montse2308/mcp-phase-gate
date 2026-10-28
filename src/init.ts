@@ -20,6 +20,7 @@ import { capasDeCuerpos, fasesDe, rutasDeCuerpos } from "./capas.js";
 import type { Salida } from "./cli.js";
 import { SERVER_NAME, SERVER_VERSION, leerVariable } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
+import { escribirAtomico } from "./lotes.js";
 import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
 import { URL_ESQUEMA_MAQUINA, VERSION_DE_MAQUINA } from "./maquina.js";
 import type { Idioma } from "./vocabulario.js";
@@ -264,7 +265,9 @@ function escribirConCopia(ctx: Contexto, archivo: string, texto: string): string
     fs.copyFileSync(archivo, copia);
   }
   fs.mkdirSync(path.dirname(archivo), { recursive: true });
-  fs.writeFileSync(archivo, texto, "utf-8");
+  // A temporary file and a rename, like the Studio does: a running server that reads machine.json at that
+  // moment sees the old file or the new one, never half of it.
+  escribirAtomico(archivo, texto);
   return copia;
 }
 
