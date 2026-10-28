@@ -3,7 +3,7 @@
 //
 // Cada servidor MCP por stdio deja `<stateDir>/sesiones/<pid>.json`:
 //   { "pid": 1234, "cliente": "claude-code 2.1.0", "raices": [...], "proyecto": "PROYECTO-A",
-//     "desde": "<ISO>", "actualizado": "<ISO>" }
+//     "rutas": { "documentacion": "...", ... }, "desde": "<ISO>", "actualizado": "<ISO>" }
 // Se escribe al conocer las raíces (al terminar el initialize y tras cada roots/list_changed) y se
 // refresca como mucho una vez por minuto; se borra al salir (exit, SIGINT, SIGTERM y cuando el cliente
 // cierra stdin). Es estado efímero y solo informativo: no guarda nada de la conversación, y escribirlo
@@ -20,7 +20,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { stateDir } from "./config.js";
+import { CLAVE_EN_MAQUINA, leerVariable, stateDir } from "./config.js";
 import { mensaje } from "./i18n/mensajes.js";
 import { log } from "./log.js";
 import { alRecibirRaices, resolverPorRaices } from "./roots.js";
@@ -30,11 +30,24 @@ export const INTERVALO_MS = 60_000;
 export const CADUCIDAD_MS = 10 * 60_000;
 export const TAMANO_MAXIMO = 16 * 1024;
 const MAX_RAICES = 20;
+// Un tope por ruta, para que el registro siga cabiendo en TAMANO_MAXIMO.
+const MAX_RUTA = 1024;
 const NOMBRE = /^([1-9]\d{0,9})\.json$/;
 
 export function carpetaDeSesiones(): string {
   return path.join(stateDir(), CARPETA_DE_SESIONES);
 }
+
+// Las rutas con las que arrancó el servidor, tal como llegaron en su entorno: las de machine.json no se
+// anotan, porque cambian sin reiniciarlo. Opcional, porque las sesiones de un servidor 3.x no la llevan.
+export const RutasDeSesion = z
+  .object({
+    documentacion: z.string().max(MAX_RUTA).optional(),
+    carpetaDeRepos: z.string().max(MAX_RUTA).optional(),
+    subcarpetaTareas: z.string().max(MAX_RUTA).optional(),
+  })
+  .strict();
+export type RutasDeSesion = z.infer<typeof RutasDeSesion>;
 
 export const SesionArchivo = z
   .object({
@@ -42,6 +55,7 @@ export const SesionArchivo = z
     cliente: z.string().max(200),
     raices: z.array(z.string().max(1024)).max(MAX_RAICES),
     proyecto: z.string().max(200).nullable(),
+    rutas: RutasDeSesion.optional(),
     desde: z.iso.datetime(),
     actualizado: z.iso.datetime(),
   })
@@ -49,6 +63,19 @@ export const SesionArchivo = z
 export type SesionArchivo = z.infer<typeof SesionArchivo>;
 
 // ─── Escribir (el servidor MCP) ─────────────────────────────────────────────
+// Lo que este proceso recibió de su entorno (el bloque "env" del cliente o el .env) para sus tres rutas. Es lo
+// que no cambia mientras el proceso vive, y lo que Ajustes compara con machine.json. Una ruta más larga que
+// el tope no se anota.
+export function rutasDelEntorno(): RutasDeSesion | undefined {
+  const rutas: RutasDeSesion = {};
+  for (const [logica, clave] of Object.entries(CLAVE_EN_MAQUINA) as ["DOCS_PATH" | "REPOS_PATH" | "TASKS_SUBDIR", keyof RutasDeSesion][]) {
+    const { valor, fuente } = leerVariable(logica);
+    if (valor === undefined || (fuente !== "entorno" && fuente !== ".env") || valor.length > MAX_RUTA) continue;
+    rutas[clave] = valor;
+  }
+  return Object.keys(rutas).length ? rutas : undefined;
+}
+
 export type Escritor = (ruta: string, contenido: string) => Promise<void>;
 
 // Escritura atómica: un temporal que empieza por punto (el lector no lo toma por una sesión) y un rename.
@@ -69,6 +96,8 @@ export type OpcionesDeRegistro = {
   ahora?: () => Date;
   intervaloMs?: number;
   escribir?: Escritor;
+  // Las rutas del entorno del servidor; sin ellas, las del proceso.
+  rutas?: RutasDeSesion | undefined;
   // El proceso al que se enganchan la salida y las señales; los tests pasan uno falso.
   proceso?: Pick<NodeJS.Process, "on" | "once" | "exit"> & { stdin?: { on: (evento: string, oyente: () => void) => unknown } };
 };
@@ -81,6 +110,8 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
   const intervalo = opciones.intervaloMs ?? INTERVALO_MS;
   const escribir = opciones.escribir ?? escribirAtomico;
   const proceso = opciones.proceso ?? process;
+  // Se leen al arrancar: lo que vino del entorno no cambia mientras el proceso vive.
+  const rutas = "rutas" in opciones ? opciones.rutas : rutasDelEntorno();
   // La ruta se fija al arrancar: si el estado cambiara de sitio, el archivo que se borra es el escrito.
   let ruta: string | null = null;
   let datos: SesionArchivo | null = null;
@@ -143,6 +174,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
       cliente,
       raices: raices.slice(0, MAX_RAICES).map((r) => r.slice(0, 1024)),
       proyecto: proyecto ? proyecto.slice(0, 200) : null,
+      ...(rutas ? { rutas } : {}),
       desde: datos?.desde ?? momento,
       actualizado: momento,
     };
@@ -198,7 +230,7 @@ export function pidVivo(pid: number): boolean {
   }
 }
 
-export type SesionAbierta = { pid: number; cliente: string; proyecto: string | null; desde: string; actualizado: string };
+export type SesionAbierta = { pid: number; cliente: string; proyecto: string | null; rutas?: RutasDeSesion; desde: string; actualizado: string };
 
 export type OpcionesDeLectura = { ahora?: () => number; vivo?: (pid: number) => boolean; borrar?: boolean };
 
@@ -287,7 +319,7 @@ export function sesionesAbiertas(opciones: OpcionesDeLectura = {}): SesionAbiert
       descartar();
       continue;
     }
-    abiertas.push({ pid, cliente: sesion.cliente, proyecto: sesion.proyecto, desde: sesion.desde, actualizado: sesion.actualizado });
+    abiertas.push({ pid, cliente: sesion.cliente, proyecto: sesion.proyecto, ...(sesion.rutas ? { rutas: sesion.rutas } : {}), desde: sesion.desde, actualizado: sesion.actualizado });
   }
   return abiertas;
 }
