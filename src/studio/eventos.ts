@@ -4,13 +4,15 @@
 //   documento {p, t, archivo}   un archivo de una carpeta de tarea
 //   recibo    {p, t, lote}      un archivo de la subcarpeta de recibos
 //   config    {p}               phase-gate.json o .phase-gate/** del proyecto
-//   prompts   {}                la capa global, <configDir>/presets o machine.json
+//   prompts   {}                la capa global o <configDir>/presets
+//   equipo    {}                <configDir>/machine.json: las rutas de este equipo pueden haber cambiado
 //   sesiones  {}                <stateDir>/sesiones
 //   punteros  {}                el archivo de las tareas activas (switch_task, start_task)
 //
 // Se vigila con fs.watch recursivo (la Documentación, la capa global, la carpeta de configuración y la
-// de estado), y como en carpetas de OneDrive no es fiable, hay un sondeo de respaldo cada 5 s sobre los
-// archivos de las tareas activas. Si el sondeo ve un cambio que el watcher no avisó, emite el evento y
+// de estado). Las carpetas se recalculan cuando cambia machine.json, porque la Documentación puede ser otra.
+// Como en carpetas de OneDrive no es fiable, hay un sondeo de respaldo cada 5 s sobre los archivos de las
+// tareas activas. Si el sondeo ve un cambio que el watcher no avisó, emite el evento y
 // el estado del watcher pasa a "degradado".
 //
 // El ruido de OneDrive (validación V8): se ignoran desktop.ini, Thumbs.db, ~$*, *.tmp (también los
@@ -36,6 +38,7 @@ export type EventoDeDominio =
   | { tipo: "recibo"; datos: { p: string; t: string; lote: string } }
   | { tipo: "config"; datos: { p: string } }
   | { tipo: "prompts"; datos: Record<string, never> }
+  | { tipo: "equipo"; datos: Record<string, never> }
   | { tipo: "sesiones"; datos: Record<string, never> }
   | { tipo: "punteros"; datos: Record<string, never> };
 
@@ -108,7 +111,8 @@ export function traducir(ruta: string): EventoDeDominio | null {
   const deConfig = segmentosDentro(configDir(), ruta);
   if (deConfig !== null && deConfig.length) {
     const [primero = ""] = deConfig;
-    if (primero === ARCHIVO_MAQUINA || primero === "presets" || primero === "prompts") return { tipo: "prompts", datos: {} };
+    if (primero === ARCHIVO_MAQUINA) return { tipo: "equipo", datos: {} };
+    if (primero === "presets" || primero === "prompts") return { tipo: "prompts", datos: {} };
   }
 
   let docs: string;
@@ -245,6 +249,8 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
       if (evento) vistos.set(`${evento.tipo}:${JSON.stringify(evento.datos)}`, evento);
     }
     pendientes.clear();
+    // machine.json cambió: la Documentación puede ser otra, así que se vigila la de ahora antes de avisar.
+    if ([...vistos.values()].some((e) => e.tipo === "equipo")) reajustar();
     for (const evento of vistos.values()) emitir(evento);
   };
 
@@ -257,8 +263,8 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
     }
   };
 
-  const vigilantes: { cerrar: () => void }[] = [];
-  for (const raiz of raicesAVigilar()) {
+  const vigilantes = new Map<string, { cerrar: () => void }>();
+  const abrir = (raiz: string): void => {
     try {
       const vigilante = vigilar(raiz, alCambiar, () => {
         degradado = true;
@@ -267,13 +273,36 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
         } catch {
           // ya estaba cerrado
         }
-        vigilantes.splice(vigilantes.indexOf(vigilante), 1);
+        vigilantes.delete(raiz);
       });
-      vigilantes.push(vigilante);
+      vigilantes.set(raiz, vigilante);
     } catch {
       degradado = true;
     }
-  }
+  };
+  for (const raiz of raicesAVigilar()) abrir(raiz);
+
+  // Las carpetas que se vigilan ahora: las que ya no hacen falta se cierran y las nuevas se abren. Y el sondeo de
+  // respaldo vuelve a calcular qué tareas están activas, que dependen de la Documentación.
+  const reajustar = (): void => {
+    if (cerrado) return;
+    const deseadas = new Set(raicesAVigilar());
+    for (const [raiz, vigilante] of vigilantes) {
+      if (deseadas.has(raiz)) continue;
+      try {
+        vigilante.cerrar();
+      } catch {
+        // ya estaba cerrado
+      }
+      vigilantes.delete(raiz);
+    }
+    for (const raiz of deseadas) if (!vigilantes.has(raiz)) abrir(raiz);
+    archivosSondeados = archivosDeTareasActivas();
+    for (const archivo of archivosSondeados) {
+      const h = huellaDe(archivo);
+      if (h !== "carpeta" && !conocidas.has(archivo)) conocidas.set(archivo, h);
+    }
+  };
 
   // ─── El sondeo de respaldo ────────────────────────────────────────────────
   let archivosSondeados: string[] = archivosDeTareasActivas();
@@ -326,7 +355,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
       req.on("close", quitar);
       res.on("close", quitar);
     },
-    estado: () => (vigilantes.length === 0 ? "apagado" : degradado ? "degradado" : "activo"),
+    estado: () => (vigilantes.size === 0 ? "apagado" : degradado ? "degradado" : "activo"),
     conexiones: () => conexiones.size,
     emitir,
     cerrar: () => {
@@ -334,13 +363,14 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
       if (agrupando) clearTimeout(agrupando);
       clearInterval(sondeo);
       clearInterval(latido);
-      for (const v of vigilantes.splice(0)) {
+      for (const v of vigilantes.values()) {
         try {
           v.cerrar();
         } catch {
           // ya estaba cerrado
         }
       }
+      vigilantes.clear();
       for (const res of conexiones) res.end();
       conexiones.clear();
     },

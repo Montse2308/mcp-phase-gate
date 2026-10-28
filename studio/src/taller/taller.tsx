@@ -123,7 +123,7 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
   const fase = Number(r.consulta.get("fase") ?? "1") || 1;
   const tarea = r.consulta.get("tarea");
   const tareas = useRecurso<TareasRespuesta>(p ? `/api/proyectos/${ruta(p)}/tareas` : null, ["documento", "punteros"]);
-  const prompt = useRecurso<PromptRespuesta>(p ? `/api/prompts/${ruta(p, fase)}${tarea ? `?tarea=${encodeURIComponent(tarea)}` : ""}` : null, ["prompts", "config", "documento"], (_t, d) => !d.p || d.p === p);
+  const prompt = useRecurso<PromptRespuesta>(p ? `/api/prompts/${ruta(p, fase)}${tarea ? `?tarea=${encodeURIComponent(tarea)}` : ""}` : null, ["prompts", "config", "documento", "equipo"], (_t, d) => !d.p || d.p === p);
   const [elegida, setElegida] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const datos = prompt.datos;

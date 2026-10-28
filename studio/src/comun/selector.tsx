@@ -10,7 +10,7 @@ import type { Vista } from "../rutas";
 import { Aviso, useRecurso } from "./estado";
 
 export function Selector({ vista, titulo }: { vista: Vista; titulo: string }) {
-  const { datos, error } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["punteros", "documento"]);
+  const { datos, error } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["punteros", "documento", "equipo"]);
   const [tareas, setTareas] = useState<Record<string, string[]>>({});
   useEffect(() => {
     // Un proyecto con el manifiesto roto no tiene tareas que listar: su error ya sale en la Red.

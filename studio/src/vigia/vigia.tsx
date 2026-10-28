@@ -70,7 +70,7 @@ function TarjetaDeCliente({ c, recargar }: { c: PlanDeClienteApi; recargar: () =
 }
 
 export function Vigia() {
-  const estado = useRecurso<EstadoRespuesta>("/api/estado", ["config", "prompts", "documento", "recibo", "punteros"]);
+  const estado = useRecurso<EstadoRespuesta>("/api/estado", ["config", "prompts", "documento", "recibo", "punteros", "equipo"]);
   const clientes = useRecurso<ClientesRespuesta>("/api/clientes", []);
   const d = estado.datos?.diagnostico;
   return (
