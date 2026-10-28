@@ -12,6 +12,106 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-28 — Las rutas de este equipo y el idioma por defecto viven en `machine.json`, que pasa a la versión 2, y el entorno siempre gana
+
+> **Reemplaza en parte** dos entradas. De "El Studio solo ejecuta acciones del CLI, con vista previa y huella"
+> (2026-10-17): que las cinco acciones sean las mismas y equivalgan a un comando del CLI. Las acciones vuelven a
+> ser cinco, pero `preset` y `reglas` salen (las cubre `proyecto`) y entran `equipo` y `proyecto`, que no tienen
+> comando de CLI (tampoco lo tenían `preset` y `reglas`). Lo que esa entrada protege se mantiene: destinos
+> cerrados por acción, un solo shape de validación y la huella. Mientras la interfaz todavía las use, `preset` y
+> `reglas` conviven con las nuevas. De "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
+> equipo" (2026-10-19) y del paso 3 de "El idioma es del proyecto y se deduce primero del disco…" (2026-10-18):
+> solo el orden entre `idiomaPorDefecto` de `machine.json` y `PHASE_GATE_LANG`, que se invierte. El resto de esas
+> entradas sigue vigente.
+
+**Decisión.**
+
+- **`machine.json` pasa a la versión 2.** Gana `rutas`, con tres claves: `documentacion` y `carpetaDeRepos`, que
+  son rutas absolutas con la misma regla que las de `repos`, y `subcarpetaTareas`, que puede ir vacía (las tareas
+  cuelgan entonces del proyecto). Sigue siendo estricto: una clave desconocida, también dentro de `rutas`, es un
+  error con su ruta. La 4.0 lee las versiones 1 y 2 y todo lo que escribe es versión 2, con el `$schema` en
+  `@4`. Su shape vive en `src/maquina.ts`, y lo usan el servidor, `doctor` y Ajustes, así que «roto» significa
+  lo mismo en los tres.
+- **Una sola regla de fuentes: el entorno siempre gana.** Para `PHASE_GATE_DOCS_PATH`, `PHASE_GATE_REPOS_PATH` y
+  `PHASE_GATE_TASKS_SUBDIR` el orden es el entorno, el `.env` y `machine.json`, y después nada. Para el idioma,
+  `PHASE_GATE_LANG` gana a `idiomaPorDefecto`, como el entorno gana en las rutas. **Es un cambio de
+  comportamiento:** quien tenga `PHASE_GATE_LANG` en el bloque `env` de un cliente verá que ahora gana a
+  `machine.json`, que antes le ganaba. Va en las notas de la 4.0.0.
+- **Se lee en cada llamada, sin caché.** En NTFS, el `mtime` no cambió en el 48 % de las escrituras atómicas
+  seguidas, así que no sirve para saber si el archivo cambió. Cambiar las rutas en Ajustes vale en la llamada
+  siguiente, sin reiniciar el cliente.
+- **Si se rompe, el proceso conserva el último archivo válido que leyó** (sus rutas y su idioma) y avisa una vez.
+  Si nunca hubo uno válido, sus rutas no cuentan, y el error lo dice según el caso: un error de sintaxis, con su
+  línea y su columna; un error de forma, con el campo; una ruta que no existe o que es un archivo, nombrando
+  `machine.json` y no una variable de entorno.
+- **Cada servidor anota en su sesión las rutas que le llegaron del entorno** (`rutas`, opcional, con un tope de
+  longitud por ruta para que el registro siga cabiendo en 16 KB): es lo que no cambia mientras el proceso vive, y
+  lo que Ajustes compara con `machine.json`. Las sesiones de un servidor 3.x, que no la llevan, se siguen leyendo.
+- **`init` y `init-cliente` guardan las rutas en `machine.json` y dejan de escribirlas en el `env`.** A una
+  entrada de Cursor o VS Code que ya existe le quitan `PHASE_GATE_DOCS_PATH`, `PHASE_GATE_REPOS_PATH` y sus alias
+  `ORQUESTADOR_*` (y `PHASE_GATE_LANG` con `quitarIdioma`), conservan todo lo demás y, si las rutas aún no están en
+  `machine.json`, las agregan en el mismo plan. En Claude Code, una entrada que ya existe no se toca: el plan
+  lee `~/.claude.json` y enseña los dos comandos (`claude mcp remove` y `claude mcp add-json`, en su ámbito) que
+  la rehacen sin las rutas. Los corre la persona, porque si el `add` fallara después del `remove` el servidor
+  quedaría sin registrar. `init` escribe `machine.json` con un temporal y un `rename`, como el Studio, para que un
+  servidor abierto no lo lea a medias.
+- **Dos acciones nuevas, `equipo` y `proyecto`**, con su plan, su huella y su 409. `equipo` edita `machine.json`:
+  `rutas`, `idiomaPorDefecto`, `presetPorDefecto` y la ruta propia de cualquier repo. `proyecto` edita en un solo
+  plan lo que cambió de un proyecto: en su `phase-gate.json`, `preset`, `idioma`, `reglas.*`, `fase5.prPorRepo` y
+  `repos`; en `machine.json`, solo las claves `<P>/<repo>` de ese proyecto. Cada campo admite un valor, o `null`
+  para quitarlo. Ninguna acción escribe fuera de su lista, por archivo y, en `machine.json`, por clave; con dos
+  archivos, `machine.json` va primero, y si falla la segunda escritura la respuesta dice qué quedó escrito y dónde
+  están las copias. Los planes viven en `src/ajustes/`, fuera de `src/studio/`, para que un CLI los pueda usar.
+- **Qué detecta Ajustes (`GET /api/ajustes`) y qué no.** Detecta que pisen `machine.json` con otro valor: el propio
+  Studio, por su entorno o su `.env` (el primer aviso); el `mcp.json` global de Cursor y de VS Code; `~/.claude.json`
+  en sus ámbitos de usuario y local; y cualquier cliente con un servidor abierto, por sus sesiones. `doctor` avisa
+  del mismo choque (`VAR-PISA-MAQUINA` y `LANG-PISA-MAQUINA`) y dice cuál gana y cómo quitarlo. **No cubre** los
+  `.cursor/mcp.json` y `.vscode/mcp.json` de cada proyecto, los perfiles de VS Code, otros clientes, el ámbito de
+  proyecto de Claude Code (su `.mcp.json`) ni los servidores con otro `PHASE_GATE_STATE_PATH`, cuyas sesiones el
+  Studio no ve.
+- **Los eventos en vivo.** `machine.json` gana su propio evento, `equipo`, en lugar del `prompts` de antes, y las
+  carpetas que vigila el Studio, que se fijaban una sola vez al arrancar, se recalculan cuando cambia: si la
+  Documentación es otra, se vigila la nueva.
+- **La 3.x no lee la versión 2.** Para volver a ella basta la copia `.bak` de la versión 1 que deja el Studio o
+  `init` al pasar el archivo a la 2. Es un cambio de versión mayor y las notas de la 4.0.0 lo explican. Mientras la
+  4.0 se desarrolla, se prueba con `PHASE_GATE_CONFIG_PATH` apuntando a una carpeta aparte, así que la 3.2 de uso
+  diario nunca ve un `machine.json` versión 2.
+- **Los tests no pueden leer la configuración real.** `limpiarEntorno` fija también `HOME`, `USERPROFILE`,
+  `APPDATA` y `XDG_CONFIG_HOME` a carpetas temporales: aunque un test borre `PHASE_GATE_CONFIG_PATH`, `configDir()`
+  cae en una carpeta falsa, y un test lo comprueba.
+
+**Por qué.**
+
+- Con `npx`, el `.env` de la raíz del paquete queda dentro de la caché de `npx`, y el Studio lanzado desde una
+  terminal no ve el bloque `env` de Cursor ni de Claude Code, así que no podía editar ni siquiera saber las rutas
+  que usa el servidor.
+- `machine.json` ya guarda la ruta de cada repo en este equipo y vive en una carpeta fija por sistema que leen
+  igual el servidor y el Studio: es el candidato natural. Pero su esquema no admitía claves nuevas, y colarlas sin
+  más habría dejado un archivo que dos versiones leen distinto. Por eso sube a la versión 2.
+- Gana el entorno porque es lo único que puede valer distinto por cliente o por ejecución: Cursor con la
+  Documentación del trabajo y Claude Code con otra, o una prueba de una sola vez sin tocar el archivo. Es la
+  convención de git y de npm: lo de la ejecución gana a lo guardado. Y una sola regla, también para el idioma,
+  se explica en una línea.
+
+**Qué se descartó.**
+
+- **Un archivo aparte para las rutas.** Solo servía para no romper la 3.x, y dejaba dos archivos de configuración
+  del equipo que mantener y que validar.
+- **Que gane Ajustes (o `machine.json`) sobre el entorno.** Un cliente no podría tener otra Documentación, y una
+  prueba de una sola vez obligaría a editar el archivo.
+- **Una 3.2.1 que tolerara la versión 2** e ignorara sus rutas, para que la 3.2 de uso diario conviviera con la 4.0
+  en desarrollo. No se publica ninguna 3.x nueva: basta con probar la 4.0 con su propia carpeta de configuración.
+- **Una caché por el `mtime` del archivo**, por lo medido en NTFS.
+- **Que `init` siga escribiendo las rutas en el `env` además de en `machine.json`:** dejaría cada cliente con su
+  copia, que gana y se queda vieja sin que nadie lo note.
+
+**Riesgo aceptado.** `machine.json` pasa a ser crítico: si se rompe, ya no fallan solo los repos, sino todo. Lo
+frenan la validación antes de escribir, la copia `.bak`, el último archivo válido en memoria, un error que dice qué
+está mal y dónde, y `doctor`, que lo muestra primero. Un `env` viejo sigue mandando aunque se cambie Ajustes: lo
+frenan el aviso con su botón, el hallazgo de `doctor` y que `init` ya no escribe rutas en él.
+
+---
+
 ## 2026-10-27 — El Studio adopta la dirección visual sobria: Inter y JetBrains Mono, un acento azul, un fondo gris, pizarra azulada en oscuro y un indicador para cada estado
 
 > **Reemplaza en parte** la §7.2 de `docs/plan-maestro-v3.md`, solo en la tipografía: las tres familias (Big
@@ -196,6 +296,10 @@ otro tema un instante, hasta que corre el JavaScript.
 ## 2026-10-19 — Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del equipo
 
 > **Matiza** la del 2026-10-18 "El idioma es del proyecto y se deduce primero del disco…", en su paso 5.
+
+> **Reemplazada en parte** el 2026-10-28 por "Las rutas de este equipo y el idioma por defecto viven en
+> `machine.json`, que pasa a la versión 2, y el entorno siempre gana": donde dice que `idiomaPorDefecto` y
+> `PHASE_GATE_LANG` cuentan en ese orden, ahora cuenta primero `PHASE_GATE_LANG`.
 
 **Decisión.**
 
@@ -450,6 +554,10 @@ proyecto que no existe) sale en el idioma del equipo, no en el del proyecto: tod
 
 > **Matizada** el 2026-10-19 por "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
 > equipo": un manifiesto sin `idioma` y sin documentos que lo digan es español, no el idioma del sistema.
+
+> **Reemplazada en parte** el 2026-10-28 por "Las rutas de este equipo y el idioma por defecto viven en
+> `machine.json`, que pasa a la versión 2, y el entorno siempre gana": en el paso 3, `PHASE_GATE_LANG` pasa a
+> ganar a `idiomaPorDefecto` de `machine.json`, y no al revés.
 
 **Decisión.** Dos conceptos distintos:
 
@@ -712,6 +820,12 @@ tests"): los textos son ese fixture y el mismo generador alimenta los tests de l
 > **Matizada** el 2026-10-18 (Etapa 6, desvío E6-D7 b): la huella ya no incluye el texto del resumen, que
 > depende del idioma de la interfaz, para que una vista previa hecha en un idioma se pueda aplicar en el otro.
 > No pierde protección: el resumen se deriva de la acción, las rutas y los contenidos, que siguen en la huella.
+
+> **Reemplazada en parte** el 2026-10-28 por "Las rutas de este equipo y el idioma por defecto viven en
+> `machine.json`, que pasa a la versión 2, y el entorno siempre gana": las acciones siguen siendo cinco, pero ya
+> no son estas (entran `equipo` y `proyecto`, que no tienen comando de CLI, y salen `preset` y `reglas`), y cada
+> acción tiene su lista cerrada de destinos, también por clave en `machine.json`. La huella, el 409, el shape de
+> validación y que nunca se escriba en una tarea ni en los repos siguen vigentes.
 
 **Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos
 (`src/studio/acciones.ts`):
