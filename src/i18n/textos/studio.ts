@@ -149,16 +149,30 @@ export const TEXTOS_STUDIO = {
 
   // ─── studio/api.ts: el asistente de clientes del Vigía ───
   "STUDIO-SIN-RUTAS": {
-    es: "Faltan PHASE_GATE_DOCS_PATH y PHASE_GATE_REPOS_PATH (o no existen): init no sabría qué rutas registrar.",
-    en: "PHASE_GATE_DOCS_PATH and PHASE_GATE_REPOS_PATH are missing (or do not exist): init would not know which paths to register.",
+    es: "Faltan la Documentación y la carpeta de repos (o no existen): ni machine.json ni el entorno las dicen, y el servidor no sabría dónde buscar.",
+    en: "The Documentation and the repos folder are missing (or do not exist): neither machine.json nor the environment gives them, and the server would not know where to look.",
+  },
+  "STUDIO-INIT-RUTAS-EN-MAQUINA": {
+    es: (p: { cambios: string[] }) => `Las rutas pasan a machine.json (${p.cambios.join("; ")}), para que el servidor de cada cliente y el Studio las lean de ahí.`,
+    en: (p: { cambios: string[] }) => `The paths move to machine.json (${p.cambios.join("; ")}), so that the server of each client and the Studio read them from there.`,
+  },
+  "STUDIO-INIT-QUITA-DEL-ENV": {
+    es: (p: { cliente: string; quita: string[] }) => `${p.cliente}: quita de su env ${p.quita.join(", ")}.`,
+    en: (p: { cliente: string; quita: string[] }) => `${p.cliente}: removes ${p.quita.join(", ")} from its env.`,
   },
   "STUDIO-CLIENTE-SIN-LISTA": {
     es: (p: { detalle: string }) => `No se puede saber si ya está registrado: ${p.detalle}`,
     en: (p: { detalle: string }) => `Cannot tell whether it is already registered: ${p.detalle}`,
   },
   "STUDIO-CLIENTE-EXISTENTE": {
-    es: (p: { clave: string }) => `Ya está registrado como «${p.clave}»; init no lo toca.`,
-    en: (p: { clave: string }) => `Already registered as "${p.clave}"; init leaves it alone.`,
+    es: (p: { clave: string; conRutas: boolean }) =>
+      p.conRutas
+        ? `Ya está registrado como «${p.clave}» y lleva rutas en su env: init no lo toca. Los comandos para dejarlo sin ellas los corres tú.`
+        : `Ya está registrado como «${p.clave}» y no lleva rutas en su env; init no lo toca.`,
+    en: (p: { clave: string; conRutas: boolean }) =>
+      p.conRutas
+        ? `Already registered as "${p.clave}" and it carries paths in its env: init leaves it alone. You run the commands that leave it without them.`
+        : `Already registered as "${p.clave}" and it carries no paths in its env; init leaves it alone.`,
   },
   "STUDIO-CLIENTE-CLAUDE-NUEVO": {
     es: (p: { clave: string }) => `Se registraría como «${p.clave}» (ámbito user).`,
@@ -312,8 +326,14 @@ export const TEXTOS_STUDIO = {
 
   // ─── studio/acciones.ts: init en un cliente ───
   "STUDIO-INIT-CLAUDE-EXISTENTE": {
-    es: (p: { clave: string; comando: string }) => `Claude Code ya lo tiene registrado como «${p.clave}»; init no lo toca. Para cambiarlo: ${p.comando}`,
-    en: (p: { clave: string; comando: string }) => `Claude Code already has it registered as "${p.clave}"; init leaves it alone. To change it: ${p.comando}`,
+    es: (p: { clave: string; comando: string | null }) =>
+      p.comando
+        ? `Claude Code ya lo tiene registrado como «${p.clave}» y lleva rutas en su env; init no lo toca. Para dejarlo sin ellas, corre tú estos dos comandos, en este orden (si el segundo falla, queda sin registrar):\n${p.comando}`
+        : `Claude Code ya lo tiene registrado como «${p.clave}» y no lleva rutas en su env; no hay nada que cambiar.`,
+    en: (p: { clave: string; comando: string | null }) =>
+      p.comando
+        ? `Claude Code already has it registered as "${p.clave}" and it carries paths in its env; init leaves it alone. To leave it without them, run these two commands yourself, in this order (if the second fails, it is left unregistered):\n${p.comando}`
+        : `Claude Code already has it registered as "${p.clave}" and it carries no paths in its env; there is nothing to change.`,
   },
   "STUDIO-INIT-CLAUDE-RESUMEN": {
     es: (p: { clave: string }) => `Registrar el servidor en Claude Code como «${p.clave}» (ámbito user).`,

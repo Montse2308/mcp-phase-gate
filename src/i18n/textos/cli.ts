@@ -36,8 +36,10 @@ Uso:
 init:
   --cliente claude-code|cursor|vscode|todos   Sin esto, detecta los que hay en este equipo.
   --clave <clave>        Nombre del registro nuevo (por defecto "pg"). Uno que ya existe conserva el suyo.
-  --docs <ruta>          Documentación Central (si no, PHASE_GATE_DOCS_PATH, o te la pregunta).
-  --repos <ruta>         Carpeta de repositorios (si no, PHASE_GATE_REPOS_PATH, o te la pregunta).
+  --docs <ruta>          Documentación Central (si no, la de machine.json o PHASE_GATE_DOCS_PATH, o te la pregunta).
+  --repos <ruta>         Carpeta de repositorios (si no, la de machine.json o PHASE_GATE_REPOS_PATH, o te la pregunta).
+                         Las dos rutas se guardan en el machine.json de este equipo, no en el env de cada cliente:
+                         a un registro que ya existe se le quitan de su env (en Claude Code, te da los comandos).
   --comandos             Copia /f1…/fN a ~/.claude/commands/ o ~/.cursor/commands/.
   --migrate              Crea phase-gate.json con "preset": "software-replica" en los proyectos sin él.
     --preset <nombre>    Otro preset para la migración.
@@ -62,30 +64,30 @@ ui:
   --export-static <dir>  No arranca nada: escribe en <dir> (nueva o vacía) un sitio estático de solo lectura con la demo.
     --incluir-datos-reales  Con tu Documentación en vez de la demo. Pide que escribas "exportar" (o --yes).
 
-Regístralo en tu cliente (Cursor, VS Code, Claude Code) así:
+Regístralo en tu cliente (Cursor, VS Code, Claude Code) con \`${servidor} init --docs <ruta> --repos <ruta>\`, o a mano:
 
   {
     "mcpServers": {
       "${servidor}": {
         "command": "npx",
-        "args": ["-y", "mcp-phase-gate"],
-        "env": {
-          "PHASE_GATE_DOCS_PATH": "<tu carpeta de documentación>",
-          "PHASE_GATE_REPOS_PATH": "<tu carpeta de repositorios>"
-        }
+        "args": ["-y", "mcp-phase-gate"]
       }
     }
   }
 
+Las rutas de este equipo viven en machine.json (rutas.documentacion, rutas.carpetaDeRepos y rutas.subcarpetaTareas),
+que lee igual el servidor de cada cliente. Una variable de entorno gana a machine.json: sirve para un valor distinto
+en un cliente o en una ejecución.
+
 Variables de entorno (los nombres ORQUESTADOR_* de antes siguen valiendo como alias):
-  PHASE_GATE_DOCS_PATH      Obligatoria. Raíz de la Documentación Central.
-  PHASE_GATE_REPOS_PATH     Obligatoria. Carpeta con tus repositorios de código.
-  PHASE_GATE_TASKS_SUBDIR   Subcarpeta de tareas dentro de cada proyecto. Por defecto "Proyectos".
+  PHASE_GATE_DOCS_PATH      Raíz de la Documentación Central. Sin ella, rutas.documentacion de machine.json.
+  PHASE_GATE_REPOS_PATH     Carpeta con tus repositorios de código. Sin ella, rutas.carpetaDeRepos de machine.json.
+  PHASE_GATE_TASKS_SUBDIR   Subcarpeta de tareas dentro de cada proyecto. Por defecto "Proyectos" (o rutas.subcarpetaTareas).
   PHASE_GATE_PROMPTS_PATH   Carpeta de prompts propios, que se superponen a los del paquete.
   PHASE_GATE_STATE_PATH     Dónde guardar los punteros de tarea activa.
   PHASE_GATE_CONFIG_PATH    Carpeta de machine.json y de los presets propios (por defecto, la del sistema).
   PHASE_GATE_ELICITATION    "off" para que el servidor no pida confirmaciones al cliente.
-  PHASE_GATE_LANG           "es" o "en": idioma de los mensajes, y de los proyectos sin idioma propio.
+  PHASE_GATE_LANG           "es" o "en": idioma de los mensajes, y de los proyectos sin idioma propio. Gana a idiomaPorDefecto de machine.json.
 
 Documentación: https://github.com/Montse2308/mcp-phase-gate`,
     en: ({ servidor, version }: Servidor) => `${servidor} v${version}
@@ -115,8 +117,10 @@ Usage:
 init:
   --cliente claude-code|cursor|vscode|todos   Without it, detects the ones on this machine.
   --clave <key>          Name of the new registration (default "pg"). An existing one keeps its own.
-  --docs <path>          Central Documentation (otherwise PHASE_GATE_DOCS_PATH, or it asks you).
-  --repos <path>         Repositories folder (otherwise PHASE_GATE_REPOS_PATH, or it asks you).
+  --docs <path>          Central Documentation (otherwise the one in machine.json or PHASE_GATE_DOCS_PATH, or it asks you).
+  --repos <path>         Repositories folder (otherwise the one in machine.json or PHASE_GATE_REPOS_PATH, or it asks you).
+                         Both paths are saved in this machine's machine.json, not in each client's env: an
+                         existing registration loses them from its env (in Claude Code, you get the commands).
   --comandos             Copies /f1…/fN to ~/.claude/commands/ or ~/.cursor/commands/.
   --migrate              Creates phase-gate.json with "preset": "software-replica" in the projects without one.
     --preset <name>      Another preset for the migration.
@@ -141,30 +145,30 @@ ui:
   --export-static <dir>  Starts nothing: writes into <dir> (new or empty) a read-only static site with the demo.
     --incluir-datos-reales  With your Documentation instead of the demo. Asks you to type "exportar" (or --yes).
 
-Register it in your client (Cursor, VS Code, Claude Code) like this:
+Register it in your client (Cursor, VS Code, Claude Code) with \`${servidor} init --docs <path> --repos <path>\`, or by hand:
 
   {
     "mcpServers": {
       "${servidor}": {
         "command": "npx",
-        "args": ["-y", "mcp-phase-gate"],
-        "env": {
-          "PHASE_GATE_DOCS_PATH": "<your documentation folder>",
-          "PHASE_GATE_REPOS_PATH": "<your repositories folder>"
-        }
+        "args": ["-y", "mcp-phase-gate"]
       }
     }
   }
 
+This machine's paths live in machine.json (rutas.documentacion, rutas.carpetaDeRepos and rutas.subcarpetaTareas),
+which the server of every client reads the same way. An environment variable wins over machine.json: use it for a
+different value in one client or one run.
+
 Environment variables (the old ORQUESTADOR_* names still work as aliases):
-  PHASE_GATE_DOCS_PATH      Required. Root of the Central Documentation.
-  PHASE_GATE_REPOS_PATH     Required. Folder with your code repositories.
-  PHASE_GATE_TASKS_SUBDIR   Task subfolder inside each project. Default "Proyectos".
+  PHASE_GATE_DOCS_PATH      Root of the Central Documentation. Without it, rutas.documentacion of machine.json.
+  PHASE_GATE_REPOS_PATH     Folder with your code repositories. Without it, rutas.carpetaDeRepos of machine.json.
+  PHASE_GATE_TASKS_SUBDIR   Task subfolder inside each project. Default "Proyectos" (or rutas.subcarpetaTareas).
   PHASE_GATE_PROMPTS_PATH   Folder of your own prompts, layered over the package's.
   PHASE_GATE_STATE_PATH     Where to keep the active-task pointers.
   PHASE_GATE_CONFIG_PATH    Folder of machine.json and your own presets (default, the system's).
   PHASE_GATE_ELICITATION    "off" so the server does not ask the client for confirmations.
-  PHASE_GATE_LANG           "es" or "en": language of the messages, and of projects with no language of their own.
+  PHASE_GATE_LANG           "es" or "en": language of the messages, and of projects with no language of their own. Wins over idiomaPorDefecto of machine.json.
 
 Documentation: https://github.com/Montse2308/mcp-phase-gate`,
   },
@@ -243,8 +247,10 @@ Documentation: https://github.com/Montse2308/mcp-phase-gate`,
     en: (p: { que: string }) => `Path to ${p.que}: `,
   },
   "INIT-FALTA-RUTA": {
-    es: (p: { que: string; bandera: string; logica: string }) => `Falta la ruta de ${p.que}: pásala con ${p.bandera} o define PHASE_GATE_${p.logica}.`,
-    en: (p: { que: string; bandera: string; logica: string }) => `The path to ${p.que} is missing: pass it with ${p.bandera} or set PHASE_GATE_${p.logica}.`,
+    es: (p: { que: string; bandera: string; logica: string; clave: string }) =>
+      `Falta la ruta de ${p.que}: pásala con ${p.bandera} (init la guarda en machine.json, en "${p.clave}"), o define PHASE_GATE_${p.logica}.`,
+    en: (p: { que: string; bandera: string; logica: string; clave: string }) =>
+      `The path to ${p.que} is missing: pass it with ${p.bandera} (init saves it in machine.json, under "${p.clave}"), or set PHASE_GATE_${p.logica}.`,
   },
   "INIT-RUTA-NO-EXISTE": {
     es: (p: { que: string; ruta: string }) => `La ruta de ${p.que} no existe o no es una carpeta: ${p.ruta}`,
@@ -312,13 +318,21 @@ Documentation: https://github.com/Montse2308/mcp-phase-gate`,
     es: (p: { stderr: string; codigo: number }) => `claude mcp list falló (${p.stderr || `código ${p.codigo}`}); no se registra para no duplicarlo.`,
     en: (p: { stderr: string; codigo: number }) => `claude mcp list failed (${p.stderr || `code ${p.codigo}`}); it is not registered, to avoid duplicating it.`,
   },
-  "INIT-CLAUDE-COMANDO-EXISTENTE": {
-    es: (p: { existente: string; comando: string }) => `claude mcp remove ${p.existente}  y después  ${p.comando}`,
-    en: (p: { existente: string; comando: string }) => `claude mcp remove ${p.existente}  and then  ${p.comando}`,
+  "INIT-CLAUDE-REHACER": {
+    es: (p: { ambito: string; carpeta: string | null; comandos: string[] }) =>
+      `${p.ambito === "local" ? `En el ámbito local (desde la carpeta ${p.carpeta}):` : "En el ámbito user:"}\n  ${p.comandos.join("\n  ")}`,
+    en: (p: { ambito: string; carpeta: string | null; comandos: string[] }) =>
+      `${p.ambito === "local" ? `In the local scope (from the folder ${p.carpeta}):` : "In the user scope:"}\n  ${p.comandos.join("\n  ")}`,
   },
   "INIT-CLAUDE-EXISTENTE": {
-    es: (p: { existente: string; comando: string }) => `Claude Code: ya está registrado como «${p.existente}»; no se toca. Para cambiar sus rutas: ${p.comando}`,
-    en: (p: { existente: string; comando: string }) => `Claude Code: already registered as «${p.existente}»; it is left untouched. To change its paths: ${p.comando}`,
+    es: (p: { existente: string; comando: string }) =>
+      `Claude Code: ya está registrado como «${p.existente}» y lleva rutas en su env; no se toca. Las rutas viven en machine.json: para dejarlo sin ellas, corre tú estos dos comandos, en este orden (si el segundo falla, el servidor queda sin registrar: vuelve a registrarlo con claude mcp add):\n${p.comando}`,
+    en: (p: { existente: string; comando: string }) =>
+      `Claude Code: already registered as «${p.existente}» and it carries paths in its env; it is left untouched. The paths live in machine.json: to leave it without them, run these two commands yourself, in this order (if the second fails, the server is left unregistered: register it again with claude mcp add):\n${p.comando}`,
+  },
+  "INIT-CLAUDE-AL-DIA": {
+    es: (p: { existente: string }) => `Claude Code: ya está registrado como «${p.existente}» y no lleva rutas en su env; no hay nada que cambiar.`,
+    en: (p: { existente: string }) => `Claude Code: already registered as «${p.existente}» and it carries no paths in its env; there is nothing to change.`,
   },
   "INIT-CLAUDE-SE-EJECUTARIA": {
     es: (p: { comando: string }) => `Claude Code: se ejecutaría ${p.comando}`,
@@ -365,6 +379,18 @@ Documentation: https://github.com/Montse2308/mcp-phase-gate`,
   "INIT-MAQUINA-SIN-CAMBIOS": {
     es: (p: { preset: string; idioma: string | null }) => `machine.json: presetPorDefecto ya es "${p.preset}"${p.idioma ? ` e idiomaPorDefecto "${p.idioma}"` : ""}; sin cambios.`,
     en: (p: { preset: string; idioma: string | null }) => `machine.json: presetPorDefecto is already "${p.preset}"${p.idioma ? ` and idiomaPorDefecto "${p.idioma}"` : ""}; no changes.`,
+  },
+  "INIT-MAQUINA-RUTAS-IGUALES": {
+    es: "machine.json: las rutas de este equipo ya son esas; sin cambios.",
+    en: "machine.json: this machine's paths are already those; no changes.",
+  },
+  "INIT-PREGUNTA-CAMBIAR-RUTAS": {
+    es: (p: { cambios: string[] }) => `machine.json ya tiene otras rutas para este equipo (${p.cambios.join("; ")}). ¿Cambiarlas?`,
+    en: (p: { cambios: string[] }) => `machine.json already has other paths for this machine (${p.cambios.join("; ")}). Change them?`,
+  },
+  "INIT-MAQUINA-RUTAS-ESCRITA": {
+    es: (p: { archivo: string; copia: string | null }) => `machine.json: rutas de este equipo guardadas en ${p.archivo}. El servidor de cada cliente y el Studio las leen de ahí.${p.copia ? ` Copia: ${p.copia}` : ""}`,
+    en: (p: { archivo: string; copia: string | null }) => `machine.json: this machine's paths saved in ${p.archivo}. The server of each client and the Studio read them from there.${p.copia ? ` Copy: ${p.copia}` : ""}`,
   },
   "INIT-PREGUNTA-CAMBIAR-PRESET": {
     es: (p: { actual: string; preset: string }) => `machine.json ya tiene presetPorDefecto "${p.actual}". ¿Cambiarlo a "${p.preset}"?`,

@@ -303,10 +303,18 @@ describe("acciones: init-cliente, sobre un HOME falso", () => {
     assert.notEqual(entorno.home, os.homedir());
     const s = await studioConApi({ entornoInit: () => entorno });
     const p = await planPosible(s, "init-cliente", { cliente: "cursor" });
-    assert.deepEqual(p.cambios, [{ archivo: "~/.cursor/mcp.json", tipo: "crear" }]);
+    // Las rutas de este Studio pasan a machine.json, que va primero, y el cliente no las lleva en su env.
+    assert.deepEqual(p.cambios, [
+      { archivo: path.join("<configuración>", "machine.json"), tipo: "crear" },
+      { archivo: "~/.cursor/mcp.json", tipo: "crear" },
+    ]);
+    assert.match(p.resumen, /Las rutas pasan a machine\.json/);
     assert.equal((await aplicar(s, "init-cliente", { cliente: "cursor" }, p.huella)).estado, 200);
     const archivo = path.join(entorno.home, ".cursor", "mcp.json");
-    assert.ok(JSON.parse(fs.readFileSync(archivo, "utf-8")).mcpServers.pg);
+    const registrada = JSON.parse(fs.readFileSync(archivo, "utf-8")).mcpServers.pg;
+    assert.ok(registrada);
+    assert.equal(registrada.env?.PHASE_GATE_DOCS_PATH, undefined);
+    assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(configDir(), "machine.json"), "utf-8")).rutas), ["documentacion", "carpetaDeRepos"]);
     assert.equal((await plan(s, "init-cliente", { cliente: "cursor" })).posible, false);
 
     const otro = entornoInitDePrueba();
@@ -330,7 +338,7 @@ describe("acciones: init-cliente, sobre un HOME falso", () => {
     const p = await planPosible(s, "init-cliente", { cliente: "cursor", comandos: true });
     assert.deepEqual(
       p.cambios.map((c) => c.archivo),
-      ["~/.cursor/mcp.json", "~/.cursor/commands/f1.md", "~/.cursor/commands/f2.md", "~/.cursor/commands/f4.md", "~/.cursor/commands/f5.md"]
+      [path.join("<configuración>", "machine.json"), "~/.cursor/mcp.json", "~/.cursor/commands/f1.md", "~/.cursor/commands/f2.md", "~/.cursor/commands/f4.md", "~/.cursor/commands/f5.md"]
     );
     assert.match(p.resumen, /\/f3 ya existen y no los generó init: no se tocan/);
     assert.equal((await aplicar(s, "init-cliente", { cliente: "cursor", comandos: true }, p.huella)).estado, 200);
@@ -346,8 +354,8 @@ describe("acciones: init-cliente, sobre un HOME falso", () => {
     const entorno = entornoInitDePrueba((args) => (args[0] === "mcp" && args[1] === "list" ? { codigo: 0, stdout: "", stderr: "" } : { codigo: falla ? 1 : 0, stdout: "", stderr: falla ? "sin permiso" : "" }));
     const s = await studioConApi({ entornoInit: () => entorno });
     const p = await planPosible(s, "init-cliente", { cliente: "claude-code" });
-    assert.deepEqual(p.cambios.map((c) => c.tipo), ["comando"]);
-    assert.match(p.diff, /^\$ claude mcp add pg --scope user/m);
+    assert.deepEqual(p.cambios.map((c) => c.tipo), ["crear", "comando"], "machine.json con las rutas, y después el comando");
+    assert.match(p.diff, /^\$ claude mcp add pg --scope user -- npx -y mcp-phase-gate$/m);
     assert.equal((await aplicar(s, "init-cliente", { cliente: "claude-code" }, p.huella)).estado, 200);
     assert.ok(entorno.llamadas.some((l) => l[1] === "mcp" && l[2] === "add"));
     // Un plan que solo ejecuta un comando no cambia ningún archivo: la huella sirve una vez, o la misma
@@ -359,6 +367,78 @@ describe("acciones: init-cliente, sobre un HOME falso", () => {
     const r = await aplicar(s, "init-cliente", { cliente: "claude-code", clave: "otra" }, q.huella);
     assert.equal(r.estado, 500);
     assert.match(r.json.error, /sin permiso/);
+  });
+});
+
+describe("acciones: init-cliente quita las rutas del env de una entrada que ya existe", () => {
+  const ENTRADA = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: "/de/cursor/docs", ORQUESTADOR_REPOS_PATH: "/de/cursor/repos", PHASE_GATE_LANG: "en", PHASE_GATE_ELICITATION: "off" } };
+  function conEntrada(entrada: object) {
+    const entorno = entornoInitDePrueba();
+    fs.mkdirSync(path.join(entorno.home, ".cursor"));
+    const archivo = path.join(entorno.home, ".cursor", "mcp.json");
+    fs.writeFileSync(archivo, JSON.stringify({ mcpServers: { pg: entrada, otro: { command: "otro" } } }, null, 2), "utf-8");
+    return { entorno, archivo };
+  }
+
+  it("quita las rutas y sus alias y conserva todo lo demás; el idioma solo con quitarIdioma; las rutas pasan a machine.json si no están", async () => {
+    instalacion();
+    const { entorno, archivo } = conEntrada(ENTRADA);
+    const s = await studioConApi({ entornoInit: () => entorno });
+
+    const p = await planPosible(s, "init-cliente", { cliente: "cursor" });
+    assert.deepEqual(p.cambios.map((c) => path.basename(c.archivo)), ["machine.json", "mcp.json"]);
+    assert.match(p.resumen, /quita de su env PHASE_GATE_DOCS_PATH, PHASE_GATE_REPOS_PATH\./, "sin el idioma");
+    assert.match(p.diff, /^- +"PHASE_GATE_DOCS_PATH": "\/de\/cursor\/docs",$/m);
+    assert.equal((await aplicar(s, "init-cliente", { cliente: "cursor" }, p.huella)).estado, 200);
+    const datos = JSON.parse(fs.readFileSync(archivo, "utf-8")).mcpServers;
+    assert.deepEqual(datos.pg.env, { PHASE_GATE_LANG: "en", PHASE_GATE_ELICITATION: "off" });
+    assert.deepEqual(datos.otro, { command: "otro" });
+    // Lo que la entrada tenía va a machine.json: es lo que el cliente usaba, y nada deja de funcionar.
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(configDir(), "machine.json"), "utf-8")).rutas, { documentacion: "/de/cursor/docs", carpetaDeRepos: "/de/cursor/repos" });
+
+    const conIdioma = await planPosible(s, "init-cliente", { cliente: "cursor", quitarIdioma: true });
+    assert.deepEqual(conIdioma.cambios.map((c) => path.basename(c.archivo)), ["mcp.json"], "machine.json ya tiene las rutas");
+    assert.match(conIdioma.resumen, /quita de su env PHASE_GATE_LANG\./);
+    assert.equal((await aplicar(s, "init-cliente", { cliente: "cursor", quitarIdioma: true }, conIdioma.huella)).estado, 200);
+    assert.deepEqual(JSON.parse(fs.readFileSync(archivo, "utf-8")).mcpServers.pg.env, { PHASE_GATE_ELICITATION: "off" });
+  });
+
+  it("solo agrega a machine.json las rutas que faltan: una que ya tiene valor no se cambia desde aquí", async () => {
+    instalacion();
+    const guardada = carpetaTemporal("guardada");
+    maquinaEn(JSON.stringify({ version: 2, rutas: { documentacion: guardada } }));
+    const { entorno } = conEntrada(ENTRADA);
+    const s = await studioConApi({ entornoInit: () => entorno });
+
+    const p = await planPosible(s, "init-cliente", { cliente: "cursor" });
+    assert.match(p.diff, /^\+ +"carpetaDeRepos": "\/de\/cursor\/repos"$/m);
+    assert.equal((await aplicar(s, "init-cliente", { cliente: "cursor" }, p.huella)).estado, 200);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(configDir(), "machine.json"), "utf-8")).rutas, { documentacion: guardada, carpetaDeRepos: "/de/cursor/repos" });
+  });
+
+  it("sin rutas en ningún lado, no registra una entrada nueva: el servidor no sabría dónde buscar", async () => {
+    limpiarEntorno();
+    estadoTemporal();
+    const entorno = entornoInitDePrueba();
+    const s = await studioConApi({ entornoInit: () => entorno });
+    const p = await plan(s, "init-cliente", { cliente: "cursor" });
+    assert.ok(!p.posible && /Faltan la Documentación y la carpeta de repos/.test(p.motivo), JSON.stringify(p));
+    assert.equal(fs.existsSync(path.join(entorno.home, ".cursor", "mcp.json")), false);
+  });
+
+  it("Claude Code: una entrada con rutas en su env se enseña con los comandos para rehacerla, y nunca se ejecutan", async () => {
+    instalacion();
+    maquinaEn(JSON.stringify({ version: 2, rutas: { documentacion: carpetaTemporal("d"), carpetaDeRepos: carpetaTemporal("r") } }));
+    const entorno = { ...entornoInitDePrueba((args) => (args[1] === "list" ? { codigo: 0, stdout: "pg: npx -y mcp-phase-gate - ✔ Connected\n", stderr: "" } : { codigo: 0, stdout: "", stderr: "" })), plataforma: "linux" as const };
+    fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ mcpServers: { pg: { type: "stdio", command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: "/x", PHASE_GATE_LANG: "en" } } } }), "utf-8");
+    const s = await studioConApi({ entornoInit: () => entorno });
+
+    const p = await plan(s, "init-cliente", { cliente: "claude-code", quitarIdioma: true });
+    assert.ok(!p.posible, "no hay nada que escribir: machine.json ya tiene las rutas");
+    assert.match(p.motivo, /claude mcp remove pg --scope user\n {2}claude mcp add-json pg '\{"type":"stdio","command":"npx","args":\["-y","mcp-phase-gate"\]\}'/s);
+    assert.equal(entorno.llamadas.some((l) => l[2] === "remove" || l[2] === "add" || l[2] === "add-json"), false);
+    const sinRutas = await studioConApi({ entornoInit: () => entorno });
+    assert.equal((await sinRutas.get("/api/clientes")).json.clientes.find((c: { cliente: string }) => c.cliente === "claude-code").estado, "existente");
   });
 });
 

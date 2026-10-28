@@ -30,6 +30,7 @@ import * as path from "path";
 import { z } from "zod";
 
 import { ArgumentosDeEquipo, planDeEquipo } from "../ajustes/equipo.js";
+import { leerMaquinaParaEditar, planDeEdicion } from "../ajustes/edicion-maquina.js";
 import { ErrorDeArgumentos } from "../ajustes/plan.js";
 import type { PlanDeAjustes } from "../ajustes/plan.js";
 import { ArgumentosDeProyecto, planDeProyecto } from "../ajustes/proyecto.js";
@@ -38,7 +39,7 @@ import { carpetaPromptsDeProyecto } from "../capas.js";
 import { ErrorDeEject, planDeEject } from "../eject.js";
 import { mensaje } from "../i18n/mensajes.js";
 import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, carpetaDelCliente, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
-import type { EntornoInit } from "../init.js";
+import type { EntornoInit, QuitaDelEntorno } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
 import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, presetsDisponibles, rutaManifiesto, rutaMaquina } from "../manifiesto.js";
 import { estaDentroReal, requireProjectFolder, rutaReal, ubicarEnTarea, validarSegmento } from "../paths.js";
@@ -65,7 +66,8 @@ const ARGUMENTOS = {
     .refine((a) => a.lotes !== undefined || a.commits !== undefined, "indica `lotes` o `commits`"),
   "crear-manifiesto": z.object({ proyecto: Proyecto, preset: z.string().regex(ID).optional() }).strict(),
   eject: z.object({ objetivo: z.string().min(1).max(120), destino: z.string().min(1).max(260), fuerza: z.boolean().optional() }).strict(),
-  "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional(), comandos: z.boolean().optional() }).strict(),
+  // quitarIdioma: quita también PHASE_GATE_LANG del env del cliente (el aviso de que el env gana al idioma de machine.json).
+  "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional(), comandos: z.boolean().optional(), quitarIdioma: z.boolean().optional() }).strict(),
   equipo: ArgumentosDeEquipo,
   proyecto: ArgumentosDeProyecto,
 } as const;
@@ -230,49 +232,91 @@ function planDeEjectAccion(a: z.infer<(typeof ARGUMENTOS)["eject"]>): Plan {
   };
 }
 
-function rutasDeInit(): { docs: string; repos: string } | null {
-  const docs = leerVariable("DOCS_PATH").valor;
-  const repos = leerVariable("REPOS_PATH").valor;
-  const carpeta = (ruta: string | undefined): string | null => (ruta && fs.statSync(path.resolve(ruta), { throwIfNoEntry: false })?.isDirectory() ? path.resolve(ruta) : null);
-  const d = carpeta(docs);
-  const r = carpeta(repos);
-  return d && r ? { docs: d, repos: r } : null;
+// Las rutas con las que trabaja este Studio ahora (el entorno, el .env o machine.json), las que existen.
+function rutasEfectivas(): QuitaDelEntorno {
+  const carpeta = (ruta: string | undefined): string | undefined => (ruta && fs.statSync(path.resolve(ruta), { throwIfNoEntry: false })?.isDirectory() ? path.resolve(ruta) : undefined);
+  const documentacion = carpeta(leerVariable("DOCS_PATH").valor);
+  const carpetaDeRepos = carpeta(leerVariable("REPOS_PATH").valor);
+  return { ...(documentacion ? { documentacion } : {}), ...(carpetaDeRepos ? { carpetaDeRepos } : {}) };
 }
 
 // El registro en el cliente y, con `comandos`, los /fN que copiaría `init --comandos` (solo Claude Code y
 // Cursor los leen de archivo). Un /fN que no generó init es de la persona: no se pisa (el CLI pide --yes).
 async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: ContextoDeAcciones): Promise<Plan> {
-  const rutas = rutasDeInit();
-  if (!rutas) return { posible: false, motivo: mensaje("STUDIO-SIN-RUTAS") };
   const entorno = ctx.entornoInit();
+  const opciones = { quitarIdioma: a.quitarIdioma === true };
   const resumen: string[] = [];
   const hecho: string[] = [];
   const motivos: string[] = [];
   const escrituras: Escritura[] = [];
   const comandos: Comando[] = [];
+  let escrituraDelCliente: Escritura | null = null;
+  let quita: QuitaDelEntorno = {};
+  let esNueva = false;
 
   if (a.cliente === "claude-code") {
-    const plan = await planDeClaude(rutas, a.clave ?? null, entorno);
+    const plan = await planDeClaude(a.clave ?? null, entorno, opciones);
     if (plan.estado === "sin-lista") motivos.push(`Claude Code: ${sinRutasDelEquipo(plan.mensaje)}`);
-    else if (plan.estado === "existente") motivos.push(mensaje("STUDIO-INIT-CLAUDE-EXISTENTE", { clave: plan.existente, comando: plan.comando }));
-    else {
+    else if (plan.estado === "existente") {
+      motivos.push(mensaje("STUDIO-INIT-CLAUDE-EXISTENTE", { clave: plan.existente, comando: plan.comando }));
+      quita = plan.quita;
+    } else {
+      esNueva = true;
       resumen.push(mensaje("STUDIO-INIT-CLAUDE-RESUMEN", { clave: plan.clave }));
       comandos.push({ comando: "claude", args: plan.args, mostrar: plan.comando });
       hecho.push(mensaje("STUDIO-INIT-CLAUDE-HECHO", { clave: plan.clave }));
     }
   } else {
-    const plan = planDeArchivo(a.cliente, rutas, a.clave ?? null, entorno);
+    const plan = planDeArchivo(a.cliente, a.clave ?? null, entorno, opciones);
     if (plan.estado === "roto") motivos.push(mensaje("STUDIO-INIT-ROTO", { cliente: plan.nombre, error: plan.error ?? "?" }));
     else if (plan.estado === "forma-rara") motivos.push(mensaje("STUDIO-INIT-FORMA-RARA", { cliente: plan.nombre, seccion: plan.seccion }));
     else if (plan.estado === "clave-ocupada") motivos.push(mensaje("STUDIO-INIT-CLAVE-OCUPADA", { cliente: plan.nombre, clave: plan.clave }));
     else if (plan.estado === "sin-cambios") motivos.push(mensaje("STUDIO-INIT-SIN-CAMBIOS", { cliente: plan.nombre, clave: plan.claveFinal }));
     else {
       const antes = leerCrudo(plan.archivo);
+      esNueva = plan.estado === "nuevo";
+      quita = plan.quita;
       resumen.push(mensaje("STUDIO-INIT-RESUMEN", { nuevo: plan.estado === "nuevo", cliente: plan.nombre, clave: plan.claveFinal, comentarios: plan.comentarios }));
-      escrituras.push({ ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false });
+      const quitadas = [
+        ...(plan.quita.documentacion ? ["PHASE_GATE_DOCS_PATH"] : []),
+        ...(plan.quita.carpetaDeRepos ? ["PHASE_GATE_REPOS_PATH"] : []),
+        ...(plan.quita.idioma ? ["PHASE_GATE_LANG"] : []),
+      ];
+      if (quitadas.length) resumen.push(mensaje("STUDIO-INIT-QUITA-DEL-ENV", { cliente: plan.nombre, quita: quitadas }));
+      escrituraDelCliente = { ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false };
       hecho.push(mensaje("STUDIO-INIT-HECHO", { nuevo: plan.estado === "nuevo", cliente: plan.nombre, clave: plan.claveFinal }));
     }
   }
+
+  // Las rutas que el cliente llevaba en su env, o las del propio Studio, pasan a machine.json si aún no están
+  // ahí: así nada deja de funcionar al quitárselas. Solo las que faltan; machine.json va primero.
+  const avisos: string[] = [];
+  const maquina = leerMaquinaParaEditar();
+  const guardadas = maquina.estado === "valido" && maquina.objeto.rutas !== null && typeof maquina.objeto.rutas === "object" ? (maquina.objeto.rutas as Record<string, unknown>) : {};
+  const efectivas = rutasEfectivas();
+  const agregar: { documentacion?: string; carpetaDeRepos?: string } = {};
+  for (const clave of ["documentacion", "carpetaDeRepos"] as const) {
+    const candidata = quita[clave] ?? efectivas[clave];
+    if (candidata && guardadas[clave] === undefined) agregar[clave] = candidata;
+  }
+  const hayRuta = (clave: "documentacion" | "carpetaDeRepos"): boolean => guardadas[clave] !== undefined || agregar[clave] !== undefined;
+  if (esNueva && !(hayRuta("documentacion") && hayRuta("carpetaDeRepos"))) return { posible: false, motivo: mensaje("STUDIO-SIN-RUTAS") };
+  if (Object.keys(agregar).length) {
+    if (maquina.estado === "invalido") return { posible: false, motivo: sinRutasDelEquipo(mensaje("AJUSTES-MAQUINA-A-MANO", { error: maquina.error })) };
+    let planeada;
+    try {
+      planeada = planDeEdicion(maquina, { rutas: agregar });
+    } catch (error) {
+      if (error instanceof ErrorDeArgumentos) throw new ErrorDeAccion(400, sinRutasDelEquipo(error.message));
+      throw error;
+    }
+    if (planeada) {
+      escrituras.push(planeada.escritura);
+      resumen.unshift(mensaje("STUDIO-INIT-RUTAS-EN-MAQUINA", { cambios: planeada.cambios }));
+      avisos.push(...planeada.faltan.map(({ clave, ruta }) => mensaje("AJUSTES-RUTA-NO-EXISTE", { clave, ruta })));
+    }
+  }
+  if (escrituraDelCliente) escrituras.push(escrituraDelCliente);
 
   if (a.comandos) {
     if (a.cliente === "vscode") motivos.push(mensaje("STUDIO-INIT-VSCODE-SIN-COMANDOS"));
@@ -291,7 +335,7 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
   }
 
   if (!escrituras.length && !comandos.length) return { posible: false, motivo: motivos.join(" ") };
-  return { posible: true, interno: { accion: "init-cliente", cliente: a.cliente, resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" ") } };
+  return { posible: true, interno: { accion: "init-cliente", cliente: a.cliente, resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" "), avisos } };
 }
 
 // Lo que calcula src/ajustes/, en la forma interna de este módulo. machine.json va primero en la lista: si falla

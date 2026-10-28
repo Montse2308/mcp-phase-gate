@@ -50,7 +50,9 @@ test("Aplicar en Cursor, con los comandos de fase, escribe en el HOME falso con 
   await previa.getByRole("button", { name: "Aplicar" }).click();
   await expect(cursor.getByRole("status").filter({ hasText: "Hecho" })).toContainText("Cursor: registrado como «pg».");
   const mcp = JSON.parse(fs.readFileSync(path.join(servidor.falso.casa, ".cursor", "mcp.json"), "utf-8"));
-  expect(mcp.mcpServers.pg.env.PHASE_GATE_DOCS_PATH).toBe(servidor.arbol.docs);
+  // El mcp.json ya no lleva las rutas: viajaron a machine.json, que se escribe antes.
+  expect(mcp.mcpServers.pg.env?.PHASE_GATE_DOCS_PATH).toBeUndefined();
+  expect(JSON.parse(fs.readFileSync(path.join(servidor.arbol.config, "machine.json"), "utf-8")).rutas.documentacion).toBe(servidor.arbol.docs);
   expect(fs.existsSync(path.join(servidor.falso.casa, ".cursor", "commands", "f4.md"))).toBe(true);
   await expect(cursor).toContainText("Sin cambios", { timeout: 15_000 });
 });

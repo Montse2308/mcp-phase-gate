@@ -595,27 +595,27 @@ export async function planesDeClientes(entorno: EntornoInit): Promise<PlanDeClie
   const repos = leerVariable("REPOS_PATH").valor;
   const existe = (ruta: string | undefined): ruta is string => Boolean(ruta) && (fs.statSync(path.resolve(ruta!), { throwIfNoEntry: false })?.isDirectory() ?? false);
   const detectados = await detectarClientes(entorno);
-  const rutas = existe(docs) && existe(repos) ? { docs: path.resolve(docs), repos: path.resolve(repos) } : null;
+  const hayRutas = existe(docs) && existe(repos);
 
   const planes: PlanDeClienteApi[] = [];
   for (const cliente of CLIENTES) {
     const base = { cliente, nombre: NOMBRES[cliente], detectado: detectados.includes(cliente) };
-    if (!rutas) {
+    if (!hayRutas) {
       planes.push({ ...base, estado: "sin-rutas", archivo: null, comando: null, diff: null, mensaje: mensaje("STUDIO-SIN-RUTAS") });
       continue;
     }
     if (cliente === "claude-code") {
-      const plan = await planDeClaude(rutas, null, entorno);
+      const plan = await planDeClaude(null, entorno);
       const texto =
         plan.estado === "sin-lista"
           ? mensaje("STUDIO-CLIENTE-SIN-LISTA", { detalle: sinRutasDelEquipo(plan.mensaje) })
           : plan.estado === "existente"
-            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente })
+            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente, conRutas: plan.rehacer.length > 0 })
             : mensaje("STUDIO-CLIENTE-CLAUDE-NUEVO", { clave: plan.clave });
       planes.push({ ...base, estado: plan.estado, archivo: null, comando: plan.estado === "sin-lista" ? null : plan.comando, diff: null, mensaje: texto });
       continue;
     }
-    const plan = planDeArchivo(cliente, rutas, null, entorno);
+    const plan = planDeArchivo(cliente, null, entorno);
     const archivo = conTilde(plan.archivo, entorno.home);
     let texto: string;
     let diff: string | null = null;

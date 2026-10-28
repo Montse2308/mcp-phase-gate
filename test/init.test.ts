@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
-import { fijarRaizDelPaquete } from "../src/config.js";
+import { configDir, fijarRaizDelPaquete } from "../src/config.js";
 import { MARCA_DE_COMANDO, candadoDePush, diffDeLineas, ejecutaPhaseGate, ejecutarInit, quitarComentarios, registroEnClaude } from "../src/init.js";
 import type { EntornoInit, Ejecucion, OpcionesInit } from "../src/init.js";
 import { carpetaTemporal, configTemporal, crearProyecto, crearTarea, estadoTemporal, limpiarEntorno } from "./helpers.js";
@@ -110,22 +110,21 @@ describe("init: registrar en los clientes", () => {
 
     assert.equal(await ejecutarInit(opciones(r), p.entorno), 0, p.errores());
 
+    // Las rutas no van en el env de ningún cliente: viven en machine.json.
     assert.deepEqual(leer(cursorJson(p)).mcpServers.pg, {
       command: "npx",
       args: ["-y", "mcp-phase-gate"],
-      env: { PHASE_GATE_DOCS_PATH: r.docs, PHASE_GATE_REPOS_PATH: r.repos, PHASE_GATE_ELICITATION: "off" },
+      env: { PHASE_GATE_ELICITATION: "off" },
     });
     assert.deepEqual(leer(path.join(p.appData, "Code", "User", "mcp.json")).servers.pg, {
       type: "stdio",
       command: "npx",
       args: ["-y", "mcp-phase-gate"],
-      env: { PHASE_GATE_DOCS_PATH: r.docs, PHASE_GATE_REPOS_PATH: r.repos },
     });
-    assert.deepEqual(p.llamadas.at(-1), [
-      "claude", "mcp", "add", "pg", "--scope", "user",
-      "--env", `PHASE_GATE_DOCS_PATH=${r.docs}`, "--env", `PHASE_GATE_REPOS_PATH=${r.repos}`,
-      "--", "npx", "-y", "mcp-phase-gate",
-    ]);
+    assert.deepEqual(p.llamadas.at(-1), ["claude", "mcp", "add", "pg", "--scope", "user", "--", "npx", "-y", "mcp-phase-gate"]);
+    const maquina = leer(path.join(configDir(), "machine.json"));
+    assert.equal(maquina.version, 2);
+    assert.deepEqual(maquina.rutas, { documentacion: r.docs, carpetaDeRepos: r.repos });
     assert.ok(p.texto().includes(candadoDePush()));
     assert.match(p.texto(), /mcp-phase-gate \d+\.\d+\.\d+.* · vía /, "termina con doctor");
   });
@@ -135,7 +134,7 @@ describe("init: registrar en los clientes", () => {
     const p = entornoDePrueba({ plataforma: "linux" });
 
     await ejecutarInit(opciones({ ...r, clientes: ["cursor"] }), p.entorno);
-    assert.equal(leer(cursorJson(p)).mcpServers.pg.env.PHASE_GATE_ELICITATION, undefined);
+    assert.deepEqual(leer(cursorJson(p)).mcpServers.pg, { command: "npx", args: ["-y", "mcp-phase-gate"] }, "sin env: no lleva nada de este equipo");
   });
 
   it("fusiona con lo que ya hay, deja copia .bak, y la segunda vez dice sin cambios", async () => {
@@ -160,7 +159,7 @@ describe("init: registrar en los clientes", () => {
     const r = rutas();
     const p = entornoDePrueba({ plataforma: "linux" });
     fs.mkdirSync(path.join(p.home, ".cursor"));
-    const original = JSON.stringify({ mcpServers: { "mcp-phase-gate": { command: "npx", args: ["-y", "mcp-phase-gate"], env: { ORQUESTADOR_DOCS_PATH: "/viejo", OTRA: "1" } } } });
+    const original = JSON.stringify({ mcpServers: { "mcp-phase-gate": { command: "npx", args: ["-y", "mcp-phase-gate"], env: { ORQUESTADOR_DOCS_PATH: "/viejo", PHASE_GATE_REPOS_PATH: "/viejo-repos", PHASE_GATE_LANG: "en", OTRA: "1" } } } });
     fs.writeFileSync(cursorJson(p), original, "utf-8");
 
     // Sin --yes ni terminal: se enseña el diff y no se aplica.
@@ -173,7 +172,7 @@ describe("init: registrar en los clientes", () => {
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"], yes: true }), p.entorno), 0);
     const servidores = leer(cursorJson(p)).mcpServers;
     assert.deepEqual(Object.keys(servidores), ["mcp-phase-gate"], "no se duplica ni cambia la clave");
-    assert.deepEqual(servidores["mcp-phase-gate"].env, { OTRA: "1", PHASE_GATE_DOCS_PATH: r.docs, PHASE_GATE_REPOS_PATH: r.repos });
+    assert.deepEqual(servidores["mcp-phase-gate"].env, { PHASE_GATE_LANG: "en", OTRA: "1" }, "quita las rutas y sus alias; el idioma y lo demás se quedan");
     assert.ok(fs.existsSync(`${cursorJson(p)}${BAK}`));
   });
 
@@ -306,7 +305,69 @@ describe("init: registrar en los clientes", () => {
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["claude-code"] }), p.entorno), 0);
     assert.equal(p.llamadas.some((l) => l[2] === "add"), false);
-    assert.match(p.texto(), /ya está registrado como «mcp-phase-gate»; no se toca\. Para cambiar sus rutas: claude mcp remove mcp-phase-gate/);
+    assert.match(p.texto(), /ya está registrado como «mcp-phase-gate» y no lleva rutas en su env; no hay nada que cambiar/);
+  });
+
+  // Una entrada que ya existe en Claude Code no se toca: se enseña el comando exacto para rehacerla sin las
+  // rutas, en su ámbito y con sus mismos args y env. Lo corre la persona: nunca se ejecuta claude mcp remove.
+  it("en Claude Code, una entrada con rutas en su env: el comando para rehacerla sin ellas, por ámbito, y nada se ejecuta", async () => {
+    const r = rutas();
+    const entrada = { type: "stdio", command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: "/viejo", ORQUESTADOR_REPOS_PATH: "/repos", PHASE_GATE_LANG: "en", OTRA: "con 'comillas' y \"dobles\"" } };
+    for (const plataforma of ["linux", "win32"] as const) {
+      const p = entornoDePrueba({
+        plataforma,
+        responder: (args) => (args[1] === "list" ? { codigo: 0, stdout: "pg: npx -y mcp-phase-gate - ✔ Connected\n", stderr: "" } : claudeVacio(args)),
+      });
+      fs.writeFileSync(path.join(p.home, ".claude.json"), JSON.stringify({ mcpServers: { pg: entrada }, projects: { "C:/trabajo/app": { mcpServers: { pg: entrada } } } }), "utf-8");
+
+      assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["claude-code"] }), p.entorno), 0, p.errores());
+      assert.deepEqual(p.llamadas.filter((l) => l[1] === "mcp" && l[2] !== "list"), [], "no se ejecuta ni remove ni add");
+      const texto = p.texto();
+      assert.match(texto, /ya está registrado como «pg» y lleva rutas en su env; no se toca/);
+      assert.match(texto, /En el ámbito user:\n {2}claude mcp remove pg --scope user\n {2}claude mcp add-json pg /);
+      assert.match(texto, /En el ámbito local \(desde la carpeta C:\/trabajo\/app\):\n {2}claude mcp remove pg --scope local\n {2}claude mcp add-json pg .* --scope local/);
+      const sinRutas = { type: "stdio", command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_LANG: "en", OTRA: "con 'comillas' y \"dobles\"" } };
+      const json = JSON.stringify(sinRutas);
+      const citado = plataforma === "win32" ? `'${json.replace(/'/g, "''").replace(/"/g, '\\"')}'` : `'${json.replace(/'/g, "'\\''")}'`;
+      assert.ok(texto.includes(`claude mcp add-json pg ${citado} --scope user`), `${plataforma}: ${texto}`);
+      // El PHASE_GATE_LANG se queda: solo se quita con quitarIdioma.
+      assert.ok(texto.includes("PHASE_GATE_LANG"));
+    }
+  });
+
+  it("init guarda las rutas en machine.json y no las pone en ninguna entrada; si ya había otras, lo confirma", async () => {
+    const r = rutas();
+    const p = entornoDePrueba({ plataforma: "linux" });
+    const archivo = path.join(configDir(), "machine.json");
+
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"] }), p.entorno), 0, p.errores());
+    assert.match(p.texto(), /machine\.json: rutas de este equipo guardadas en/);
+    assert.deepEqual(leer(archivo).rutas, { documentacion: r.docs, carpetaDeRepos: r.repos });
+    assert.equal(fs.readdirSync(configDir()).some((n) => n.startsWith("machine.json.bak-")), false, "un archivo nuevo no necesita copia");
+
+    // Las mismas otra vez: sin cambios.
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: [] }), p.entorno), 0);
+    assert.match(p.texto(), /las rutas de este equipo ya son esas; sin cambios/);
+
+    // Otras: se pide confirmación, y sin ella no se cambia.
+    const otras = { docs: carpetaTemporal("otra-docs"), repos: r.repos };
+    assert.equal(await ejecutarInit(opciones({ ...otras, clientes: [] }), p.entorno), 1);
+    assert.deepEqual(leer(archivo).rutas, { documentacion: r.docs, carpetaDeRepos: r.repos });
+    assert.match(p.errores(), /machine\.json: no se cambió/);
+    assert.equal(await ejecutarInit(opciones({ ...otras, clientes: [], yes: true }), p.entorno), 0, p.errores());
+    assert.deepEqual(leer(archivo).rutas, { documentacion: otras.docs, carpetaDeRepos: r.repos });
+    assert.ok(fs.readdirSync(configDir()).some((n) => n.startsWith("machine.json.bak-")), "al cambiar un valor queda la copia");
+  });
+
+  it("si machine.json no se puede leer, init no registra nada: sin las rutas el servidor no funcionaría", async () => {
+    const r = rutas();
+    const p = entornoDePrueba({ plataforma: "linux" });
+    fs.writeFileSync(path.join(configDir(), "machine.json"), "{ roto", "utf-8");
+    fs.mkdirSync(path.join(p.home, ".cursor"));
+
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["cursor"] }), p.entorno), 1);
+    assert.equal(fs.existsSync(cursorJson(p)), false);
+    assert.match(p.errores(), /machine\.json no es válido/);
   });
 
   it("sin rutas ni terminal sale con 2; en una terminal las pregunta", async () => {
@@ -422,7 +483,7 @@ describe("init --migrate", () => {
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true, soloEsteEquipo: true, yes: true }), p.entorno), 0, p.errores());
     const escrito = leer(archivo);
-    assert.deepEqual(Object.keys(escrito), ["$schema", "version", "repos", "presetPorDefecto"]);
+    assert.deepEqual(Object.keys(escrito), ["$schema", "version", "rutas", "repos", "presetPorDefecto"]);
     assert.equal(escrito.$schema, "https://unpkg.com/mcp-phase-gate@4/schema/machine.json");
     assert.equal(escrito.version, 2);
     assert.deepEqual(escrito.repos, { "PROYECTO-A/api": destino });
