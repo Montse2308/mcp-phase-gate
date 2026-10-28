@@ -128,6 +128,22 @@ export const TEXTOS_DIAGNOSTICO = {
     es: (p: { quien: string; lote: string; texto: string }) => `${p.quien}, ${p.lote}: ${p.texto}`,
     en: (p: { quien: string; lote: string; texto: string }) => `${p.quien}, ${p.lote}: ${p.texto}`,
   },
+  "VAR-PISA-MAQUINA": {
+    es: (p: { variable: string; origen: string; clave: string; valor: string; guardado: string }) =>
+      `${p.variable} (${p.origen === ".env" ? "el .env" : "el entorno del cliente"}) vale ${p.valor} y pisa a ${p.clave} de machine.json (${p.guardado}): gana ${p.variable}. ` +
+      `Para usar el de machine.json, quita ${p.variable} del bloque "env" del cliente${p.origen === ".env" ? " (o del .env)" : ""}.`,
+    en: (p: { variable: string; origen: string; clave: string; valor: string; guardado: string }) =>
+      `${p.variable} (${p.origen === ".env" ? "the .env" : "the client's environment"}) is ${p.valor} and overrides ${p.clave} in machine.json (${p.guardado}): ${p.variable} wins. ` +
+      `To use the one in machine.json, remove ${p.variable} from the client's "env" block${p.origen === ".env" ? " (or from the .env)" : ""}.`,
+  },
+  "LANG-PISA-MAQUINA": {
+    es: (p: { valor: string; guardado: string }) =>
+      `PHASE_GATE_LANG vale ${JSON.stringify(p.valor)} y pisa a idiomaPorDefecto de machine.json (${JSON.stringify(p.guardado)}): gana PHASE_GATE_LANG, porque el entorno siempre gana. ` +
+      `Para usar el de machine.json, quita PHASE_GATE_LANG del bloque "env" del cliente.`,
+    en: (p: { valor: string; guardado: string }) =>
+      `PHASE_GATE_LANG is ${JSON.stringify(p.valor)} and overrides idiomaPorDefecto in machine.json (${JSON.stringify(p.guardado)}): PHASE_GATE_LANG wins, because the environment always wins. ` +
+      `To use the one in machine.json, remove PHASE_GATE_LANG from the client's "env" block.`,
+  },
   "LANG-INVALIDO": {
     es: (p: { valor: string; sistema: string }) =>
       `PHASE_GATE_LANG vale ${JSON.stringify(p.valor)}, que no es "es" ni "en" (también valen es-MX o en_US.UTF-8): ` +

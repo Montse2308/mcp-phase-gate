@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { ejecutarCli } from "../src/cli.js";
 import type { Salida } from "../src/cli.js";
-import { fijarRaizDelPaquete } from "../src/config.js";
+import { cargarEnv, fijarRaizDelPaquete } from "../src/config.js";
 import { diagnosticar, diagnosticarSinBloquear, formatearDiagnostico, informeDeConfiguracion, procedenciaDeFase } from "../src/diagnostico.js";
 import { estadosConPlazo } from "../src/repos.js";
 import type { Diagnostico } from "../src/diagnostico.js";
@@ -332,5 +332,98 @@ describe("phase-gate://configuracion/{proyecto} y get_orchestrator_status", () =
     } finally {
       await cerrar();
     }
+  });
+});
+
+describe("doctor: el entorno pisa a machine.json", () => {
+  function maquina(config: string, contenido: unknown): void {
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify(contenido), "utf-8");
+  }
+
+  it("una ruta del entorno con otro valor que la de machine.json: aviso que dice cuál gana y cómo quitarla; con el mismo valor, nada", () => {
+    const { docs, repos, config } = instalacion();
+    crearProyecto(docs, "P");
+    const deMaquina = carpetaTemporal("de-maquina");
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: deMaquina } });
+
+    const d = diagnosticar();
+    const pisadas = hallazgo(d, "VAR-PISA-MAQUINA");
+    assert.equal(pisadas.length, 1, "solo la que difiere: documentacion es la misma");
+    assert.equal(pisadas[0]?.severidad, "aviso");
+    assert.match(pisadas[0]?.texto ?? "", /PHASE_GATE_REPOS_PATH \(el entorno del cliente\) vale .* y pisa a rutas\.carpetaDeRepos de machine\.json \(.*\): gana PHASE_GATE_REPOS_PATH\./);
+    assert.match(pisadas[0]?.texto ?? "", /quita PHASE_GATE_REPOS_PATH del bloque "env" del cliente\.$/);
+    assert.ok((pisadas[0]?.texto ?? "").includes(repos));
+
+    // Cuando las dos coinciden, o machine.json no las dice, no hay nada que avisar.
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos } });
+    assert.deepEqual(hallazgo(diagnosticar(), "VAR-PISA-MAQUINA"), []);
+    maquina(config, { version: 2 });
+    assert.deepEqual(hallazgo(diagnosticar(), "VAR-PISA-MAQUINA"), []);
+  });
+
+  it("si la variable viene del .env, lo dice y propone quitarla de ahí también; en inglés sale en inglés", () => {
+    const { docs, config } = instalacion();
+    crearProyecto(docs, "P");
+    maquina(config, { version: 2, rutas: { carpetaDeRepos: carpetaTemporal("otra") } });
+    const delEnv = carpetaTemporal("del-env");
+    delete process.env.PHASE_GATE_REPOS_PATH;
+    const archivo = path.join(carpetaTemporal("env"), ".env");
+    fs.writeFileSync(archivo, `PHASE_GATE_REPOS_PATH=${delEnv}\n`);
+    cargarEnv(archivo);
+
+    const texto = hallazgo(diagnosticar(), "VAR-PISA-MAQUINA")[0]?.texto ?? "";
+    assert.match(texto, /PHASE_GATE_REPOS_PATH \(el \.env\) vale/);
+    assert.match(texto, /\(o del \.env\)\.$/);
+    process.env.PHASE_GATE_LANG = "en";
+    assert.match(hallazgo(diagnosticar(), "VAR-PISA-MAQUINA")[0]?.texto ?? "", /PHASE_GATE_REPOS_PATH \(the \.env\) is .* overrides rutas\.carpetaDeRepos in machine\.json .*: PHASE_GATE_REPOS_PATH wins\. To use the one in machine\.json, remove PHASE_GATE_REPOS_PATH from the client's "env" block \(or from the \.env\)\.$/);
+  });
+
+  it("PHASE_GATE_LANG con otro idioma que idiomaPorDefecto: aviso; con el mismo, o inválida, no", () => {
+    const { config } = instalacion();
+    maquina(config, { version: 2, idiomaPorDefecto: "en" });
+    process.env.PHASE_GATE_LANG = "es";
+
+    const aviso = hallazgo(diagnosticar(), "LANG-PISA-MAQUINA");
+    assert.equal(aviso.length, 1);
+    assert.match(aviso[0]?.texto ?? "", /PHASE_GATE_LANG vale "es" y pisa a idiomaPorDefecto de machine\.json \("en"\): gana PHASE_GATE_LANG, porque el entorno siempre gana\./);
+    assert.match(aviso[0]?.texto ?? "", /quita PHASE_GATE_LANG del bloque "env" del cliente\.$/);
+
+    process.env.PHASE_GATE_LANG = "en-GB";
+    assert.deepEqual(hallazgo(diagnosticar(), "LANG-PISA-MAQUINA"), [], "en-GB es en");
+    process.env.PHASE_GATE_LANG = "fr";
+    assert.deepEqual(hallazgo(diagnosticar(), "LANG-PISA-MAQUINA"), [], "un valor inválido ya lo dice LANG-INVALIDO");
+  });
+
+  it("sin entorno, la ruta sale de machine.json y doctor lo dice como fuente; sin ninguna, sin definir", () => {
+    const { docs, repos, config } = instalacion();
+    crearProyecto(docs, "P");
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    delete process.env.PHASE_GATE_REPOS_PATH;
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos } });
+
+    const d = diagnosticar();
+    const variable = (logica: string) => d.variables.find((v) => v.logica === logica);
+    assert.deepEqual([variable("DOCS_PATH")?.fuente, variable("DOCS_PATH")?.usada], ["machine.json", "rutas.documentacion"]);
+    assert.equal(variable("REPOS_PATH")?.fuente, "machine.json");
+    assert.equal(d.rutas.docs.existe, true);
+    assert.match(formatearDiagnostico(d, "texto"), /rutas\.documentacion · machine\.json/);
+    assert.deepEqual(hallazgo(d, "VAR-PISA-MAQUINA"), []);
+
+    fs.rmSync(path.join(config, "machine.json"));
+    assert.equal(diagnosticar().variables.find((v) => v.logica === "DOCS_PATH")?.fuente, "sin definir");
+  });
+
+  it("un machine.json roto: lo muestra el diagnóstico como error, y el servidor conserva lo que ya sabía", async () => {
+    const { docs, repos, config } = instalacion();
+    crearProyecto(docs, "P");
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    delete process.env.PHASE_GATE_REPOS_PATH;
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos } });
+    assert.equal(diagnosticar().rutas.docs.existe, true);
+
+    fs.writeFileSync(path.join(config, "machine.json"), "{ roto", "utf-8");
+    const d = diagnosticar();
+    assert.equal(d.rutas.docs.existe, true, "las rutas del último machine.json válido siguen valiendo");
+    assert.equal(hallazgo(d, "MAQUINA-INVALIDA")[0]?.severidad, "error");
   });
 });
