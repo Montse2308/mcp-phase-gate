@@ -7,6 +7,7 @@ import {
   DOCS,
   REPOS,
   cargarEnv,
+  conMaquinaDeLaLlamada,
   configDir,
   clavesDeEnv,
   defaultPromptsPath,
@@ -389,6 +390,21 @@ describe("rutas desde machine.json", () => {
     assert.equal(requireBasePath(DOCS), docs);
     assert.equal(requireBasePath(REPOS), repos);
     assert.equal(tasksSubdir(), "Tareas");
+  });
+
+  it("dentro de una llamada se lee una sola vez, aunque cambie en medio; la llamada siguiente ve el cambio", () => {
+    const primera = carpetaTemporal("primera");
+    const segunda = carpetaTemporal("segunda");
+    maquina({ version: 2, rutas: { documentacion: primera } });
+
+    const dentro = conMaquinaDeLaLlamada(() => {
+      const antes = requireBasePath(DOCS);
+      maquina({ version: 2, rutas: { documentacion: segunda } });
+      return [antes, requireBasePath(DOCS), leerVariable("DOCS_PATH").valor];
+    });
+    assert.deepEqual(dentro, [primera, primera, primera], "una llamada no mezcla dos versiones del archivo");
+    assert.equal(requireBasePath(DOCS), segunda, "fuera de la llamada, y en la siguiente, se lee el disco");
+    assert.equal(conMaquinaDeLaLlamada(() => requireBasePath(DOCS)), segunda);
   });
 
   it("el entorno gana a machine.json, y el .env también, cada uno por su lado", () => {

@@ -16,7 +16,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { DOCS, REPOS, configDir, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, leerArchivoDeMaquina, raizPaquete, requireBasePath } from "./config.js";
+import { DOCS, REPOS, conMaquinaDeLaLlamada, configDir, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, leerArchivoDeMaquina, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { ErrorConCodigo, mensaje } from "./i18n/mensajes.js";
 import { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, errorDeZod, rutaDeError } from "./maquina.js";
@@ -276,11 +276,11 @@ const NOMBRES_POR_IDIOMA: ReadonlyArray<[Idioma, ReadonlySet<string>]> = IDIOMAS
 // proyecto se pregunta muchas veces en la misma llamada (el idioma de los mensajes, el de los presets al leer
 // el manifiesto, el de las capas, el del prompt…), y cada recuento lee todas sus carpetas de tarea. Con esto,
 // una vez por proyecto y por llamada (hallazgo 3 de la auditoría de la Etapa 6). Fuera de una llamada no hay
-// caché: cada pregunta mira el disco.
+// caché: cada pregunta mira el disco. The same call also reads machine.json once (conMaquinaDeLaLlamada).
 const recuentosDeLaLlamada = new AsyncLocalStorage<Map<string, DocumentosPorIdioma>>();
 
 export function conCacheDelIdioma<T>(funcion: () => T): T {
-  return recuentosDeLaLlamada.getStore() ? funcion() : recuentosDeLaLlamada.run(new Map(), funcion);
+  return conMaquinaDeLaLlamada(() => (recuentosDeLaLlamada.getStore() ? funcion() : recuentosDeLaLlamada.run(new Map(), funcion)));
 }
 
 // Cuántos documentos de fase con nombre de cada idioma tienen las tareas del proyecto, y en qué tareas.

@@ -4,7 +4,7 @@
 
 import * as fs from "fs";
 
-import { leerArchivoDeMaquina } from "../config.js";
+import { leerArchivoDeMaquinaDelDisco } from "../config.js";
 import { mensaje } from "../i18n/mensajes.js";
 import { URL_ESQUEMA_MAQUINA, VERSION_DE_MAQUINA, interpretarMaquina } from "../maquina.js";
 import type { RutasDeMaquina } from "../maquina.js";
@@ -25,11 +25,12 @@ export type MaquinaParaEditar =
   | { estado: "valido"; ruta: string; crudo: string; objeto: Record<string, unknown> }
   | { estado: "invalido"; ruta: string; error: string };
 
+// One read: the text that is edited is the one that was validated.
 export function leerMaquinaParaEditar(): MaquinaParaEditar {
-  const lectura = leerArchivoDeMaquina();
+  const lectura = leerArchivoDeMaquinaDelDisco();
   if (lectura.estado === "ausente") return { estado: "ausente", ruta: lectura.ruta, crudo: null, objeto: null };
   if (lectura.estado === "invalido") return { estado: "invalido", ruta: lectura.ruta, error: lectura.error! };
-  const crudo = fs.readFileSync(lectura.ruta, "utf-8");
+  const crudo = lectura.texto!;
   return { estado: "valido", ruta: lectura.ruta, crudo, objeto: JSON.parse(crudo.replace(/^﻿/, "")) as Record<string, unknown> };
 }
 

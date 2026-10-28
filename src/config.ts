@@ -5,6 +5,7 @@
 // arrancar obliga a reiniciar el cliente para cambiarlo, y vuelve imposible probar una
 // función con otra configuración sin recargar el módulo entero.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -422,8 +423,9 @@ export function configDir(): string {
 // preset are resolved by manifiesto.ts with the same reading.
 //
 // There is no cache by the file's mtime: on NTFS it did not change in 48 % of back-to-back atomic writes. It
-// is read on every call. The only thing kept is the last valid file this process read: if the file stops
-// being valid, its paths and its language keep applying until it is fixed, and one warning is logged.
+// is read once per call (a tool, a read of the Studio, a doctor: conMaquinaDeLaLlamada) and, outside a call,
+// on every question. The only thing kept between calls is the last valid file this process read: if the file
+// stops being valid, its paths and its language keep applying until it is fixed, and one warning is logged.
 export type LecturaDeMaquina = {
   estado: "ausente" | "valido" | "invalido";
   ruta: string;
@@ -431,6 +433,8 @@ export type LecturaDeMaquina = {
   error: string | null;
   // What made it invalid, independent of the language of `error`: the warning is logged once per cause.
   causa: string | null;
+  // The text that was read, so that whoever edits the file works on the same text that was validated.
+  texto: string | null;
 };
 
 // `deMemoria`: the file is invalid and `config` is the last valid one this process read.
@@ -447,19 +451,43 @@ export function rutaDeMaquina(): string {
 }
 
 // One read of the disk, without memory: what the file says now.
-export function leerArchivoDeMaquina(): LecturaDeMaquina {
-  const ruta = rutaDeMaquina();
+function leerDelDisco(ruta: string): LecturaDeMaquina {
   let texto: string;
   try {
     texto = fs.readFileSync(ruta, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return { estado: "ausente", ruta, config: null, error: null, causa: null };
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return { estado: "ausente", ruta, config: null, error: null, causa: null, texto: null };
     const detalle = error instanceof Error ? error.message : String(error);
-    return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: detalle }), causa: detalle };
+    return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: detalle }), causa: detalle, texto: null };
   }
   const leido = interpretarMaquina(texto);
-  if (!leido.ok) return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: leido.error }), causa: texto };
-  return { estado: "valido", ruta, config: leido.config, error: null, causa: null };
+  if (!leido.ok) return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: leido.error }), causa: texto, texto };
+  return { estado: "valido", ruta, config: leido.config, error: null, causa: null, texto };
+}
+
+// One call reads machine.json once: a doctor asks for it more than a hundred times, and every read is a moment
+// in which a write of the file can fail on Windows (a rename over a file that another process has open). It also
+// means that a single call never mixes two versions of the file. Writes always read the disk, outside a call.
+const lecturasDeLaLlamada = new AsyncLocalStorage<Map<string, LecturaDeMaquina>>();
+
+export function conMaquinaDeLaLlamada<T>(funcion: () => T): T {
+  return lecturasDeLaLlamada.getStore() ? funcion() : lecturasDeLaLlamada.run(new Map(), funcion);
+}
+
+// What the file says now, or what it said at the start of this call.
+export function leerArchivoDeMaquina(): LecturaDeMaquina {
+  const ruta = rutaDeMaquina();
+  const deLaLlamada = lecturasDeLaLlamada.getStore();
+  const guardada = deLaLlamada?.get(ruta);
+  if (guardada) return guardada;
+  const lectura = leerDelDisco(ruta);
+  deLaLlamada?.set(ruta, lectura);
+  return lectura;
+}
+
+// For whoever is about to write the file: the disk, even inside a call.
+export function leerArchivoDeMaquinaDelDisco(): LecturaDeMaquina {
+  return leerDelDisco(rutaDeMaquina());
 }
 
 let ultimaValida: { ruta: string; config: MaquinaConfig } | null = null;
