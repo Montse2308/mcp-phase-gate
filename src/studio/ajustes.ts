@@ -1,8 +1,8 @@
-// GET /api/ajustes (Etapa «Ajustes»): lo que la vista necesita para enseñar, de cada ruta de este equipo y del
-// idioma, lo que dice machine.json, lo que vale de verdad y de dónde sale; y quién lo está pisando. No escribe
-// nada. Lo que no cubre, porque no lo puede ver desde aquí, queda escrito en docs/decisiones.md: los
-// .cursor/mcp.json y .vscode/mcp.json de cada proyecto, los perfiles de VS Code, otros clientes y los servidores
-// con otro PHASE_GATE_STATE_PATH, cuyas sesiones el Studio no ve.
+// GET /api/ajustes: what the view needs to show, for each path of this machine and for the language, what
+// machine.json says, what really applies and where it comes from; and who is overriding it. It writes nothing.
+// What it does not cover, because it cannot see it from here, is written in docs/decisiones.md: the
+// .cursor/mcp.json and .vscode/mcp.json of each project, the VS Code profiles, other clients and the servers
+// with another PHASE_GATE_STATE_PATH, whose sessions the Studio does not see.
 
 import * as path from "path";
 
@@ -22,7 +22,7 @@ const CAMPOS: { campo: Exclude<NombreDeCampo, "idioma">; logica: NombreLogico }[
 ];
 const NOMBRES: Record<Cliente, string> = { "claude-code": "Claude Code", cursor: "Cursor", vscode: "VS Code" };
 
-// Dos valores son el mismo: las rutas se comparan resueltas, y lo demás recortado.
+// Two values are the same: paths are compared resolved, and anything else trimmed.
 const comparable = (campo: NombreDeCampo, valor: string): string => (campo === "documentacion" || campo === "carpetaDeRepos" ? (valor.trim() ? path.resolve(valor.trim()) : "") : valor.trim());
 const igual = (campo: NombreDeCampo, a: string, b: string): boolean => comparable(campo, a) === comparable(campo, b);
 
@@ -31,7 +31,7 @@ function conTilde(ruta: string, home: string): string {
   return relativa && !relativa.startsWith("..") && !path.isAbsolute(relativa) ? `~/${relativa.split(path.sep).join("/")}` : sinRutasDelEquipo(ruta);
 }
 
-// ─── Lo que vale en este Studio ─────────────────────────────────────────────
+// ─── What applies in this Studio ────────────────────────────────────────────
 function camposDeEsteEquipo(): CampoAjustes[] {
   const campos: CampoAjustes[] = CAMPOS.map(({ campo, logica }) => {
     const lectura = leerVariable(logica);
@@ -43,9 +43,9 @@ function camposDeEsteEquipo(): CampoAjustes[] {
       enMaquina,
       efectivo: lectura.valor ?? null,
       fuente: lectura.fuente,
-      // Este mismo Studio, por su entorno o su .env, usa otro valor que machine.json.
+      // This same Studio, through its environment or its .env, uses another value than machine.json.
       propioStudioPisa: delEntorno && enMaquina !== null && lectura.valor !== undefined && !igual(campo, lectura.valor, enMaquina),
-      // Y un valor del entorno que machine.json no tiene: se puede guardar ahí.
+      // And a value from the environment that machine.json does not have: it can be saved there.
       sinGuardar: delEntorno && enMaquina === null && lectura.valor !== undefined,
     };
   });
@@ -63,7 +63,7 @@ function camposDeEsteEquipo(): CampoAjustes[] {
   return campos;
 }
 
-// ─── Lo que dicen los clientes en su env ────────────────────────────────────
+// ─── What the clients say in their env ──────────────────────────────────────
 function variablesDeEnv(env: Record<string, unknown>, enMaquina: Map<NombreDeCampo, string | null>): EnvDeCliente[] {
   const dicho: QuitaDelEntorno = rutasDelEnvDeEntrada(env);
   const subcarpeta = typeof env.PHASE_GATE_TASKS_SUBDIR === "string" ? env.PHASE_GATE_TASKS_SUBDIR : typeof env.ORQUESTADOR_TASKS_SUBDIR === "string" ? env.ORQUESTADOR_TASKS_SUBDIR : undefined;
@@ -82,7 +82,7 @@ function variablesDeEnv(env: Record<string, unknown>, enMaquina: Map<NombreDeCam
   return resultado;
 }
 
-// Las entradas de este servidor en el JSON de un cliente: la sección dada de su archivo.
+// The entries of this server in a client's JSON: the given section of its file.
 function entradasDeSeccion(seccion: unknown, ambito: EntradaDeCliente["ambito"], carpeta: string | null, enMaquina: Map<NombreDeCampo, string | null>): EntradaDeCliente[] {
   if (seccion === null || typeof seccion !== "object" || Array.isArray(seccion)) return [];
   const entradas: EntradaDeCliente[] = [];
@@ -104,8 +104,8 @@ function clienteDeArchivo(cliente: "cursor" | "vscode", entorno: EntornoInit, en
   return { ...base, lectura: "leido", entradas: entradasDeSeccion(lectura.datos[cliente === "cursor" ? "mcpServers" : "servers"], "archivo", null, enMaquina) };
 }
 
-// Claude Code guarda sus servidores en ~/.claude.json: los de usuario y, por cada carpeta, los locales. Los de
-// proyecto (.mcp.json) viven en cada proyecto y no se leen.
+// Claude Code keeps its servers in ~/.claude.json: the user ones and, per folder, the local ones. The project
+// ones (.mcp.json) live in each project and are not read.
 function clienteDeClaude(entorno: EntornoInit, enMaquina: Map<NombreDeCampo, string | null>): ClienteAjustes {
   const archivo = path.join(entorno.home, ".claude.json");
   const lectura = leerJsonTolerante(archivo);
@@ -123,7 +123,7 @@ function clienteDeClaude(entorno: EntornoInit, enMaquina: Map<NombreDeCampo, str
   return { ...base, lectura: "leido", entradas };
 }
 
-// Un servidor abierto, sea de quien sea: lo que recibió de su entorno al arrancar, que no cambia mientras vive.
+// An open server, whoever's it is: what it received from its environment at start, which does not change while it lives.
 function sesionDeAjustes(sesion: SesionAbierta, enMaquina: Map<NombreDeCampo, string | null>): SesionDeAjustes {
   const rutas = sesion.rutas ?? {};
   const variables: EnvDeCliente[] = [];
@@ -136,8 +136,8 @@ function sesionDeAjustes(sesion: SesionAbierta, enMaquina: Map<NombreDeCampo, st
   return { pid: sesion.pid, cliente: sesion.cliente, proyecto: sesion.proyecto, sinRutas: sesion.rutas === undefined, variables };
 }
 
-// ─── Las variables avanzadas ────────────────────────────────────────────────
-// Se muestran con su valor, su origen y cómo cambiarlas; no se editan desde Ajustes.
+// ─── The advanced variables ─────────────────────────────────────────────────
+// They are shown with their value, their origin and how to change them; they are not edited from Ajustes.
 const AVANZADAS: NombreLogico[] = ["PROMPTS_PATH", "STATE_PATH", "CONFIG_PATH", "ELICITATION", "LANG"];
 
 function avanzadas(): AvanzadaApi[] {
@@ -166,7 +166,7 @@ export function ajustesDeEsteEquipo(ctx: { entornoInit: () => EntornoInit; sesio
     maquina: {
       estado: maquina.estado,
       error: maquina.error === null ? null : sinRutasDelEquipo(maquina.error),
-      // El proceso conserva el último archivo válido si este se rompió: lo que sigue valiendo no es lo que hay en disco.
+      // The process keeps the last valid file if this one broke: what still applies is not what is on disk.
       deMemoria: maquina.deMemoria,
       version,
     },

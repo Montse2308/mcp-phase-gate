@@ -289,9 +289,9 @@ async function rutaPedida(ctx: Contexto, valor: string | null, logica: "DOCS_PAT
   return ruta;
 }
 
-// Las rutas de este equipo se guardan en machine.json, no en el "env" de cada cliente: así las leen igual el
-// servidor de cada cliente y el Studio. Va antes de registrar nada, para que una entrada que ya tenía las rutas
-// en su "env" no deje de funcionar al quitárselas. Devuelve false si no se pudo.
+// This machine's paths are saved in machine.json, not in each client's "env": that way the server of each
+// client and the Studio read them the same. It goes before registering anything, so that an entry that already
+// carried the paths in its "env" does not stop working when they are taken out. It returns false if it could not.
 async function guardarRutas(ctx: Contexto, rutas: Rutas): Promise<boolean> {
   const maquina = leerMaquinaParaEditar();
   if (maquina.estado === "invalido") {
@@ -303,7 +303,7 @@ async function guardarRutas(ctx: Contexto, rutas: Rutas): Promise<boolean> {
     ctx.entorno.salida.out(mensaje("INIT-MAQUINA-RUTAS-IGUALES"));
     return true;
   }
-  // Un valor distinto del que ya estaba se confirma, como el preset: otro cliente lo usa.
+  // A value different from the one that was there is confirmed, like the preset: another client uses it.
   const guardadas = maquina.objeto && esObjetoPlano(maquina.objeto.rutas) ? maquina.objeto.rutas : {};
   const cambia = [
     ...(typeof guardadas.documentacion === "string" && guardadas.documentacion !== rutas.docs ? [`documentacion: ${guardadas.documentacion} -> ${rutas.docs}`] : []),
@@ -354,14 +354,14 @@ export function entradaDelServidor(cliente: Cliente, plataforma: NodeJS.Platform
   return cliente === "vscode" ? { type: "stdio", ...base } : base;
 }
 
-// Lo que una entrada tenía en su "env" y se le quita: las rutas de este equipo (y sus alias ORQUESTADOR_*) y,
-// con `quitarIdioma`, PHASE_GATE_LANG.
+// What an entry had in its "env" and is taken out: this machine's paths (and their ORQUESTADOR_* aliases) and,
+// with `quitarIdioma`, PHASE_GATE_LANG.
 export type QuitaDelEntorno = { documentacion?: string; carpetaDeRepos?: string; idioma?: string };
 export type OpcionesDeEntrada = { quitarIdioma?: boolean };
 
 const VARIABLES_DE_RUTAS = ["PHASE_GATE_DOCS_PATH", "ORQUESTADOR_DOCS_PATH", "PHASE_GATE_REPOS_PATH", "ORQUESTADOR_REPOS_PATH"] as const;
 
-// Lo que dice el "env" de una entrada: el valor que ganaría (PHASE_GATE_* antes que su alias).
+// What an entry's "env" says: the value that would win (PHASE_GATE_* before its alias).
 export function rutasDelEnvDeEntrada(env: Record<string, unknown>): QuitaDelEntorno {
   const texto = (valor: unknown): string | undefined => (typeof valor === "string" && valor.trim() !== "" ? valor.trim() : undefined);
   const documentacion = texto(env.PHASE_GATE_DOCS_PATH) ?? texto(env.ORQUESTADOR_DOCS_PATH);
@@ -370,7 +370,7 @@ export function rutasDelEnvDeEntrada(env: Record<string, unknown>): QuitaDelEnto
   return { ...(documentacion ? { documentacion } : {}), ...(carpetaDeRepos ? { carpetaDeRepos } : {}), ...(idioma ? { idioma } : {}) };
 }
 
-// Lo que deja de llevar el "env" de una entrada que ya existe, y lo que se le quita.
+// What the "env" of an entry that already exists stops carrying, and what is taken out of it.
 export function sinRutasEnElEntorno(env: Record<string, unknown>, opciones: OpcionesDeEntrada = {}): { env: Record<string, unknown>; quita: QuitaDelEntorno } {
   const quita = rutasDelEnvDeEntrada(env);
   const resto = { ...env };
@@ -404,9 +404,9 @@ export function ejecutaPhaseGate(entrada: unknown): boolean {
   return partes.some(lanzaPhaseGate);
 }
 
-// Lo que cambia init en una entrada que ya existe: deja de llevar las rutas en su "env" (con sus alias
-// ORQUESTADOR_*) y, si se pide, PHASE_GATE_LANG. Conserva el comando (un clon de desarrollo sigue lanzando su
-// build/index.js) y todo lo demás, como el PHASE_GATE_ELICITATION de Cursor en Windows.
+// What init changes in an entry that already exists: it stops carrying the paths in its "env" (with their
+// ORQUESTADOR_* aliases) and, if asked, PHASE_GATE_LANG. It keeps the command (a development clone still
+// launches its build/index.js) and everything else, such as Cursor's PHASE_GATE_ELICITATION on Windows.
 function actualizarEntrada(existente: Record<string, unknown>, nueva: Record<string, unknown>, opciones: OpcionesDeEntrada): { entrada: Record<string, unknown>; quita: QuitaDelEntorno } {
   const actual = esObjetoPlano(existente.env) ? existente.env : {};
   const { env, quita } = sinRutasEnElEntorno(actual, opciones);
@@ -571,23 +571,22 @@ export function registroEnClaude(lista: string): string | null {
   return null;
 }
 
-// Sin variables de entorno: las rutas viven en machine.json.
+// No environment variables: the paths live in machine.json.
 function comandoDeClaude(clave: string): string[] {
   return ["mcp", "add", clave, "--scope", "user", "--", "npx", "-y", SERVER_NAME];
 }
 
-// El JSON de un servidor, como un solo argumento en la terminal de quien lo va a correr: PowerShell en
-// Windows (con las comillas dobles escapadas, que es lo que espera al llamar a un programa) y una terminal
-// POSIX en lo demás.
+// A server's JSON, as a single argument in the terminal of whoever will run it: PowerShell on Windows (with the
+// double quotes escaped, which is what it expects when calling a program) and a POSIX terminal elsewhere.
 function citarJson(texto: string, plataforma: NodeJS.Platform): string {
   if (plataforma === "win32") return `'${texto.replace(/'/g, "''").replace(/"/g, '\\"')}'`;
   return `'${texto.replace(/'/g, "'\\''")}'`;
 }
 
-// Lo que hay que correr para rehacer una entrada de Claude Code sin sus rutas, en su ámbito.
+// What has to be run to redo a Claude Code entry without its paths, in its scope.
 export type RehacerEnClaude = { ambito: "user" | "local"; carpeta: string | null; comandos: string[]; quita: QuitaDelEntorno };
 
-// Las entradas de este servidor con esa clave en ~/.claude.json: la de usuario y las locales de cada carpeta.
+// The entries of this server with that key in ~/.claude.json: the user one and the local ones of each folder.
 function entradasDeClaude(home: string, clave: string): { ambito: "user" | "local"; carpeta: string | null; entrada: Record<string, unknown> }[] {
   const lectura = leerJsonTolerante(path.join(home, ".claude.json"));
   if (lectura.estado !== "valido") return [];
@@ -628,9 +627,10 @@ function mostrarComando(args: string[]): string {
 
 // El plan en Claude Code: el comando que se ejecutaría, o por qué no. Lee `claude mcp list`, que no
 // escribe nada.
-// Una entrada que ya existe no se toca: `rehacer` dice, para cada ámbito donde está, los dos comandos que la
-// dejan igual pero sin las rutas (`claude mcp remove` y `claude mcp add-json`). Los corre la persona: si el add
-// fallara después del remove, el servidor quedaría sin registrar. `quita` es lo que llevaba en su "env".
+// An entry that already exists is not touched: `rehacer` says, for each scope where it is, the two commands
+// that leave it the same but without the paths (`claude mcp remove` and `claude mcp add-json`). The person
+// runs them: if the add failed after the remove, the server would be left unregistered. `quita` is what it
+// carried in its "env".
 export type PlanDeClaude =
   | { cliente: "claude-code"; estado: "sin-lista"; mensaje: string }
   | { cliente: "claude-code"; estado: "existente"; existente: string; comando: string | null; rehacer: RehacerEnClaude[]; quita: QuitaDelEntorno }
@@ -648,7 +648,8 @@ export async function planDeClaude(claveDada: string | null, entorno: Pick<Entor
     return { cliente: "claude-code", estado: "sin-lista", mensaje: mensaje("INIT-CLAUDE-LISTA-FALLO", { stderr: lista.stderr.trim(), codigo: lista.codigo }) };
   }
 
-  // `mcp list` no enseña las variables de un registro: se leen de ~/.claude.json. Uno que ya existe no se toca.
+  // `mcp list` does not show a registration's variables: they are read from ~/.claude.json. One that already
+  // exists is not touched.
   const existente = registroEnClaude(lista.stdout);
   if (existente) {
     const rehacer = comandosParaRehacer(entorno.home, existente, entorno.plataforma, opciones);

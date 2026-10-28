@@ -1,10 +1,10 @@
-// Mensajes del grupo «ajustes» (ver i18n/mensajes.ts): los planes que editan machine.json y phase-gate.json
-// desde src/ajustes/. Cada código con su texto en español y en inglés.
+// Messages of the "ajustes" group (see i18n/mensajes.ts): the plans that edit machine.json and phase-gate.json
+// from src/ajustes/. Each code with its text in Spanish and in English.
 
 import type { Catalogo } from "./tipos.js";
 
 export const TEXTOS_AJUSTES = {
-  // ─── ajustes/maquina.ts ───
+  // ─── ajustes/edicion-maquina.ts ───
   "AJUSTES-MAQUINA-A-MANO": {
     es: (p: { error: string }) => `${p.error} Arréglalo a mano antes de cambiarlo desde el Studio.`,
     en: (p: { error: string }) => `${p.error} Fix it by hand before changing it from the Studio.`,
@@ -83,7 +83,7 @@ export const TEXTOS_AJUSTES = {
     en: (p: { id: string; clave: string }) => `The repo "${p.id}" leaves the project, but machine.json keeps its own path ("${p.clave}"): set it to null to remove it too.`,
   },
 
-  // ─── studio/ajustes.ts: las variables avanzadas ───
+  // ─── studio/ajustes.ts: the advanced variables ───
   "AJUSTES-AVANZADA-PROMPTS-PATH": {
     es: "Carpeta con prompts de fase propios, que se superponen a los del paquete.",
     en: "Folder with your own phase prompts, layered over the package's.",
@@ -109,7 +109,7 @@ export const TEXTOS_AJUSTES = {
     en: (p: { variable: string }) => `It is not edited from Ajustes. It is changed in the "env" block of your client's mcp.json (or in the environment of whoever launches the server): ${p.variable}.`,
   },
 
-  // ─── studio/acciones.ts: el orden y los destinos de varios archivos ───
+  // ─── studio/acciones.ts: the order and the destinations of several files ───
   "AJUSTES-APLICAR-PARCIAL": {
     es: (p: { detalle: string; escritos: string[]; copias: string[] }) =>
       `No se pudo terminar: ${p.detalle} ` +

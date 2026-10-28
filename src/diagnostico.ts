@@ -143,8 +143,9 @@ function estadoLegible(archivo: string): boolean {
   }
 }
 
-// Lo que el entorno o el .env dicen y pisa lo que machine.json dice, con otro valor: gana el entorno, y quien
-// puso la variable en el bloque "env" de un cliente rara vez lo sabe. Dice cuál gana y cómo quitarla.
+// What the environment or the .env say and override what machine.json says, with another value: the
+// environment wins, and whoever put the variable in a client's "env" block rarely knows. It says which one
+// wins and how to remove it.
 function pisadasDeMaquina(variables: LecturaVariable[]): Hallazgo[] {
   const hallazgos: Hallazgo[] = [];
   for (const lectura of variables) {

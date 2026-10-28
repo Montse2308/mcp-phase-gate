@@ -4,16 +4,17 @@
 //   documento {p, t, archivo}   un archivo de una carpeta de tarea
 //   recibo    {p, t, lote}      un archivo de la subcarpeta de recibos
 //   config    {p}               phase-gate.json o .phase-gate/** del proyecto
-//   prompts   {}                la capa global o <configDir>/presets
-//   equipo    {}                <configDir>/machine.json: las rutas de este equipo pueden haber cambiado
+//   prompts   {}                the global layer or <configDir>/presets
+//   equipo    {}                <configDir>/machine.json: this machine's paths may have changed
 //   sesiones  {}                <stateDir>/sesiones
 //   punteros  {}                el archivo de las tareas activas (switch_task, start_task)
 //
 // Se vigila con fs.watch recursivo (la Documentación, la capa global, la carpeta de configuración y la
-// de estado). Las carpetas se recalculan cuando cambia machine.json, porque la Documentación puede ser otra.
-// Como en carpetas de OneDrive no es fiable, hay un sondeo de respaldo cada 5 s sobre los archivos de las
-// tareas activas. Si el sondeo ve un cambio que el watcher no avisó, emite el evento y
+// de estado), y como en carpetas de OneDrive no es fiable, hay un sondeo de respaldo cada 5 s sobre los
+// archivos de las tareas activas. Si el sondeo ve un cambio que el watcher no avisó, emite el evento y
 // el estado del watcher pasa a "degradado".
+//
+// The watched folders are recalculated when machine.json changes, because the Documentation may be another.
 //
 // El ruido de OneDrive (validación V8): se ignoran desktop.ini, Thumbs.db, ~$*, *.tmp (también los
 // temporales de la escritura atómica) y lo que empieza por punto dentro de una tarea, y un aviso solo
@@ -249,7 +250,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
       if (evento) vistos.set(`${evento.tipo}:${JSON.stringify(evento.datos)}`, evento);
     }
     pendientes.clear();
-    // machine.json cambió: la Documentación puede ser otra, así que se vigila la de ahora antes de avisar.
+    // machine.json changed: the Documentation may be another, so the current one is watched before announcing.
     if ([...vistos.values()].some((e) => e.tipo === "equipo")) reajustar();
     for (const evento of vistos.values()) emitir(evento);
   };
@@ -282,8 +283,8 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
   };
   for (const raiz of raicesAVigilar()) abrir(raiz);
 
-  // Las carpetas que se vigilan ahora: las que ya no hacen falta se cierran y las nuevas se abren. Y el sondeo de
-  // respaldo vuelve a calcular qué tareas están activas, que dependen de la Documentación.
+  // The folders watched now: those no longer needed are closed and the new ones are opened. And the backup
+  // poll works out again which tasks are active, which depend on the Documentation.
   const reajustar = (): void => {
     if (cerrado) return;
     const deseadas = new Set(raicesAVigilar());

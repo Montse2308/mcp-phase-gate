@@ -62,7 +62,7 @@ export const Manifiesto = z
 
 export type Manifiesto = z.output<typeof Manifiesto>;
 
-// El shape de machine.json vive en maquina.ts; aquí se reexporta, porque de aquí lo toma el resto.
+// The shape of machine.json lives in maquina.ts; it is re-exported here because the rest takes it from here.
 export { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, rutaDeError };
 
 export const ARCHIVO_MANIFIESTO = "phase-gate.json";
@@ -172,9 +172,9 @@ function errorDeDir(dir: string): string | null {
   return null;
 }
 
-// Lo que hace válido a un manifiesto, sin mirar el disco: su shape y lo que zod no expresa (un id de repo
-// repetido, una carpeta que sale de PHASE_GATE_REPOS_PATH). Lo usan leerManifiesto y los planes de Ajustes,
-// para que "válido" signifique lo mismo al leerlo y al escribirlo.
+// What makes a manifest valid, without looking at the disk: its shape and what zod does not express (a
+// repeated repo id, a folder that leaves PHASE_GATE_REPOS_PATH). Used by leerManifiesto and the Ajustes plans,
+// so that "valid" means the same when reading and when writing.
 export function validarManifiesto(crudo: unknown): { ok: true; manifiesto: Manifiesto } | { ok: false; error: string } {
   const leido = Manifiesto.safeParse(crudo);
   if (!leido.success) return { ok: false, error: `${errorDeZod(leido.error, crudo)}.` };
@@ -247,8 +247,8 @@ export function copiasEnConflicto(carpetaProyecto: string): string[] {
 //   2. lo que ya hay en disco: el idioma de los documentos de sus tareas ("el disco es la verdad": un
 //      proyecto sin manifiesto, con tareas en español, no se ve de golpe sin fases hechas porque el
 //      sistema esté en inglés); con documentos de los dos, el que más tenga, y doctor da IDIOMA-MIXTO;
-//   3. PHASE_GATE_LANG: lo de la ejecución gana a lo guardado, como en las rutas;
-//   4. `idiomaPorDefecto` de machine.json;
+//   3. PHASE_GATE_LANG: what belongs to the run wins over what is stored, as in the paths;
+//   4. `idiomaPorDefecto` of machine.json;
 //   5. el idioma del sistema (es si su locale empieza por "es"; si no, en). Salvo para un proyecto con un
 //      manifiesto sin `idioma`: ese manifiesto es de la 3.0 o la 3.1, cuyo esquema daba "es" por defecto, y
 //      sigue en español aunque el sistema esté en inglés, como en un Linux sin LANG (hallazgo 2 de la

@@ -224,8 +224,8 @@ export const PlanDeClienteApi = z.object({
 export const ClientesRespuesta = z.object({ clientes: z.array(PlanDeClienteApi) });
 
 // ─── /api/ajustes ───────────────────────────────────────────────────────────
-// De cada ruta de este equipo y del idioma: lo que dice machine.json, lo que vale de verdad y de dónde sale; y
-// quién lo pisa con su propio env.
+// For each path of this machine and for the language: what machine.json says, what really applies and where it
+// comes from; and who overrides it with their own env.
 export const NombreDeCampo = z.enum(["documentacion", "carpetaDeRepos", "subcarpetaTareas", "idioma"]);
 
 export const CampoAjustes = z.object({
@@ -234,13 +234,13 @@ export const CampoAjustes = z.object({
   enMaquina: z.string().nullable(), // lo que dice machine.json
   efectivo: z.string().nullable(), // lo que vale ahora en este Studio
   fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "sin definir"]),
-  // Este mismo Studio, por su entorno o su .env, usa otro valor que machine.json: es el primer aviso.
+  // This same Studio, through its environment or its .env, uses another value than machine.json: the first warning.
   propioStudioPisa: z.boolean(),
-  // Su entorno o su .env dicen algo que machine.json no tiene: se puede guardar ahí.
+  // Its environment or its .env say something machine.json does not have: it can be saved there.
   sinGuardar: z.boolean(),
 });
 
-// Lo que un env dice de un campo, comparado con machine.json.
+// What an env says of a field, compared with machine.json.
 export const EnvDeCliente = z.object({
   campo: NombreDeCampo,
   variable: z.string(),
@@ -263,7 +263,7 @@ export const ClienteAjustes = z.object({
   entradas: z.array(EntradaDeCliente),
 });
 
-// Un servidor abierto, de cualquier cliente: sus rutas son las que recibió al arrancar.
+// An open server, of any client: its paths are the ones it received at start.
 export const SesionDeAjustes = z.object({
   pid: z.number().int(),
   cliente: z.string(),
@@ -286,7 +286,7 @@ export const AjustesRespuesta = z.object({
   maquina: z.object({
     estado: z.enum(["ausente", "valido", "invalido"]),
     error: z.string().nullable(),
-    // Con el archivo roto, este proceso sigue con el último válido que leyó.
+    // With the file broken, this process goes on with the last valid one it read.
     deMemoria: z.boolean(),
     version: z.number().int().nullable(),
   }),
@@ -301,7 +301,7 @@ export const PlanRespuesta = z.union([
   z.object({
     posible: z.literal(true),
     resumen: z.string(),
-    // Lo que el plan avisa y no impide: una ruta que no existe, un recibo que cita un repo que se quita.
+    // What the plan warns about and does not prevent: a path that does not exist, a receipt that cites a repo being removed.
     avisos: z.array(z.string()),
     diff: z.string(),
     huella: z.string().regex(/^[0-9a-f]{64}$/),

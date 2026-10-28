@@ -5,24 +5,26 @@
 //   2. aplicar:  { accion, argumentos, huella } → el servidor RECALCULA el plan y solo escribe si la huella
 //                coincide; si no, 409: "El disco cambió desde que viste el cambio. Revísalo otra vez."
 //
-//   equipo            <configDir>/machine.json: las rutas de este equipo, su idioma y preset por defecto y la ruta
-//                     propia de cualquier repo (src/ajustes/equipo.ts)
-//   proyecto          lo que cambió de un proyecto, en un solo plan: su phase-gate.json y, en machine.json, solo
-//                     las claves de sus repos (src/ajustes/proyecto.ts)
+//   equipo            <configDir>/machine.json: this machine's paths, its default language and preset, and the own
+//                     path of any repo (src/ajustes/equipo.ts)
+//   proyecto          what changed in a project, in a single plan: its phase-gate.json and, in machine.json, only
+//                     the keys of its repos (src/ajustes/proyecto.ts)
 //   crear-manifiesto  init --migrate para un proyecto: crea phase-gate.json (solo crea)
 //   eject             mcp-phase-gate eject <objetivo> --a … (capa global, del proyecto o carpeta de presets)
 //   init-cliente      mcp-phase-gate init --cliente <c>: el mcp.json de Cursor o VS Code, o `claude mcp add`
-//   preset            el "preset" de <DOCS>/<P>/phase-gate.json (para retirar: lo cubre `proyecto`)
-//   reglas            "reglas.lotes" o "reglas.commits" del mismo archivo (para retirar: lo cubre `proyecto`)
+//   preset            the "preset" of <DOCS>/<P>/phase-gate.json (to be retired: `proyecto` covers it)
+//   reglas            "reglas.lotes" or "reglas.commits" of the same file (to be retired: `proyecto` covers it)
 //
-// `equipo` y `proyecto` no tienen comando de CLI, como tampoco lo tenían `preset` y `reglas`; lo que protege
-// este módulo se mantiene: destinos cerrados por acción, un solo shape de validación y la huella.
+// `equipo` and `proyecto` have no CLI command, as `preset` and `reglas` did not either; what this module
+// protects stays: closed destinations per action, a single validation shape and the fingerprint.
 //
 // Cada acción calcula su plan con la MISMA función que el CLI (planDeEject, planDeArchivo, planDeClaude,
 // manifiestoNuevo). Nunca escribe documentos de tareas, recibos ni nada de los repos: cada destino se
-// comprueba antes de escribir, y cada acción tiene además su lista cerrada de destinos (comprobarLista): por
-// archivo y, en machine.json, por clave. Una huella sirve una sola vez, y aplicar va bajo un candado del estado
+// comprueba antes de escribir. Una huella sirve una sola vez, y aplicar va bajo un candado del estado
 // (`<stateDir>/.studio-acciones.lock`), así que dos Studios con la misma huella no aplican los dos.
+//
+// On top of that, each action has its own closed list of destinations (comprobarLista): per file and, in
+// machine.json, per key.
 
 import * as crypto from "crypto";
 import * as fs from "fs";
@@ -45,7 +47,7 @@ import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo
 import { estaDentroReal, requireProjectFolder, rutaReal, ubicarEnTarea, validarSegmento } from "../paths.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 
-// preset y reglas se quedan mientras la interfaz las use; `proyecto` ya las cubre.
+// preset and reglas stay while the interface uses them; `proyecto` already covers them.
 export const ACCIONES = ["preset", "reglas", "crear-manifiesto", "eject", "init-cliente", "equipo", "proyecto"] as const;
 export type Accion = (typeof ACCIONES)[number];
 
@@ -66,7 +68,7 @@ const ARGUMENTOS = {
     .refine((a) => a.lotes !== undefined || a.commits !== undefined, "indica `lotes` o `commits`"),
   "crear-manifiesto": z.object({ proyecto: Proyecto, preset: z.string().regex(ID).optional() }).strict(),
   eject: z.object({ objetivo: z.string().min(1).max(120), destino: z.string().min(1).max(260), fuerza: z.boolean().optional() }).strict(),
-  // quitarIdioma: quita también PHASE_GATE_LANG del env del cliente (el aviso de que el env gana al idioma de machine.json).
+  // quitarIdioma: also removes PHASE_GATE_LANG from the client's env (the warning that the env wins over machine.json's language).
   "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional(), comandos: z.boolean().optional(), quitarIdioma: z.boolean().optional() }).strict(),
   equipo: ArgumentosDeEquipo,
   proyecto: ArgumentosDeProyecto,
@@ -76,7 +78,7 @@ export const PeticionDePlan = z.object({ accion: z.enum(ACCIONES), argumentos: z
 export const PeticionDeAplicar = z.object({ accion: z.enum(ACCIONES), argumentos: z.unknown(), huella: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
 
 export class ErrorDeAccion extends Error {
-  // `extra` se suma al cuerpo de la respuesta de error: con varios archivos, cuáles quedaron escritos.
+  // `extra` is added to the body of the error response: with several files, which ones were written.
   constructor(
     readonly estado: 400 | 404 | 409 | 500,
     message: string,
@@ -104,13 +106,13 @@ function proyectoDe(nombre: string): string {
 // ─── El plan ────────────────────────────────────────────────────────────────
 type Escritura = { ruta: string; antes: string | null; despues: string; copia: boolean; exclusiva: boolean };
 type Comando = { comando: string; args: string[]; mostrar: string };
-// `proyecto` y `cliente` son los que la acción dijo: de ellos depende su lista de destinos.
+// `proyecto` and `cliente` are the ones the action named: its list of destinations depends on them.
 type PlanInterno = { accion: Accion; resumen: string; escrituras: Escritura[]; comandos: Comando[]; hecho: string; avisos?: string[]; proyecto?: string; cliente?: (typeof CLIENTES)[number] };
 type Plan = { posible: true; interno: PlanInterno } | { posible: false; motivo: string };
 
 export type ContextoDeAcciones = {
   entornoInit: () => EntornoInit;
-  // Quien escribe cada archivo; los tests lo cambian para que una escritura falle. Sin él, la atómica.
+  // Whoever writes each file; the tests swap it so that a write fails. Without it, the atomic one.
   escribir?: (ruta: string, contenido: string) => void;
 };
 
@@ -232,7 +234,7 @@ function planDeEjectAccion(a: z.infer<(typeof ARGUMENTOS)["eject"]>): Plan {
   };
 }
 
-// Las rutas con las que trabaja este Studio ahora (el entorno, el .env o machine.json), las que existen.
+// The paths this Studio works with now (the environment, the .env or machine.json), the ones that exist.
 function rutasEfectivas(): QuitaDelEntorno {
   const carpeta = (ruta: string | undefined): string | undefined => (ruta && fs.statSync(path.resolve(ruta), { throwIfNoEntry: false })?.isDirectory() ? path.resolve(ruta) : undefined);
   const documentacion = carpeta(leerVariable("DOCS_PATH").valor);
@@ -288,8 +290,8 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
     }
   }
 
-  // Las rutas que el cliente llevaba en su env, o las del propio Studio, pasan a machine.json si aún no están
-  // ahí: así nada deja de funcionar al quitárselas. Solo las que faltan; machine.json va primero.
+  // The paths the client carried in its env, or the Studio's own, move to machine.json if they are not there
+  // yet: that way nothing stops working when they are taken out. Only the missing ones; machine.json goes first.
   const avisos: string[] = [];
   const maquina = leerMaquinaParaEditar();
   const guardadas = maquina.estado === "valido" && maquina.objeto.rutas !== null && typeof maquina.objeto.rutas === "object" ? (maquina.objeto.rutas as Record<string, unknown>) : {};
@@ -338,9 +340,9 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
   return { posible: true, interno: { accion: "init-cliente", cliente: a.cliente, resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" "), avisos } };
 }
 
-// Lo que calcula src/ajustes/, en la forma interna de este módulo. machine.json va primero en la lista: si falla
-// la segunda escritura, las rutas quedan repetidas, pero todo funciona. Un argumento que daría un archivo
-// que no se puede leer es un 400, antes de la vista previa.
+// What src/ajustes/ computes, in this module's internal shape. machine.json goes first in the list: if the
+// second write fails, the paths end up repeated, but everything works. An argument that would produce a file
+// that cannot be read is a 400, before the preview.
 function planDeAjustes(accion: "equipo" | "proyecto", proyecto: string | null, calcular: () => PlanDeAjustes): Plan {
   let plan: PlanDeAjustes;
   try {
@@ -458,10 +460,10 @@ function comprobarDestino(ruta: string): void {
   }
 }
 
-// ─── La lista cerrada de cada acción ────────────────────────────────────────
-// Además de lo que comprobarDestino prohíbe (que solo prohíbe: fuera de la Documentación admite cualquier
-// ruta), cada acción tiene los destinos que puede escribir. Tres acciones comparten machine.json, así que ahí
-// la lista va por claves: lo que cambia entre lo que había y lo que habrá.
+// ─── The closed list of each action ─────────────────────────────────────────
+// On top of what comprobarDestino forbids (it only forbids: outside the Documentation it admits any path),
+// each action has the destinations it can write. Three actions share machine.json, so there the list goes by
+// keys: what changes between what there was and what there will be.
 const CLAVES_DE_ESTRUCTURA = new Set(["$schema", "version"]);
 const mismaRuta = (a: string, b: string): boolean => {
   try {
@@ -472,7 +474,7 @@ const mismaRuta = (a: string, b: string): boolean => {
 };
 const proyectoDeClave = (clave: string): string => clave.slice(0, Math.max(clave.indexOf("/"), 0)).toLowerCase();
 
-// Las claves de machine.json que cambian, de la raíz y dentro de `repos` y `rutas`.
+// The keys of machine.json that change, at the root and inside `repos` and `rutas`.
 function clavesTocadas(e: Escritura): { raiz: string[]; repos: string[]; rutasNuevas: string[]; rutasCambiadas: string[] } | null {
   const leer = (texto: string | null): Record<string, unknown> | null => {
     if (texto === null) return {};
@@ -542,7 +544,7 @@ export function comprobarLista(plan: PlanInterno, e: Escritura, ctx: ContextoDeA
         const tocadas = clavesTocadas(e);
         if (!tocadas) return noEscribe();
         for (const clave of tocadas.raiz) if (clave !== "rutas") claveNoPermitida(clave);
-        // Solo las rutas que faltan: una que ya tiene valor no se cambia desde aquí.
+        // Only the paths that are missing: one that already has a value is not changed from here.
         for (const clave of tocadas.rutasCambiadas) claveNoPermitida(`rutas.${clave}`);
         if (tocadas.repos.length) claveNoPermitida("repos");
         return;
@@ -613,8 +615,8 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
         const escribir = ctx.escribir ?? escribirAtomico;
         const archivos: string[] = [];
         const copias: string[] = [];
-        // Con varios pasos (machine.json y otro archivo, o un archivo y un comando), un fallo a medias dice qué
-        // quedó escrito y dónde están las copias; con uno solo, el error de siempre.
+        // With several steps (machine.json and another file, or a file and a command), a failure halfway says what
+        // was written and where the copies are; with a single one, the usual error.
         const variosPasos = interno.escrituras.length + interno.comandos.length > 1;
         try {
           for (const e of interno.escrituras) {

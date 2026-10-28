@@ -144,9 +144,9 @@ export type LecturaVariable = {
 //      nombre llega por una vía distinta. Si no, un .env con PHASE_GATE_X le ganaría a un bloque
 //      env con ORQUESTADOR_X, y "el cliente gana al .env" dejaría de ser cierto.
 //   2. Dentro de la misma fuente, PHASE_GATE_* gana a ORQUESTADOR_*.
-//   3. Para DOCS_PATH, REPOS_PATH y TASKS_SUBDIR, lo que diga `rutas` de machine.json. Gana lo de la
-//      ejecución sobre lo guardado, como en git y npm. Se lee en cada llamada, y solo si el entorno no
-//      define la variable.
+//   3. For DOCS_PATH, REPOS_PATH and TASKS_SUBDIR, what `rutas` in machine.json says. What belongs to the
+//      run wins over what is stored, as in git and npm. It is read on every call, and only if the
+//      environment does not define the variable.
 //
 // "Definida" es que exista, aunque esté vacía: TASKS_SUBDIR vacía a propósito significa que las
 // tareas cuelgan directo del proyecto, y eso tiene que poder decirse también con el nombre nuevo.
@@ -236,8 +236,8 @@ export function requireBasePath({ logica, apuntaA }: RutaRequerida): string {
   const { valor, usada, fuente } = leerVariable(logica);
 
   if (!valor || !usada) {
-    // Si el .env no se pudo cargar, o machine.json no se puede leer, esa es casi seguro la causa: se dice
-    // antes que nada.
+    // If the .env could not be loaded, or machine.json cannot be read, that is almost surely the cause: it is
+    // said first.
     const maquina = maquinaVigente();
     throw fallo("CONFIG-FALTA-VARIABLE", {
       variable: nombrarVariable(logica),
@@ -253,7 +253,7 @@ export function requireBasePath({ logica, apuntaA }: RutaRequerida): string {
   // Una variable definida pero incorrecta falla igual de tarde que una ausente, así que la
   // existencia se comprueba aquí. El BOM y el UTF-16 ya los resuelve cargarEnv; un .env guardado
   // en ANSI todavía rompe los acentos sin que se pueda detectar con certeza.
-  // Si el valor salió de machine.json, el error nombra ese archivo y no una variable de entorno.
+  // If the value came from machine.json, the error names that file and not an environment variable.
   const variable = fuente === "machine.json" ? `${ARCHIVO_MAQUINA} (${usada})` : usada;
   if (!fs.existsSync(ruta)) {
     throw fallo("CONFIG-RUTA-NO-EXISTE", { variable, ruta, fuente });
@@ -317,11 +317,11 @@ export function fijarRaizDelPaquete(ruta: string | null): void {
   raizDelPaquete = ruta ?? path.join(MODULE_DIR, "..");
 }
 
-// El idioma de este equipo cuando no hay proyecto (§8.3, pasos 3 a 5): PHASE_GATE_LANG, después
-// `idiomaPorDefecto` de machine.json y, al final, el del sistema. Como en las rutas, lo de la ejecución gana
-// a lo guardado. Es lo mismo que idiomaDelEquipo (manifiesto.ts), que dice además de dónde salió; los dos
-// leen machine.json con el mismo lector, y así este módulo no importa el del manifiesto, que lo importa a
-// él. Un machine.json ilegible no cuenta: doctor lo dice.
+// The language of this machine when there is no project: PHASE_GATE_LANG, then `idiomaPorDefecto` of
+// machine.json and, last, the system's. As with the paths, what belongs to the run wins over what is stored.
+// It is the same as idiomaDelEquipo (manifiesto.ts), which also says where it came from; both read
+// machine.json with the same reader, so this module does not import the manifest's, which imports it. An
+// unreadable machine.json does not count: doctor says so.
 export function idiomaSinProyecto(): Idioma {
   return idiomaDelEntornoBase() ?? idiomaDeMaquina() ?? idiomaDelSistemaBase();
 }
@@ -417,13 +417,13 @@ export function configDir(): string {
 }
 
 // ─── machine.json ───────────────────────────────────────────────────────────
-// Lo que lee este módulo de machine.json: sus `rutas` y su `idiomaPorDefecto`. El archivo entero lo valida
-// maquina.ts, para que "roto" signifique lo mismo aquí, en doctor y en Ajustes; los repos y el preset los
-// resuelve manifiesto.ts con la misma lectura.
+// What this module reads of machine.json: its `rutas` and its `idiomaPorDefecto`. The whole file is
+// validated by maquina.ts, so that "broken" means the same here, in doctor and in Ajustes; the repos and the
+// preset are resolved by manifiesto.ts with the same reading.
 //
-// No hay caché por el mtime del archivo: en NTFS no cambió en el 48 % de las escrituras atómicas seguidas.
-// Se lee en cada llamada. Lo único que se guarda es el último archivo válido que leyó este proceso: si el
-// archivo deja de serlo, sus rutas y su idioma siguen valiendo hasta que se arregle, y se avisa una vez.
+// There is no cache by the file's mtime: on NTFS it did not change in 48 % of back-to-back atomic writes. It
+// is read on every call. The only thing kept is the last valid file this process read: if the file stops
+// being valid, its paths and its language keep applying until it is fixed, and one warning is logged.
 export type LecturaDeMaquina = {
   estado: "ausente" | "valido" | "invalido";
   ruta: string;
@@ -431,7 +431,7 @@ export type LecturaDeMaquina = {
   error: string | null;
 };
 
-// `deMemoria`: el archivo es inválido y `config` es el último válido que leyó este proceso.
+// `deMemoria`: the file is invalid and `config` is the last valid one this process read.
 export type MaquinaVigente = LecturaDeMaquina & { deMemoria: boolean };
 
 export const CLAVE_EN_MAQUINA: Partial<Record<NombreLogico, keyof RutasDeMaquina>> = {
@@ -444,7 +444,7 @@ export function rutaDeMaquina(): string {
   return path.join(configDir(), ARCHIVO_MAQUINA);
 }
 
-// Una lectura del disco, sin memoria: lo que el archivo dice ahora.
+// One read of the disk, without memory: what the file says now.
 export function leerArchivoDeMaquina(): LecturaDeMaquina {
   const ruta = rutaDeMaquina();
   let texto: string;
@@ -462,8 +462,8 @@ export function leerArchivoDeMaquina(): LecturaDeMaquina {
 let ultimaValida: { ruta: string; config: MaquinaConfig } | null = null;
 let ultimoAviso: string | null = null;
 
-// Lo que vale ahora: el archivo si es válido; si está roto, el último válido que leyó este proceso (de esa
-// misma ruta), con un aviso la primera vez; y si nunca hubo uno, nada.
+// What applies now: the file if it is valid; if it is broken, the last valid one this process read (from that
+// same path), with a warning the first time; and if there never was one, nothing.
 export function maquinaVigente(): MaquinaVigente {
   const lectura = leerArchivoDeMaquina();
   if (lectura.estado === "valido") {
@@ -486,14 +486,14 @@ export function maquinaVigente(): MaquinaVigente {
   return { ...lectura, deMemoria: false };
 }
 
-// Solo para tests: olvida el último machine.json válido y el aviso.
+// Only for tests: forgets the last valid machine.json and the warning.
 export function reiniciarMaquina(): void {
   ultimaValida = null;
   ultimoAviso = null;
 }
 
-// Lo que machine.json dice de una variable, ganen o no el entorno o el .env. Solo DOCS_PATH, REPOS_PATH y
-// TASKS_SUBDIR tienen valor en machine.json.
+// What machine.json says of a variable, whether or not the environment or the .env wins. Only DOCS_PATH,
+// REPOS_PATH and TASKS_SUBDIR have a value in machine.json.
 export function valorDeMaquina(logica: NombreLogico): string | undefined {
   const clave = CLAVE_EN_MAQUINA[logica];
   return clave ? maquinaVigente().config?.rutas?.[clave] : undefined;

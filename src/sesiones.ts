@@ -30,7 +30,7 @@ export const INTERVALO_MS = 60_000;
 export const CADUCIDAD_MS = 10 * 60_000;
 export const TAMANO_MAXIMO = 16 * 1024;
 const MAX_RAICES = 20;
-// Un tope por ruta, para que el registro siga cabiendo en TAMANO_MAXIMO.
+// A cap per path, so that the record still fits in TAMANO_MAXIMO.
 const MAX_RUTA = 1024;
 const NOMBRE = /^([1-9]\d{0,9})\.json$/;
 
@@ -38,8 +38,9 @@ export function carpetaDeSesiones(): string {
   return path.join(stateDir(), CARPETA_DE_SESIONES);
 }
 
-// Las rutas con las que arrancó el servidor, tal como llegaron en su entorno: las de machine.json no se
-// anotan, porque cambian sin reiniciarlo. Opcional, porque las sesiones de un servidor 3.x no la llevan.
+// The paths the server started with, as they came in its environment: the ones from machine.json are not
+// recorded, because they change without restarting it. Optional, because the sessions of a 3.x server do not
+// carry it.
 export const RutasDeSesion = z
   .object({
     documentacion: z.string().max(MAX_RUTA).optional(),
@@ -63,9 +64,9 @@ export const SesionArchivo = z
 export type SesionArchivo = z.infer<typeof SesionArchivo>;
 
 // ─── Escribir (el servidor MCP) ─────────────────────────────────────────────
-// Lo que este proceso recibió de su entorno (el bloque "env" del cliente o el .env) para sus tres rutas. Es lo
-// que no cambia mientras el proceso vive, y lo que Ajustes compara con machine.json. Una ruta más larga que
-// el tope no se anota.
+// What this process received from its environment (the client's "env" block or the .env) for its three paths.
+// It is what does not change while the process lives, and what Ajustes compares with machine.json. A path
+// longer than the cap is not recorded.
 export function rutasDelEntorno(): RutasDeSesion | undefined {
   const rutas: RutasDeSesion = {};
   for (const [logica, clave] of Object.entries(CLAVE_EN_MAQUINA) as ["DOCS_PATH" | "REPOS_PATH" | "TASKS_SUBDIR", keyof RutasDeSesion][]) {
@@ -96,7 +97,7 @@ export type OpcionesDeRegistro = {
   ahora?: () => Date;
   intervaloMs?: number;
   escribir?: Escritor;
-  // Las rutas del entorno del servidor; sin ellas, las del proceso.
+  // The paths from the server's environment; without them, the process's.
   rutas?: RutasDeSesion | undefined;
   // El proceso al que se enganchan la salida y las señales; los tests pasan uno falso.
   proceso?: Pick<NodeJS.Process, "on" | "once" | "exit"> & { stdin?: { on: (evento: string, oyente: () => void) => unknown } };
@@ -110,7 +111,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
   const intervalo = opciones.intervaloMs ?? INTERVALO_MS;
   const escribir = opciones.escribir ?? escribirAtomico;
   const proceso = opciones.proceso ?? process;
-  // Se leen al arrancar: lo que vino del entorno no cambia mientras el proceso vive.
+  // Read at start: what came from the environment does not change while the process lives.
   const rutas = "rutas" in opciones ? opciones.rutas : rutasDelEntorno();
   // La ruta se fija al arrancar: si el estado cambiara de sitio, el archivo que se borra es el escrito.
   let ruta: string | null = null;
