@@ -83,6 +83,32 @@ export const TEXTOS_AJUSTES = {
     en: (p: { id: string; clave: string }) => `The repo "${p.id}" leaves the project, but machine.json keeps its own path ("${p.clave}"): set it to null to remove it too.`,
   },
 
+  // ─── studio/ajustes.ts: las variables avanzadas ───
+  "AJUSTES-AVANZADA-PROMPTS-PATH": {
+    es: "Carpeta con prompts de fase propios, que se superponen a los del paquete.",
+    en: "Folder with your own phase prompts, layered over the package's.",
+  },
+  "AJUSTES-AVANZADA-STATE-PATH": {
+    es: "Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya.",
+    en: "Where the active-task pointers and the sessions are kept. Each registration of the server with its own Documentation needs its own.",
+  },
+  "AJUSTES-AVANZADA-CONFIG-PATH": {
+    es: "La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts.",
+    en: "This machine's configuration folder: machine.json, your own presets and the global prompts layer.",
+  },
+  "AJUSTES-AVANZADA-ELICITATION": {
+    es: "«off» para que el servidor no pida confirmaciones al cliente y las pida en el chat.",
+    en: "\"off\" so the server does not ask the client for confirmations and asks them in the chat.",
+  },
+  "AJUSTES-AVANZADA-LANG": {
+    es: "El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo.",
+    en: "The server's language: that of its messages and of projects with no language of their own. It wins over this machine's default language.",
+  },
+  "AJUSTES-AVANZADA-COMO-CAMBIARLA": {
+    es: (p: { variable: string }) => `No se edita desde Ajustes. Se cambia en el bloque "env" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): ${p.variable}.`,
+    en: (p: { variable: string }) => `It is not edited from Ajustes. It is changed in the "env" block of your client's mcp.json (or in the environment of whoever launches the server): ${p.variable}.`,
+  },
+
   // ─── studio/acciones.ts: el orden y los destinos de varios archivos ───
   "AJUSTES-APLICAR-PARCIAL": {
     es: (p: { detalle: string; escritos: string[]; copias: string[] }) =>

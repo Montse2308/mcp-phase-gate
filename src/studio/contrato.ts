@@ -2,7 +2,7 @@
 // ellos, y el frontend importa los tipos (solo los tipos: `import type`, que no lleva zod al bundle).
 //
 // Las respuestas no llevan las rutas absolutas del equipo salvo donde la vista las necesita para
-// decir dónde editar algo (el diagnóstico y las capas de prompts): una tarea se identifica por su
+// decir dónde editar algo (el diagnóstico, las capas de prompts y Ajustes): una tarea se identifica por su
 // proyecto y su nombre, no por su carpeta.
 
 import { z } from "zod";
@@ -223,6 +223,79 @@ export const PlanDeClienteApi = z.object({
 
 export const ClientesRespuesta = z.object({ clientes: z.array(PlanDeClienteApi) });
 
+// ─── /api/ajustes ───────────────────────────────────────────────────────────
+// De cada ruta de este equipo y del idioma: lo que dice machine.json, lo que vale de verdad y de dónde sale; y
+// quién lo pisa con su propio env.
+export const NombreDeCampo = z.enum(["documentacion", "carpetaDeRepos", "subcarpetaTareas", "idioma"]);
+
+export const CampoAjustes = z.object({
+  campo: NombreDeCampo,
+  variable: z.string(), // la variable de entorno que lo pisaría
+  enMaquina: z.string().nullable(), // lo que dice machine.json
+  efectivo: z.string().nullable(), // lo que vale ahora en este Studio
+  fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "sin definir"]),
+  // Este mismo Studio, por su entorno o su .env, usa otro valor que machine.json: es el primer aviso.
+  propioStudioPisa: z.boolean(),
+  // Su entorno o su .env dicen algo que machine.json no tiene: se puede guardar ahí.
+  sinGuardar: z.boolean(),
+});
+
+// Lo que un env dice de un campo, comparado con machine.json.
+export const EnvDeCliente = z.object({
+  campo: NombreDeCampo,
+  variable: z.string(),
+  valor: z.string(),
+  estado: z.enum(["pisa", "coincide", "sin-valor-en-maquina"]),
+});
+
+export const EntradaDeCliente = z.object({
+  clave: z.string(), // la clave de la entrada en el archivo del cliente
+  ambito: z.enum(["archivo", "usuario", "local"]),
+  carpeta: z.string().nullable(), // en Claude Code, la carpeta de un ámbito local
+  variables: z.array(EnvDeCliente),
+});
+
+export const ClienteAjustes = z.object({
+  cliente: z.enum(["claude-code", "cursor", "vscode"]),
+  nombre: z.string(),
+  archivo: z.string(), // con ~ en lugar de la carpeta del usuario
+  lectura: z.enum(["leido", "no-existe", "ilegible"]),
+  entradas: z.array(EntradaDeCliente),
+});
+
+// Un servidor abierto, de cualquier cliente: sus rutas son las que recibió al arrancar.
+export const SesionDeAjustes = z.object({
+  pid: z.number().int(),
+  cliente: z.string(),
+  proyecto: z.string().nullable(),
+  sinRutas: z.boolean(), // es de un servidor 3.x, que no anota sus rutas
+  variables: z.array(EnvDeCliente),
+});
+
+export const AvanzadaApi = z.object({
+  logica: z.string(),
+  variable: z.string(),
+  descripcion: z.string(),
+  valor: z.string().nullable(),
+  usada: z.string().nullable(),
+  fuente: z.enum(["entorno", ".env", "machine.json", "sin definir"]),
+  comoCambiarla: z.string(),
+});
+
+export const AjustesRespuesta = z.object({
+  maquina: z.object({
+    estado: z.enum(["ausente", "valido", "invalido"]),
+    error: z.string().nullable(),
+    // Con el archivo roto, este proceso sigue con el último válido que leyó.
+    deMemoria: z.boolean(),
+    version: z.number().int().nullable(),
+  }),
+  campos: z.array(CampoAjustes),
+  clientes: z.array(ClienteAjustes),
+  sesiones: z.array(SesionDeAjustes),
+  avanzadas: z.array(AvanzadaApi),
+});
+
 // ─── Acciones (§7.6) ────────────────────────────────────────────────────────
 export const PlanRespuesta = z.union([
   z.object({
@@ -260,5 +333,13 @@ export type Modo = z.infer<typeof Modo>;
 export type EventoDeBitacora = z.infer<typeof EventoDeBitacora>;
 export type BitacoraRespuesta = z.infer<typeof BitacoraRespuesta>;
 export type PlanRespuesta = z.infer<typeof PlanRespuesta>;
+export type NombreDeCampo = z.infer<typeof NombreDeCampo>;
+export type CampoAjustes = z.infer<typeof CampoAjustes>;
+export type EnvDeCliente = z.infer<typeof EnvDeCliente>;
+export type EntradaDeCliente = z.infer<typeof EntradaDeCliente>;
+export type ClienteAjustes = z.infer<typeof ClienteAjustes>;
+export type SesionDeAjustes = z.infer<typeof SesionDeAjustes>;
+export type AvanzadaApi = z.infer<typeof AvanzadaApi>;
+export type AjustesRespuesta = z.infer<typeof AjustesRespuesta>;
 export type AplicarRespuesta = z.infer<typeof AplicarRespuesta>;
 export type EstadoDelWatcher = z.infer<typeof EstadoDelWatcher>;

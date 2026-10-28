@@ -27,6 +27,7 @@ import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requir
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
 import { etiquetaDeLote, parsearRecibo } from "../recibos.js";
+import type { SesionAbierta } from "../sesiones.js";
 import type { Recibo } from "../recibos.js";
 import { archivoDeTarea } from "../recursos.js";
 import { estadosConPlazo, resolverRepo } from "../repos.js";
@@ -34,6 +35,7 @@ import { textoDelPromptDeFase } from "../servidor.js";
 import { avisoDeCompuerta, avisoDePendientes, describeEstado, detectarSalto, listarTareas, tareaActiva, tieneValidacionesPendientes } from "../tasks.js";
 import type { EstadoTarea } from "../tasks.js";
 import type {
+  AjustesRespuesta,
   BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
@@ -53,13 +55,14 @@ import type {
   TareasRespuesta,
 } from "./contrato.js";
 import { ErrorDeAccion, crearAcciones } from "./acciones.js";
+import { ajustesDeEsteEquipo } from "./ajustes.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
 export type ContextoApi = {
   modo: Modo; // "estatico" solo al exportar (exportar.ts): ningún servidor sirve en ese modo
   watcher: () => EstadoRespuesta["studio"]["watcher"];
-  sesiones: () => SesionApi[];
+  sesiones: () => SesionAbierta[];
   // Para /api/clientes: la carpeta del usuario, APPDATA y cómo se ejecuta `claude`. En los tests y en la
   // demo, uno falso: nunca la configuración real de los clientes.
   entornoInit: () => EntornoInit;
@@ -160,7 +163,7 @@ async function estado(ctx: ContextoApi): Promise<EstadoRespuesta> {
 }
 
 // ─── /api/proyectos ─────────────────────────────────────────────────────────
-async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<ProyectoApi> {
+async function proyecto(nombre: string, sesiones: SesionAbierta[]): Promise<ProyectoApi> {
   const lectura = leerManifiesto(nombre);
   let errorDeConfiguracion: string | null = null;
   let preset: ProyectoApi["preset"] = null;
@@ -234,7 +237,9 @@ async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<Proyecto
     repos,
     tareas,
     activa,
-    sesiones: sesiones.filter((s) => s.proyecto !== null && s.proyecto.toLowerCase() === nombre.toLowerCase()),
+    sesiones: sesiones
+      .filter((s) => s.proyecto !== null && s.proyecto.toLowerCase() === nombre.toLowerCase())
+      .map(({ pid, cliente, proyecto, desde, actualizado }) => ({ pid, cliente, proyecto, desde, actualizado })),
   };
 }
 
@@ -657,6 +662,7 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     { patron: /^\/tareas\/([^/]+)\/([^/]+)\/bitacora$/, atender: (m) => bitacora(m[1]!, m[2]!) },
     { patron: /^\/prompts\/([^/]+)\/([^/]+)$/, atender: (m, p) => prompt(m[1]!, m[2]!, p.consulta) },
     { patron: /^\/clientes$/, atender: async (): Promise<ClientesRespuesta> => ({ clientes: await planesDeClientes(ctx.entornoInit()) }) },
+    { patron: /^\/ajustes$/, atender: (): AjustesRespuesta => ajustesDeEsteEquipo({ entornoInit: ctx.entornoInit, sesiones: ctx.sesiones }) },
   ];
 
   const acciones = crearAcciones({ entornoInit: ctx.entornoInit });

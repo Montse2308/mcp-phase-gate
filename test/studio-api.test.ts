@@ -9,9 +9,10 @@ import * as path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { fijarRaizDelPaquete } from "../src/config.js";
+import { cargarEnv, configDir, fijarRaizDelPaquete } from "../src/config.js";
 import { registrarLote } from "../src/lotes.js";
 import {
+  AjustesRespuesta,
   BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
@@ -305,6 +306,159 @@ describe("API del Studio: cada ruta con su shape", () => {
   });
 });
 
+describe("API del Studio: /api/ajustes", () => {
+  const maquina = (config: string, contenido: unknown): void => fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify(contenido), "utf-8");
+  const campo = (r: AjustesRespuesta, nombre: string) => r.campos.find((c) => c.campo === nombre)!;
+  async function pedirAjustes(contexto: Parameters<typeof studioConApi>[0] = {}): Promise<AjustesRespuesta> {
+    const s = await studioConApi(contexto);
+    const r = await s.get("/api/ajustes");
+    assert.equal(r.estado, 200, r.texto);
+    return AjustesRespuesta.parse(r.json);
+  }
+  const sesion = (pid: number, rutas?: object) => ({ pid, cliente: "claude-code 2.1.0", proyecto: "P", desde: "2026-10-27T10:00:00.000Z", actualizado: "2026-10-27T10:00:00.000Z", ...(rutas ? { rutas } : {}) });
+
+  it("para cada ruta y el idioma: el valor de machine.json, el efectivo y su fuente; sin machine.json ni clientes, nada más", async () => {
+    const { docs, repos } = await instalacion();
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+
+    assert.deepEqual(r.maquina, { estado: "ausente", error: null, deMemoria: false, version: null });
+    assert.deepEqual(r.campos.map((c) => c.campo), ["documentacion", "carpetaDeRepos", "subcarpetaTareas", "idioma"]);
+    assert.deepEqual(
+      r.campos.map((c) => [c.variable, c.enMaquina, c.efectivo, c.fuente, c.propioStudioPisa, c.sinGuardar]),
+      [
+        ["PHASE_GATE_DOCS_PATH", null, docs, "entorno", false, true],
+        ["PHASE_GATE_REPOS_PATH", null, repos, "entorno", false, true],
+        ["PHASE_GATE_TASKS_SUBDIR", null, "Proyectos", "entorno", false, true],
+        ["PHASE_GATE_LANG", null, "es", "entorno", false, true],
+      ],
+      "lo del entorno de este Studio que machine.json no tiene se puede guardar ahí"
+    );
+    assert.deepEqual(r.clientes.map((c) => [c.cliente, c.lectura, c.entradas]), [["claude-code", "no-existe", []], ["cursor", "no-existe", []], ["vscode", "no-existe", []]]);
+    assert.deepEqual(r.sesiones, []);
+
+    // Sin entorno, la ruta sale de machine.json; sin ninguno, sin definir.
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    delete process.env.PHASE_GATE_REPOS_PATH;
+    delete process.env.ORQUESTADOR_TASKS_SUBDIR;
+    delete process.env.PHASE_GATE_LANG;
+    const sin = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.deepEqual(sin.campos.slice(0, 2).map((c) => [c.efectivo, c.fuente]), [[null, "sin definir"], [null, "sin definir"]]);
+    maquina(configDir(), { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "" }, idiomaPorDefecto: "en" });
+    const guardado = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.deepEqual(
+      guardado.campos.map((c) => [c.enMaquina, c.efectivo, c.fuente, c.propioStudioPisa, c.sinGuardar]),
+      [[docs, docs, "machine.json", false, false], [repos, repos, "machine.json", false, false], ["", "", "machine.json", false, false], ["en", "en", "machine.json", false, false]]
+    );
+    assert.deepEqual([guardado.maquina.estado, guardado.maquina.version], ["valido", 2]);
+  });
+
+  it("como primer aviso, si el propio Studio usa otro valor por su entorno o su .env que el de machine.json", async () => {
+    const { docs, config } = await instalacion();
+    const otra = carpetaTemporal("otra-docs");
+    maquina(config, { version: 2, rutas: { documentacion: otra, carpetaDeRepos: process.env.PHASE_GATE_REPOS_PATH }, idiomaPorDefecto: "en" });
+    process.env.PHASE_GATE_LANG = "es";
+
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.equal(campo(r, "documentacion").propioStudioPisa, true);
+    assert.equal(campo(r, "documentacion").efectivo, docs, "gana el entorno");
+    assert.equal(campo(r, "documentacion").enMaquina, otra);
+    assert.equal(campo(r, "carpetaDeRepos").propioStudioPisa, false, "la misma ruta");
+    assert.equal(campo(r, "idioma").propioStudioPisa, true, "PHASE_GATE_LANG=es contra idiomaPorDefecto=en");
+    assert.equal(campo(r, "idioma").efectivo, "es");
+
+    // La misma ruta con otra forma no es otro valor; y una ruta que viene del .env se dice como tal.
+    process.env.ORQUESTADOR_DOCS_PATH = path.join(otra, "sub", "..");
+    assert.equal(campo(await pedirAjustes({ entornoInit: () => entornoInitDePrueba() }), "documentacion").propioStudioPisa, false);
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    const archivo = path.join(carpetaTemporal("env"), ".env");
+    fs.writeFileSync(archivo, `PHASE_GATE_DOCS_PATH=${docs}\nPHASE_GATE_LANG=es\n`);
+    delete process.env.PHASE_GATE_LANG;
+    cargarEnv(archivo);
+    const delEnv = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.deepEqual([campo(delEnv, "documentacion").fuente, campo(delEnv, "documentacion").propioStudioPisa], [".env", true]);
+    assert.equal(campo(delEnv, "idioma").fuente, ".env");
+  });
+
+  it("por cliente: un env que pisa, uno que coincide y ninguno, leyendo el mcp.json de Cursor y VS Code y ~/.claude.json en sus ámbitos", async () => {
+    const { docs, repos, config } = await instalacion();
+    const otra = carpetaTemporal("otra-docs");
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos }, idiomaPorDefecto: "es" });
+    const entorno = entornoInitDePrueba();
+    const pisa = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: otra, ORQUESTADOR_REPOS_PATH: repos, PHASE_GATE_LANG: "en", OTRA: "1" } };
+    const coincide = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: path.join(docs, "sub", ".."), PHASE_GATE_TASKS_SUBDIR: "Cosas" } };
+    const ninguno = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_ELICITATION: "off" } };
+    const ajena = { command: "npx", args: ["-y", "otro-servidor"], env: { PHASE_GATE_DOCS_PATH: otra } };
+    fs.mkdirSync(path.join(entorno.home, ".cursor"));
+    fs.writeFileSync(path.join(entorno.home, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: { pg: pisa, ajena } }), "utf-8");
+    fs.mkdirSync(path.join(entorno.appData!, "Code", "User"), { recursive: true });
+    fs.writeFileSync(path.join(entorno.appData!, "Code", "User", "mcp.json"), `{ // con comentarios\n "servers": { "pg": ${JSON.stringify({ type: "stdio", ...ninguno })}, }, }`, "utf-8");
+    fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ numStartups: 3, mcpServers: { pg: coincide }, projects: { "C:/trabajo/app": { mcpServers: { pg: pisa } }, "C:/otro": { mcpServers: {} } } }), "utf-8");
+
+    const r = await pedirAjustes({ entornoInit: () => entorno });
+    const [claude, cursor, vscode] = r.clientes;
+    assert.deepEqual([claude!.cliente, claude!.archivo, claude!.lectura], ["claude-code", "~/.claude.json", "leido"]);
+    assert.deepEqual(
+      claude!.entradas.map((e) => [e.clave, e.ambito, e.carpeta, e.variables.map((v) => `${v.campo}:${v.estado}`)]),
+      [
+        ["pg", "usuario", null, ["documentacion:coincide", "subcarpetaTareas:sin-valor-en-maquina"]],
+        ["pg", "local", "C:/trabajo/app", ["documentacion:pisa", "carpetaDeRepos:coincide", "idioma:pisa"]],
+      ]
+    );
+    assert.deepEqual([cursor!.archivo, cursor!.lectura, cursor!.entradas.length], ["~/.cursor/mcp.json", "leido", 1], "la entrada de otro servidor no cuenta");
+    assert.deepEqual(cursor!.entradas[0]!.variables.map((v) => [v.variable, v.valor, v.estado]), [["PHASE_GATE_DOCS_PATH", otra, "pisa"], ["PHASE_GATE_REPOS_PATH", repos, "coincide"], ["PHASE_GATE_LANG", "en", "pisa"]]);
+    assert.deepEqual([vscode!.lectura, vscode!.entradas.map((e) => [e.clave, e.variables])], ["leido", [["pg", []]]], "un env que no habla de rutas ni de idioma no pisa nada");
+
+    // Un archivo roto se dice, sin romper la respuesta.
+    fs.writeFileSync(path.join(entorno.home, ".cursor", "mcp.json"), "{ roto", "utf-8");
+    assert.equal((await pedirAjustes({ entornoInit: () => entorno })).clientes[1]!.lectura, "ilegible");
+    assert.equal(fs.readFileSync(path.join(entorno.home, ".cursor", "mcp.json"), "utf-8"), "{ roto", "solo lee");
+  });
+
+  it("por sesión: cualquier cliente con un servidor abierto, con lo que recibió al arrancar; uno 3.x no dice nada", async () => {
+    const { docs, repos, config } = await instalacion();
+    const otra = carpetaTemporal("otra-docs");
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos } });
+
+    const r = await pedirAjustes({
+      entornoInit: () => entornoInitDePrueba(),
+      sesiones: () => [sesion(11, { documentacion: otra, carpetaDeRepos: repos }), sesion(12), sesion(13, { subcarpetaTareas: "Cosas" })],
+    });
+    assert.deepEqual(
+      r.sesiones.map((s) => [s.pid, s.sinRutas, s.variables.map((v) => `${v.campo}:${v.estado}`)]),
+      [[11, false, ["documentacion:pisa", "carpetaDeRepos:coincide"]], [12, true, []], [13, false, ["subcarpetaTareas:sin-valor-en-maquina"]]]
+    );
+  });
+
+  it("las variables avanzadas: valor, origen y cómo cambiarlas, sin editarlas", async () => {
+    await instalacion();
+    const estadoPropio = carpetaTemporal("estado-propio");
+    process.env.PHASE_GATE_STATE_PATH = estadoPropio;
+    process.env.PHASE_GATE_ELICITATION = "off";
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+
+    assert.deepEqual(r.avanzadas.map((a) => a.variable), ["PHASE_GATE_PROMPTS_PATH", "PHASE_GATE_STATE_PATH", "PHASE_GATE_CONFIG_PATH", "PHASE_GATE_ELICITATION", "PHASE_GATE_LANG"]);
+    const estado = r.avanzadas.find((a) => a.logica === "STATE_PATH")!;
+    assert.deepEqual([estado.valor, estado.usada, estado.fuente], [estadoPropio, "PHASE_GATE_STATE_PATH", "entorno"]);
+    assert.equal(r.avanzadas.find((a) => a.logica === "PROMPTS_PATH")!.fuente, "sin definir");
+    assert.match(estado.comoCambiarla, /No se edita desde Ajustes\. Se cambia en el bloque "env" del mcp\.json de tu cliente .*: PHASE_GATE_STATE_PATH\./);
+    assert.ok(r.avanzadas.every((a) => a.descripcion.length > 20));
+  });
+
+  it("con un machine.json roto: lo dice, sin las rutas del equipo; y /api/proyectos no lleva las rutas de las sesiones", async () => {
+    const { config } = await instalacion();
+    fs.writeFileSync(path.join(config, "machine.json"), '{\n  "version": 2,\n  "rutas": }', "utf-8");
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba(), sesiones: () => [sesion(21, { documentacion: "/x" })] });
+    assert.equal(r.maquina.estado, "invalido");
+    assert.match(r.maquina.error ?? "", /machine\.json no es válido \(<configuración>.machine\.json\): no es un JSON válido: carácter inesperado «\}» \(línea 3, columna 12\)/);
+    assert.ok(!(r.maquina.error ?? "").includes(config));
+
+    const s = await studioConApi({ entornoInit: () => entornoInitDePrueba(), sesiones: () => [sesion(21, { documentacion: "/x" })] });
+    const proyectos = await s.get("/api/proyectos");
+    assert.deepEqual(Object.keys(ProyectosRespuesta.parse(proyectos.json).proyectos.find((p) => p.nombre === "P")!.sesiones[0]!).sort(), ["actualizado", "cliente", "desde", "pid", "proyecto"]);
+    assert.ok(!proyectos.texto.includes('"rutas"'), "las rutas de una sesión no salen por /api/proyectos");
+  });
+});
+
 describe("API del Studio: parámetros, errores y lo que no se hace", () => {
   it("un proyecto, una tarea, un documento o una fase que no existen son 404, no 500", async () => {
     await instalacion();
@@ -447,6 +601,7 @@ describe("API del Studio: parámetros, errores y lo que no se hace", () => {
       "/api/prompts/P/4?tarea=en-curso",
       "/api/prompts/Q/1",
       "/api/clientes",
+      "/api/ajustes",
       "/api/proyectos/R/tareas",
     ]) {
       await s.get(ruta);
