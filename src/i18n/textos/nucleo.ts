@@ -286,6 +286,12 @@ export const TEXTOS_NUCLEO = {
     es: ({ archivo, ruta, error }: { archivo: string; ruta: string; error: string }) => `${archivo} no es válido (${ruta}): ${error}`,
     en: ({ archivo, ruta, error }: { archivo: string; ruta: string; error: string }) => `${archivo} is not valid (${ruta}): ${error}`,
   },
+  "MAQUINA-TXT-SINTAXIS": {
+    es: ({ linea, columna, caracter }: { linea: number; columna: number; caracter: string | null }) =>
+      `no es un JSON válido: ${caracter === null ? "el archivo termina antes de tiempo" : `carácter inesperado «${caracter}»`} (línea ${linea}, columna ${columna}).`,
+    en: ({ linea, columna, caracter }: { linea: number; columna: number; caracter: string | null }) =>
+      `is not valid JSON: ${caracter === null ? "the file ends too soon" : `unexpected character «${caracter}»`} (line ${linea}, column ${columna}).`,
+  },
   "MAQUINA-CLAVE-DUPLICADA": {
     es: ({ ruta, clave }: { ruta: string; clave: string }) =>
       `${ruta}: la clave "${clave}" coincide con otra anterior sin distinguir mayúsculas en el proyecto; vale la primera.`,

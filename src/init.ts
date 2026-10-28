@@ -20,7 +20,8 @@ import { capasDeCuerpos, fasesDe, rutasDeCuerpos } from "./capas.js";
 import type { Salida } from "./cli.js";
 import { SERVER_NAME, SERVER_VERSION, leerVariable } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
-import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_MAQUINA, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import { URL_ESQUEMA_MAQUINA, VERSION_DE_MAQUINA } from "./maquina.js";
 import type { Idioma } from "./vocabulario.js";
 import { discoverProjects } from "./paths.js";
 import { leerPromptNormalizado, resolveCommandFile } from "./phases.js";
@@ -666,13 +667,16 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
       fallar(ctx, mensaje("INIT-NO-SE-TOCA", { error: lectura.error }));
       return true;
     }
-    const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined; idiomaPorDefecto?: string | undefined } = lectura.config ?? { version: 1 };
+    const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined; idiomaPorDefecto?: string | undefined } = lectura.config ?? { version: VERSION_DE_MAQUINA };
     const idioma = ctx.opciones.idioma ?? null;
     if (actual.presetPorDefecto === preset && (!idioma || actual.idiomaPorDefecto === idioma)) {
       ctx.entorno.salida.out(mensaje("INIT-MAQUINA-SIN-CAMBIOS", { preset, idioma }));
       return true;
     }
-    const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...actual, presetPorDefecto: preset, ...(idioma ? { idiomaPorDefecto: idioma } : {}) };
+    // Everything written is version 2, with the $schema of this series: the one the file had (an old @3)
+    // does not stay, and the other keys keep their order.
+    const { $schema: _anterior, ...resto } = actual;
+    const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...resto, version: VERSION_DE_MAQUINA, presetPorDefecto: preset, ...(idioma ? { idiomaPorDefecto: idioma } : {}) };
     if (actual.presetPorDefecto && !ctx.opciones.dryRun && !(await confirmar(ctx, mensaje("INIT-PREGUNTA-CAMBIAR-PRESET", { actual: actual.presetPorDefecto, preset })))) {
       fallar(ctx, mensaje("INIT-MAQUINA-NO-CAMBIADA"));
       return true;

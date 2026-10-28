@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unpkg.com/mcp-phase-gate@3/schema/machine.json",
+  "$id": "https://unpkg.com/mcp-phase-gate@4/schema/machine.json",
   "title": "machine.json",
-  "description": "Configuración de mcp-phase-gate en este equipo: rutas de repos que salen de PHASE_GATE_REPOS_PATH y preset por defecto para proyectos sin manifiesto.",
+  "description": "Configuración de mcp-phase-gate en este equipo: las rutas de la Documentación y de los repos, la ruta propia de cada repo, el preset por defecto para proyectos sin manifiesto y el idioma por defecto. Vive en la carpeta de configuración de este equipo, no en la Documentación.",
   "type": "object",
   "properties": {
     "$schema": {
@@ -10,7 +10,27 @@
     },
     "version": {
       "type": "number",
-      "const": 1
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "rutas": {
+      "type": "object",
+      "properties": {
+        "documentacion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "carpetaDeRepos": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subcarpetaTareas": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "repos": {
       "default": {},

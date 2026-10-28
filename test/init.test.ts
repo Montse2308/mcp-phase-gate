@@ -403,6 +403,28 @@ describe("init --migrate", () => {
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true, soloEsteEquipo: true }), p.entorno), 0, p.errores());
     assert.equal(leer(path.join(config, "machine.json")).presetPorDefecto, "software-replica");
     assert.equal(fs.existsSync(path.join(r.docs, "PROYECTO-A", "phase-gate.json")), false);
+    const escrito = leer(path.join(config, "machine.json"));
+    assert.equal(escrito.version, 2);
+    assert.equal(escrito.$schema, "https://unpkg.com/mcp-phase-gate@4/schema/machine.json");
+  });
+
+  it("--solo-este-equipo sobre un machine.json versión 1 con $schema @3 lo deja en versión 2 y @4, sin perder nada", async () => {
+    fijarRaizDelPaquete(RAIZ);
+    const r = rutas();
+    crearProyecto(r.docs, "PROYECTO-A");
+    const config = configTemporal();
+    const destino = carpetaTemporal("repo");
+    const archivo = path.join(config, "machine.json");
+    fs.writeFileSync(archivo, JSON.stringify({ $schema: "https://unpkg.com/mcp-phase-gate@3/schema/machine.json", version: 1, repos: { "PROYECTO-A/api": destino } }), "utf-8");
+    const p = entornoDePrueba();
+
+    assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true, soloEsteEquipo: true, yes: true }), p.entorno), 0, p.errores());
+    const escrito = leer(archivo);
+    assert.deepEqual(Object.keys(escrito), ["$schema", "version", "repos", "presetPorDefecto"]);
+    assert.equal(escrito.$schema, "https://unpkg.com/mcp-phase-gate@4/schema/machine.json");
+    assert.equal(escrito.version, 2);
+    assert.deepEqual(escrito.repos, { "PROYECTO-A/api": destino });
+    assert.ok(fs.readdirSync(config).some((n) => n.startsWith("machine.json.bak-")), "queda la copia de la versión 1");
   });
 });
 
