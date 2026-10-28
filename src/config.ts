@@ -429,6 +429,8 @@ export type LecturaDeMaquina = {
   ruta: string;
   config: MaquinaConfig | null;
   error: string | null;
+  // What made it invalid, independent of the language of `error`: the warning is logged once per cause.
+  causa: string | null;
 };
 
 // `deMemoria`: the file is invalid and `config` is the last valid one this process read.
@@ -451,12 +453,13 @@ export function leerArchivoDeMaquina(): LecturaDeMaquina {
   try {
     texto = fs.readFileSync(ruta, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return { estado: "ausente", ruta, config: null, error: null };
-    return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: error instanceof Error ? error.message : String(error) }) };
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return { estado: "ausente", ruta, config: null, error: null, causa: null };
+    const detalle = error instanceof Error ? error.message : String(error);
+    return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: detalle }), causa: detalle };
   }
   const leido = interpretarMaquina(texto);
-  if (!leido.ok) return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: leido.error }) };
-  return { estado: "valido", ruta, config: leido.config, error: null };
+  if (!leido.ok) return { estado: "invalido", ruta, config: null, error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error: leido.error }), causa: texto };
+  return { estado: "valido", ruta, config: leido.config, error: null, causa: null };
 }
 
 let ultimaValida: { ruta: string; config: MaquinaConfig } | null = null;
@@ -477,8 +480,8 @@ export function maquinaVigente(): MaquinaVigente {
     return { ...lectura, deMemoria: false };
   }
   if (ultimaValida && ultimaValida.ruta === lectura.ruta) {
-    if (ultimoAviso !== lectura.error) {
-      ultimoAviso = lectura.error;
+    if (ultimoAviso !== lectura.causa) {
+      ultimoAviso = lectura.causa;
       console.error(`[${SERVER_NAME}] ${mensaje("CONFIG-MAQUINA-EN-MEMORIA", { error: lectura.error })}`);
     }
     return { ...lectura, config: ultimaValida.config, deMemoria: true };

@@ -19,6 +19,7 @@ import { DISCO_CAMBIADO, ErrorDeAccion, comprobarLista, crearAcciones } from "..
 import type { Accion, ContextoDeAcciones } from "../src/studio/acciones.js";
 import { AplicarRespuesta, PlanRespuesta } from "../src/studio/contrato.js";
 import { CARPETAS_REALES, carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, huellaDeConfiguracion, limpiarEntorno } from "./helpers.js";
+import { carpetaDelCliente } from "../src/init.js";
 import { entornoInitDePrueba, pedir, studioConApi } from "./studio-ayudas.js";
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -782,10 +783,10 @@ describe("acciones: la lista cerrada de destinos de cada una", () => {
     prohibido("init-cliente", maquina(base, { ...base, repos: { "P/api": "/x" } }), /no escribe la clave «repos»/, { cliente: "cursor" });
     assert.doesNotThrow(() => comprobarLista(plan("init-cliente", { cliente: "cursor" }), conEntorno(path.join(e.home, ".cursor", "mcp.json")), { entornoInit: () => e }));
     assert.doesNotThrow(() => comprobarLista(plan("init-cliente", { cliente: "cursor" }), conEntorno(path.join(e.home, ".cursor", "commands", "f1.md")), { entornoInit: () => e }));
-    assert.doesNotThrow(() => comprobarLista(plan("init-cliente", { cliente: "vscode" }), conEntorno(path.join(e.appData!, "Code", "User", "mcp.json")), { entornoInit: () => e }));
+    assert.doesNotThrow(() => comprobarLista(plan("init-cliente", { cliente: "vscode" }), conEntorno(path.join(carpetaDelCliente("vscode", e), "mcp.json")), { entornoInit: () => e }));
     for (const [cliente, ruta] of [
       ["cursor", path.join(e.home, ".claude", "commands", "f1.md")], // los comandos de otro cliente
-      ["cursor", path.join(e.appData!, "Code", "User", "mcp.json")], // el mcp.json de otro cliente
+      ["cursor", path.join(carpetaDelCliente("vscode", e), "mcp.json")], // el mcp.json de otro cliente
       ["vscode", path.join(e.home, ".cursor", "commands", "f1.md")], // VS Code no lee comandos de archivo
       ["cursor", path.join(e.home, ".cursor", "otra-cosa.json")],
     ] as const) {

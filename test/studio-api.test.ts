@@ -23,6 +23,7 @@ import {
   TareaRespuesta,
   TareasRespuesta,
 } from "../src/studio/contrato.js";
+import { carpetaDelCliente } from "../src/init.js";
 import { sinRutasDelEquipo } from "../src/studio/api.js";
 import { conectar, textoDe } from "./cliente.js";
 import { carpetaTemporal, configTemporal, crearProyecto, crearSymlink, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
@@ -390,8 +391,9 @@ describe("API del Studio: /api/ajustes", () => {
     const ajena = { command: "npx", args: ["-y", "otro-servidor"], env: { PHASE_GATE_DOCS_PATH: otra } };
     fs.mkdirSync(path.join(entorno.home, ".cursor"));
     fs.writeFileSync(path.join(entorno.home, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: { pg: pisa, ajena } }), "utf-8");
-    fs.mkdirSync(path.join(entorno.appData!, "Code", "User"), { recursive: true });
-    fs.writeFileSync(path.join(entorno.appData!, "Code", "User", "mcp.json"), `{ // con comentarios\n "servers": { "pg": ${JSON.stringify({ type: "stdio", ...ninguno })}, }, }`, "utf-8");
+    const carpetaVsCode = carpetaDelCliente("vscode", entorno);
+    fs.mkdirSync(carpetaVsCode, { recursive: true });
+    fs.writeFileSync(path.join(carpetaVsCode, "mcp.json"), `{ // con comentarios\n "servers": { "pg": ${JSON.stringify({ type: "stdio", ...ninguno })}, }, }`, "utf-8");
     fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ numStartups: 3, mcpServers: { pg: coincide }, projects: { "C:/trabajo/app": { mcpServers: { pg: pisa } }, "C:/otro": { mcpServers: {} } } }), "utf-8");
 
     const r = await pedirAjustes({ entornoInit: () => entorno });
