@@ -15,7 +15,7 @@ import { configDir, fijarRaizDelPaquete, stateDir } from "../src/config.js";
 import { manifiestoNuevo } from "../src/init.js";
 import { DISCO_CAMBIADO } from "../src/studio/acciones.js";
 import { AplicarRespuesta, PlanRespuesta } from "../src/studio/contrato.js";
-import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, huellaDeConfiguracion, limpiarEntorno } from "./helpers.js";
+import { CARPETAS_REALES, carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, huellaDeConfiguracion, limpiarEntorno } from "./helpers.js";
 import { entornoInitDePrueba, pedir, studioConApi } from "./studio-ayudas.js";
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -31,8 +31,9 @@ afterEach(() => {
 // sesiones), así que de ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto
 // (hallazgo 8 de la auditoría de la Etapa 6).
 function huellaReal(): string[] {
-  const appData = process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming");
-  return [path.join(os.homedir(), ".cursor", "mcp.json"), path.join(appData, "Code", "User", "mcp.json"), path.join(os.homedir(), ".claude.json"), path.join(os.homedir(), ".config", "Code", "User", "mcp.json")].map(
+  const { home, appData: appDataReal } = CARPETAS_REALES;
+  const appData = appDataReal ?? path.join(home, "AppData", "Roaming");
+  return [path.join(home, ".cursor", "mcp.json"), path.join(appData, "Code", "User", "mcp.json"), path.join(home, ".claude.json"), path.join(home, ".config", "Code", "User", "mcp.json")].map(
     (ruta) => `${ruta}|${huellaDeConfiguracion(ruta)}`
   );
 }
