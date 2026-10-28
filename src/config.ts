@@ -317,12 +317,13 @@ export function fijarRaizDelPaquete(ruta: string | null): void {
   raizDelPaquete = ruta ?? path.join(MODULE_DIR, "..");
 }
 
-// El idioma de este equipo cuando no hay proyecto (§8.3, pasos 3 a 5): `idiomaPorDefecto` de machine.json,
-// PHASE_GATE_LANG o el del sistema. Es lo mismo que idiomaDelEquipo (manifiesto.ts), que dice además de
-// dónde salió; los dos leen machine.json con el mismo lector, y así este módulo no importa el del
-// manifiesto, que lo importa a él. Un machine.json ilegible no cuenta: doctor lo dice.
+// El idioma de este equipo cuando no hay proyecto (§8.3, pasos 3 a 5): PHASE_GATE_LANG, después
+// `idiomaPorDefecto` de machine.json y, al final, el del sistema. Como en las rutas, lo de la ejecución gana
+// a lo guardado. Es lo mismo que idiomaDelEquipo (manifiesto.ts), que dice además de dónde salió; los dos
+// leen machine.json con el mismo lector, y así este módulo no importa el del manifiesto, que lo importa a
+// él. Un machine.json ilegible no cuenta: doctor lo dice.
 export function idiomaSinProyecto(): Idioma {
-  return idiomaDeMaquina() ?? idiomaDelEntornoBase() ?? idiomaDelSistemaBase();
+  return idiomaDelEntornoBase() ?? idiomaDeMaquina() ?? idiomaDelSistemaBase();
 }
 
 // Sin idioma, el del equipo: desde la Etapa 6 la capa de fábrica sin proyecto puede ser prompts/en/.

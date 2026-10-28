@@ -74,14 +74,29 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     assert.equal(idiomaDelProyecto("P").idioma, "en");
   });
 
-  it("3. sin documentos, `idiomaPorDefecto` de machine.json", () => {
+  it("3. sin documentos, PHASE_GATE_LANG gana a `idiomaPorDefecto` de machine.json: lo de la ejecución gana a lo guardado", () => {
     const { config } = instalacion();
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
     process.env.PHASE_GATE_LANG = "es";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "es", origen: "de PHASE_GATE_LANG" });
+
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 2, idiomaPorDefecto: "es" }));
+    process.env.PHASE_GATE_LANG = "en";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
+  });
+
+  it("4. sin PHASE_GATE_LANG, `idiomaPorDefecto` de machine.json", () => {
+    const { config } = instalacion();
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
+    delete process.env.PHASE_GATE_LANG;
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de machine.json" });
+
+    // Un PHASE_GATE_LANG que no es es ni en no cuenta: machine.json sigue valiendo.
+    process.env.PHASE_GATE_LANG = "fr";
     assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de machine.json" });
   });
 
-  it("4. después, PHASE_GATE_LANG (también con región: en-GB, es_MX.UTF-8)", () => {
+  it("3. PHASE_GATE_LANG, también con región: en-GB, es_MX.UTF-8", () => {
     instalacion();
     process.env.PHASE_GATE_LANG = "en-GB";
     assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
@@ -122,7 +137,7 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     const r = idiomaDelProyecto("P");
     assert.deepEqual([r.idioma, r.origen, r.sinIdiomaDeclarado], ["es", "del manifiesto sin idioma", true]);
 
-    // Lo que alguien fijó a propósito sí cuenta: PHASE_GATE_LANG y machine.json, en ese orden inverso.
+    // Lo que alguien fijó a propósito sí cuenta: PHASE_GATE_LANG primero y, sin ella, machine.json.
     process.env.PHASE_GATE_LANG = "en";
     assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
     delete process.env.PHASE_GATE_LANG;
@@ -342,7 +357,9 @@ describe("idioma sin proyecto: el del equipo", () => {
     assert.equal(fasesDe(null).get(1)?.documento, "01 - Technical Analysis.md");
     assert.ok(carpetaPresetsDelPaquete().endsWith(path.join("presets", "en")));
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "es" }));
-    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "es")), "machine.json gana a PHASE_GATE_LANG");
+    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "en")), "PHASE_GATE_LANG gana a machine.json");
+    delete process.env.PHASE_GATE_LANG;
+    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "es")), "sin PHASE_GATE_LANG, vale machine.json");
   });
 
   it("los /fN de un servidor en inglés salen con los títulos de las fases en inglés", async () => {

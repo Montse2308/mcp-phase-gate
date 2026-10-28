@@ -482,6 +482,7 @@ describe("rutas desde machine.json", () => {
         maquina("{ roto");
         assert.equal(requireBasePath(DOCS), docs, "las rutas siguen valiendo");
         assert.equal(leerVariable("DOCS_PATH").fuente, "machine.json");
+        delete process.env.PHASE_GATE_LANG; // la suite la fija en es, y entonces ganaría a machine.json
         assert.equal(idiomaSinProyecto(), "en", "y el idioma también");
         assert.equal(maquinaVigente().deMemoria, true);
         assert.equal(aviso.mock.callCount(), 1, "el aviso sale una vez por error, no una vez por lectura");

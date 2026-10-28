@@ -240,8 +240,8 @@ export function copiasEnConflicto(carpetaProyecto: string): string[] {
 //   2. lo que ya hay en disco: el idioma de los documentos de sus tareas ("el disco es la verdad": un
 //      proyecto sin manifiesto, con tareas en español, no se ve de golpe sin fases hechas porque el
 //      sistema esté en inglés); con documentos de los dos, el que más tenga, y doctor da IDIOMA-MIXTO;
-//   3. `idiomaPorDefecto` de machine.json;
-//   4. PHASE_GATE_LANG;
+//   3. PHASE_GATE_LANG: lo de la ejecución gana a lo guardado, como en las rutas;
+//   4. `idiomaPorDefecto` de machine.json;
 //   5. el idioma del sistema (es si su locale empieza por "es"; si no, en). Salvo para un proyecto con un
 //      manifiesto sin `idioma`: ese manifiesto es de la 3.0 o la 3.1, cuyo esquema daba "es" por defecto, y
 //      sigue en español aunque el sistema esté en inglés, como en un Linux sin LANG (hallazgo 2 de la
@@ -325,10 +325,10 @@ function contarDocumentos(raiz: string): DocumentosPorIdioma {
 // Los pasos 3 a 5: el idioma de este equipo, sin proyecto. Un machine.json inválido no tumba nada aquí:
 // lo dice doctor, y quien lo necesite para trabajar lo lee con maquinaDe.
 export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelIdioma, "del proyecto" | "de sus documentos"> } {
-  const deMaquina = idiomaDeMaquina();
-  if (deMaquina) return { idioma: deMaquina, origen: "de machine.json" };
   const delEntorno = idiomaDelEntorno();
   if (delEntorno) return { idioma: delEntorno, origen: "de PHASE_GATE_LANG" };
+  const deMaquina = idiomaDeMaquina();
+  if (deMaquina) return { idioma: deMaquina, origen: "de machine.json" };
   return { idioma: idiomaDelSistema(), origen: "del sistema" };
 }
 
