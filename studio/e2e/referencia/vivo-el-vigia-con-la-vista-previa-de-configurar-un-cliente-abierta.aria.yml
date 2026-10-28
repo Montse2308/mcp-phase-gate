@@ -75,7 +75,7 @@
         - paragraph: Se registraría como «pg» (ámbito user).
         - paragraph:
           - text: "Comando:"
-          - code: claude mcp add pg --scope user --env PHASE_GATE_DOCS_PATH=<raiz>/docs --env PHASE_GATE_REPOS_PATH=<raiz>/repos -- npx -y mcp-phase-gate
+          - code: claude mcp add pg --scope user -- npx -y mcp-phase-gate
         - paragraph:
           - checkbox "Copiar también los comandos de fase (/f1…/fN)"
           - text: Copiar también los comandos de fase (/f1…/fN)
@@ -92,8 +92,11 @@
           - checkbox "Copiar también los comandos de fase (/f1…/fN)"
           - text: Copiar también los comandos de fase (/f1…/fN)
         - 'region "Vista previa: Configurar Cursor"':
-          - paragraph: Registrar el servidor en Cursor como «pg».
+          - paragraph: Las rutas pasan a machine.json (rutas.documentacion = "<raiz>/docs"; rutas.carpetaDeRepos = "<raiz>/repos"), para que el servidor de cada cliente y el Studio las lean de ahí. Registrar el servidor en Cursor como «pg».
           - list:
+            - listitem:
+              - text: Crea
+              - code: <configuración>/machine.json
             - listitem:
               - text: Crea
               - code: ~/.cursor/mcp.json
