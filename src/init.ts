@@ -18,7 +18,7 @@ import * as readline from "readline/promises";
 
 import { capasDeCuerpos, fasesDe, rutasDeCuerpos } from "./capas.js";
 import type { Salida } from "./cli.js";
-import { SERVER_NAME, SERVER_VERSION, leerVariable } from "./config.js";
+import { SERVER_NAME, SERVER_VERSION, leerArchivoDeMaquinaDelDisco, leerVariable } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
 import { leerMaquinaParaEditar, planDeEdicion } from "./ajustes/edicion-maquina.js";
 import { escribirAtomico } from "./lotes.js";
@@ -357,9 +357,31 @@ export function entradaDelServidor(cliente: Cliente, plataforma: NodeJS.Platform
 // What an entry had in its "env" and is taken out: this machine's paths (and their ORQUESTADOR_* aliases) and,
 // with `quitarIdioma`, PHASE_GATE_LANG.
 export type QuitaDelEntorno = { documentacion?: string; carpetaDeRepos?: string; idioma?: string };
-export type OpcionesDeEntrada = { quitarIdioma?: boolean };
+// `todas`: every path goes, also one that is different from machine.json's: `init --docs --repos` was given the
+// paths of this machine, and they replace the old ones, as init always did.
+export type OpcionesDeEntrada = { quitarIdioma?: boolean; todas?: boolean };
+// A path that the entry keeps because it is not the one in machine.json: that client keeps using its own.
+export type RutaDistinta = { clave: "documentacion" | "carpetaDeRepos"; variable: string; valor: string; guardada: string };
 
-const VARIABLES_DE_RUTAS = ["PHASE_GATE_DOCS_PATH", "ORQUESTADOR_DOCS_PATH", "PHASE_GATE_REPOS_PATH", "ORQUESTADOR_REPOS_PATH"] as const;
+const NOMBRES_DE_RUTA = {
+  documentacion: ["PHASE_GATE_DOCS_PATH", "ORQUESTADOR_DOCS_PATH"],
+  carpetaDeRepos: ["PHASE_GATE_REPOS_PATH", "ORQUESTADOR_REPOS_PATH"],
+} as const;
+
+// The variable an entry's "env" really uses for a path: PHASE_GATE_* before its alias, and an empty one does not count.
+export function variableDeRutaEnEntrada(env: Record<string, unknown>, clave: "documentacion" | "carpetaDeRepos"): string | null {
+  return NOMBRES_DE_RUTA[clave].find((nombre) => typeof env[nombre] === "string" && env[nombre].trim() !== "") ?? null;
+}
+
+function rutasGuardadas(): { documentacion?: string | undefined; carpetaDeRepos?: string | undefined } {
+  const rutas = leerArchivoDeMaquinaDelDisco().config?.rutas;
+  return { documentacion: rutas?.documentacion, carpetaDeRepos: rutas?.carpetaDeRepos };
+}
+
+const mismaRuta = (a: string, b: string): boolean => {
+  const [x, y] = [path.resolve(a), path.resolve(b)];
+  return process.platform === "win32" ? x.toLowerCase() === y.toLowerCase() : x === y;
+};
 
 // What an entry's "env" says: the value that would win (PHASE_GATE_* before its alias).
 export function rutasDelEnvDeEntrada(env: Record<string, unknown>): QuitaDelEntorno {
@@ -370,14 +392,34 @@ export function rutasDelEnvDeEntrada(env: Record<string, unknown>): QuitaDelEnto
   return { ...(documentacion ? { documentacion } : {}), ...(carpetaDeRepos ? { carpetaDeRepos } : {}), ...(idioma ? { idioma } : {}) };
 }
 
-// What the "env" of an entry that already exists stops carrying, and what is taken out of it.
-export function sinRutasEnElEntorno(env: Record<string, unknown>, opciones: OpcionesDeEntrada = {}): { env: Record<string, unknown>; quita: QuitaDelEntorno } {
-  const quita = rutasDelEnvDeEntrada(env);
+// What the "env" of an entry that already exists stops carrying, and what is taken out of it. A path is taken out
+// only if it is the one machine.json has, or if machine.json has none (then it moves there). One that is
+// different stays, with its aliases: it is how a client uses another folder, and taking it out would switch that
+// client to machine.json's without anyone deciding it. It comes back in `distintas`, to be said.
+export function sinRutasEnElEntorno(
+  env: Record<string, unknown>,
+  opciones: OpcionesDeEntrada = {}
+): { env: Record<string, unknown>; quita: QuitaDelEntorno; distintas: RutaDistinta[] } {
+  const dicho = rutasDelEnvDeEntrada(env);
+  const guardadas = opciones.todas ? {} : rutasGuardadas();
+  const quita: QuitaDelEntorno = {};
+  const distintas: RutaDistinta[] = [];
   const resto = { ...env };
-  for (const variable of VARIABLES_DE_RUTAS) delete resto[variable];
-  if (opciones.quitarIdioma) delete resto.PHASE_GATE_LANG;
-  else delete quita.idioma;
-  return { env: resto, quita };
+  for (const clave of ["documentacion", "carpetaDeRepos"] as const) {
+    const valor = dicho[clave];
+    const guardada = guardadas[clave];
+    if (valor !== undefined && guardada !== undefined && !mismaRuta(valor, guardada)) {
+      distintas.push({ clave, variable: variableDeRutaEnEntrada(env, clave)!, valor, guardada });
+      continue;
+    }
+    for (const variable of NOMBRES_DE_RUTA[clave]) delete resto[variable];
+    if (valor !== undefined) quita[clave] = valor;
+  }
+  if (opciones.quitarIdioma && dicho.idioma !== undefined) {
+    delete resto.PHASE_GATE_LANG;
+    quita.idioma = dicho.idioma;
+  }
+  return { env: resto, quita, distintas };
 }
 
 // ¿Esta parte de un comando lanza mcp-phase-gate? El paquete exacto (`mcp-phase-gate`, o con versión
@@ -405,16 +447,20 @@ export function ejecutaPhaseGate(entrada: unknown): boolean {
 }
 
 // What init changes in an entry that already exists: it stops carrying the paths in its "env" (with their
-// ORQUESTADOR_* aliases) and, if asked, PHASE_GATE_LANG. It keeps the command (a development clone still
+// ORQUESTADOR_* aliases), except one that is not machine.json's (sinRutasEnElEntorno), and, if asked, PHASE_GATE_LANG. It keeps the command (a development clone still
 // launches its build/index.js) and everything else, such as Cursor's PHASE_GATE_ELICITATION on Windows.
-function actualizarEntrada(existente: Record<string, unknown>, nueva: Record<string, unknown>, opciones: OpcionesDeEntrada): { entrada: Record<string, unknown>; quita: QuitaDelEntorno } {
+function actualizarEntrada(
+  existente: Record<string, unknown>,
+  nueva: Record<string, unknown>,
+  opciones: OpcionesDeEntrada
+): { entrada: Record<string, unknown>; quita: QuitaDelEntorno; distintas: RutaDistinta[] } {
   const actual = esObjetoPlano(existente.env) ? existente.env : {};
-  const { env, quita } = sinRutasEnElEntorno(actual, opciones);
+  const { env, quita, distintas } = sinRutasEnElEntorno(actual, opciones);
   const nuevo = { ...env, ...(esObjetoPlano(nueva.env) ? nueva.env : {}) };
   const entrada = { ...existente };
   if (Object.keys(nuevo).length) entrada.env = nuevo;
   else delete entrada.env;
-  return { entrada, quita };
+  return { entrada, quita, distintas };
 }
 
 const esObjetoPlano = (valor: unknown): valor is Record<string, unknown> => valor !== null && typeof valor === "object" && !Array.isArray(valor);
@@ -437,11 +483,12 @@ export type PlanDeArchivo =
   | (BaseDePlan & { estado: "roto"; error: string | null; paraPegar: string })
   | (BaseDePlan & { estado: "forma-rara"; paraPegar: string })
   | (BaseDePlan & { estado: "clave-ocupada" })
-  | (BaseDePlan & { estado: "sin-cambios"; claveFinal: string })
+  | (BaseDePlan & { estado: "sin-cambios"; claveFinal: string; distintas: RutaDistinta[] })
   | (BaseDePlan & {
       estado: "nuevo" | "actualiza";
       claveFinal: string;
       quita: QuitaDelEntorno; // lo que el "env" de la entrada llevaba y deja de llevar
+      distintas: RutaDistinta[]; // las rutas que se quedan porque no son las de machine.json
       renombra: string | null; // la clave que se sustituye por --clave
       conserva: string | null; // la clave que ya tenía y se conserva
       comentarios: boolean;
@@ -481,11 +528,12 @@ export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | 
   let claveFinal = clave;
   let nuevaEntrada = deseada;
   let quita: QuitaDelEntorno = {};
+  let distintas: RutaDistinta[] = [];
   let renombra: string | null = null;
   let conserva: string | null = null;
 
   if (yaRegistrada) {
-    ({ entrada: nuevaEntrada, quita } = actualizarEntrada(servidores[yaRegistrada] as Record<string, unknown>, deseada, opciones));
+    ({ entrada: nuevaEntrada, quita, distintas } = actualizarEntrada(servidores[yaRegistrada] as Record<string, unknown>, deseada, opciones));
     if (yaRegistrada !== clave && claveDada === null) {
       claveFinal = yaRegistrada;
       conserva = yaRegistrada;
@@ -498,7 +546,7 @@ export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | 
 
   const antes = yaRegistrada ? json(servidores[yaRegistrada]) : "";
   const despues = json(nuevaEntrada);
-  if (yaRegistrada && !renombra && antes === despues) return { ...base, estado: "sin-cambios", claveFinal };
+  if (yaRegistrada && !renombra && antes === despues) return { ...base, estado: "sin-cambios", claveFinal, distintas };
 
   if (renombra) delete servidores[renombra];
   servidores[claveFinal] = nuevaEntrada;
@@ -507,6 +555,7 @@ export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | 
     estado: yaRegistrada ? "actualiza" : "nuevo",
     claveFinal,
     quita,
+    distintas,
     renombra,
     conserva,
     comentarios: lectura.comentarios,
@@ -517,7 +566,7 @@ export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | 
 }
 
 async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode"): Promise<void> {
-  const plan = planDeArchivo(cliente, ctx.opciones.clave, ctx.entorno);
+  const plan = planDeArchivo(cliente, ctx.opciones.clave, ctx.entorno, { todas: true });
   const { nombre, archivo, seccion, clave } = plan;
 
   if (plan.estado === "roto") {
@@ -584,7 +633,9 @@ function citarJson(texto: string, plataforma: NodeJS.Platform): string {
 }
 
 // What has to be run to redo a Claude Code entry without its paths, in its scope.
-export type RehacerEnClaude = { ambito: "user" | "local"; carpeta: string | null; comandos: string[]; quita: QuitaDelEntorno };
+// `comandos` is empty when there is nothing to take out; `distintas` are the paths that stay because they are not
+// the ones in machine.json.
+export type RehacerEnClaude = { ambito: "user" | "local"; carpeta: string | null; comandos: string[]; quita: QuitaDelEntorno; distintas: RutaDistinta[] };
 
 // The entries of this server with that key in ~/.claude.json: the user one and the local ones of each folder.
 function entradasDeClaude(home: string, clave: string): { ambito: "user" | "local"; carpeta: string | null; entrada: Record<string, unknown> }[] {
@@ -606,8 +657,11 @@ function entradasDeClaude(home: string, clave: string): { ambito: "user" | "loca
 export function comandosParaRehacer(home: string, clave: string, plataforma: NodeJS.Platform, opciones: OpcionesDeEntrada = {}): RehacerEnClaude[] {
   const rehacer: RehacerEnClaude[] = [];
   for (const { ambito, carpeta, entrada } of entradasDeClaude(home, clave)) {
-    const { env, quita } = sinRutasEnElEntorno(esObjetoPlano(entrada.env) ? entrada.env : {}, opciones);
-    if (!Object.keys(quita).length) continue;
+    const { env, quita, distintas } = sinRutasEnElEntorno(esObjetoPlano(entrada.env) ? entrada.env : {}, opciones);
+    if (!Object.keys(quita).length) {
+      if (distintas.length) rehacer.push({ ambito, carpeta, quita, distintas, comandos: [] });
+      continue;
+    }
     const nueva = { ...entrada };
     if (Object.keys(env).length) nueva.env = env;
     else delete nueva.env;
@@ -615,6 +669,7 @@ export function comandosParaRehacer(home: string, clave: string, plataforma: Nod
       ambito,
       carpeta,
       quita,
+      distintas,
       comandos: [`claude mcp remove ${clave} --scope ${ambito}`, `claude mcp add-json ${clave} ${citarJson(JSON.stringify(nueva), plataforma)} --scope ${ambito}`],
     });
   }
@@ -633,7 +688,7 @@ function mostrarComando(args: string[]): string {
 // carried in its "env".
 export type PlanDeClaude =
   | { cliente: "claude-code"; estado: "sin-lista"; mensaje: string }
-  | { cliente: "claude-code"; estado: "existente"; existente: string; comando: string | null; rehacer: RehacerEnClaude[]; quita: QuitaDelEntorno }
+  | { cliente: "claude-code"; estado: "existente"; existente: string; comando: string | null; rehacer: RehacerEnClaude[]; quita: QuitaDelEntorno; distintas: RutaDistinta[] }
   | { cliente: "claude-code"; estado: "nuevo"; clave: string; args: string[]; comando: string };
 
 export async function planDeClaude(claveDada: string | null, entorno: Pick<EntornoInit, "ejecutar" | "home" | "plataforma">, opciones: OpcionesDeEntrada = {}): Promise<PlanDeClaude> {
@@ -652,10 +707,12 @@ export async function planDeClaude(claveDada: string | null, entorno: Pick<Entor
   // exists is not touched.
   const existente = registroEnClaude(lista.stdout);
   if (existente) {
-    const rehacer = comandosParaRehacer(entorno.home, existente, entorno.plataforma, opciones);
+    const todas = comandosParaRehacer(entorno.home, existente, entorno.plataforma, opciones);
+    const rehacer = todas.filter((r) => r.comandos.length);
+    const distintas = todas.flatMap((r) => r.distintas);
     const quita: QuitaDelEntorno = Object.assign({}, ...rehacer.map((r) => r.quita).reverse());
     const comando = rehacer.length ? rehacer.map((r) => mensaje("INIT-CLAUDE-REHACER", { ambito: r.ambito, carpeta: r.carpeta, comandos: r.comandos })).join("\n") : null;
-    return { cliente: "claude-code", estado: "existente", existente, comando, rehacer, quita };
+    return { cliente: "claude-code", estado: "existente", existente, comando, rehacer, quita, distintas };
   }
   const clave = claveDada ?? CLAVE_POR_DEFECTO;
   const args = comandoDeClaude(clave);
@@ -663,7 +720,7 @@ export async function planDeClaude(claveDada: string | null, entorno: Pick<Entor
 }
 
 async function registrarEnClaude(ctx: Contexto): Promise<void> {
-  const plan = await planDeClaude(ctx.opciones.clave, ctx.entorno);
+  const plan = await planDeClaude(ctx.opciones.clave, ctx.entorno, { todas: true });
   if (plan.estado === "sin-lista") {
     fallar(ctx, `Claude Code: ${plan.mensaje}`);
     return;

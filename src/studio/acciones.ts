@@ -41,7 +41,7 @@ import { carpetaPromptsDeProyecto } from "../capas.js";
 import { ErrorDeEject, planDeEject } from "../eject.js";
 import { mensaje } from "../i18n/mensajes.js";
 import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, carpetaDelCliente, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
-import type { EntornoInit, QuitaDelEntorno } from "../init.js";
+import type { EntornoInit, QuitaDelEntorno, RutaDistinta } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
 import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, presetsDisponibles, rutaManifiesto, rutaMaquina } from "../manifiesto.js";
 import { estaDentroReal, requireProjectFolder, rutaReal, ubicarEnTarea, validarSegmento } from "../paths.js";
@@ -254,6 +254,9 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
   const comandos: Comando[] = [];
   let escrituraDelCliente: Escritura | null = null;
   let quita: QuitaDelEntorno = {};
+  // The paths the entry keeps because they are not machine.json's: that client keeps its own, and it is said.
+  let distintas: RutaDistinta[] = [];
+  let nombreDelCliente = "Claude Code";
   let esNueva = false;
 
   if (a.cliente === "claude-code") {
@@ -262,6 +265,7 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
     else if (plan.estado === "existente") {
       motivos.push(mensaje("STUDIO-INIT-CLAUDE-EXISTENTE", { clave: plan.existente, comando: plan.comando }));
       quita = plan.quita;
+      distintas = plan.distintas;
     } else {
       esNueva = true;
       resumen.push(mensaje("STUDIO-INIT-CLAUDE-RESUMEN", { clave: plan.clave }));
@@ -270,6 +274,8 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
     }
   } else {
     const plan = planDeArchivo(a.cliente, a.clave ?? null, entorno, opciones);
+    nombreDelCliente = plan.nombre;
+    if (plan.estado === "sin-cambios" || plan.estado === "nuevo" || plan.estado === "actualiza") distintas = plan.distintas;
     if (plan.estado === "roto") motivos.push(mensaje("STUDIO-INIT-ROTO", { cliente: plan.nombre, error: plan.error ?? "?" }));
     else if (plan.estado === "forma-rara") motivos.push(mensaje("STUDIO-INIT-FORMA-RARA", { cliente: plan.nombre, seccion: plan.seccion }));
     else if (plan.estado === "clave-ocupada") motivos.push(mensaje("STUDIO-INIT-CLAVE-OCUPADA", { cliente: plan.nombre, clave: plan.clave }));
@@ -292,7 +298,7 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
 
   // The paths the client carried in its env, or the Studio's own, move to machine.json if they are not there
   // yet: that way nothing stops working when they are taken out. Only the missing ones; machine.json goes first.
-  const avisos: string[] = [];
+  const avisos: string[] = distintas.map((distinta) => mensaje("INIT-RUTA-DISTINTA", { cliente: nombreDelCliente, ...distinta }));
   const maquina = leerMaquinaParaEditar();
   const guardadas = maquina.estado === "valido" && maquina.objeto.rutas !== null && typeof maquina.objeto.rutas === "object" ? (maquina.objeto.rutas as Record<string, unknown>) : {};
   const efectivas = rutasEfectivas();
@@ -336,7 +342,7 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
     }
   }
 
-  if (!escrituras.length && !comandos.length) return { posible: false, motivo: motivos.join(" ") };
+  if (!escrituras.length && !comandos.length) return { posible: false, motivo: [...motivos, ...avisos].join(" ") };
   return { posible: true, interno: { accion: "init-cliente", cliente: a.cliente, resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" "), avisos } };
 }
 

@@ -4,6 +4,7 @@
 import { z } from "zod";
 
 import { mensaje } from "../i18n/mensajes.js";
+import { presetsDisponibles } from "../manifiesto.js";
 import { leerMaquinaParaEditar, planDeEdicion } from "./edicion-maquina.js";
 import type { EdicionDeMaquina } from "./edicion-maquina.js";
 import type { PlanDeAjustes } from "./plan.js";
@@ -34,6 +35,13 @@ export type ArgumentosDeEquipo = z.infer<typeof ArgumentosDeEquipo>;
 export function planDeEquipo(argumentos: ArgumentosDeEquipo): PlanDeAjustes {
   const estado = leerMaquinaParaEditar();
   if (estado.estado === "invalido") return { posible: false, motivo: mensaje("AJUSTES-MAQUINA-A-MANO", { error: estado.error }) };
+
+  // The default preset has to exist, as in `proyecto` and in init: one that does not would break the prompts of
+  // every project without a manifest.
+  if (typeof argumentos.presetPorDefecto === "string") {
+    const presets = presetsDisponibles();
+    if (!presets.has(argumentos.presetPorDefecto)) return { posible: false, motivo: mensaje("STUDIO-PRESET-NO-EXISTE", { preset: argumentos.presetPorDefecto, disponibles: [...presets.keys()].sort() }) };
+  }
 
   const planeada = planDeEdicion(estado, argumentos as EdicionDeMaquina);
   if (!planeada) return { posible: false, motivo: mensaje("AJUSTES-EQUIPO-IGUAL") };

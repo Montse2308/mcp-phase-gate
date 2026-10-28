@@ -329,11 +329,11 @@ export const TEXTOS_STUDIO = {
     es: (p: { clave: string; comando: string | null }) =>
       p.comando
         ? `Claude Code ya lo tiene registrado como «${p.clave}» y lleva rutas en su env; init no lo toca. Para dejarlo sin ellas, corre tú estos dos comandos, en este orden (si el segundo falla, queda sin registrar):\n${p.comando}`
-        : `Claude Code ya lo tiene registrado como «${p.clave}» y no lleva rutas en su env; no hay nada que cambiar.`,
+        : `Claude Code ya lo tiene registrado como «${p.clave}» y su env no lleva rutas que quitar; no hay nada que cambiar.`,
     en: (p: { clave: string; comando: string | null }) =>
       p.comando
         ? `Claude Code already has it registered as "${p.clave}" and it carries paths in its env; init leaves it alone. To leave it without them, run these two commands yourself, in this order (if the second fails, it is left unregistered):\n${p.comando}`
-        : `Claude Code already has it registered as "${p.clave}" and it carries no paths in its env; there is nothing to change.`,
+        : `Claude Code already has it registered as "${p.clave}" and its env carries no paths to take out; there is nothing to change.`,
   },
   "STUDIO-INIT-CLAUDE-RESUMEN": {
     es: (p: { clave: string }) => `Registrar el servidor en Claude Code como «${p.clave}» (ámbito user).`,

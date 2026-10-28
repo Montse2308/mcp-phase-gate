@@ -305,7 +305,7 @@ describe("init: registrar en los clientes", () => {
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: ["claude-code"] }), p.entorno), 0);
     assert.equal(p.llamadas.some((l) => l[2] === "add"), false);
-    assert.match(p.texto(), /ya está registrado como «mcp-phase-gate» y no lleva rutas en su env; no hay nada que cambiar/);
+    assert.match(p.texto(), /ya está registrado como «mcp-phase-gate» y su env no lleva rutas que quitar; no hay nada que cambiar/);
   });
 
   // Una entrada que ya existe en Claude Code no se toca: se enseña el comando exacto para rehacerla sin las

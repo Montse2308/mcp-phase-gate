@@ -429,9 +429,11 @@ describe("acciones: init-cliente quita las rutas del env de una entrada que ya e
 
   it("Claude Code: una entrada con rutas en su env se enseña con los comandos para rehacerla, y nunca se ejecutan", async () => {
     instalacion();
-    maquinaEn(JSON.stringify({ version: 2, rutas: { documentacion: carpetaTemporal("d"), carpetaDeRepos: carpetaTemporal("r") } }));
+    const d = carpetaTemporal("d");
+    maquinaEn(JSON.stringify({ version: 2, rutas: { documentacion: d, carpetaDeRepos: carpetaTemporal("r") } }));
     const entorno = { ...entornoInitDePrueba((args) => (args[1] === "list" ? { codigo: 0, stdout: "pg: npx -y mcp-phase-gate - ✔ Connected\n", stderr: "" } : { codigo: 0, stdout: "", stderr: "" })), plataforma: "linux" as const };
-    fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ mcpServers: { pg: { type: "stdio", command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: "/x", PHASE_GATE_LANG: "en" } } } }), "utf-8");
+    // La misma Documentación que machine.json: en el env sobra.
+    fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ mcpServers: { pg: { type: "stdio", command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: d, PHASE_GATE_LANG: "en" } } } }), "utf-8");
     const s = await studioConApi({ entornoInit: () => entorno });
 
     const p = await plan(s, "init-cliente", { cliente: "claude-code", quitarIdioma: true });
@@ -440,6 +442,40 @@ describe("acciones: init-cliente quita las rutas del env de una entrada que ya e
     assert.equal(entorno.llamadas.some((l) => l[2] === "remove" || l[2] === "add" || l[2] === "add-json"), false);
     const sinRutas = await studioConApi({ entornoInit: () => entorno });
     assert.equal((await sinRutas.get("/api/clientes")).json.clientes.find((c: { cliente: string }) => c.cliente === "claude-code").estado, "existente");
+  });
+
+  it("una ruta del env distinta de la de machine.json se queda, con sus alias, y el plan lo avisa: ese cliente usa otra Documentación", async () => {
+    instalacion();
+    const d = carpetaTemporal("d");
+    const otra = carpetaTemporal("otra-docs");
+    const r = carpetaTemporal("r");
+    maquinaEn(JSON.stringify({ version: 2, rutas: { documentacion: d, carpetaDeRepos: r } }));
+    const entorno = entornoInitDePrueba((args) => (args[1] === "list" ? { codigo: 0, stdout: "pg: npx -y mcp-phase-gate - ✔ Connected\n", stderr: "" } : { codigo: 0, stdout: "", stderr: "" }));
+    const archivo = path.join(carpetaDelCliente("cursor", entorno), "mcp.json");
+    fs.mkdirSync(path.dirname(archivo), { recursive: true });
+    const env = { PHASE_GATE_DOCS_PATH: otra, ORQUESTADOR_DOCS_PATH: otra, PHASE_GATE_REPOS_PATH: r, OTRA: "1" };
+    fs.writeFileSync(archivo, JSON.stringify({ mcpServers: { pg: { command: "npx", args: ["-y", "mcp-phase-gate"], env } } }), "utf-8");
+    const s = await studioConApi({ entornoInit: () => entorno });
+
+    const p = await planPosible(s, "init-cliente", { cliente: "cursor" });
+    assert.equal(p.avisos.length, 1, JSON.stringify(p.avisos));
+    assert.match(p.avisos[0]!, /Cursor: su env conserva PHASE_GATE_DOCS_PATH = .*otra-docs.*, que no es la de rutas\.documentacion en machine\.json/);
+    assert.match(p.resumen, /quita de su env PHASE_GATE_REPOS_PATH/);
+    assert.doesNotMatch(p.resumen, /PHASE_GATE_DOCS_PATH/);
+    const r1 = await aplicar(s, "init-cliente", { cliente: "cursor" }, p.huella);
+    assert.equal(r1.estado, 200, r1.texto);
+    const queda = JSON.parse(fs.readFileSync(archivo, "utf-8")).mcpServers.pg.env;
+    assert.equal(queda.PHASE_GATE_DOCS_PATH, otra);
+    assert.equal(queda.ORQUESTADOR_DOCS_PATH, otra);
+    assert.equal(queda.PHASE_GATE_REPOS_PATH, undefined);
+    assert.equal(queda.OTRA, "1");
+
+    // En Claude Code no hay nada que rehacer, y se dice por qué se queda.
+    fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ mcpServers: { pg: { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: otra } } } }), "utf-8");
+    const c = await plan(s, "init-cliente", { cliente: "claude-code" });
+    assert.ok(!c.posible);
+    assert.doesNotMatch(c.motivo, /claude mcp remove/);
+    assert.match(c.motivo, /Claude Code: su env conserva PHASE_GATE_DOCS_PATH/);
   });
 });
 
@@ -476,6 +512,16 @@ function maquinaEn(texto: string): string {
 const copiasDe = (archivo: string): string[] => fs.readdirSync(path.dirname(archivo)).filter((n) => n.startsWith(`${path.basename(archivo)}.bak-`));
 
 describe("acciones: equipo (machine.json)", () => {
+  it("un presetPorDefecto que no existe no se guarda, como en proyecto e init", async () => {
+    instalacion();
+    const s = await studioConApi({ entornoInit: () => entornoInitDePrueba() });
+    const p = await plan(s, "equipo", { presetPorDefecto: "no-existe" });
+    assert.ok(!p.posible);
+    assert.match(p.motivo, /No existe el preset "no-existe"\. Los disponibles son: .*software/);
+    assert.equal(fs.existsSync(path.join(configDir(), "machine.json")), false);
+    assert.ok((await plan(s, "equipo", { presetPorDefecto: "software" })).posible);
+  });
+
   it("sin machine.json lo crea en exclusiva, en versión 2 y con el $schema @4, sin .bak; si aparece uno entre el plan y el aplicar, 409", async () => {
     instalacion();
     const docs = carpetaTemporal("docs-nueva");

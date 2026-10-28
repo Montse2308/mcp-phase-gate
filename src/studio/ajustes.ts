@@ -9,7 +9,7 @@ import * as path from "path";
 import { VARIABLES, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, leerVariable, maquinaVigente, valorDeMaquina } from "../config.js";
 import type { NombreLogico } from "../config.js";
 import { mensaje } from "../i18n/mensajes.js";
-import { CLIENTES, carpetaDelCliente, ejecutaPhaseGate, leerJsonTolerante, rutasDelEnvDeEntrada } from "../init.js";
+import { CLIENTES, carpetaDelCliente, ejecutaPhaseGate, leerJsonTolerante, rutasDelEnvDeEntrada, variableDeRutaEnEntrada } from "../init.js";
 import type { Cliente, EntornoInit, QuitaDelEntorno } from "../init.js";
 import type { SesionAbierta } from "../sesiones.js";
 import type { AjustesRespuesta, AvanzadaApi, CampoAjustes, ClienteAjustes, EntradaDeCliente, EnvDeCliente, NombreDeCampo, SesionDeAjustes } from "./contrato.js";
@@ -66,11 +66,13 @@ function camposDeEsteEquipo(): CampoAjustes[] {
 // ─── What the clients say in their env ──────────────────────────────────────
 function variablesDeEnv(env: Record<string, unknown>, enMaquina: Map<NombreDeCampo, string | null>): EnvDeCliente[] {
   const dicho: QuitaDelEntorno = rutasDelEnvDeEntrada(env);
-  const subcarpeta = typeof env.PHASE_GATE_TASKS_SUBDIR === "string" ? env.PHASE_GATE_TASKS_SUBDIR : typeof env.ORQUESTADOR_TASKS_SUBDIR === "string" ? env.ORQUESTADOR_TASKS_SUBDIR : undefined;
+  const variableDeSubcarpeta = typeof env.PHASE_GATE_TASKS_SUBDIR === "string" ? "PHASE_GATE_TASKS_SUBDIR" : typeof env.ORQUESTADOR_TASKS_SUBDIR === "string" ? "ORQUESTADOR_TASKS_SUBDIR" : null;
+  const subcarpeta = variableDeSubcarpeta ? (env[variableDeSubcarpeta] as string) : undefined;
+  // The name the entry really uses, alias included: it is the one the person has to remove.
   const lista: [NombreDeCampo, string, string | undefined][] = [
-    ["documentacion", "PHASE_GATE_DOCS_PATH", dicho.documentacion],
-    ["carpetaDeRepos", "PHASE_GATE_REPOS_PATH", dicho.carpetaDeRepos],
-    ["subcarpetaTareas", "PHASE_GATE_TASKS_SUBDIR", subcarpeta],
+    ["documentacion", variableDeRutaEnEntrada(env, "documentacion") ?? "PHASE_GATE_DOCS_PATH", dicho.documentacion],
+    ["carpetaDeRepos", variableDeRutaEnEntrada(env, "carpetaDeRepos") ?? "PHASE_GATE_REPOS_PATH", dicho.carpetaDeRepos],
+    ["subcarpetaTareas", variableDeSubcarpeta ?? "PHASE_GATE_TASKS_SUBDIR", subcarpeta],
     ["idioma", "PHASE_GATE_LANG", dicho.idioma],
   ];
   const resultado: EnvDeCliente[] = [];

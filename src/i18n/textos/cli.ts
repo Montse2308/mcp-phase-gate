@@ -331,8 +331,14 @@ Documentation: https://github.com/Montse2308/mcp-phase-gate`,
       `Claude Code: already registered as «${p.existente}» and it carries paths in its env; it is left untouched. The paths live in machine.json: to leave it without them, run these two commands yourself, in this order (if the second fails, the server is left unregistered: register it again with claude mcp add):\n${p.comando}`,
   },
   "INIT-CLAUDE-AL-DIA": {
-    es: (p: { existente: string }) => `Claude Code: ya está registrado como «${p.existente}» y no lleva rutas en su env; no hay nada que cambiar.`,
-    en: (p: { existente: string }) => `Claude Code: already registered as «${p.existente}» and it carries no paths in its env; there is nothing to change.`,
+    es: (p: { existente: string }) => `Claude Code: ya está registrado como «${p.existente}» y su env no lleva rutas que quitar; no hay nada que cambiar.`,
+    en: (p: { existente: string }) => `Claude Code: already registered as «${p.existente}» and its env carries no paths to take out; there is nothing to change.`,
+  },
+  "INIT-RUTA-DISTINTA": {
+    es: (p: { cliente: string; clave: string; variable: string; valor: string; guardada: string }) =>
+      `${p.cliente}: su env conserva ${p.variable} = ${p.valor}, que no es la de rutas.${p.clave} en machine.json (${p.guardada}). Ese cliente sigue usando la suya; si quieres que use la de machine.json, quítale ${p.variable} a mano.`,
+    en: (p: { cliente: string; clave: string; variable: string; valor: string; guardada: string }) =>
+      `${p.cliente}: its env keeps ${p.variable} = ${p.valor}, which is not rutas.${p.clave} in machine.json (${p.guardada}). That client keeps using its own; if you want it to use machine.json's, remove ${p.variable} by hand.`,
   },
   "INIT-CLAUDE-SE-EJECUTARIA": {
     es: (p: { comando: string }) => `Claude Code: se ejecutaría ${p.comando}`,

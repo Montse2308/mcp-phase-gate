@@ -407,7 +407,8 @@ describe("API del Studio: /api/ajustes", () => {
       ]
     );
     assert.deepEqual([cursor!.archivo, cursor!.lectura, cursor!.entradas.length], ["~/.cursor/mcp.json", "leido", 1], "la entrada de otro servidor no cuenta");
-    assert.deepEqual(cursor!.entradas[0]!.variables.map((v) => [v.variable, v.valor, v.estado]), [["PHASE_GATE_DOCS_PATH", otra, "pisa"], ["PHASE_GATE_REPOS_PATH", repos, "coincide"], ["PHASE_GATE_LANG", "en", "pisa"]]);
+    // Cada una con el nombre que la entrada usa de verdad, alias incluido: es el que habría que quitar.
+    assert.deepEqual(cursor!.entradas[0]!.variables.map((v) => [v.variable, v.valor, v.estado]), [["PHASE_GATE_DOCS_PATH", otra, "pisa"], ["ORQUESTADOR_REPOS_PATH", repos, "coincide"], ["PHASE_GATE_LANG", "en", "pisa"]]);
     assert.deepEqual([vscode!.lectura, vscode!.entradas.map((e) => [e.clave, e.variables])], ["leido", [["pg", []]]], "un env que no habla de rutas ni de idioma no pisa nada");
 
     // Un archivo roto se dice, sin romper la respuesta.
