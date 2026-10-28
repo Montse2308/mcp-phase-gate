@@ -172,6 +172,22 @@ function errorDeDir(dir: string): string | null {
   return null;
 }
 
+// Lo que hace válido a un manifiesto, sin mirar el disco: su shape y lo que zod no expresa (un id de repo
+// repetido, una carpeta que sale de PHASE_GATE_REPOS_PATH). Lo usan leerManifiesto y los planes de Ajustes,
+// para que "válido" signifique lo mismo al leerlo y al escribirlo.
+export function validarManifiesto(crudo: unknown): { ok: true; manifiesto: Manifiesto } | { ok: false; error: string } {
+  const leido = Manifiesto.safeParse(crudo);
+  if (!leido.success) return { ok: false, error: `${errorDeZod(leido.error, crudo)}.` };
+  const vistos = new Set<string>();
+  for (const [i, repo] of leido.data.repos.entries()) {
+    if (vistos.has(repo.id)) return { ok: false, error: mensaje("MANIFIESTO-TXT-ID-REPETIDO", { i, id: repo.id }) };
+    vistos.add(repo.id);
+    const problema = errorDeDir(repo.dir);
+    if (problema) return { ok: false, error: `repos[${i}].dir: ${problema}` };
+  }
+  return { ok: true, manifiesto: leido.data };
+}
+
 export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
   const ruta = rutaManifiesto(carpetaProyecto);
   if (!fs.existsSync(ruta)) return { estado: "ausente", ruta };
@@ -190,18 +206,9 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
     return invalido(mensaje("MANIFIESTO-TXT-JSON-INVALIDO", { detalle: error instanceof Error ? error.message : String(error) }));
   }
 
-  const leido = Manifiesto.safeParse(crudo);
-  if (!leido.success) return invalido(`${errorDeZod(leido.error, crudo)}.`);
-  const manifiesto = leido.data;
-
-  // Lo que zod no expresa.
-  const vistos = new Set<string>();
-  for (const [i, repo] of manifiesto.repos.entries()) {
-    if (vistos.has(repo.id)) return invalido(mensaje("MANIFIESTO-TXT-ID-REPETIDO", { i, id: repo.id }));
-    vistos.add(repo.id);
-    const problema = errorDeDir(repo.dir);
-    if (problema) return invalido(`repos[${i}].dir: ${problema}`);
-  }
+  const validado = validarManifiesto(crudo);
+  if (!validado.ok) return invalido(validado.error);
+  const manifiesto = validado.manifiesto;
 
   const presets = presetsDisponibles(idiomaDelProyecto(carpetaProyecto, manifiesto).idioma);
   if (!presets.has(manifiesto.preset)) {

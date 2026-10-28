@@ -672,7 +672,10 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
         return { estado: 200, json: peticion.ruta === "/acciones/plan" ? await acciones.plan(peticion.cuerpo) : await acciones.aplicar(peticion.cuerpo) };
       } catch (error) {
         const codigo = error instanceof ErrorDeAccion ? error.estado : estadoDe(error);
-        return { estado: codigo, json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error) } };
+        return {
+          estado: codigo,
+          json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error), ...(error instanceof ErrorDeAccion ? error.extra : {}) },
+        };
       }
     }
     for (const { patron, atender } of rutas) {

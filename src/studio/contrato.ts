@@ -228,6 +228,8 @@ export const PlanRespuesta = z.union([
   z.object({
     posible: z.literal(true),
     resumen: z.string(),
+    // Lo que el plan avisa y no impide: una ruta que no existe, un recibo que cita un repo que se quita.
+    avisos: z.array(z.string()),
     diff: z.string(),
     huella: z.string().regex(/^[0-9a-f]{64}$/),
     cambios: z.array(z.object({ archivo: z.string(), tipo: z.enum(["crear", "reemplazar", "comando"]) })),
