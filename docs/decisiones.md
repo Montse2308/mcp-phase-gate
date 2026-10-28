@@ -15,11 +15,11 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 ## 2026-10-28 — Las rutas de este equipo y el idioma por defecto viven en `machine.json`, que pasa a la versión 2, y el entorno siempre gana
 
 > **Reemplaza en parte** dos entradas. De "El Studio solo ejecuta acciones del CLI, con vista previa y huella"
-> (2026-10-17): que las cinco acciones sean las mismas y equivalgan a un comando del CLI. Las acciones vuelven a
-> ser cinco, pero `preset` y `reglas` salen (las cubre `proyecto`) y entran `equipo` y `proyecto`, que no tienen
-> comando de CLI (tampoco lo tenían `preset` y `reglas`). Lo que esa entrada protege se mantiene: destinos
-> cerrados por acción, un solo shape de validación y la huella. Mientras la interfaz todavía las use, `preset` y
-> `reglas` conviven con las nuevas. De "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
+> (2026-10-17): que las cinco acciones sean las mismas y equivalgan a un comando del CLI. Entran `equipo` y
+> `proyecto`, que no tienen comando de CLI (tampoco lo tenían `preset` y `reglas`), y `preset` y `reglas` saldrán,
+> porque las cubre `proyecto`. Mientras la interfaz todavía las use, conviven con las nuevas: hoy son siete, y
+> serán cinco cuando salgan. Lo que esa entrada protege se mantiene: destinos cerrados por acción, un solo shape de
+> validación y la huella. De "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
 > equipo" (2026-10-19) y del paso 3 de "El idioma es del proyecto y se deduce primero del disco…" (2026-10-18):
 > solo el orden entre `idiomaPorDefecto` de `machine.json` y `PHASE_GATE_LANG`, que se invierte. El resto de esas
 > entradas sigue vigente.
@@ -37,9 +37,15 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
   `PHASE_GATE_LANG` gana a `idiomaPorDefecto`, como el entorno gana en las rutas. **Es un cambio de
   comportamiento:** quien tenga `PHASE_GATE_LANG` en el bloque `env` de un cliente verá que ahora gana a
   `machine.json`, que antes le ganaba. Va en las notas de la 4.0.0.
-- **Se lee en cada llamada, sin caché.** En NTFS, el `mtime` no cambió en el 48 % de las escrituras atómicas
-  seguidas, así que no sirve para saber si el archivo cambió. Cambiar las rutas en Ajustes vale en la llamada
-  siguiente, sin reiniciar el cliente.
+- **Se lee una vez por llamada, sin caché entre llamadas.** En NTFS, el `mtime` no cambió en el 48 % de las
+  escrituras atómicas seguidas, así que no sirve para saber si el archivo cambió. Cambiar las rutas en Ajustes vale
+  en la llamada siguiente, sin reiniciar el cliente. Dentro de una llamada (una herramienta, una lectura del Studio,
+  un `doctor`) se lee una sola vez: leerlo en cada pregunta eran más de cien lecturas por `doctor`, una llamada
+  podía mezclar dos versiones del archivo, y en Windows cada lectura es un momento en que el `rename` de una
+  escritura falla con EPERM. Por eso la escritura atómica, además, reintenta el `rename` durante un segundo en
+  Windows.
+- **Una `rutas` en un archivo versión 1 es un error**, que pide `"version": 2`: la 3.x lo rechazaría, y un mismo
+  archivo no debe leerse distinto según la versión.
 - **Si se rompe, el proceso conserva el último archivo válido que leyó** (sus rutas y su idioma) y avisa una vez.
   Si nunca hubo uno válido, sus rutas no cuentan, y el error lo dice según el caso: un error de sintaxis, con su
   línea y su columna; un error de forma, con el campo; una ruta que no existe o que es un archivo, nombrando
@@ -50,7 +56,10 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 - **`init` y `init-cliente` guardan las rutas en `machine.json` y dejan de escribirlas en el `env`.** A una
   entrada de Cursor o VS Code que ya existe le quitan `PHASE_GATE_DOCS_PATH`, `PHASE_GATE_REPOS_PATH` y sus alias
   `ORQUESTADOR_*` (y `PHASE_GATE_LANG` con `quitarIdioma`), conservan todo lo demás y, si las rutas aún no están en
-  `machine.json`, las agregan en el mismo plan. En Claude Code, una entrada que ya existe no se toca: el plan
+  `machine.json`, las agregan en el mismo plan. **Solo quitan una ruta si es la de `machine.json`, o si
+  `machine.json` no tiene ninguna** (y entonces pasa allí). Una ruta distinta se queda en el `env`, con sus alias, y
+  el plan lo dice: es justo el caso de un cliente con otra Documentación, y quitarla lo cambiaría a la de
+  `machine.json` sin que nadie lo decida. Quien quiera que use la de `machine.json` la quita a mano. En Claude Code, una entrada que ya existe no se toca: el plan
   lee `~/.claude.json` y enseña los dos comandos (`claude mcp remove` y `claude mcp add-json`, en su ámbito) que
   la rehacen sin las rutas. Los corre la persona, porque si el `add` fallara después del `remove` el servidor
   quedaría sin registrar. `init` escribe `machine.json` con un temporal y un `rename`, como el Studio, para que un
@@ -72,8 +81,14 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 - **Los eventos en vivo.** `machine.json` gana su propio evento, `equipo`, en lugar del `prompts` de antes, y las
   carpetas que vigila el Studio, que se fijaban una sola vez al arrancar, se recalculan cuando cambia: si la
   Documentación es otra, se vigila la nueva.
-- **La 3.x no lee la versión 2.** Para volver a ella basta la copia `.bak` de la versión 1 que deja el Studio o
-  `init` al pasar el archivo a la 2. Es un cambio de versión mayor y las notas de la 4.0.0 lo explican. Mientras la
+- **La 3.x no lee la versión 2, y volver a ella son dos pasos.** Con un `machine.json` versión 2, `doctor` de la
+  3.2 dice `MAQUINA-INVALIDA` («version: debe ser 1; (raíz): clave desconocida "rutas"») y, si el cliente ya no
+  lleva las rutas en su `env`, también `VAR-FALTA` para `PHASE_GATE_DOCS_PATH` y `PHASE_GATE_REPOS_PATH`: la 3.x
+  no tiene Documentación ni repos. Para volver: (1) restaurar la copia `machine.json.bak-<fecha>` de la versión 1
+  que dejaron el Studio o `init` al pasar el archivo a la 2; (2) devolver las rutas al `env` de cada cliente:
+  en Cursor y VS Code, restaurar su `mcp.json.bak-<fecha>` o volver a correr `init` de la 3.2; en Claude Code,
+  `claude mcp remove` y `claude mcp add` con sus `--env`, que es lo que hace `init` de la 3.2. El paso (1) solo
+  no basta. Es un cambio de versión mayor y las notas de la 4.0.0 lo explican. Mientras la
   4.0 se desarrolla, se prueba con `PHASE_GATE_CONFIG_PATH` apuntando a una carpeta aparte, así que la 3.2 de uso
   diario nunca ve un `machine.json` versión 2.
 - **Los tests no pueden leer la configuración real.** `limpiarEntorno` fija también `HOME`, `USERPROFILE`,
