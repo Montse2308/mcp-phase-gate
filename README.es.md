@@ -5,18 +5,18 @@ Un servidor MCP que convierte a cualquier agente de IA que programa en un flujo 
 *Este es el README en español · El principal, en inglés: [README.md](README.md).*
 
 <p align="center">
-  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, de unos 41 segundos: init --dry-run y doctor en una terminal; después el Studio: la red de proyectos, el tablero de una tarea terminada con sus sellos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, el Taller y el sitio publicado en un teléfono" width="760"></a>
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, de unos 42 segundos: doctor en una terminal; después el Studio: la red de proyectos, el tablero de una tarea terminada con sus sellos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, la política de commits de un proyecto que cambia en Ajustes con su diff, el Taller y el sitio publicado en un teléfono" width="760"></a>
 </p>
 
 [![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/mcp-phase-gate)](https://www.npmjs.com/package/mcp-phase-gate)
 [![npm provenance](https://img.shields.io/badge/npm-provenance-blue)](https://www.npmjs.com/package/mcp-phase-gate#provenance)
 [![Licencia: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/Montse2308/mcp-phase-gate/blob/master/LICENSE)
-[![Demo en vivo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-blue)](https://montse2308.github.io/mcp-phase-gate/)
+[![Demo en vivo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-blue)](https://montse2308.github.io/mcp-phase-gate/demo/)
 
 **El problema:** un agente de IA que programa se lanza directo al código, toma decisiones que nadie le pidió y su razonamiento muere con el chat.<br>
 **La solución:** cinco fases con una compuerta entre ellas, y cada una deja un documento en disco; en la Fase 4 es el propio servidor quien escribe el recibo de cada lote, después de comprobar el commit contra git.<br>
-**Velo:** la [demo en vivo](https://montse2308.github.io/mcp-phase-gate/) es el Studio con datos de ejemplo, de solo lectura, en español y en inglés.
+**Velo:** la [demo en vivo](https://montse2308.github.io/mcp-phase-gate/demo/) es el Studio con datos de ejemplo, de solo lectura, en español y en inglés; cuelga del [sitio del proyecto](https://montse2308.github.io/mcp-phase-gate/).
 
 ## Pruébalo en 10 segundos
 
@@ -1022,7 +1022,7 @@ Los tests viven en `test/` y no necesitan ninguna dependencia extra: usan `node:
 viene con Node. Las pruebas de extremo a extremo del Studio viven en `studio/e2e/`. Montan una Documentación Central de mentira en una carpeta temporal, así que
 no tocan la tuya. El CI los corre en cada PR.
 
-El GIF, el video y el póster de los README no están en git: `scripts/medios.mjs` los genera desde la demo real en el workflow de GitHub Pages con cada tag, en los dos idiomas, y se publican en `https://montse2308.github.io/mcp-phase-gate/medios/`.
+El GIF, el video y el póster de los README no están en git: `scripts/medios.mjs` los genera desde la demo real en el workflow de GitHub Pages con cada tag de versión, en los dos idiomas, y se publican en `https://montse2308.github.io/mcp-phase-gate/medios/`.
 
 ### Dónde está cada cosa
 

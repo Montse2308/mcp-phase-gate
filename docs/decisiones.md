@@ -28,20 +28,27 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
   las fuentes se enlazan desde `demo/fuentes/`. «Instalar» lleva a `docs/guide/installation.md` (o
   `docs/guia/instalacion.md`): esos nombres quedan fijados aquí.
 - **La demo vive en `demo/`.** Los enlaces de antes llevaban la vista o el idioma en el hash (`#/tablero/…`,
-  `#red`, `#?lang=en`, `#?sobrio=1`): la portada redirige a `demo/` cualquier hash que no sea una de sus anclas
-  (una lista cerrada) y lo conserva. La banda de la demo gana un enlace a la portada con su URL absoluta, porque
-  cualquier `ui --export-static` sin datos reales muestra la misma banda y un enlace relativo se rompería fuera de
-  este sitio.
+  `#red`, `#?lang=en`, `#?sobrio=1`): la portada manda a `demo/`, con el hash intacto, lo que **parece** un
+  enlace de la demo —una ruta (`#/…`), una consulta (`#?…`) o el nombre de una vista del Studio—, y deja en la
+  portada cualquier otro fragmento. Al revés (una lista cerrada de anclas propias) cada sección nueva mandaría a
+  la demo a quien llegara con su enlace. Los nombres de las vistas no se copian: `scripts/portada.mjs` los saca
+  de `studio/src/rutas.ts` y los deja en `data-vistas`, y falla al armar el sitio si ese archivo cambia de forma.
+  La banda de la demo gana un enlace a la portada con su URL absoluta, porque cualquier `ui --export-static` sin
+  datos reales muestra la misma banda y un enlace relativo se rompería fuera de este sitio.
 - **El idioma al llegar.** La portada en inglés mira primero `?lang=`, después lo que ya elegiste (la misma clave
   `pg-idioma` que usa el Studio, en el mismo origen) y después el idioma del navegador; si es español, lleva a
   `es/`. El selector EN / ES guarda la elección, y el Studio y la portada recuerdan lo mismo.
-- **Pesa poco:** la primera carga, con las tres capturas, no pasa de 300 kB. Para eso las capturas son WebP, que el
-  propio Chromium codifica: en PNG pesaban 278 kB las tres y la portada pasaba del tope. Medido: 274 kB en inglés y
-  278 kB en español, sin comprimir.
+- **Pesa poco:** la primera carga, con las tres capturas, no pasa de 300 kB, y lo comprueban las dos partes: el
+  e2e sobre las capturas que él mismo saca, y el job `ensamblar` sobre las que de verdad se publican. Para eso las
+  capturas son WebP, que el propio Chromium codifica: en PNG pesaban 278 kB las tres y la portada pasaba del tope.
+  Cada captura empieza bajo la banda de la demo, que solo dice en qué carpeta temporal se generó: a quien llega a
+  la portada no le dice nada, y quitarla deja ver esa franja más de interfaz y ahorra otros 25 kB. Medido: 246 kB
+  en inglés y 251 kB en español, sin comprimir.
 - **El video son dos piezas del mismo script.** El MP4 completo, de unos 42 s, con siete escenas (la terminal con
   solo `doctor`, la Red, el Tablero de una tarea terminada, un lote que pasa a verificado en vivo, Ajustes, el
   Taller y el sitio en un teléfono), y un GIF corto, de unos 20 s, con la terminal breve, la Red, el lote en vivo y
-  Ajustes: es lo que el README muestra sin clic y lleva al MP4. La escena de `init` sale, porque con la 4.0 se
+  Ajustes: es lo que el README muestra sin clic y lleva al MP4. En el GIF la terminal empieza con el comando casi
+  tecleado: en 3 s lo que vale es la salida de `doctor`, no ver escribirlo. La escena de `init` sale, porque con la 4.0 se
   configura en Ajustes, que cambia la política de commits de un proyecto, enseña su diff y aplica.
 - **El Studio se graba en tema claro y la terminal se queda oscura**, con los tokens del tema oscuro y JetBrains
   Mono; el marco del teléfono es el gris claro del Studio. `medios.json` gana la versión y el detalle de las dos
@@ -53,13 +60,17 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
   contra un `ui --demo` en vivo, para que Ajustes no salga de solo lectura; `medios` graba el video; `ensamblar`,
   sin permisos, junta todo en el artefacto `sitio-completo`, que se guarda 14 días; y `desplegar` publica
   exactamente ese artefacto, así que lo que se revisa es lo que se publica. `desplegar` solo corre con un tag sin
-  guion: una beta nunca publica, y una corrida manual sobre una rama solo construye. Las construcciones van por
-  ref, así que una corrida manual no cancela la de un tag, y el despliegue tiene su propio grupo, sin cancelar.
+  guion, y su primer paso exige además la forma de una versión (`vMAYOR.MENOR.PARCHE`): una beta nunca publica, y
+  una corrida manual sobre una rama solo construye. Las construcciones van por ref, así que una corrida manual no
+  cancela la de un tag; y la de un tag no se cancela nunca, para no dejar el sitio a medias.
 - **Los medios nunca frenan el sitio**, pero las capturas sí: sin ellas la portada no está completa.
 
-**Medido** (corrida manual sobre la rama, Ubuntu): MP4 de 1.14 MiB en español y 1.03 MiB en inglés, 41.7 s; GIF de
-1.88 MiB (8 fps y 760 px) y 2.13 MiB (10 fps y 840 px), 21.9 s. En el tag v3.2.0, el GIF de la versión anterior ya
-no cabía en su tope de 5 MiB.
+**Medido** (corrida manual sobre la rama, Ubuntu, con las escenas ya completadas hasta su tiempo): MP4 de
+1.10 MiB en español y 1.12 MiB en inglés, 41.7 s; GIF de 2.31 MiB en los dos idiomas (10 fps y 840 px), 21.9 s.
+El GIF cabe con un 12 % de margen, no más: entre corridas con el mismo código cambia de peso y de escalón de
+calidad (en una anterior salió a 1.88 y 2.13 MiB), y solo queda un escalón por debajo. Si una escena del GIF
+crece, deja de caber; entonces `medios` falla y el sitio sale con los medios ya publicados. En el tag v3.2.0, el
+GIF de la versión anterior ya no cabía en su tope de 5 MiB.
 
 **Descartado.**
 
@@ -71,7 +82,8 @@ no cabía en su tope de 5 MiB.
   abrirlo.
 
 **Riesgo aceptado.** El enlace «Instalar» y los de la banda apuntan a `blob/master/docs/…` y a la portada, que no
-existen hasta que la v4 llegue a `master` y se publique.
+existen hasta que la v4 llegue a `master` y se publique. Para que no se publique un botón roto, el job `sitio`
+comprueba que las dos guías existan **cuando la corrida es de un tag**; mientras la v4 se construye, no estorba.
 
 ---
 
