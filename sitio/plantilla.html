@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="{{lang}}" data-base="{{base}}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{titulo}}</title>
+    <meta name="description" content="{{descripcion}}" />
+    <link rel="canonical" href="{{url-esta}}" />
+    <link rel="alternate" hreflang="en" href="{{url-en}}" />
+    <link rel="alternate" hreflang="es" href="{{url-es}}" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="{{base}}tema-claro.css" />
+    <link rel="stylesheet" href="{{base}}portada.css" />
+    <script src="{{base}}portada.js"></script>
+  </head>
+  <body>
+    <a class="saltar" href="#contenido">{{saltar}}</a>
+    <header class="barra">
+      <p class="marca"><span class="marca-nombre">mcp-phase-gate</span></p>
+      <nav class="idiomas" aria-label="{{idiomas}}">
+        <a href="{{href-en}}" hreflang="en" lang="en" data-idioma="en" title="English"{{aria-en}}>EN</a>
+        <a href="{{href-es}}" hreflang="es" lang="es" data-idioma="es" title="Español"{{aria-es}}>ES</a>
+      </nav>
+    </header>
+
+    <main id="contenido" tabindex="-1">
+      <section class="hero">
+        <h1>{{lema}}</h1>
+        <p class="subtitulo">{{subtitulo}}</p>
+        <p class="botones">
+          <a class="boton boton-principal" href="{{base}}demo/">{{boton-demo}}</a>
+          <a class="boton" href="{{url-guia}}">{{boton-instalar}}</a>
+        </p>
+      </section>
+
+      <section id="fases" aria-labelledby="titulo-fases">
+        <h2 id="titulo-fases">{{fases-titulo}}</h2>
+        <ol class="fases">
+          <li><span class="numero">1</span><h3>{{fase-1}}</h3><p>{{fase-1-texto}}</p></li>
+          <li><span class="numero">2</span><h3>{{fase-2}}</h3><p>{{fase-2-texto}}</p></li>
+          <li><span class="numero">3</span><h3>{{fase-3}}</h3><p>{{fase-3-texto}}</p></li>
+          <li><span class="numero">4</span><h3>{{fase-4}}</h3><p>{{fase-4-texto}}</p></li>
+          <li><span class="numero">5</span><h3>{{fase-5}}</h3><p>{{fase-5-texto}}</p></li>
+        </ol>
+      </section>
+
+      <section id="capturas" aria-labelledby="titulo-capturas">
+        <h2 id="titulo-capturas">{{capturas-titulo}}</h2>
+        <div class="capturas">
+          <figure>
+            <img src="{{base}}medios/captura-red-{{idioma}}.{{ext-captura}}" width="1280" height="720" alt="{{captura-red-alt}}" />
+            <figcaption>{{captura-red}}</figcaption>
+          </figure>
+          <figure>
+            <img src="{{base}}medios/captura-tablero-{{idioma}}.{{ext-captura}}" width="1280" height="720" alt="{{captura-tablero-alt}}" />
+            <figcaption>{{captura-tablero}}</figcaption>
+          </figure>
+          <figure>
+            <img src="{{base}}medios/captura-ajustes-{{idioma}}.{{ext-captura}}" width="1280" height="720" alt="{{captura-ajustes-alt}}" />
+            <figcaption>{{captura-ajustes}}</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="probar" aria-labelledby="titulo-probar">
+        <h2 id="titulo-probar">{{probar-titulo}}</h2>
+        <pre class="comando"><code>npx mcp-phase-gate ui --demo</code></pre>
+        <p>{{probar-texto}}</p>
+      </section>
+    </main>
+
+    <footer class="pie">
+      <ul>
+        <li><a href="https://github.com/Montse2308/mcp-phase-gate">GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/mcp-phase-gate">npm</a></li>
+        <li><a href="https://github.com/Montse2308/mcp-phase-gate/blob/master/LICENSE">{{pie-licencia}}</a></li>
+        <li>{{pie-version}} {{version}}</li>
+      </ul>
+    </footer>
+  </body>
+</html>

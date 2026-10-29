@@ -1,0 +1,86 @@
+// Arma la portada del sitio a partir de sitio/: una sola plantilla HTML con sus textos en inglés y en español,
+// sin framework. Escribe en <carpeta>:
+//   index.html     la portada en inglés
+//   es/index.html  la portada en español
+//   portada.css, portada.js y tema-claro.css (copiado tal cual de los tokens del Studio)
+//   .nojekyll      para que Pages sirva los archivos tal cual
+// Las fuentes y las capturas no las escribe: se enlazan desde demo/fuentes/ (donde las deja el export del
+// Studio) y desde medios/captura-<vista>-<idioma>.<ext> (que saca capturas-studio.mjs).
+//
+// Uso, después de `npm run build`:
+//   node scripts/portada.mjs --salida <carpeta>
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+
+const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SITIO = "https://montse2308.github.io/mcp-phase-gate/";
+const GUIAS = {
+  en: "https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guide/installation.md",
+  es: "https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guia/instalacion.md",
+};
+// El formato de las tres capturas de medios/. Lo mismo lo dice capturas-studio.mjs.
+export const EXTENSION_DE_LAS_CAPTURAS = "webp";
+
+export function armarPortada(salida) {
+  const textos = JSON.parse(fs.readFileSync(path.join(raiz, "sitio", "textos.json"), "utf-8"));
+  const plantilla = fs.readFileSync(path.join(raiz, "sitio", "plantilla.html"), "utf-8");
+  const { version } = JSON.parse(fs.readFileSync(path.join(raiz, "package.json"), "utf-8"));
+
+  const usadas = new Set();
+  const paginas = { en: "index.html", es: path.join("es", "index.html") };
+  for (const idioma of ["en", "es"]) {
+    const propios = textos[idioma];
+    if (!propios) throw new Error(`sitio/textos.json no tiene el idioma ${idioma}.`);
+    const enEspanol = idioma === "es";
+    const base = enEspanol ? "../" : "";
+    const valores = {
+      ...propios,
+      lang: idioma,
+      idioma,
+      base,
+      version,
+      "ext-captura": EXTENSION_DE_LAS_CAPTURAS,
+      "url-esta": enEspanol ? `${SITIO}es/` : SITIO,
+      "url-en": SITIO,
+      "url-es": `${SITIO}es/`,
+      "href-en": enEspanol ? "../" : "./",
+      "href-es": enEspanol ? "./" : "es/",
+      "aria-en": enEspanol ? "" : ' aria-current="true"',
+      "aria-es": enEspanol ? ' aria-current="true"' : "",
+      "url-guia": GUIAS[idioma],
+    };
+    const pagina = plantilla.replace(/\{\{([a-z0-9-]+)\}\}/g, (_, clave) => {
+      if (!Object.hasOwn(valores, clave)) throw new Error(`La plantilla pide «${clave}» y sitio/textos.json no lo trae en ${idioma}.`);
+      usadas.add(clave);
+      return String(valores[clave]);
+    });
+    const destino = path.join(salida, paginas[idioma]);
+    fs.mkdirSync(path.dirname(destino), { recursive: true });
+    fs.writeFileSync(destino, pagina, "utf-8");
+  }
+  // Un texto que ninguna plantilla usa es un texto que sobra, o una clave mal escrita.
+  for (const idioma of ["en", "es"]) {
+    for (const clave of Object.keys(textos[idioma])) {
+      if (!usadas.has(clave)) throw new Error(`sitio/textos.json trae «${clave}» (${idioma}) y la plantilla no lo usa.`);
+    }
+  }
+  if (JSON.stringify(Object.keys(textos.en).sort()) !== JSON.stringify(Object.keys(textos.es).sort())) {
+    throw new Error("sitio/textos.json: el inglés y el español no tienen las mismas claves.");
+  }
+
+  fs.copyFileSync(path.join(raiz, "sitio", "portada.css"), path.join(salida, "portada.css"));
+  fs.copyFileSync(path.join(raiz, "sitio", "portada.js"), path.join(salida, "portada.js"));
+  fs.copyFileSync(path.join(raiz, "studio", "src", "estilos", "tema-claro.css"), path.join(salida, "tema-claro.css"));
+  fs.writeFileSync(path.join(salida, ".nojekyll"), "", "utf-8");
+  return { version, archivos: ["index.html", "es/index.html", "portada.css", "portada.js", "tema-claro.css", ".nojekyll"] };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { values } = parseArgs({ options: { salida: { type: "string" } } });
+  if (!values.salida?.trim()) throw new Error("Uso: node scripts/portada.mjs --salida <carpeta>");
+  const { archivos, version } = armarPortada(path.resolve(values.salida));
+  console.log(`Portada de la ${version}: ${archivos.join(", ")} en ${path.resolve(values.salida)}.`);
+}

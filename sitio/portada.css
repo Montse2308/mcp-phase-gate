@@ -1,0 +1,264 @@
+/* La portada del sitio: la misma sobriedad técnica del Studio, en tema claro. Los colores salen de
+   tema-claro.css, que se copia tal cual; las fuentes, de demo/fuentes/, donde las deja el export del Studio. */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("demo/fuentes/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("demo/fuentes/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+:root {
+  --texto-cuerpo: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --texto-codigo: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radio: 6px;
+  --radio-tarjeta: 8px;
+  --radio-contenedor: 10px;
+  --ancho: 68rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--texto-cuerpo);
+  line-height: 1.55;
+  background: var(--fondo);
+  color: var(--texto);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  font-size: 1rem;
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0 0 0.5rem;
+}
+h1 {
+  font-size: clamp(1.6rem, 4.6vw, 2.4rem);
+  letter-spacing: -0.01em;
+}
+h2 {
+  font-size: 1.5rem;
+  letter-spacing: 0.01em;
+}
+h3 {
+  font-size: 1.05rem;
+}
+p {
+  margin: 0 0 1rem;
+}
+a {
+  color: var(--acento);
+}
+
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+main:focus {
+  outline: none;
+}
+
+.saltar {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acento);
+  color: var(--sobre-acento);
+  border-radius: var(--radio);
+}
+.saltar:focus {
+  top: 0.5rem;
+}
+
+.barra,
+main,
+.pie {
+  width: 100%;
+  max-width: var(--ancho);
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1rem;
+}
+.marca {
+  margin: 0;
+  font-family: var(--texto-codigo);
+  font-weight: 600;
+}
+.idiomas {
+  display: flex;
+  gap: 0.25rem;
+}
+.idiomas a {
+  min-width: 2.75rem;
+  padding: 0.4rem 0.7rem;
+  text-align: center;
+  text-decoration: none;
+  color: var(--texto);
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.idiomas a[aria-current="true"] {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--sobre-acento);
+}
+
+.hero {
+  padding-block: 2.5rem 2rem;
+  max-width: 48rem;
+}
+.subtitulo {
+  color: var(--texto-2);
+  font-size: 1.1rem;
+}
+.botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0;
+}
+.boton {
+  display: inline-block;
+  padding: 0.7rem 1.2rem;
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--texto);
+  font-weight: 600;
+  text-decoration: none;
+}
+.boton-principal {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--sobre-acento);
+}
+
+section {
+  padding-block: 1.5rem;
+}
+
+.fases {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fases li {
+  padding: 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-tarjeta);
+}
+.fases p {
+  margin: 0;
+  color: var(--texto-2);
+  font-size: 0.9rem;
+}
+.numero {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--acento);
+  border-radius: 50%;
+  color: var(--acento);
+  font-family: var(--texto-codigo);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.capturas {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+figure {
+  margin: 0;
+}
+figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-contenedor);
+  background: var(--superficie);
+}
+figcaption {
+  margin-top: 0.4rem;
+  color: var(--texto-2);
+  font-size: 0.9rem;
+}
+
+.comando {
+  margin: 1rem 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-tarjeta);
+  font-family: var(--texto-codigo);
+  font-size: 0.95rem;
+}
+
+.pie {
+  padding-block: 2rem 3rem;
+  color: var(--texto-2);
+  font-size: 0.9rem;
+}
+.pie ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--borde);
+  list-style: none;
+}
+
+@media (max-width: 860px) {
+  .fases {
+    grid-template-columns: 1fr;
+  }
+  .fases li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.75rem;
+  }
+  .fases .numero {
+    grid-row: span 2;
+  }
+}
