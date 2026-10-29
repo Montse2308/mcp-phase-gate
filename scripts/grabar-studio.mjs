@@ -9,7 +9,8 @@
 // el tiempo justo para leerla, que es lo único que se mide en milisegundos.
 //
 // Uso, después de `npm run build` y con Chromium instalado (PLAYWRIGHT_BROWSERS_PATH=0):
-//   node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo>
+//   node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo> [--segundos 2=4,3=7,...]
+// Con --segundos, cada escena se deja quieta al final hasta durar lo que le toca; sin él, dura lo que tarden sus pasos.
 // <sitio completo> es lo que se publica: la portada en la raíz (en inglés) y en es/, y la demo en demo/.
 // Escribe en <carpeta> escena-2.webm … escena-7.webm; la 1, la terminal, es de VHS.
 
@@ -25,7 +26,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH ??= "0";
 const { chromium } = await import("@playwright/test");
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { values: argumentos } = parseArgs({ options: { idioma: { type: "string" }, salida: { type: "string" }, sitio: { type: "string" } } });
+const { values: argumentos } = parseArgs({ options: { idioma: { type: "string" }, salida: { type: "string" }, sitio: { type: "string" }, segundos: { type: "string" } } });
 const idioma = argumentos.idioma === "en" ? "en" : "es";
 if (!argumentos.salida || !argumentos.sitio) throw new Error("Uso: node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo>");
 fs.mkdirSync(path.resolve(argumentos.salida), { recursive: true });
@@ -76,16 +77,25 @@ const origenEstatico = `http://127.0.0.1:${estatico.address().port}${PREFIJO}`;
 const navegador = await chromium.launch();
 // Lo que graba Playwright, en bruto, junto a la salida: se borra al terminar.
 const crudo = fs.mkdtempSync(path.join(salida, "crudo-"));
+// Lo que dura cada escena, en segundos, tal como se grabó: medios.mjs avisa si lo que pidió el guion pasa de lo que
+// le toca y al recortarla perdería el final.
+const objetivo = Object.fromEntries((argumentos.segundos ?? "").split(",").filter(Boolean).map((par) => par.split("=").map(Number)));
+const duraciones = {};
 async function escena(numero, tamano, grabar) {
   const carpeta = path.join(crudo, `escena-${numero}`);
   const contexto = await navegador.newContext({ viewport: tamano, recordVideo: { dir: carpeta, size: tamano }, reducedMotion: "no-preference", colorScheme: "light", locale: idioma === "en" ? "en-US" : "es-ES" });
   await contexto.addCookies([{ name: nombre, value: valor, url: origen }]);
   const pagina = await contexto.newPage();
+  const inicio = Date.now();
   await grabar(pagina);
+  // Lo que pidieron los pasos, antes de completar el tiempo de la escena.
+  duraciones[numero] = Math.round((Date.now() - inicio) / 100) / 10;
+  // Si terminan antes de su tiempo, la última imagen se queda quieta hasta completarlo.
+  if (objetivo[numero] && duraciones[numero] < objetivo[numero]) await quieto((objetivo[numero] - duraciones[numero]) * 1000);
   const video = pagina.video();
   await contexto.close();
   fs.copyFileSync(await video.path(), path.join(salida, `escena-${numero}.webm`));
-  console.log(`escena ${numero}: ${path.join(salida, `escena-${numero}.webm`)}`);
+  console.log(`escena ${numero} (${duraciones[numero]} s): ${path.join(salida, `escena-${numero}.webm`)}`);
 }
 const vista = (hash) => `${origen}/#${hash}${hash.includes("?") ? "&" : "?"}lang=${idioma}`;
 const listo = (pagina) => pagina.evaluate(() => document.fonts.ready);
@@ -106,9 +116,9 @@ try {
     await p.locator(".estado-verificado").nth(2).waitFor();
     await p.locator(".estado-descartado").first().waitFor();
     await listo(p);
-    await quieto(2500);
+    await quieto(3000);
     await p.getByRole("row").filter({ has: p.locator(".estado-verificado") }).first().getByRole("button").click();
-    await quieto(2800);
+    await quieto(2400);
   });
 
   // 4. En vivo: el lote con el commit pendiente se commitea y se ancla con record_batch, y su estado
@@ -150,15 +160,17 @@ try {
     // La lista de presets llega un instante después del formulario: sin esperarla, ese select se ve en blanco.
     await p.waitForFunction(() => document.querySelector('[data-campo="preset"] select')?.value);
     await listo(p);
-    await quieto(1000);
+    await quieto(800);
     await politica.selectOption(nueva);
-    await quieto(700);
+    await quieto(500);
     await p.locator(".pie-ajustes .accion > button").click();
     await p.locator(".vista-previa .diff-mas").first().waitFor();
-    await quieto(2500);
+    // La vista previa queda bajo el formulario: se baja hasta ella para que el diff se lea.
+    await p.locator(".vista-previa").evaluate((el) => el.scrollIntoView({ block: "center", behavior: "smooth" }));
+    await quieto(3200);
     await p.locator(".vista-previa .boton-principal").click();
     await p.locator(".aviso-hecho").waitFor();
-    await quieto(2000);
+    await quieto(1500);
   });
 
   // 6. El Taller: de dónde sale la ranura de pruebas de la Fase 3 (el preset frente a la fábrica), con su diff.
@@ -183,6 +195,7 @@ try {
     await listo(p);
     await quieto(2000);
   });
+  fs.writeFileSync(path.join(salida, "duraciones.json"), `${JSON.stringify(duraciones, null, 2)}\n`, "utf-8");
 } finally {
   await navegador.close();
   estatico.close();

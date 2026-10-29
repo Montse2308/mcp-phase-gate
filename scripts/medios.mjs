@@ -130,8 +130,14 @@ try {
 
     // ─── 2 a 7. El Studio ──────────────────────────────────────────────────
     const escenas = path.join(aqui, "escenas");
-    ejecutar(process.execPath, [path.join(raiz, "scripts", "grabar-studio.mjs"), "--idioma", idioma, "--salida", escenas, "--sitio", sitio], { stdio: ["ignore", "inherit", "inherit"] });
+    const segundosDelStudio = ESCENAS.filter((e) => e.n > 1).map((e) => `${e.n}=${e.segundos}`).join(",");
+    ejecutar(process.execPath, [path.join(raiz, "scripts", "grabar-studio.mjs"), "--idioma", idioma, "--salida", escenas, "--sitio", sitio, "--segundos", segundosDelStudio], { stdio: ["ignore", "inherit", "inherit"] });
     const fuenteDe = (n) => (n === 1 ? path.join(aqui, "terminal.mp4") : path.join(escenas, `escena-${n}.webm`));
+    // Lo que pidieron los pasos de cada escena: si pasa de lo que le toca, al recortarla se pierde su final.
+    const crudos = { ...JSON.parse(fs.readFileSync(path.join(escenas, "duraciones.json"), "utf-8")), 1: Math.round(duracion(fuenteDe(1)) * 10) / 10 };
+    for (const e of ESCENAS) {
+      if (crudos[e.n] > e.segundos + 0.3) console.log(`::warning::La escena ${e.n} (${e.nombre}, ${idioma}) dura ${crudos[e.n]} s y se recorta a ${e.segundos} s: pierde su final.`);
+    }
 
     // ─── Unir: cada escena a 1280×720, 30 fps, H.264, con los segundos que le tocan ───
     // La del teléfono (390×844) va centrada, a la altura del video, sobre el fondo del tema claro.
@@ -174,7 +180,7 @@ try {
     ffmpeg(["-ss", String(redondear(segundosDe[0] + segundosDe[1] + segundosDe[2] / 2)), "-i", mp4, "-frames:v", "1", poster]);
 
     resumen.idiomas[idioma] = {
-      mp4: { segundos: redondear(total), bytes: fs.statSync(mp4).size, escenas: ESCENAS.map((e, i) => ({ n: e.n, nombre: e.nombre, segundos: redondear(segundosDe[i]) })) },
+      mp4: { segundos: redondear(total), bytes: fs.statSync(mp4).size, escenas: ESCENAS.map((e, i) => ({ n: e.n, nombre: e.nombre, segundos: redondear(segundosDe[i]), pedidos: crudos[e.n] })) },
       gif: { segundos: redondear(duracion(corto)), ...delGif, escenas: GIF_ESCENAS.map((e) => ({ n: e.n, segundos: e.segundos })) },
       posterBytes: fs.statSync(poster).size,
     };
