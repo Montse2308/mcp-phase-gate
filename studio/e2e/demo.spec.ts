@@ -61,7 +61,8 @@ const banda = (page: import("@playwright/test").Page) => page.locator(".banda-de
 
 test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documentación de quien la lanza, y la banda fija", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/`);
-  await expect(banda(page)).toHaveText(`Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
+  await expect(banda(page)).toHaveText(`Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)} Qué es mcp-phase-gate`);
+  await expect(banda(page).getByRole("link", { name: "Qué es mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/es/");
   await expect(banda(page)).toHaveAttribute("role", "note");
   for (const nombre of ["TIENDA", "ASISTENTE", "INVESTIGACION"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
   await expect(page.getByText("MARCADOR")).toHaveCount(0);
@@ -160,7 +161,8 @@ test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
   await ponerTema(page, "oscuro");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
+  await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)} What is mcp-phase-gate`);
+  await expect(banda(page).getByRole("link", { name: "What is mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/");
   const lista = lotesDeLaFase(page, "Batches of Phase 4");
   await expect(lista).toHaveCount(4);
   for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verified");

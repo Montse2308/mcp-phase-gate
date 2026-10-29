@@ -170,8 +170,9 @@ export async function ponerTema(page: Page, tema: "claro" | "oscuro"): Promise<v
 
 // El sitio estático: `ui --export-static` del binario compilado, como en el workflow de Pages, servido bajo un
 // subdirectorio (/mcp-phase-gate/) por un servidor de archivos sin nada más, como GitHub Pages: sin API, sin SSE
-// y sin CSP. Todo lo que pide la página fuera del subdirectorio es un 404.
+// y sin CSP. Todo lo que pide la página fuera del subdirectorio es un 404. La demo vive en demo/, como en el sitio.
 export const PREFIJO = "/mcp-phase-gate/";
+export const PREFIJO_DE_LA_DEMO = `${PREFIJO}demo/`;
 const TIPOS: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
 
 export function servirCarpeta(raiz: string): Promise<{ servidor: http.Server; puerto: number }> {
@@ -185,7 +186,9 @@ export function servirCarpeta(raiz: string): Promise<{ servidor: http.Server; pu
       res.writeHead(404).end();
       return;
     }
-    const relativa = crudo.slice(PREFIJO.length) || "index.html";
+    // Una carpeta (la raíz del sitio, demo/, es/) sirve su index.html, como GitHub Pages.
+    const pedida = crudo.slice(PREFIJO.length);
+    const relativa = pedida === "" || pedida.endsWith("/") ? `${pedida}index.html` : pedida;
     const ruta = path.resolve(raiz, relativa);
     if (path.relative(raiz, ruta).startsWith("..") || !fs.statSync(ruta, { throwIfNoEntry: false })?.isFile()) {
       res.writeHead(404).end();
@@ -204,8 +207,9 @@ export const testEstatico = test.extend<{}, { servidor: Servidor }>({
       for (const c of carpetas) fs.mkdirSync(c);
       const [docs, repos, estado, config] = carpetas as [string, string, string, string];
       const sitio = path.join(raiz, "sitio");
+      fs.mkdirSync(sitio);
       const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(PHASE_GATE_|ORQUESTADOR_)/i.test(k)));
-      const r = spawnSync(process.execPath, [BINARIO, "ui", "--export-static", sitio], { env: { ...env, PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config }, encoding: "utf-8", timeout: 120_000 });
+      const r = spawnSync(process.execPath, [BINARIO, "ui", "--export-static", path.join(sitio, "demo")], { env: { ...env, PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config }, encoding: "utf-8", timeout: 120_000 });
       expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
       const { servidor, puerto } = await servirCarpeta(sitio);
       const origen = `http://127.0.0.1:${puerto}`;
@@ -217,4 +221,4 @@ export const testEstatico = test.extend<{}, { servidor: Servidor }>({
   ],
 });
 
-export const sitio = (s: Servidor, hash = "") => `${s.origen}${PREFIJO}${hash}`;
+export const sitio = (s: Servidor, hash = "") => `${s.origen}${PREFIJO_DE_LA_DEMO}${hash}`;

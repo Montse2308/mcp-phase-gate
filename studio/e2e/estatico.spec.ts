@@ -1,20 +1,22 @@
-// El sitio estático (§7.9 del plan) en Chromium real: `ui --export-static` del binario compilado, como en el
-// workflow de Pages, servido bajo un subdirectorio (/mcp-phase-gate/) por un servidor de archivos sin nada
-// más, como GitHub Pages: sin API, sin SSE y sin CSP. Todo lo que pide la página fuera del subdirectorio es
-// un 404, y el fixture no admite ni un error en la consola ni una petición fuera de 127.0.0.1.
+// El sitio estático en Chromium real: `ui --export-static` del binario compilado, como en el workflow de
+// Pages, servido bajo un subdirectorio (/mcp-phase-gate/demo/) por un servidor de archivos sin nada más, como
+// GitHub Pages: sin API, sin SSE y sin CSP. Todo lo que pide la página fuera del subdirectorio es un 404, y el
+// fixture no admite ni un error en la consola ni una petición fuera de 127.0.0.1.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { BINARIO, PREFIJO, expect, lotesDeLaFase, ponerTema, servirCarpeta, sinDesbordamiento, sinViolacionesGraves, sitio, testEstatico as test } from "./ayudas";
+import { BINARIO, PREFIJO_DE_LA_DEMO, expect, lotesDeLaFase, ponerTema, servirCarpeta, sinDesbordamiento, sinViolacionesGraves, sitio, testEstatico as test } from "./ayudas";
 
 const SOLO_LECTURA = "En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.";
 
-test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda, ninguna petición a una API y Ajustes de solo lectura", async ({ page, servidor, registro }) => {
+test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda con su enlace a la portada, ninguna petición a una API y Ajustes de solo lectura", async ({ page, servidor, registro }) => {
   await page.goto(sitio(servidor));
-  await expect(page.locator(".banda-demo")).toHaveText("Demo: datos de ejemplo. Todo es de solo lectura.");
+  await expect(page.locator(".banda-demo")).toHaveText("Demo: datos de ejemplo. Todo es de solo lectura. Qué es mcp-phase-gate");
+  // El enlace es absoluto: cualquier export sin datos reales muestra la misma banda, y en otro sitio uno relativo se rompería.
+  await expect(page.locator(".banda-demo").getByRole("link", { name: "Qué es mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/es/");
   for (const nombre of ["TIENDA", "ASISTENTE", "INVESTIGACION"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
   // La Red ya no cambia nada: su fila desplegada manda a Ajustes, que en el sitio publicado es de solo lectura.
   await page.getByRole("heading", { level: 2, name: "TIENDA" }).getByRole("button").click();
@@ -28,9 +30,9 @@ test("la Red, servida bajo un subdirectorio: los tres proyectos, la banda, ningu
   await expect(page.getByLabel("Preset", { exact: true })).toBeDisabled();
   await expect(page.getByLabel("Política de commits")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Agregar a la lista" })).toHaveCount(0);
-  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
+  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO_DE_LA_DEMO}`)), "todo bajo demo/").toEqual([]);
   expect(registro.peticiones.filter((u) => u.includes("/api/")), "ni API ni SSE").toEqual([]);
-  // Los datos de la interfaz en español (§8.7): datos/es/.
+  // Los datos de la interfaz en español: datos/es/.
   expect(registro.peticiones.some((u) => u.endsWith("/datos/es/indice.json"))).toBe(true);
   expect(registro.peticiones.some((u) => u.includes("/datos/en/"))).toBe(false);
 });
@@ -40,7 +42,8 @@ test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH,
   await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
   await page.getByRole("group", { name: "Idioma" }).getByRole("button", { name: "EN" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.locator(".banda-demo")).toHaveText("Demo: sample data. Everything is read-only.");
+  await expect(page.locator(".banda-demo")).toHaveText("Demo: sample data. Everything is read-only. What is mcp-phase-gate");
+  await expect(page.locator(".banda-demo").getByRole("link", { name: "What is mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/");
   for (const nombre of ["SHOP", "ASSISTANT", "RESEARCH"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
   await expect(page.getByRole("heading", { name: "TIENDA" })).toHaveCount(0);
   expect(registro.peticiones.some((u) => u.endsWith("/datos/en/indice.json"))).toBe(true);
@@ -51,7 +54,7 @@ test("al cambiar a inglés, cambia también de demo: SHOP, ASSISTANT y RESEARCH,
   for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verified");
   await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("discarded");
   await sinViolacionesGraves(page, "el tablero estático en inglés");
-  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
+  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO_DE_LA_DEMO}`)), "todo bajo demo/").toEqual([]);
 });
 
 test("el tablero de cupones-de-descuento: cuatro lotes, el visor y Reverificar anclas, en los dos temas y con axe", async ({ page, servidor, registro }) => {
@@ -108,7 +111,7 @@ test("Ajustes en el sitio publicado: las páginas con datos se ven de solo lectu
   await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await sinViolacionesGraves(page, "Ajustes, Studio, en el sitio publicado");
   expect(registro.peticiones.filter((u) => u.includes("/api/")), "ni API ni SSE").toEqual([]);
-  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO}`)), "todo bajo el subdirectorio").toEqual([]);
+  expect(registro.peticiones.filter((u) => !u.startsWith(`${servidor.origen}${PREFIJO_DE_LA_DEMO}`)), "todo bajo demo/").toEqual([]);
 });
 
 // Sirve su propio sitio, en otro puerto: no usa la página del fixture, que solo admite el origen del suyo.
@@ -119,17 +122,19 @@ test("con una Documentación exportada, las páginas de Ajustes que enseñan rut
   const tarea = path.join(docs, "REAL", "Proyectos", "una-tarea");
   fs.mkdirSync(tarea, { recursive: true });
   fs.writeFileSync(path.join(tarea, "00 - Contexto Inicial.md"), "# Una tarea\n", "utf-8");
-  const sitioReal = path.join(raiz, "sitio");
+  const sitioPublicado = path.join(raiz, "sitio");
+  fs.mkdirSync(sitioPublicado);
+  const sitioReal = path.join(sitioPublicado, "demo");
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(PHASE_GATE_|ORQUESTADOR_)/i.test(k)));
   const r = spawnSync(process.execPath, [BINARIO, "ui", "--export-static", sitioReal, "--incluir-datos-reales", "--yes"], { env: { ...env, PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config }, encoding: "utf-8", timeout: 120_000 });
   expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
-  const { servidor: estatico, puerto } = await servirCarpeta(sitioReal);
+  const { servidor: estatico, puerto } = await servirCarpeta(sitioPublicado);
   const contexto = await browser.newContext({ locale: "es-ES" });
   const page = await contexto.newPage();
   const peticiones: string[] = [];
   page.on("request", (r) => peticiones.push(r.url()));
   try {
-    const origen = `http://127.0.0.1:${puerto}${PREFIJO}`;
+    const origen = `http://127.0.0.1:${puerto}${PREFIJO_DE_LA_DEMO}`;
     for (const hash of ["#/ajustes/equipo", "#/ajustes/proyecto/REAL", "#/ajustes/clientes", "#/ajustes/avanzado"]) {
       await page.goto(`${origen}${hash}`);
       await expect(page.getByText("No disponible en una exportación.")).toBeVisible();
