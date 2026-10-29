@@ -54,9 +54,11 @@ const ESCENAS = [
   { n: 6, nombre: "taller", segundos: 5 },
   { n: 7, nombre: "telefono", segundos: 5 },
 ];
-// El GIF corto: la terminal breve (3 s en vez de 6), la Red, el lote en vivo y Ajustes.
+// El GIF corto: la terminal breve (3 s en vez de 6), la Red, el lote en vivo y Ajustes. La terminal no empieza
+// por el principio: en 3 s lo que vale es la salida de `doctor`, no ver teclear el comando, así que se salta casi
+// todo el tecleo (`desde`) en vez de cortar el final.
 const GIF_ESCENAS = [
-  { n: 1, segundos: 3 },
+  { n: 1, desde: 0.8, segundos: 3 },
   { n: 2, segundos: 4 },
   { n: 4, segundos: 7 },
   { n: 5, segundos: 8 },
@@ -142,9 +144,10 @@ try {
     // ─── Unir: cada escena a 1280×720, 30 fps, H.264, con los segundos que le tocan ───
     // La del teléfono (390×844) va centrada, a la altura del video, sobre el fondo del tema claro.
     const filtro = `scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=${FONDO},fps=30,format=yuv420p`;
-    const normalizar = (n, segundos, etiqueta) => {
+    const normalizar = (n, segundos, etiqueta, desde = 0) => {
       const destino = path.join(aqui, `${etiqueta}-${n}.mp4`);
-      ffmpeg(["-i", fuenteDe(n), "-t", String(segundos), "-vf", filtro, "-an", "-c:v", "libx264", "-preset", "slow", "-crf", "26", destino]);
+      const salto = desde ? ["-ss", String(desde)] : [];
+      ffmpeg([...salto, "-i", fuenteDe(n), "-t", String(segundos), "-vf", filtro, "-an", "-c:v", "libx264", "-preset", "slow", "-crf", "26", destino]);
       return destino;
     };
     const unir = (piezas, destino, lista) => {
@@ -161,7 +164,7 @@ try {
 
     // El GIF corto: sale de sus propias escenas, no del MP4, para poder recortarlas sin tocarlo.
     const corto = path.join(aqui, "corto.mp4");
-    unir(GIF_ESCENAS.map((e) => normalizar(e.n, e.segundos, "corta")), corto, "corta.txt");
+    unir(GIF_ESCENAS.map((e) => normalizar(e.n, e.segundos, "corta", e.desde)), corto, "corta.txt");
     const gif = path.join(salida, `demo-${idioma}.gif`);
     const hacerGif = (fps, ancho) => {
       const paleta = path.join(aqui, "paleta.png");
@@ -181,7 +184,7 @@ try {
 
     resumen.idiomas[idioma] = {
       mp4: { segundos: redondear(total), bytes: fs.statSync(mp4).size, escenas: ESCENAS.map((e, i) => ({ n: e.n, nombre: e.nombre, segundos: redondear(segundosDe[i]), pedidos: crudos[e.n] })) },
-      gif: { segundos: redondear(duracion(corto)), ...delGif, escenas: GIF_ESCENAS.map((e) => ({ n: e.n, segundos: e.segundos })) },
+      gif: { segundos: redondear(duracion(corto)), ...delGif, escenas: GIF_ESCENAS.map((e) => ({ n: e.n, desde: e.desde ?? 0, segundos: e.segundos })) },
       posterBytes: fs.statSync(poster).size,
     };
     console.log(`${idioma}: ${JSON.stringify(resumen.idiomas[idioma])}`);

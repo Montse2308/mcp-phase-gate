@@ -4,15 +4,15 @@
 // la página completa (para no cortar el contenido al comparar); --salida elige la carpeta.
 //
 // Con --portada se sacan las tres de la portada del sitio: la Red, el Tablero y Ajustes, en tema claro y en los
-// dos idiomas (o en los de --idiomas), contra un `ui --demo` en vivo, porque Ajustes sobre el sitio estático
-// saldría de solo lectura. Cada una es el viewport de 1280×720, y se escribe en --salida (obligatoria) como
-// captura-<vista>-<idioma>.<extensión>.
+// dos idiomas, contra un `ui --demo` en vivo, porque Ajustes sobre el sitio estático saldría de solo lectura.
+// Cada una son 1280×720 de interfaz, empezando bajo la banda de la demo (que solo dice en qué carpeta temporal
+// vive, y en la portada es ruido), y se escribe en --salida (obligatoria) como captura-<vista>-<idioma>.<ext>.
 //
 // Uso, después de `npm run build` y con Chromium instalado
 // (PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium):
 //   node scripts/capturas-studio.mjs
 //   node scripts/capturas-studio.mjs --vistas red,tablero,taller,vigia,bitacora --salida <carpeta>
-//   node scripts/capturas-studio.mjs --portada --salida <carpeta> [--idiomas es,en]
+//   node scripts/capturas-studio.mjs --portada --salida <carpeta>
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -43,7 +43,7 @@ const VISTAS = {
 
 // --vistas y --salida. Sin --vistas se captura solo el tablero, como antes de que existieran las opciones.
 const { values: argumentos } = parseArgs({
-  options: { vistas: { type: "string" }, salida: { type: "string" }, portada: { type: "boolean" }, idiomas: { type: "string" } },
+  options: { vistas: { type: "string" }, salida: { type: "string" }, portada: { type: "boolean" } },
   strict: true,
 });
 
@@ -52,8 +52,7 @@ async function capturarPortada() {
   if (!argumentos.salida?.trim()) throw new Error("--portada necesita --salida <carpeta>.");
   if (argumentos.vistas !== undefined) throw new Error("--portada saca siempre la Red, el Tablero y Ajustes: no admite --vistas.");
   const salidaPortada = path.resolve(argumentos.salida);
-  const idiomas = (argumentos.idiomas ?? "es,en").split(",").map((i) => i.trim()).filter(Boolean);
-  for (const i of idiomas) if (i !== "es" && i !== "en") throw new Error(`Idioma desconocido: ${i}. Valores: es, en.`);
+  const idiomas = ["es", "en"];
   const { carpetaDeTextos } = await import(pathToFileURL(path.join(raiz, "build", "studio", "demo.js")).href);
   fs.mkdirSync(salidaPortada, { recursive: true });
   const navegador = await chromium.launch();
@@ -77,8 +76,14 @@ async function capturarPortada() {
           await pagina.goto(`${demo.origen}/#${hash}?lang=${idioma}`);
           await listo(pagina);
           await pagina.evaluate(() => document.fonts.ready);
+          // La banda de la demo dice en qué carpeta temporal se generó, y eso no le dice nada a quien llega a la
+          // portada: la foto empieza justo debajo. La ventana crece lo que mide la banda para que la captura
+          // siga siendo de 1280×720 de interfaz, que es lo que declara la plantilla.
+          const banda = await pagina.evaluate(() => Math.ceil(document.querySelector(".banda-demo")?.getBoundingClientRect().height ?? 0));
+          if (banda > 0) await pagina.setViewportSize({ width: 1280, height: 720 + banda });
+          await listo(pagina);
           const archivo = path.join(salidaPortada, `captura-${vista}-${idioma}.${EXTENSION_DE_LAS_CAPTURAS}`);
-          fs.writeFileSync(archivo, await fotografiar(navegador, pagina));
+          fs.writeFileSync(archivo, await fotografiar(navegador, pagina, { x: 0, y: banda, width: 1280, height: 720 }));
           console.log(`${archivo}: ${fs.statSync(archivo).size} bytes`);
           await pagina.close();
         }
@@ -94,9 +99,8 @@ async function capturarPortada() {
 
 // La foto de la página en el formato de la portada. Chromium solo da PNG y JPEG: el WebP, mucho más chico para una
 // interfaz de colores planos, lo codifica el propio navegador con un canvas, sin ninguna herramienta más.
-async function fotografiar(navegador, pagina) {
-  const png = await pagina.screenshot({ type: "png" });
-  if (EXTENSION_DE_LAS_CAPTURAS === "png") return png;
+async function fotografiar(navegador, pagina, recorte) {
+  const png = await pagina.screenshot({ type: "png", clip: recorte });
   const aparte = await navegador.newPage();
   try {
     const base64 = await aparte.evaluate(async (origen) => {
@@ -119,7 +123,6 @@ if (argumentos.portada) {
   await capturarPortada();
   process.exit(0);
 }
-if (argumentos.idiomas !== undefined) throw new Error("--idiomas solo vale con --portada.");
 const vistas = (argumentos.vistas ?? "tablero").split(",").map((v) => v.trim()).filter(Boolean);
 if (vistas.length === 0) throw new Error("--vistas necesita al menos una vista: red, tablero, taller, vigia, bitacora.");
 for (const vista of vistas) if (!Object.hasOwn(VISTAS, vista)) throw new Error(`Vista desconocida: ${vista}. Valores: ${Object.keys(VISTAS).join(", ")}.`);
