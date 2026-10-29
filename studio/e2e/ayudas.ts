@@ -25,11 +25,16 @@ export const BINARIO = path.join(AQUI, "..", "..", "build", "index.js");
 
 export type Servidor = { origen: string; puerto: number; cookie: { name: string; value: string }; arbol: Arbol; falso: EntornoFalso };
 
-// El entorno del proceso sin lo que diría dónde está el usuario de verdad: eso lo pone entornoFalso.
+// El entorno del proceso sin lo que diría dónde está el usuario de verdad (eso lo pone entornoFalso) ni las
+// variables PHASE_GATE_* y ORQUESTADOR_* de quien lo corre: Ajustes las enseña, y lo que vale en este equipo no
+// tiene que valer en otro.
 function entornoDeUi(arbol: Arbol, falso: EntornoFalso): NodeJS.ProcessEnv {
   const fuera = new Set(["PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME"]);
-  const base = Object.fromEntries(Object.entries(process.env).filter(([clave]) => !fuera.has(clave.toUpperCase())));
-  return { ...base, ...falso.env, ...arbol.env };
+  const base = Object.fromEntries(Object.entries(process.env).filter(([clave]) => !fuera.has(clave.toUpperCase()) && !/^(?:PHASE_GATE_|ORQUESTADOR_)/i.test(clave)));
+  // El .env de la raíz del paquete solo rellena lo que el entorno no define, y una ruta vacía cuenta como no
+  // definida: así el .env de quien corre las pruebas no le da rutas a un Studio que no debe tenerlas.
+  const sinRutas = Object.fromEntries(["DOCS_PATH", "REPOS_PATH", "PROMPTS_PATH"].flatMap((v) => [[`PHASE_GATE_${v}`, ""], [`ORQUESTADOR_${v}`, ""]]));
+  return { ...base, ...sinRutas, ...falso.env, ...arbol.env };
 }
 
 function esperarUrl(hijo: ChildProcess): Promise<string> {
@@ -169,7 +174,7 @@ export async function ponerTema(page: Page, tema: "claro" | "oscuro"): Promise<v
 export const PREFIJO = "/mcp-phase-gate/";
 const TIPOS: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8" };
 
-function servirCarpeta(raiz: string): Promise<{ servidor: http.Server; puerto: number }> {
+export function servirCarpeta(raiz: string): Promise<{ servidor: http.Server; puerto: number }> {
   const servidor = http.createServer((req, res) => {
     const crudo = decodeURIComponent((req.url ?? "/").split("?")[0]!);
     if (crudo === PREFIJO.slice(0, -1)) {

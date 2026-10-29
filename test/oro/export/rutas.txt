@@ -1,3 +1,7 @@
+/api/ajustes
+/api/ajustes/proyectos/ASISTENTE
+/api/ajustes/proyectos/INVESTIGACION
+/api/ajustes/proyectos/TIENDA
 /api/clientes
 /api/estado
 /api/prompts/ASISTENTE/1

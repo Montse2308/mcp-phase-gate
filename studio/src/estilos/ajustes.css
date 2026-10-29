@@ -1,0 +1,185 @@
+/* Ajustes: el menú a la izquierda y la página elegida a la derecha. Por debajo de 760 px el menú pasa a un
+   selector de arriba. Los colores salen de los tokens de cada tema. */
+
+.ajustes-cuerpo {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.menu-ajustes {
+  position: sticky;
+  top: 1rem;
+}
+.menu-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.menu-lista a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-left: 3px solid transparent;
+  border-radius: var(--radio);
+  color: var(--texto);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.menu-lista a:hover {
+  background: var(--superficie-2);
+}
+.menu-lista a[aria-current="page"] {
+  background: var(--acento-suave);
+  border-left-color: var(--acento);
+  font-weight: 600;
+}
+.menu-grupo {
+  display: block;
+  margin: 0.75rem 0.625rem 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+/* El número de cambios sin aplicar de una página: se ve y se lee. */
+.numero-de-cambios {
+  flex: none;
+  min-width: 1.375rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--ambar);
+  color: var(--superficie);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+.menu-selector {
+  display: none;
+}
+
+.ajustes-pagina {
+  min-width: 0;
+}
+.ajustes-pagina h2 {
+  margin-top: 0;
+}
+.formulario-ajustes {
+  display: grid;
+  gap: 1rem;
+  max-width: 46rem;
+}
+.campo-ajuste {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-tarjeta);
+  min-width: 0;
+}
+.campo-ajuste > label:first-child {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+fieldset.campo-ajuste legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+.campo-ajuste p,
+.aviso {
+  overflow-wrap: anywhere;
+}
+.campo-ajuste p {
+  margin: 0.375rem 0;
+}
+/* Un campo con cambios sin aplicar lleva el color de «cambiado» en su borde, además de su marca y su texto. */
+.campo-cambiado {
+  border-left: 4px solid var(--ambar);
+}
+.entrada-ancha {
+  width: 100%;
+}
+.conflicto {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--rojo);
+  border-radius: var(--radio);
+  background: var(--superficie-2);
+}
+.opcion {
+  display: block;
+  margin: 0.25rem 0;
+}
+.pie-ajustes {
+  max-width: 46rem;
+  margin-top: 1rem;
+}
+.estado-de-maquina {
+  margin-bottom: 1rem;
+}
+.env-de-clientes {
+  max-width: 46rem;
+  margin-top: 1.5rem;
+}
+.env-lista {
+  list-style: none;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0;
+}
+.env-lista li {
+  margin: 0.25rem 0;
+  overflow-wrap: anywhere;
+}
+.env-de-cliente h4 {
+  margin: 0.75rem 0 0.25rem;
+}
+.agregar-repo {
+  margin: 0.75rem 0 0;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-tarjeta);
+}
+.agregar-repo label {
+  display: block;
+}
+.agregar-repo input[type="text"] {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+}
+.rotulo-diff {
+  margin: 0.5rem 0 0.125rem;
+  font-weight: 600;
+}
+.pagina-proyecto .tabla td input,
+.pagina-proyecto .tabla th input {
+  width: 100%;
+  min-width: 8rem;
+}
+/* El id de un repo no se parte: es un identificador. En un teléfono, la ficha ya lo pone en su propia línea. */
+.pagina-proyecto .tabla tbody th {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.en-ajustes {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 760px) {
+  .ajustes-cuerpo {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .menu-ajustes {
+    position: static;
+  }
+  .menu-lista {
+    display: none;
+  }
+  .menu-selector {
+    display: block;
+  }
+  .menu-selector select {
+    width: 100%;
+  }
+}

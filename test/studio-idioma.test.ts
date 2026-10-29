@@ -142,21 +142,21 @@ describe("Studio: el idioma de la petición", () => {
     const post = (ruta: string, cuerpo: unknown, idioma: string) => pedir(s.puerto, "POST", ruta, { Cookie: s.cookie, "X-Phase-Gate": "1", "X-Phase-Gate-Lang": idioma }, JSON.stringify(cuerpo));
     const argumentos = { proyecto: "P", preset: "software-tdd" };
 
-    const planEn = await post("/api/acciones/plan", { accion: "preset", argumentos }, "en");
-    const planEs = await post("/api/acciones/plan", { accion: "preset", argumentos }, "es");
+    const planEn = await post("/api/acciones/plan", { accion: "proyecto", argumentos }, "en");
+    const planEs = await post("/api/acciones/plan", { accion: "proyecto", argumentos }, "es");
     assert.equal(planEn.estado, 200, planEn.texto);
-    assert.equal(planEn.json.resumen, 'The preset of P becomes "software-tdd".');
-    assert.equal(planEs.json.resumen, 'El preset de P pasa a ser "software-tdd".');
+    assert.equal(planEn.json.resumen, 'In P (phase-gate.json): preset = "software-tdd".');
+    assert.equal(planEs.json.resumen, 'En P (phase-gate.json): preset = "software-tdd".');
     assert.equal(planEn.json.huella, planEs.json.huella, "la huella no depende del idioma");
 
     // Visto en inglés, aplicado con la interfaz ya en español.
-    const hecho = await post("/api/acciones/aplicar", { accion: "preset", argumentos, huella: planEn.json.huella }, "es");
+    const hecho = await post("/api/acciones/aplicar", { accion: "proyecto", argumentos, huella: planEn.json.huella }, "es");
     assert.equal(hecho.estado, 200, hecho.texto);
-    assert.equal(hecho.json.mensaje, 'P usa ahora el preset "software-tdd".');
+    assert.equal(hecho.json.mensaje, 'P actualizado: preset = "software-tdd".');
     assert.equal(JSON.parse(fs.readFileSync(path.join(docs, "P", "phase-gate.json"), "utf-8")).preset, "software-tdd");
 
     // La huella ya usada: 409, dicho en el idioma de la petición.
-    const otra = await post("/api/acciones/aplicar", { accion: "preset", argumentos, huella: planEn.json.huella }, "en");
+    const otra = await post("/api/acciones/aplicar", { accion: "proyecto", argumentos, huella: planEn.json.huella }, "en");
     assert.equal(otra.estado, 409);
     assert.match(otra.json.error, /^The disk changed since you saw the change\./);
   });

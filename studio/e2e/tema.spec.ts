@@ -211,6 +211,25 @@ test.describe("compararEstructuras", () => {
     expect(compararEstructuras(foto(), mas)).toEqual(["html > body[1] > main#contenido[1]: tiene 2 hijos y 3"]);
   });
 
+  test("el texto suelto de un elemento con hijos se compara, con su sitio: <span><svg/> {texto}</span>", () => {
+    // Un <span> con un hijo y dos tramos de texto suelto: el espacio antes del texto y el texto, tras el hijo.
+    const conTextos = (textos?: string[]): Foto => {
+      const f = foto();
+      principal(f).hijos.push({ etiqueta: "span", atributos: {}, hijos: [n("svg")], ...(textos ? { textos } : {}) });
+      return f;
+    };
+    const base = ["", " Hola"];
+    expect(compararEstructuras(conTextos(base), conTextos([...base]))).toEqual([]);
+    expect(compararEstructuras(conTextos(base), conTextos(["", " Adiós"]))).toEqual(['html > body[1] > main#contenido[1] > span[2]: el texto suelto del final es " Hola" y " Adiós"']);
+    // El mismo texto pero antes del hijo en lugar de después: cambia el orden, y se señalan los dos tramos.
+    expect(compararEstructuras(conTextos(base), conTextos([" Hola", ""]))).toEqual([
+      'html > body[1] > main#contenido[1] > span[2]: el texto suelto antes del hijo 0 es "" y " Hola"',
+      'html > body[1] > main#contenido[1] > span[2]: el texto suelto del final es " Hola" y ""',
+    ]);
+    // Con texto contra sin texto suelto.
+    expect(compararEstructuras(conTextos(base), conTextos())).toEqual(['html > body[1] > main#contenido[1] > span[2]: el texto suelto del final es " Hola" y ""']);
+  });
+
   test("un texto distinto se señala, en el árbol y en el de accesibilidad", () => {
     const otro = foto();
     principal(otro).hijos[1]!.texto = "Adiós";
@@ -269,6 +288,15 @@ test.describe("compararEstructuras", () => {
     const otroPulsado = foto();
     otroPulsado.aria = ARIA.replace('"ES" [pressed]', '"ES"');
     expect(compararEstructuras(foto(), otroPulsado)).toHaveLength(1);
+    // La casilla marcada del selector de tema de Ajustes también se ignora; la de otro grupo, no.
+    const conSelector = (marcada: string): Foto => ({
+      ...foto(),
+      aria: [ARIA, '  - radio "Sistema"', `  - radio "Claro"${marcada === "Claro" ? " [checked]" : ""}`, `  - radio "Oscuro"${marcada === "Oscuro" ? " [checked]" : ""}`, '  - radio "Español" [checked]'].join("\n"),
+    });
+    expect(compararEstructuras(conSelector("Claro"), conSelector("Oscuro"))).toEqual([]);
+    const otroGrupo = conSelector("Claro");
+    otroGrupo.aria = otroGrupo.aria.replace('radio "Español" [checked]', 'radio "Español"');
+    expect(compararEstructuras(conSelector("Claro"), otroGrupo)).toHaveLength(1);
     const botonCambiado = foto();
     barra(botonCambiado).hijos[0]!.atributos["class"] = "interruptor nuevo";
     barra(botonCambiado).hijos[0]!.atributos["title"] = "otro";
@@ -356,14 +384,39 @@ const abrirElRecibo = async (p: Page) => {
 };
 const tallerListo = async (p: Page) => {
   await expect(p.getByRole("list", { name: "Ranuras" }).getByRole("listitem").first()).toBeVisible();
-  await expect(p.getByText("Política de commits")).toBeVisible();
+  await expect(p.getByRole("link", { name: "Cambiar en Ajustes" })).toBeVisible();
   // El selector de proyectos se llena cuando llega la lista de proyectos, después del resto de la vista.
   await expect(p.locator("#taller-proyecto option")).not.toHaveCount(0);
 };
 const vigiaListo = async (p: Page) => {
   await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
+  await expect(p.getByRole("link", { name: "Abrir Ajustes" })).toBeVisible();
+};
+const ajustesEquipoListo = async (p: Page) => {
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
+  await expect(p.getByRole("heading", { level: 2, name: "Este equipo" })).toBeVisible();
+  await expect(p.getByLabel("Carpeta de la Documentación")).toBeVisible();
+  await expect(p.getByRole("region", { name: "Lo que dicen los clientes en su env" })).toBeVisible();
+  await expect(p.getByText("Servidores abiertos")).toBeVisible();
+};
+const ajustesProyectoListo = async (p: Page) => {
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
+  await expect(p.getByRole("heading", { level: 2, name: "Proyecto TIENDA" })).toBeVisible();
+  await expect(p.getByRole("table", { name: "Repos del proyecto" }).getByRole("row")).toHaveCount(4);
+};
+const ajustesClientesListo = async (p: Page) => {
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
   await expect(p.getByRole("article", { name: "Cursor" })).toBeVisible();
-  await expect(p.getByRole("table", { name: "Variables de entorno" })).toBeVisible();
+  await expect(p.getByRole("article", { name: "Claude Code" })).toBeVisible();
+};
+const ajustesAvanzadoListo = async (p: Page) => {
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
+  await expect(p.getByRole("table", { name: "Variables avanzadas" }).getByRole("row")).toHaveCount(6);
+};
+const ajustesStudioListo = async (p: Page) => {
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
+  await expect(p.getByRole("group", { name: "Tema" })).toBeVisible();
+  await expect(p.getByRole("group", { name: "Idioma de la interfaz" })).toBeVisible();
 };
 const bitacoraLista = async (p: Page) => {
   await expect(p.getByRole("list", { name: "Eventos de la tarea" }).getByRole("listitem").first()).toBeVisible();
@@ -384,20 +437,6 @@ const VIVAS: Escenario[] = [
       await expect(p.getByRole("article", { name: "ROTO" }).locator(".detalle-error")).toBeVisible();
     },
   })),
-  {
-    nombre: "la Red con la vista previa de cambiar el preset abierta",
-    hash: "#/red",
-    ancho: 1280,
-    contiene: "Vista previa: Cambiar el preset",
-    listo: redLista,
-    despues: async (p) => {
-      const tienda = p.getByRole("article", { name: "TIENDA" });
-      await botonDeFila(p, "TIENDA").click();
-      await tienda.getByLabel("Preset", { exact: true }).selectOption("software");
-      await tienda.getByRole("button", { name: "Cambiar el preset: vista previa" }).click();
-      await expect(tienda.getByRole("region", { name: "Vista previa: Cambiar el preset" }).locator(".diff-mas").first()).toBeVisible();
-    },
-  },
   {
     nombre: "la Red cuando la API falla",
     hash: "#/red",
@@ -440,18 +479,46 @@ const VIVAS: Escenario[] = [
     },
   },
   ...ANCHOS.map((ancho) => ({ nombre: `el Vigía a ${ancho} px`, hash: "#/vigia", ancho, contiene: "Diagnóstico", listo: vigiaListo })),
+  ...ANCHOS.map((ancho) => ({ nombre: `Ajustes, Este equipo, a ${ancho} px`, hash: "#/ajustes/equipo", ancho, contiene: "Este equipo", listo: ajustesEquipoListo })),
+  ...ANCHOS.map((ancho) => ({ nombre: `Ajustes, un proyecto, a ${ancho} px`, hash: "#/ajustes/proyecto/TIENDA", ancho, contiene: "Proyecto TIENDA", listo: ajustesProyectoListo })),
   {
-    nombre: "el Vigía con la vista previa de configurar un cliente abierta",
-    hash: "#/vigia",
+    nombre: "Ajustes, un proyecto, con un cambio y la vista previa abiertos",
+    hash: "#/ajustes/proyecto/TIENDA",
+    ancho: 1280,
+    contiene: "Vista previa: Guardar los cambios",
+    listo: ajustesProyectoListo,
+    despues: async (p) => {
+      await p.getByLabel("Preset", { exact: true }).selectOption("software");
+      await expect(p.locator(".indicador.ajustes-cambiado")).toHaveCount(1);
+      await p.getByRole("button", { name: "Guardar los cambios: vista previa" }).click();
+      await expect(p.getByRole("region", { name: "Vista previa: Guardar los cambios" }).locator(".diff-mas").first()).toBeVisible();
+    },
+  },
+  {
+    nombre: "Ajustes, un proyecto sin phase-gate.json",
+    hash: "#/ajustes/proyecto/NUEVO",
+    ancho: 1280,
+    contiene: "Este proyecto no tiene phase-gate.json todavía.",
+    listo: async (p) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
+      await expect(p.getByRole("button", { name: "Crear phase-gate.json: vista previa" })).toBeVisible();
+    },
+  },
+  ...ANCHOS.map((ancho) => ({ nombre: `Ajustes, Clientes MCP, a ${ancho} px`, hash: "#/ajustes/clientes", ancho, contiene: "Clientes MCP", listo: ajustesClientesListo })),
+  {
+    nombre: "Ajustes, Clientes MCP, con la vista previa de configurar un cliente abierta",
+    hash: "#/ajustes/clientes",
     ancho: 1280,
     contiene: "Vista previa: Configurar Cursor",
-    listo: vigiaListo,
+    listo: ajustesClientesListo,
     despues: async (p) => {
       const cursor = p.getByRole("article", { name: "Cursor" });
       await cursor.getByRole("button", { name: "Configurar Cursor: vista previa" }).click();
       await expect(cursor.getByRole("region", { name: "Vista previa: Configurar Cursor" })).toBeVisible();
     },
   },
+  ...ANCHOS.map((ancho) => ({ nombre: `Ajustes, Studio, a ${ancho} px`, hash: "#/ajustes/studio", ancho, contiene: "Idioma de la interfaz", listo: ajustesStudioListo })),
+  ...ANCHOS.map((ancho) => ({ nombre: `Ajustes, Avanzado, a ${ancho} px`, hash: "#/ajustes/avanzado", ancho, contiene: "Variables avanzadas", listo: ajustesAvanzadoListo })),
   ...ANCHOS.map((ancho) => ({ nombre: `la Bitácora a ${ancho} px`, hash: "#/bitacora/TIENDA/cerrada", ancho, contiene: "Bitácora de cerrada", listo: bitacoraLista })),
 ];
 
@@ -500,7 +567,29 @@ const ESTATICAS: Escenario[] = [
     ancho,
     contiene: "Diagnóstico",
     listo: async (p: Page) => {
+      // El enlace a Ajustes se pinta antes que los datos: se espera también al diagnóstico.
+      await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
+      await expect(p.getByRole("link", { name: "Abrir Ajustes" })).toBeVisible();
+    },
+  })),
+  ...ANCHOS.map((ancho) => ({
+    nombre: `Ajustes, un proyecto, a ${ancho} px`,
+    hash: "#/ajustes/proyecto/TIENDA",
+    ancho,
+    contiene: "Proyecto TIENDA",
+    listo: async (p: Page) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/ASISTENTE"], option[value="#/ajustes/proyecto/ASISTENTE"]')).toHaveCount(2);
       await expect(p.getByText("En la demo publicada todo es de solo lectura.").first()).toBeVisible();
+    },
+  })),
+  ...ANCHOS.map((ancho) => ({
+    nombre: `Ajustes, Este equipo, a ${ancho} px`,
+    hash: "#/ajustes/equipo",
+    ancho,
+    contiene: "Este equipo",
+    listo: async (p: Page) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/ASISTENTE"], option[value="#/ajustes/proyecto/ASISTENTE"]')).toHaveCount(2);
+      await expect(p.getByText("Ahora se usa <Documentación>, de entorno.")).toBeVisible();
     },
   })),
   ...ANCHOS.map((ancho) => ({

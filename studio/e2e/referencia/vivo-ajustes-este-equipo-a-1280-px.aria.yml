@@ -1,0 +1,107 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - list:
+        - listitem:
+          - link "Este equipo":
+            - /url: "#/ajustes/equipo"
+        - listitem:
+          - text: Proyectos
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "NUEVO":
+            - /url: "#/ajustes/proyecto/NUEVO"
+        - listitem:
+          - link "ROTO":
+            - /url: "#/ajustes/proyecto/ROTO"
+        - listitem:
+          - link "TALLER":
+            - /url: "#/ajustes/proyecto/TALLER"
+        - listitem:
+          - link "TIENDA":
+            - /url: "#/ajustes/proyecto/TIENDA"
+        - listitem:
+          - link "Clientes MCP":
+            - /url: "#/ajustes/clientes"
+        - listitem:
+          - link "Studio":
+            - /url: "#/ajustes/studio"
+        - listitem:
+          - link "Avanzado":
+            - /url: "#/ajustes/avanzado"
+    - heading "Este equipo" [level=2]
+    - paragraph: Dónde están tu Documentación y tus repos en esta computadora, y los valores por defecto. Se guardan en machine.json, que leen igual el servidor de cada cliente y este Studio.
+    - paragraph: sin machine.json todavía
+    - text: Carpeta de la Documentación
+    - textbox "Carpeta de la Documentación"
+    - paragraph: Ahora se usa <raiz>/docs, de entorno.
+    - paragraph:
+      - text: Tu entorno define <raiz>/docs, y machine.json no lo tiene.
+      - button "Guardarlo en machine.json"
+    - text: Carpeta de los repos
+    - textbox "Carpeta de los repos"
+    - paragraph: Ahora se usa <raiz>/repos, de entorno.
+    - paragraph:
+      - text: Tu entorno define <raiz>/repos, y machine.json no lo tiene.
+      - button "Guardarlo en machine.json"
+    - text: Subcarpeta de las tareas
+    - textbox "Subcarpeta de las tareas"
+    - paragraph: Ahora se usa Proyectos, el valor por defecto.
+    - paragraph:
+      - 'checkbox "Sin subcarpeta: las tareas cuelgan directo del proyecto"'
+      - text: "Sin subcarpeta: las tareas cuelgan directo del proyecto"
+    - text: Idioma por defecto del equipo
+    - combobox "Idioma por defecto del equipo":
+      - option "(sin elegir)" [selected]
+      - option "Español"
+      - option "English"
+    - paragraph: Ahora se usa Español, de entorno.
+    - text: Preset para los proyectos sin phase-gate.json
+    - combobox "Preset para los proyectos sin phase-gate.json":
+      - option "(sin elegir)" [selected]
+      - option "ai-agent-ops"
+      - option "multi-repo-feature"
+      - option "research-ops"
+      - option "software"
+      - option "software-replica"
+      - option "software-tdd"
+    - 'button "Guardar los cambios: vista previa" [disabled]'
+    - region "Lo que dicen los clientes en su env":
+      - heading "Lo que dicen los clientes en su env" [level=3]
+      - paragraph: Un valor en el env de un cliente gana a machine.json, aunque cambies Ajustes. Quitarlo deja una vista previa, y nada se escribe sin ella.
+      - paragraph: Ningún cliente tiene rutas ni idioma en su env.
+    - region "Servidores abiertos":
+      - heading "Servidores abiertos" [level=3]
+      - paragraph: "Un servidor abierto conserva lo que recibió al arrancar: para que use lo nuevo, reinicia ese cliente."
+      - list:
+        - listitem: "cliente-e2e 1.0: es un servidor 3.x y no dice sus rutas"

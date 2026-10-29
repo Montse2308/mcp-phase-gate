@@ -1,3 +1,7 @@
+/api/ajustes
+/api/ajustes/proyectos/ASSISTANT
+/api/ajustes/proyectos/RESEARCH
+/api/ajustes/proyectos/SHOP
 /api/clientes
 /api/estado
 /api/prompts/ASSISTANT/1

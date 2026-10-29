@@ -1,7 +1,7 @@
 // La Red en Chromium real: una fila por proyecto, en una lista que se despliega, con la misma estructura en
 // los dos temas. Plegada dice el nombre, el preset (con el aviso de un manifiesto inválido o de un error de
 // configuración), el git y el rol de cada repo, la tarea activa y la sesión; desplegada, además, el
-// manifiesto, las reglas y las acciones.
+// manifiesto, las reglas y el enlace a Ajustes, donde se cambia todo eso.
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
@@ -48,7 +48,7 @@ test("plegada: cada fila dice el nombre, el preset, el git y el rol de cada repo
   await expect(tienda.locator(".campo-sesion svg.marca-lleno")).toHaveCount(1);
   // Lo de la fila desplegada no se ve.
   await expect(tienda.locator(".campo-manifiesto")).toBeHidden();
-  await expect(tienda.getByRole("button", { name: "Cambiar el preset: vista previa" })).toBeHidden();
+  await expect(tienda.getByRole("link", { name: "Cambiar en Ajustes" })).toBeHidden();
   await expect(tienda.locator(".alerta-proyecto")).toHaveCount(0);
 
   const investigacion = fila(page, "INVESTIGACION");
@@ -69,7 +69,7 @@ test("plegada: cada fila dice el nombre, el preset, el git y el rol de cada repo
   test.info().annotations.push({ type: "peticiones", description: `${registro.peticiones.length}: ${registro.peticiones.map((u) => new URL(u).pathname).join(" ")}` });
 });
 
-test("desplegada: el manifiesto con su forma y su error, las reglas, el rol de cada repo y las acciones", async ({ page, servidor }) => {
+test("desplegada: el manifiesto con su forma y su error, las reglas, el rol de cada repo y el enlace a Ajustes", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/red`);
   const datos: { proyectos: { nombre: string; reglas: { lotes: boolean; commits: string } | null }[] } = await page.evaluate(() => fetch("./api/proyectos").then((r) => r.json()));
   const reglas = datos.proyectos.find((p) => p.nombre === "TIENDA")!.reglas!;
@@ -81,8 +81,10 @@ test("desplegada: el manifiesto con su forma y su error, las reglas, el rol de c
   await expect(tienda.locator(".campo-manifiesto svg.marca-lleno")).toHaveCount(1);
   await expect(tienda.locator(".campo-reglas dd")).toHaveText(`Lotes: ${reglas.lotes ? "sí" : "no"} · Commits: ${reglas.commits}`);
   await expect(tienda.getByRole("listitem").filter({ hasText: "api" })).toHaveText("api (backend) · rama main · árbol limpio");
-  await expect(tienda.getByLabel("Preset", { exact: true })).toBeVisible();
-  await expect(tienda.getByRole("button", { name: "Cambiar el preset: vista previa" })).toBeVisible();
+  // El preset y el manifiesto ya no se cambian aquí: el enlace lleva a la página del proyecto en Ajustes.
+  await expect(tienda.getByRole("link", { name: "Cambiar en Ajustes" })).toHaveAttribute("href", "#/ajustes/proyecto/TIENDA");
+  await expect(tienda.getByLabel("Preset", { exact: true })).toHaveCount(0);
+  await expect(tienda.getByRole("button", { name: /vista previa/ })).toHaveCount(0);
   await expect(desplegar(page, "ROTO")).toHaveAttribute("aria-expanded", "false");
 
   const roto = fila(page, "ROTO");
@@ -90,13 +92,16 @@ test("desplegada: el manifiesto con su forma y su error, las reglas, el rol de c
   await expect(roto.locator(".campo-manifiesto dd")).toContainText("phase-gate.json inválido");
   await expect(roto.locator(".campo-manifiesto svg.marca-rombo")).toHaveCount(1);
   await expect(roto.locator(".detalle-error")).toContainText("no es un JSON válido");
-  await expect(roto.getByRole("combobox")).toHaveCount(0); // con el manifiesto inválido no hay acciones
+  await expect(roto.getByRole("combobox")).toHaveCount(0); // la Red no cambia nada: ni selectores ni botones
+  await expect(roto.getByRole("link", { name: "Cambiar en Ajustes" })).toHaveAttribute("href", "#/ajustes/proyecto/ROTO");
 
   const investigacion = fila(page, "INVESTIGACION");
   await desplegar(page, "INVESTIGACION").click();
   await expect(investigacion.locator(".campo-manifiesto dd")).toHaveText("sin phase-gate.json");
   await expect(investigacion.locator(".campo-manifiesto svg.marca-vacio")).toHaveCount(1);
-  await expect(investigacion.getByRole("button", { name: "Crear phase-gate.json: vista previa" })).toBeVisible();
+  // Crear el phase-gate.json ya no se hace aquí: el enlace lleva a la página del proyecto, que lo ofrece.
+  await expect(investigacion.getByRole("button", { name: /vista previa/ })).toHaveCount(0);
+  await expect(investigacion.getByRole("link", { name: "Cambiar en Ajustes" })).toHaveAttribute("href", "#/ajustes/proyecto/INVESTIGACION");
   await ningunEstadoSoloColor(page);
   await sinViolacionesGraves(page, "la Red con filas desplegadas");
 
@@ -189,7 +194,7 @@ test("dos proyectos cuyo nombre solo difiere en un espacio o un acento: cada fil
     await desplegar(page, nombre).click();
     const controla = await desplegar(page, nombre).getAttribute("aria-controls");
     await expect(fila(page, nombre).locator(`[id="${controla}"]`), nombre).toBeVisible();
-    await expect(fila(page, nombre).getByLabel("Preset", { exact: true }), nombre).toBeVisible();
+    await expect(fila(page, nombre).getByRole("link", { name: "Cambiar en Ajustes" }), nombre).toBeVisible();
   }
 });
 
@@ -282,10 +287,10 @@ test("con el teclado: saltar al contenido, desplegar y plegar una fila con Enter
   await page.keyboard.press("Enter");
   await expect(boton).toHaveAttribute("aria-expanded", "true");
   await expect(manifiesto).toBeVisible();
-  // Desplegada, después del enlace de la tarea vienen las acciones del detalle.
+  // Desplegada, después del enlace de la tarea viene el enlace a Ajustes, al final del detalle.
   await abrir.focus();
   await page.keyboard.press("Tab");
-  await expect(investigacion.getByLabel("Preset del phase-gate.json nuevo")).toBeFocused();
+  await expect(investigacion.getByRole("link", { name: "Cambiar en Ajustes" })).toBeFocused();
   await boton.focus();
   await page.keyboard.press("Space");
   await expect(boton).toHaveAttribute("aria-expanded", "false");
@@ -298,22 +303,6 @@ test("con el teclado: saltar al contenido, desplegar y plegar una fila con Enter
   await abrir.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#\/tablero\/INVESTIGACION\/costos$/);
-});
-
-test("la acción de preset, desde la fila desplegada: su vista previa con el diff, y Cancelar no escribe nada", async ({ page, servidor }) => {
-  const archivo = path.join(servidor.arbol.docs, "TIENDA", "phase-gate.json");
-  const antes = fs.readFileSync(archivo, "utf-8");
-  await page.goto(`${servidor.origen}/#/red`);
-  const tienda = fila(page, "TIENDA");
-  await desplegar(page, "TIENDA").click();
-  await tienda.getByLabel("Preset", { exact: true }).selectOption("software");
-  await tienda.getByRole("button", { name: "Cambiar el preset: vista previa" }).click();
-  const previa = tienda.getByRole("region", { name: "Vista previa: Cambiar el preset" });
-  await expect(previa.locator(".diff-menos").filter({ hasText: '"preset": "multi-repo-feature"' })).toHaveCount(1);
-  await expect(previa.locator(".diff-mas").filter({ hasText: '"preset": "software"' })).toHaveCount(1);
-  await previa.getByRole("button", { name: "Cancelar" }).click();
-  await expect(previa).toHaveCount(0);
-  expect(fs.readFileSync(archivo, "utf-8")).toBe(antes);
 });
 
 test("en vivo: una sesión que se abre se ve en su fila sin recargar, y la fila desplegada no se pliega", async ({ page, servidor }) => {

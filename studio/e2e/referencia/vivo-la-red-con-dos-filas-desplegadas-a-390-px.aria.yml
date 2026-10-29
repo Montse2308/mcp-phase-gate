@@ -19,6 +19,9 @@
       - listitem:
         - link "Bitácora":
           - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
   - button "Tema oscuro"
   - group "Idioma":
     - button "ES" [pressed]
@@ -88,6 +91,9 @@
           - definition:
             - paragraph: phase-gate.json inválido
             - paragraph: "phase-gate.json de ROTO no es válido (<Documentación>/ROTO/phase-gate.json): no es un JSON válido (Expected property name or '}' in JSON at position 2 (line 1 column 3))."
+          - paragraph:
+            - link "Cambiar en Ajustes":
+              - /url: "#/ajustes/proyecto/ROTO"
       - listitem:
         - article "TALLER":
           - heading "TALLER" [level=2]:
@@ -141,12 +147,6 @@
             - paragraph: phase-gate.json válido
           - term: Reglas
           - definition: "Lotes: sí · Commits: agente-commitea-con-OK"
-          - text: Preset
-          - combobox "Preset":
-            - option "ai-agent-ops"
-            - option "multi-repo-feature" [selected]
-            - option "research-ops"
-            - option "software"
-            - option "software-replica"
-            - option "software-tdd"
-          - 'button "Cambiar el preset: vista previa" [disabled]'
+          - paragraph:
+            - link "Cambiar en Ajustes":
+              - /url: "#/ajustes/proyecto/TIENDA"

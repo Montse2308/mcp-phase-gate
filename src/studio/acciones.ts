@@ -12,11 +12,10 @@
 //   crear-manifiesto  init --migrate para un proyecto: crea phase-gate.json (solo crea)
 //   eject             mcp-phase-gate eject <objetivo> --a … (capa global, del proyecto o carpeta de presets)
 //   init-cliente      mcp-phase-gate init --cliente <c>: el mcp.json de Cursor o VS Code, o `claude mcp add`
-//   preset            the "preset" of <DOCS>/<P>/phase-gate.json (to be retired: `proyecto` covers it)
-//   reglas            "reglas.lotes" or "reglas.commits" of the same file (to be retired: `proyecto` covers it)
 //
-// `equipo` and `proyecto` have no CLI command, as `preset` and `reglas` did not either; what this module
-// protects stays: closed destinations per action, a single validation shape and the fingerprint.
+// `equipo` and `proyecto` have no CLI command (nor did the `preset` and `reglas` actions they replaced, which
+// `proyecto` covers); what this module protects stays: closed destinations per action, a single validation shape
+// and the fingerprint.
 //
 // Cada acción calcula su plan con la MISMA función que el CLI (planDeEject, planDeArchivo, planDeClaude,
 // manifiestoNuevo). Nunca escribe documentos de tareas, recibos ni nada de los repos: cada destino se
@@ -43,12 +42,11 @@ import { mensaje } from "../i18n/mensajes.js";
 import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, carpetaDelCliente, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
 import type { EntornoInit, QuitaDelEntorno, RutaDistinta } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
-import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, presetsDisponibles, rutaManifiesto, rutaMaquina } from "../manifiesto.js";
+import { carpetaPresetsDelUsuario, idiomaDelEquipo, presetsDisponibles, rutaManifiesto, rutaMaquina } from "../manifiesto.js";
 import { estaDentroReal, requireProjectFolder, rutaReal, ubicarEnTarea, validarSegmento } from "../paths.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 
-// preset and reglas stay while the interface uses them; `proyecto` already covers them.
-export const ACCIONES = ["preset", "reglas", "crear-manifiesto", "eject", "init-cliente", "equipo", "proyecto"] as const;
+export const ACCIONES = ["crear-manifiesto", "eject", "init-cliente", "equipo", "proyecto"] as const;
 export type Accion = (typeof ACCIONES)[number];
 
 // El 409 de una huella que ya no vale. Sale en el idioma de la petición; la constante es el texto en
@@ -61,11 +59,6 @@ const CANDADO = ".studio-acciones.lock";
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const Proyecto = z.string().min(1).max(200);
 const ARGUMENTOS = {
-  preset: z.object({ proyecto: Proyecto, preset: z.string().regex(ID) }).strict(),
-  reglas: z
-    .object({ proyecto: Proyecto, lotes: z.boolean().optional(), commits: z.enum(POLITICAS_COMMIT).optional() })
-    .strict()
-    .refine((a) => a.lotes !== undefined || a.commits !== undefined, "indica `lotes` o `commits`"),
   "crear-manifiesto": z.object({ proyecto: Proyecto, preset: z.string().regex(ID).optional() }).strict(),
   eject: z.object({ objetivo: z.string().min(1).max(120), destino: z.string().min(1).max(260), fuerza: z.boolean().optional() }).strict(),
   // quitarIdioma: also removes PHASE_GATE_LANG from the client's env (the warning that the env wins over machine.json's language).
@@ -116,7 +109,6 @@ export type ContextoDeAcciones = {
   escribir?: (ruta: string, contenido: string) => void;
 };
 
-const json2 = (valor: unknown): string => `${JSON.stringify(valor, null, 2)}\n`;
 const leerCrudo = (ruta: string): string | null => {
   try {
     return fs.readFileSync(ruta, "utf-8");
@@ -125,64 +117,6 @@ const leerCrudo = (ruta: string): string | null => {
   }
 };
 const sinBom = (texto: string): string => texto.replace(/^\uFEFF/, "");
-
-// El manifiesto de un proyecto, como objeto, conservando el orden de sus claves (JSON.parse lo conserva).
-function manifiestoComoObjeto(proyecto: string): { ruta: string; crudo: string; objeto: Record<string, unknown> } | { motivo: string } {
-  const lectura = leerManifiesto(proyecto);
-  if (lectura.estado === "ausente") return { motivo: mensaje("STUDIO-SIN-MANIFIESTO", { proyecto }) };
-  if (lectura.estado === "invalido") return { motivo: mensaje("STUDIO-MANIFIESTO-A-MANO", { error: sinRutasDelEquipo(lectura.error) }) };
-  const crudo = leerCrudo(lectura.ruta) ?? "";
-  return { ruta: lectura.ruta, crudo, objeto: JSON.parse(sinBom(crudo)) as Record<string, unknown> };
-}
-
-// El manifiesto después del cambio tiene que seguir siendo válido, con el mismo shape que lo lee.
-function validarManifiesto(texto: string): string | null {
-  const leido = Manifiesto.safeParse(JSON.parse(texto));
-  return leido.success ? null : leido.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-}
-
-function planDePreset(a: z.infer<(typeof ARGUMENTOS)["preset"]>): Plan {
-  const proyecto = proyectoDe(a.proyecto);
-  const m = manifiestoComoObjeto(proyecto);
-  if ("motivo" in m) return { posible: false, motivo: m.motivo };
-  const presets = presetsDisponibles(idiomaDelProyecto(proyecto).idioma);
-  if (!presets.has(a.preset)) return { posible: false, motivo: mensaje("STUDIO-PRESET-NO-EXISTE", { preset: a.preset, disponibles: [...presets.keys()].sort() }) };
-  if (m.objeto.preset === a.preset) return { posible: false, motivo: mensaje("STUDIO-PRESET-YA-EN-USO", { proyecto, preset: a.preset }) };
-  // Asignar sobre la clave que ya existe la deja en su sitio; si no estaba, va al final.
-  m.objeto.preset = a.preset;
-  const despues = json2(m.objeto);
-  const error = validarManifiesto(despues);
-  if (error) return { posible: false, motivo: mensaje("STUDIO-MANIFIESTO-NO-VALDRIA", { error }) };
-  return {
-    posible: true,
-    interno: { accion: "preset", proyecto, resumen: mensaje("STUDIO-PRESET-RESUMEN", { proyecto, preset: a.preset }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-PRESET-HECHO", { proyecto, preset: a.preset }) },
-  };
-}
-
-function planDeReglas(a: z.infer<(typeof ARGUMENTOS)["reglas"]>): Plan {
-  const proyecto = proyectoDe(a.proyecto);
-  const m = manifiestoComoObjeto(proyecto);
-  if ("motivo" in m) return { posible: false, motivo: m.motivo };
-  const reglas = (m.objeto.reglas && typeof m.objeto.reglas === "object" ? m.objeto.reglas : {}) as Record<string, unknown>;
-  const cambios: string[] = [];
-  if (a.lotes !== undefined && reglas.lotes !== a.lotes) {
-    reglas.lotes = a.lotes;
-    cambios.push(mensaje("STUDIO-REGLA-LOTES", { lotes: a.lotes }));
-  }
-  if (a.commits !== undefined && reglas.commits !== a.commits) {
-    reglas.commits = a.commits;
-    cambios.push(`commits: ${a.commits}`);
-  }
-  if (!cambios.length) return { posible: false, motivo: mensaje("STUDIO-REGLAS-IGUALES", { proyecto }) };
-  m.objeto.reglas = reglas;
-  const despues = json2(m.objeto);
-  const error = validarManifiesto(despues);
-  if (error) return { posible: false, motivo: mensaje("STUDIO-MANIFIESTO-NO-VALDRIA", { error }) };
-  return {
-    posible: true,
-    interno: { accion: "reglas", proyecto, resumen: mensaje("STUDIO-REGLAS-RESUMEN", { proyecto, cambios: cambios.join(", ") }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-REGLAS-HECHO", { proyecto, cambios: cambios.join(", ") }) },
-  };
-}
 
 function planDeCrear(a: z.infer<(typeof ARGUMENTOS)["crear-manifiesto"]>): Plan {
   const proyecto = proyectoDe(a.proyecto);
@@ -373,10 +307,6 @@ async function planificar(accion: Accion, crudo: unknown, ctx: ContextoDeAccione
       const proyecto = proyectoDe(nombre);
       return planDeAjustes("proyecto", proyecto, () => planDeProyecto(proyecto, cambios));
     }
-    case "preset":
-      return planDePreset(argumentosDe("preset", crudo));
-    case "reglas":
-      return planDeReglas(argumentosDe("reglas", crudo));
     case "crear-manifiesto":
       return planDeCrear(argumentosDe("crear-manifiesto", crudo));
     case "eject":
@@ -535,8 +465,6 @@ export function comprobarLista(plan: PlanInterno, e: Escritura, ctx: ContextoDeA
       for (const clave of tocadas.repos) if (proyectoDeClave(clave) !== plan.proyecto.toLowerCase()) claveNoPermitida(`repos.${clave}`);
       return;
     }
-    case "preset":
-    case "reglas":
     case "crear-manifiesto":
       if (!esManifiestoDelProyecto()) noEscribe();
       return;

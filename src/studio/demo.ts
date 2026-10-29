@@ -118,8 +118,10 @@ async function conEntorno<T>(env: Record<string, string>, hacer: () => Promise<T
 // cada commit que guarda el recibo) usan, como los commits, la marca como configuración global y ninguna del
 // sistema: un i18n.commitEncoding de quien la genera cambiaría la codificación del asunto, y con ella los
 // bytes de los recibos.
-export function conEntornoDeDemo<T>(c: CarpetasDeDemo, hacer: () => Promise<T>): Promise<T> {
-  return conEntorno({ ...entornoDeDemo(c), GIT_CONFIG_GLOBAL: path.join(c.raiz, MARCA_DE_DEMO), GIT_CONFIG_NOSYSTEM: "1" }, hacer);
+// `extra`: more variables for that reading; the export sets PHASE_GATE_LANG so that the language Ajustes says it
+// uses is the one of the data set and not the one of the system of whoever exports.
+export function conEntornoDeDemo<T>(c: CarpetasDeDemo, hacer: () => Promise<T>, extra: Record<string, string> = {}): Promise<T> {
+  return conEntorno({ ...entornoDeDemo(c), GIT_CONFIG_GLOBAL: path.join(c.raiz, MARCA_DE_DEMO), GIT_CONFIG_NOSYSTEM: "1", ...extra }, hacer);
 }
 
 function escribir(ruta: string, texto: string, fecha: Date): void {

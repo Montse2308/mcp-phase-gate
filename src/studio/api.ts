@@ -55,7 +55,7 @@ import type {
   TareasRespuesta,
 } from "./contrato.js";
 import { ErrorDeAccion, crearAcciones } from "./acciones.js";
-import { ajustesDeEsteEquipo } from "./ajustes.js";
+import { ajustesDeEsteEquipo, ajustesDeProyecto } from "./ajustes.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
@@ -663,6 +663,7 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     { patron: /^\/prompts\/([^/]+)\/([^/]+)$/, atender: (m, p) => prompt(m[1]!, m[2]!, p.consulta) },
     { patron: /^\/clientes$/, atender: async (): Promise<ClientesRespuesta> => ({ clientes: await planesDeClientes(ctx.entornoInit()) }) },
     { patron: /^\/ajustes$/, atender: (): AjustesRespuesta => ajustesDeEsteEquipo({ entornoInit: ctx.entornoInit, sesiones: ctx.sesiones }) },
+    { patron: /^\/ajustes\/proyectos\/([^/]+)$/, atender: (m) => ajustesDeProyecto(proyectoDe(m[1]!)) },
   ];
 
   const acciones = crearAcciones({ entornoInit: ctx.entornoInit });

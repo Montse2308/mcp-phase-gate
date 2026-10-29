@@ -20,6 +20,9 @@
       - listitem:
         - link "Bitácora":
           - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
   - button "Tema oscuro"
   - group "Idioma":
     - button "ES" [pressed]
@@ -119,13 +122,6 @@
         - strong: multi-repo-feature
         - text: (del proyecto)
       - paragraph:
-        - checkbox "Lotes" [checked]
-        - text: Lotes Política de commits
-        - combobox "Política de commits":
-          - option "agente-commitea-con-OK" [selected]
-          - option "agente-propone"
-          - option "auto"
-          - option "ninguno"
-      - paragraph:
-        - button "Cambiar las reglas" [disabled]
-        - text: En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.
+        - text: "Lotes: sí · Commits: agente-commitea-con-OK ·"
+        - link "Cambiar en Ajustes":
+          - /url: "#/ajustes/proyecto/TIENDA"

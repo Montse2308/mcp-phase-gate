@@ -233,7 +233,7 @@ export const CampoAjustes = z.object({
   variable: z.string(), // la variable de entorno que lo pisaría
   enMaquina: z.string().nullable(), // lo que dice machine.json
   efectivo: z.string().nullable(), // lo que vale ahora en este Studio
-  fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "sin definir"]),
+  fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "por defecto", "sin definir"]),
   // This same Studio, through its environment or its .env, uses another value than machine.json: the first warning.
   propioStudioPisa: z.boolean(),
   // Its environment or its .env say something machine.json does not have: it can be saved there.
@@ -289,11 +289,37 @@ export const AjustesRespuesta = z.object({
     // With the file broken, this process goes on with the last valid one it read.
     deMemoria: z.boolean(),
     version: z.number().int().nullable(),
+    // The preset for projects without a manifest, as machine.json says it (null: it does not say).
+    presetPorDefecto: z.string().nullable(),
   }),
   campos: z.array(CampoAjustes),
   clientes: z.array(ClienteAjustes),
   sesiones: z.array(SesionDeAjustes),
   avanzadas: z.array(AvanzadaApi),
+});
+
+// ─── /api/ajustes/proyectos/:p ──────────────────────────────────────────────
+// What the "cada proyecto" page edits: what phase-gate.json says (null: the key is not there and the preset
+// or the team decides), what really applies, and the own path of each repo in this machine's machine.json.
+export const AjustesDeProyecto = z.object({
+  proyecto: z.string(),
+  manifiesto: z.object({ estado: z.enum(["valido", "ausente", "invalido"]), error: z.string().nullable() }),
+  archivo: z
+    .object({
+      preset: z.string().nullable(),
+      idioma: z.enum(["es", "en"]).nullable(),
+      lotes: z.boolean().nullable(),
+      commits: z.string().nullable(),
+      verificacion: z.array(z.string()).nullable(),
+      prPorRepo: z.boolean().nullable(),
+      repos: z.array(z.object({ id: z.string(), dir: z.string(), rol: z.string().nullable() })),
+    })
+    .nullable(),
+  // delPreset: what the preset alone decides, without the file: what applies if the key is removed.
+  efectivo: z
+    .object({ preset: z.string(), origenDelPreset: z.string(), lotes: z.boolean(), commits: z.string(), delPreset: z.object({ lotes: z.boolean(), commits: z.string() }) })
+    .nullable(),
+  rutasPropias: z.record(z.string(), z.string()),
 });
 
 // ─── Acciones (§7.6) ────────────────────────────────────────────────────────
@@ -341,5 +367,6 @@ export type ClienteAjustes = z.infer<typeof ClienteAjustes>;
 export type SesionDeAjustes = z.infer<typeof SesionDeAjustes>;
 export type AvanzadaApi = z.infer<typeof AvanzadaApi>;
 export type AjustesRespuesta = z.infer<typeof AjustesRespuesta>;
+export type AjustesDeProyecto = z.infer<typeof AjustesDeProyecto>;
 export type AplicarRespuesta = z.infer<typeof AplicarRespuesta>;
 export type EstadoDelWatcher = z.infer<typeof EstadoDelWatcher>;

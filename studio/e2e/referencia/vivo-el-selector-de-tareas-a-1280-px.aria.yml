@@ -5,6 +5,9 @@
   - navigation "Vistas":
     - list:
       - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+      - listitem:
         - link "Bitácora":
           - /url: "#/bitacora"
       - listitem:

@@ -90,7 +90,9 @@ test.describe("con el navegador en inglés", () => {
     await expect(ranuras.getByText(/^preset: ai-agent-ops$/).first()).toBeVisible();
     await ranuras.getByRole("button", { name: /phase-3\/tests/ }).click();
     await expect(page.getByRole("button", { name: "Edit phase-3/tests (fase-3/pruebas) in the project layer: preview" })).toBeVisible();
-    await expect(page.getByText("Commit policy")).toBeVisible();
+    // Las reglas se leen en el Taller (con el enlace a Ajustes), y se cambian allí.
+    await expect(page.getByRole("region", { name: "Rules of TALLER" })).toContainText(/Batches: (yes|no) · Commits: /);
+    await expect(page.getByRole("link", { name: "Change in Settings" })).toBeVisible();
     await sinViolacionesGraves(page, "el Taller en inglés, tema oscuro");
     await ponerTema(page, "claro");
     await sinViolacionesGraves(page, "el Taller en inglés, tema claro");
@@ -107,15 +109,36 @@ test.describe("con el navegador en inglés", () => {
     await expect(hallazgo).toContainText("is not valid JSON"); // el texto del hallazgo, del servidor
     for (const arreglo of await page.locator(".arreglo").allTextContents()) expect(arreglo, "cada código tiene su arreglo").not.toContain("Read the finding's text");
     await expect(page.getByText(/File watching active/)).toBeVisible();
-    const cursor = page.getByRole("article", { name: "Cursor" });
-    await expect(cursor).toContainText("not detected");
-    // Del servidor. Si vigia.spec.ts ya configuró Cursor en este mismo `ui`, dice que no hay cambios.
-    await expect(cursor).toContainText(/It would be registered as "pg"\.|No changes: already registered as "pg"\./);
-    await expect(page.getByRole("table", { name: "Environment variables" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Settings" })).toBeVisible();
     await ningunEstadoSoloColor(page);
     await sinViolacionesGraves(page, "el Vigía en inglés, tema oscuro");
     await ponerTema(page, "claro");
     await sinViolacionesGraves(page, "el Vigía en inglés, tema claro");
+  });
+
+  test("Ajustes: las páginas, sus campos y el texto del servidor en inglés", async ({ page, servidor }) => {
+    await page.goto(`${servidor.origen}/#/ajustes/clientes`);
+    await ponerTema(page, "oscuro");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("navigation", { name: "Settings pages" }).getByRole("link", { name: "MCP clients" })).toHaveAttribute("aria-current", "page");
+    const cursor = page.getByRole("article", { name: "Cursor" });
+    await expect(cursor).toContainText("not detected");
+    // Del servidor. Si ajustes.spec.ts ya configuró Cursor en este mismo `ui`, dice que no hay cambios.
+    await expect(cursor).toContainText(/It would be registered as "pg"\.|No changes: already registered as "pg"\./);
+    await ningunEstadoSoloColor(page);
+    await sinViolacionesGraves(page, "Ajustes, clientes, en inglés, tema oscuro");
+    await page.goto(`${servidor.origen}/#/ajustes/avanzado`);
+    await expect(page.getByRole("table", { name: "Advanced variables" })).toBeVisible();
+    await page.goto(`${servidor.origen}/#/ajustes/proyecto/TALLER`);
+    await expect(page.getByRole("heading", { level: 2, name: "Project TALLER" })).toBeVisible();
+    await expect(page.getByLabel("Commit policy")).toBeVisible();
+    await expect(page.getByLabel("Verification commands (one per line)")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save the changes: preview" })).toBeDisabled();
+    await sinViolacionesGraves(page, "Ajustes, proyecto, en inglés, tema oscuro");
+    await ponerTema(page, "claro");
+    await sinViolacionesGraves(page, "Ajustes, proyecto, en inglés, tema claro");
   });
 
   test("la Bitácora: tipos y títulos de los eventos en inglés, y la fecha completa en el title", async ({ page, servidor }) => {

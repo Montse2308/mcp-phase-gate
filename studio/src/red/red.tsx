@@ -1,6 +1,6 @@
 // La Red: una fila por proyecto, en una lista que se despliega. Plegada, cada fila dice el preset y de dónde
 // sale (con un aviso si el manifiesto es inválido o la configuración falla), el git y el rol de cada repo, la
-// tarea activa y qué sesión MCP lo tiene abierto; desplegada, añade el manifiesto, las reglas y las acciones.
+// tarea activa y qué sesión MCP lo tiene abierto; desplegada, añade el manifiesto, las reglas y el enlace a Ajustes, donde se cambia todo eso.
 // Con muchos repos, la fila plegada dice cuántos hay en cada estado y la lista completa va al detalle. El
 // nombre va en un h2 que envuelve el botón que despliega la fila. Cada estado lleva su forma y su texto, nunca
 // solo color. La misma estructura en los dos modos: solo cambian los colores.
@@ -11,7 +11,6 @@ import type { ProyectoApi, ProyectosRespuesta, RepoApi } from "../../../src/stud
 import { Aviso, Cargando, useRecurso } from "../comun/estado";
 import { IndicadorDeEstado } from "../comun/indicador";
 import type { ClaveDeEstado } from "../comun/indicador";
-import { AccionesDeProyecto } from "./acciones";
 import { t, tn } from "../i18n/idioma";
 import type { ClavePlural } from "../i18n/idioma";
 import { enlace } from "../rutas";
@@ -180,7 +179,7 @@ function recordar(nombre: string, abierto: boolean): void {
   }
 }
 
-function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: string[]; recargar: () => void }) {
+function FilaDeProyecto({ p }: { p: ProyectoApi }) {
   const [abierto, setAbierto] = useState(() => desplegadas.has(p.nombre));
   // Con useId, dos nombres que solo difieren en espacios o acentos no comparten id.
   const id = useId();
@@ -253,7 +252,9 @@ function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: str
               </div>
             ) : null}
           </dl>
-          <AccionesDeProyecto p={p} presets={presets} alAplicar={recargar} />
+          <p class="linea">
+            <a href={enlace("ajustes", "proyecto", p.nombre)}>{t("ajustes.cambiarEnAjustes")}</a>
+          </p>
         </div>
       </article>
     </li>
@@ -261,18 +262,25 @@ function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: str
 }
 
 export function Red() {
-  const { datos, error, cargando, recargar } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts", "equipo"]);
+  const { datos, error, cargando } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts", "equipo"]);
   return (
     <section class="vista vista-red" aria-labelledby="titulo-red">
       <h1 id="titulo-red">{t("red.titulo")}</h1>
       {error ? <Aviso error={error} /> : null}
-      {datos?.error ? <Aviso error={datos.error} /> : null}
+      {datos?.error ? (
+        <>
+          <Aviso error={datos.error} />
+          <p>
+            <a href={enlace("ajustes", "equipo")}>{t("red.abrirAjustes")}</a>
+          </p>
+        </>
+      ) : null}
       {cargando && !datos ? <Cargando /> : null}
       {datos && datos.proyectos.length === 0 && !datos.error ? <p>{t("red.vacia")}</p> : null}
       {datos && datos.proyectos.length ? (
         <ul class="proyectos" aria-label={t("red.lista")}>
           {datos.proyectos.map((p) => (
-            <FilaDeProyecto key={p.nombre} p={p} presets={datos.presets} recargar={recargar} />
+            <FilaDeProyecto key={p.nombre} p={p} />
           ))}
         </ul>
       ) : null}

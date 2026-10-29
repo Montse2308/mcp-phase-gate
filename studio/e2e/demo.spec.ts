@@ -124,6 +124,38 @@ test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sell
   expect(await page.evaluate(() => (window as unknown as { __sinRecargar?: boolean }).__sinRecargar)).toBe(true);
 });
 
+test("Ajustes sobre la demo: cambiar la política de commits de TIENDA, con un diff que se lee y un solo Aplicar", async ({ page, servidor }) => {
+  const { carpetasDeDemo } = await import("../../build/studio/demo.js");
+  const manifiesto = path.join(carpetasDeDemo(raizDeLaDemo(servidor.arbol.env.TEMP!)).docs, "TIENDA", "phase-gate.json");
+  const antes = JSON.parse(fs.readFileSync(manifiesto, "utf-8")) as { reglas?: { commits?: string } };
+  const nueva = antes.reglas?.commits === "auto" ? "agente-propone" : "auto";
+  const aplicaciones: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/acciones/aplicar")) aplicaciones.push(r.url());
+  });
+  await page.goto(`${servidor.origen}/#/ajustes/proyecto/TIENDA`);
+  await expect(banda(page)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Proyecto TIENDA" })).toBeVisible();
+  await page.getByLabel("Política de commits").selectOption(nueva);
+  await page.getByRole("button", { name: "Guardar los cambios: vista previa" }).click();
+  const previa = page.getByRole("region", { name: "Vista previa: Guardar los cambios" });
+  // Un diff legible: un solo archivo, y lo que cambia con su +.
+  await expect(previa).toContainText(`reglas.commits = "${nueva}"`);
+  await expect(previa.locator("pre.diff")).toHaveCount(1);
+  await expect(previa.locator(".diff-mas").filter({ hasText: `"commits": "${nueva}"` })).toHaveCount(1);
+  await ningunEstadoSoloColor(page);
+  await sinViolacionesGraves(page, "Ajustes sobre la demo, con la vista previa abierta");
+  await previa.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Hecho" })).toContainText("TIENDA actualizado");
+  expect(aplicaciones, "un solo Aplicar").toHaveLength(1);
+  expect((JSON.parse(fs.readFileSync(manifiesto, "utf-8")) as { reglas: { commits: string } }).reglas.commits).toBe(nueva);
+  await expect(page.getByLabel("Política de commits")).toHaveValue(nueva);
+  // La Red lo dice con sus palabras: lo que se aplicó es lo que se ve.
+  await page.goto(`${servidor.origen}/#/red`);
+  await page.getByRole("heading", { level: 2, name: "TIENDA" }).getByRole("button").click();
+  await expect(page.getByRole("article", { name: "TIENDA" }).locator(".campo-reglas dd")).toContainText(`Commits: ${nueva}`);
+});
+
 test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos temas", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
   await ponerTema(page, "oscuro");

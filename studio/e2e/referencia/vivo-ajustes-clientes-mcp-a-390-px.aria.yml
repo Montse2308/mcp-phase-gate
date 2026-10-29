@@ -1,0 +1,77 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - text: Ir a la página
+      - combobox "Ir a la página":
+        - option "Este equipo"
+        - option "INVESTIGACION"
+        - option "NUEVO"
+        - option "ROTO"
+        - option "TALLER"
+        - option "TIENDA"
+        - option "Clientes MCP" [selected]
+        - option "Studio"
+        - option "Avanzado"
+    - heading "Clientes MCP" [level=2]
+    - paragraph: "Lo que haría `mcp-phase-gate init` en cada uno. Nada se escribe sin la vista previa y su \"Aplicar\"."
+    - article "Claude Code":
+      - heading "Claude Code" [level=3]
+      - paragraph: detectado en este equipo
+      - paragraph: Se registraría como «pg» (ámbito user).
+      - paragraph:
+        - text: "Comando:"
+        - code: claude mcp add pg --scope user -- npx -y mcp-phase-gate
+      - paragraph:
+        - checkbox "Copiar también los comandos de fase (/f1…/fN)"
+        - text: Copiar también los comandos de fase (/f1…/fN)
+      - 'button "Configurar Claude Code: vista previa"'
+    - article "Cursor":
+      - heading "Cursor" [level=3]
+      - paragraph: no detectado
+      - paragraph: Se registraría como «pg».
+      - paragraph:
+        - text: "Archivo:"
+        - code: ~/.cursor/mcp.json
+      - text: <diff>
+      - paragraph:
+        - checkbox "Copiar también los comandos de fase (/f1…/fN)"
+        - text: Copiar también los comandos de fase (/f1…/fN)
+      - 'button "Configurar Cursor: vista previa"'
+    - article "VS Code":
+      - heading "VS Code" [level=3]
+      - paragraph: no detectado
+      - paragraph: Se registraría como «pg».
+      - paragraph:
+        - text: "Archivo:"
+        - code: ~/<carpeta de VS Code>/mcp.json
+      - text: <diff>
+      - 'button "Configurar VS Code: vista previa"'

@@ -95,7 +95,8 @@ export async function crearArbol(raiz: string): Promise<Arbol> {
   const estado = path.join(raiz, "estado");
   const config = path.join(raiz, "config");
   for (const c of [docs, repos, estado, config]) fs.mkdirSync(c, { recursive: true });
-  const env = { PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config };
+  // El idioma del servidor, fijo: Ajustes lo enseña, y el del sistema cambia de un equipo a otro.
+  const env: Record<string, string> = { PHASE_GATE_DOCS_PATH: docs, PHASE_GATE_REPOS_PATH: repos, PHASE_GATE_STATE_PATH: estado, PHASE_GATE_CONFIG_PATH: config, PHASE_GATE_LANG: "es" };
 
   // TIENDA: manifiesto con dos repos con git (api, pagos) y uno sin git (web).
   escribir(

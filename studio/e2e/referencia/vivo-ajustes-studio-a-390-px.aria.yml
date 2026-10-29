@@ -1,0 +1,59 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - text: Ir a la página
+      - combobox "Ir a la página":
+        - option "Este equipo"
+        - option "INVESTIGACION"
+        - option "NUEVO"
+        - option "ROTO"
+        - option "TALLER"
+        - option "TIENDA"
+        - option "Clientes MCP"
+        - option "Studio" [selected]
+        - option "Avanzado"
+    - heading "Studio" [level=2]
+    - paragraph: "La apariencia de este navegador. Se aplica al momento, sin vista previa: no escribe en el disco."
+    - group "Tema":
+      - text: Tema
+      - radio "Sistema"
+      - text: Sistema
+      - radio "Claro" [checked]
+      - text: Claro
+      - radio "Oscuro"
+      - text: Oscuro
+    - group "Idioma de la interfaz":
+      - text: Idioma de la interfaz
+      - radio "Español" [checked]
+      - text: Español
+      - radio "English"
+      - text: English

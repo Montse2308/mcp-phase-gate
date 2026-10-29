@@ -3,7 +3,12 @@
 // dice, con un botón para volver a ver el cambio. En el sitio estático no hay escrituras.
 //
 // Al cambiar el idioma de la interfaz, una vista previa abierta se cierra: su resumen estaba en el idioma de
-// antes. La huella no depende del idioma, así que un plan visto en uno se puede aplicar en el otro.
+// antes. La huella no depende del idioma, así que un plan visto en uno se puede aplicar en el otro. Lo mismo
+// pasa si cambian los argumentos: el plan visto ya no es el de lo que se va a aplicar.
+//
+// Un plan con varios archivos enseña un diff por archivo (con su rótulo, si la vista lo da) y sus avisos: lo
+// que el plan advierte y no impide. Con `version`, un plan abierto vuelve a pedirse cuando esa cuenta sube (el
+// archivo cambió en el disco mientras la vista previa estaba abierta).
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
@@ -36,7 +41,30 @@ export function Diff({ texto, etiqueta }: { texto: string; etiqueta: string }) {
   );
 }
 
-export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado }: { etiqueta: string; accion: string; argumentos: unknown; alAplicar?: () => void; deshabilitado?: boolean }) {
+// El diff de un plan, partido por archivo: cada uno empieza con `--- archivo` o `+++ archivo (nuevo)`, y cada
+// comando va solo, como `$ comando`.
+export function diffPorArchivo(texto: string): { archivo: string; texto: string }[] {
+  const partes: { archivo: string; lineas: string[] }[] = [];
+  for (const linea of texto.split("\n")) {
+    if (linea.startsWith("--- ") || linea.startsWith("+++ ")) partes.push({ archivo: linea.slice(4).replace(/ \(nuevo\)$/, ""), lineas: [linea] });
+    else if (linea.startsWith("$ ") || partes.length === 0) partes.push({ archivo: "", lineas: [linea] });
+    else partes[partes.length - 1]!.lineas.push(linea);
+  }
+  return partes.map((p) => ({ archivo: p.archivo, texto: p.lineas.join("\n") }));
+}
+
+type PropiedadesDeAccion = {
+  etiqueta: string;
+  accion: string;
+  argumentos: unknown;
+  alAplicar?: () => void;
+  deshabilitado?: boolean;
+  version?: number;
+  // Una línea que dice qué es cada archivo del diff ("viaja con la Documentación"), o null si no dice nada.
+  rotulo?: (archivo: string) => string | null;
+};
+
+export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado, version, rotulo }: PropiedadesDeAccion) {
   const [estado, setEstado] = useState<Estado>({ tipo: "inactivo" });
   const idioma = useIdioma();
   const idiomaDelEstado = useRef(idioma);
@@ -45,16 +73,23 @@ export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado 
     idiomaDelEstado.current = idioma;
     setEstado({ tipo: "inactivo" });
   }, [idioma]);
-  if (MODO === "estatico") {
-    return (
-      <p class="accion accion-solo-lectura">
-        <button type="button" class="boton" disabled>
-          {etiqueta}
-        </button>{" "}
-        <span class="secundaria">{t("estatico.soloLectura")}</span>
-      </p>
-    );
-  }
+  // Con otros argumentos, el plan visto no es el de lo que se aplicaría: se cierra. Un "Hecho" se queda.
+  const clave = JSON.stringify(argumentos);
+  const claveVista = useRef(clave);
+  useEffect(() => {
+    if (claveVista.current === clave) return;
+    claveVista.current = clave;
+    setEstado((e) => (e.tipo === "plan" || e.tipo === "imposible" || e.tipo === "error" ? { tipo: "inactivo" } : e));
+  }, [clave]);
+  // Un plan abierto vuelve a pedirse cuando sube la versión de lo que hay en el disco. Un 409 ya dicho no: se
+  // queda hasta que la persona pida verlo otra vez.
+  const versionVista = useRef(version);
+  const volverAPedir = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (versionVista.current === version) return;
+    versionVista.current = version;
+    if (estado.tipo === "plan") volverAPedir.current();
+  }, [version]);
 
   const pedirPlan = (): void => {
     setEstado({ tipo: "pidiendo" });
@@ -73,6 +108,18 @@ export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado 
       (error: unknown) => setEstado({ tipo: "error", mensaje: error instanceof Error ? error.message : String(error), cambio: error instanceof ErrorDeApi && error.estado === 409 })
     );
   };
+
+  volverAPedir.current = pedirPlan;
+  if (MODO === "estatico") {
+    return (
+      <p class="accion accion-solo-lectura">
+        <button type="button" class="boton" disabled>
+          {etiqueta}
+        </button>{" "}
+        <span class="secundaria">{t("estatico.soloLectura")}</span>
+      </p>
+    );
+  }
 
   return (
     <div class="accion">
@@ -93,7 +140,25 @@ export function Accion({ etiqueta, accion, argumentos, alAplicar, deshabilitado 
               </li>
             ))}
           </ul>
-          <Diff texto={estado.plan.diff} etiqueta={t("accion.cambiosDe", { etiqueta })} />
+          {estado.plan.avisos.length ? (
+            <ul class="avisos-del-plan" aria-label={t("accion.avisos")}>
+              {estado.plan.avisos.map((a, i) => (
+                <li key={i} class="aviso">
+                  {a}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {diffPorArchivo(estado.plan.diff).length > 1 ? (
+            diffPorArchivo(estado.plan.diff).map((parte, i) => (
+              <div key={i} class="diff-de-archivo">
+                {rotulo?.(parte.archivo) ? <p class="secundaria rotulo-diff">{rotulo(parte.archivo)}</p> : null}
+                <Diff texto={parte.texto} etiqueta={parte.archivo ? t("accion.cambiosDeEn", { etiqueta, archivo: parte.archivo }) : t("accion.cambiosDe", { etiqueta })} />
+              </div>
+            ))
+          ) : (
+            <Diff texto={estado.plan.diff} etiqueta={t("accion.cambiosDe", { etiqueta })} />
+          )}
           <p class="botones">
             <button type="button" class="boton boton-principal" onClick={() => aplicar(estado.plan)} disabled={estado.tipo === "aplicando"}>
               {t(estado.tipo === "aplicando" ? "accion.aplicando" : "accion.aplicar")}

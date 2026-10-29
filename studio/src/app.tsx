@@ -1,17 +1,20 @@
-// La estructura de la página: la barra con las cinco vistas, el botón del tema y el selector
+// La estructura de la página: la barra con las seis vistas, el botón del tema y el selector
 // ES / EN, la banda de la demo y la vista que toca según el hash. Al cambiar de idioma se vuelve a pintar
 // todo sin recargar, y cada vista vuelve a pedir sus datos en el idioma nuevo (useRecurso).
 
+import { Ajustes } from "./ajustes/ajustes";
+import { guardarSalida } from "./ajustes/borrador";
 import { Bitacora } from "./bitacora/bitacora";
-import { MODO, textoDeLaBanda } from "./datos";
+import { MODO, get, textoDeLaBanda } from "./datos";
 import { IDIOMAS_UI, NOMBRE_DEL_IDIOMA, cambiarIdioma, t, useIdioma } from "./i18n/idioma";
 import { cambiarTema, useTemaOscuro } from "./preferencias";
 import { Red } from "./red/red";
-import { VISTAS, useRuta } from "./rutas";
+import { VISTAS, enlace, useRuta } from "./rutas";
 import { Tablero } from "./tablero/tablero";
 import { Taller } from "./taller/taller";
 import { Vigia } from "./vigia/vigia";
 import type { Ruta } from "./rutas";
+import { useEffect } from "preact/hooks";
 
 function Pendiente({ nombre }: { nombre: string }) {
   return (
@@ -34,6 +37,8 @@ function Vista({ ruta }: { ruta: Ruta }) {
       return <Vigia />;
     case "bitacora":
       return <Bitacora p={ruta.partes[0]} t={ruta.partes[1]} />;
+    case "ajustes":
+      return <Ajustes ruta={ruta} />;
     default:
       return <Pendiente nombre={t(`vista.${ruta.vista as string}` as "vista.red")} />;
   }
@@ -54,8 +59,25 @@ function SelectorDeIdioma() {
   );
 }
 
+// Sin Documentación configurada, abrir el Studio sin elegir una vista lleva a Ajustes, a decir dónde está: una
+// Red vacía no le sirve a nadie. Solo al abrir y solo con el Studio en vivo: en la demo y en el sitio exportado
+// siempre hay datos.
+function useAjustesSiNoHayDocumentacion(): void {
+  useEffect(() => {
+    if (MODO !== "vivo" || !["", "#", "#/"].includes(window.location.hash.split("?")[0]!)) return;
+    get<{ proyectos: unknown[]; error: string | null }>("/api/proyectos").then(
+      (r) => {
+        if (r.error !== null && r.proyectos.length === 0 && ["", "#", "#/"].includes(window.location.hash.split("?")[0]!)) window.location.replace(enlace("ajustes", "equipo"));
+      },
+      () => {}
+    );
+  }, []);
+}
+
 export function App() {
   const ruta = useRuta();
+  useEffect(guardarSalida, []);
+  useAjustesSiNoHayDocumentacion();
   const oscuro = useTemaOscuro();
   useIdioma(); // al cambiar, se vuelve a pintar todo con el diccionario nuevo
   return (

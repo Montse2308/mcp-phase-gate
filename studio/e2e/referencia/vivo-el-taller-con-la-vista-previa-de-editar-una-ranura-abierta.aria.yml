@@ -19,6 +19,9 @@
       - listitem:
         - link "Bitácora":
           - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
   - button "Tema oscuro"
   - group "Idioma":
     - button "ES" [pressed]
@@ -130,11 +133,6 @@
         - strong: ai-agent-ops
         - text: (del proyecto)
       - paragraph:
-        - checkbox "Lotes" [checked]
-        - text: Lotes Política de commits
-        - combobox "Política de commits":
-          - option "agente-commitea-con-OK" [selected]
-          - option "agente-propone"
-          - option "auto"
-          - option "ninguno"
-      - 'button "Cambiar las reglas: vista previa" [disabled]'
+        - text: "Lotes: sí · Commits: agente-commitea-con-OK ·"
+        - link "Cambiar en Ajustes":
+          - /url: "#/ajustes/proyecto/TALLER"
