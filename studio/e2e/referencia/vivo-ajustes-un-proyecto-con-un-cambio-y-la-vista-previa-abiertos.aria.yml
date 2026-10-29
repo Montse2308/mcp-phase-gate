@@ -1,0 +1,170 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - list:
+        - listitem:
+          - link "Este equipo":
+            - /url: "#/ajustes/equipo"
+        - listitem:
+          - text: Proyectos
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "NUEVO":
+            - /url: "#/ajustes/proyecto/NUEVO"
+        - listitem:
+          - link "ROTO":
+            - /url: "#/ajustes/proyecto/ROTO"
+        - listitem:
+          - link "TALLER":
+            - /url: "#/ajustes/proyecto/TALLER"
+        - listitem:
+          - link "TIENDA 1 1 cambio sin aplicar":
+            - /url: "#/ajustes/proyecto/TIENDA"
+        - listitem:
+          - link "Clientes MCP":
+            - /url: "#/ajustes/clientes"
+        - listitem:
+          - link "Studio":
+            - /url: "#/ajustes/studio"
+        - listitem:
+          - link "Avanzado":
+            - /url: "#/ajustes/avanzado"
+    - heading "Proyecto TIENDA" [level=2]
+    - paragraph: Lo que se guarda en el phase-gate.json de este proyecto, que viaja con la Documentación, y la ruta propia de sus repos en esta computadora, que va en machine.json.
+    - text: Preset
+    - combobox "Preset":
+      - option "(sin elegir)"
+      - option "ai-agent-ops"
+      - option "multi-repo-feature"
+      - option "research-ops"
+      - option "software" [selected]
+      - option "software-replica"
+      - option "software-tdd"
+    - paragraph: Ahora se usa multi-repo-feature, de del proyecto.
+    - paragraph: Cambiado, sin aplicar
+    - text: Idioma del proyecto
+    - combobox "Idioma del proyecto":
+      - option "(sin elegir)" [selected]
+      - option "Español"
+      - option "English"
+    - text: Lotes
+    - combobox "Lotes":
+      - 'option "(lo decide el preset: sí)" [selected]'
+      - option "Con lotes"
+      - option "Sin lotes"
+    - text: Política de commits
+    - combobox "Política de commits":
+      - 'option "(lo decide el preset: agente-commitea-con-OK)" [selected]'
+      - option "agente-commitea-con-OK"
+      - option "agente-propone"
+      - option "auto"
+      - option "ninguno"
+    - text: Comandos de verificación (uno por línea)
+    - textbox "Comandos de verificación (uno por línea)"
+    - text: Un PR por repo
+    - combobox "Un PR por repo":
+      - option "(sin elegir)" [selected]
+      - option "Un PR por cada repo"
+      - option "Un solo PR"
+    - group "Repos del proyecto":
+      - text: Repos del proyecto
+      - table "Repos del proyecto":
+        - caption: Repos del proyecto
+        - rowgroup:
+          - row "Id Carpeta Rol En esta computadora Acciones":
+            - columnheader "Id"
+            - columnheader "Carpeta"
+            - columnheader "Rol"
+            - columnheader "En esta computadora"
+            - columnheader "Acciones"
+        - rowgroup:
+          - row "api api backend Quitar api":
+            - rowheader "api":
+              - code: api
+            - cell "api":
+              - textbox "Carpeta de api": api
+            - cell "backend":
+              - textbox "Rol de api": backend
+            - cell:
+              - textbox "Ruta propia de api en esta computadora"
+            - cell "Quitar api":
+              - button "Quitar api"
+          - row "web web Quitar web":
+            - rowheader "web":
+              - code: web
+            - cell "web":
+              - textbox "Carpeta de web": web
+            - cell:
+              - textbox "Rol de web"
+            - cell:
+              - textbox "Ruta propia de web en esta computadora"
+            - cell "Quitar web":
+              - button "Quitar web"
+          - row "pagos pagos Quitar pagos":
+            - rowheader "pagos":
+              - code: pagos
+            - cell "pagos":
+              - textbox "Carpeta de pagos": pagos
+            - cell:
+              - textbox "Rol de pagos"
+            - cell:
+              - textbox "Ruta propia de pagos en esta computadora"
+            - cell "Quitar pagos":
+              - button "Quitar pagos"
+      - group "Agregar un repo":
+        - text: Agregar un repo
+        - paragraph:
+          - text: Id del repo nuevo
+          - textbox "Id del repo nuevo"
+        - paragraph:
+          - text: Carpeta del repo nuevo
+          - textbox "Carpeta del repo nuevo"
+        - paragraph:
+          - text: Rol (opcional)
+          - textbox "Rol (opcional)"
+        - paragraph:
+          - text: En esta computadora está en otra carpeta (opcional)
+          - textbox "En esta computadora está en otra carpeta (opcional)"
+        - button "Agregar a la lista"
+    - 'region "Vista previa: Guardar los cambios"':
+      - paragraph: "En TIENDA (phase-gate.json): preset = \"software\"."
+      - list:
+        - listitem:
+          - text: Reescribe (deja copia .bak)
+          - code: <Documentación>/TIENDA/phase-gate.json
+      - text: <diff>
+      - paragraph:
+        - button "Aplicar"
+        - button "Cancelar"
+    - paragraph:
+      - button "Descartar los cambios"

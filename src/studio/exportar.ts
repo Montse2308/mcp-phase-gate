@@ -121,9 +121,9 @@ const seg = (...partes: (string | number)[]): string => partes.map((p) => encode
 export type Respuestas = Map<string, { estado: number; json: unknown }>;
 export type RespuestasPorIdioma = Record<Idioma, Respuestas>;
 
-// Con `conAjustes`, también lo que enseña Ajustes. Con datos reales no: son rutas de este equipo, que el
-// sustituidor de nombres no reconoce si caen fuera de las raíces conocidas, así que esas páginas dicen que no
-// están disponibles en una exportación.
+// With `conAjustes`, also what Ajustes shows. Not with real data: those are paths of this machine, which the name
+// substitution does not recognise when they fall outside the known roots, so those pages say they are not
+// available in an export.
 async function recorrer(api: ManejadorApi, conAjustes: boolean): Promise<Respuestas> {
   const respuestas: Respuestas = new Map();
   const pedir = async (ruta: string): Promise<any> => {

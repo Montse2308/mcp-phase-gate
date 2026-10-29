@@ -5,7 +5,7 @@
 //
 // Sin phase-gate.json, la página ofrece crearlo.
 
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { Dispatch, StateUpdater } from "preact/hooks";
 
 import type { AjustesDeProyecto } from "../../../src/studio/contrato.js";
@@ -175,24 +175,30 @@ function EditorDeRepos({ b, quitarRutas, ponerQuitarRutas }: { b: ControlDeBorra
   );
 }
 
-function CrearManifiesto({ proyecto, presets, alAplicar }: { proyecto: string; presets: string[]; alAplicar: () => void }) {
+// Con `creado`, el archivo ya existe: la sección se queda para que se lea el «Hecho», y el resto de la página pasa
+// a editarlo.
+function CrearManifiesto({ proyecto, presets, creado, alAplicar }: { proyecto: string; presets: string[]; creado: boolean; alAplicar: () => void }) {
   const [preset, setPreset] = useState("software-replica");
   return (
     <section class="crear-manifiesto" aria-label={t("ajustes.proyecto.crear")}>
-      <p>{t("ajustes.proyecto.sinManifiesto")}</p>
-      <p>
-        <label>
-          {t("ajustes.proyecto.presetNuevo")}{" "}
-          <select value={preset} disabled={SOLO_LECTURA} onChange={(e) => setPreset((e.target as HTMLSelectElement).value)}>
-            {presets.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
-      </p>
-      <Accion etiqueta={t("ajustes.proyecto.crear")} accion="crear-manifiesto" argumentos={{ proyecto, preset }} alAplicar={alAplicar} />
+      {creado ? null : (
+        <>
+          <p>{t("ajustes.proyecto.sinManifiesto")}</p>
+          <p>
+            <label>
+              {t("ajustes.proyecto.presetNuevo")}{" "}
+              <select value={preset} disabled={SOLO_LECTURA} onChange={(e) => setPreset((e.target as HTMLSelectElement).value)}>
+                {presets.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </p>
+        </>
+      )}
+      <Accion etiqueta={t("ajustes.proyecto.crear")} accion="crear-manifiesto" argumentos={{ proyecto, preset }} alAplicar={alAplicar} deshabilitado={creado} />
     </section>
   );
 }
@@ -203,6 +209,11 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
   const disco = datos ? discoDe(datos) : null;
   const b = useBorrador<DiscoProyecto>(`proyecto:${proyecto}`, disco);
   const [quitarRutas, ponerQuitarRutas] = useState(true);
+  // Un proyecto que estaba sin phase-gate.json y ya lo tiene: la sección de crearlo se queda (con su «Hecho»).
+  const [seCreo, setSeCreo] = useState(false);
+  useEffect(() => {
+    if (datos?.manifiesto.estado === "ausente") setSeCreo(true);
+  }, [datos]);
   const efectivo = datos?.efectivo ?? null;
 
   return (
@@ -212,7 +223,7 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
       {SIN_DATOS_REALES ? <NoDisponible /> : null}
       {recurso.error ? <Aviso error={recurso.error} /> : null}
       {recurso.cargando && !datos && !SIN_DATOS_REALES ? <Cargando /> : null}
-      {datos?.manifiesto.estado === "ausente" ? <CrearManifiesto proyecto={proyecto} presets={presets} alAplicar={recurso.recargar} /> : null}
+      {datos?.manifiesto.estado === "ausente" || (seCreo && datos?.manifiesto.estado === "valido") ? <CrearManifiesto proyecto={proyecto} presets={presets} creado={datos.manifiesto.estado === "valido"} alAplicar={recurso.recargar} /> : null}
       {datos?.manifiesto.estado === "invalido" ? (
         <>
           <p class="aviso aviso-error" role="alert">

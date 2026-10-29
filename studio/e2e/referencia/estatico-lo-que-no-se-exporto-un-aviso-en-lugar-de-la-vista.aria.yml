@@ -20,6 +20,9 @@
       - listitem:
         - link "Bitácora":
           - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
   - button "Tema oscuro"
   - group "Idioma":
     - button "ES" [pressed]

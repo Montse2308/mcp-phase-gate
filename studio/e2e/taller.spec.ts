@@ -41,21 +41,6 @@ test("ver el prompt completo: el mismo texto que get_phase_prompt, y se puede co
   expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n")).toBe(datos.texto);
 });
 
-test("reglas: vista previa con el diff del manifiesto, Aplicar, y el disco cambia", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/taller/TALLER?fase=4`);
-  await page.getByLabel("Lotes").uncheck();
-  await page.getByRole("button", { name: "Cambiar las reglas: vista previa" }).click();
-  const previa = page.getByRole("region", { name: "Vista previa: Cambiar las reglas" });
-  await expect(previa).toContainText("lotes: no");
-  await expect(previa.locator(".diff-mas").filter({ hasText: '"lotes": false' })).toHaveCount(1);
-  await previa.getByRole("button", { name: "Aplicar" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Hecho" })).toContainText("Reglas de TALLER cambiadas");
-  const manifiesto = JSON.parse(fs.readFileSync(path.join(servidor.arbol.docs, "TALLER", "phase-gate.json"), "utf-8"));
-  expect(manifiesto.reglas).toEqual({ verificacion: ["npm test"], lotes: false });
-  expect(fs.readdirSync(path.join(servidor.arbol.docs, "TALLER")).some((n) => n.startsWith("phase-gate.json.bak-"))).toBe(true);
-  await expect(page.getByLabel("Lotes")).not.toBeChecked();
-});
-
 test("editar una ranura: eject a la capa del proyecto con vista previa, y después gana el proyecto", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/taller/TALLER?fase=3`);
   await page.getByRole("list", { name: "Ranuras" }).getByRole("button", { name: /fase-3\/pruebas/ }).click();
@@ -68,39 +53,17 @@ test("editar una ranura: eject a la capa del proyecto con vista previa, y despu�
   await expect(page.getByRole("list", { name: "Ranuras" }).getByRole("listitem").filter({ hasText: "fase-3/pruebas" })).toContainText("proyecto");
 });
 
-test("si el disco cambia entre la vista previa y Aplicar, 409: se dice y se puede volver a ver el cambio", async ({ page, servidor, registro }) => {
-  registro.permitidos.push(/the server responded with a status of 409/);
-  await page.goto(`${servidor.origen}/#/red`);
-  await ponerTema(page, "oscuro");
-  const taller = page.getByRole("article", { name: "TALLER" });
-  await taller.getByRole("heading", { level: 2, name: "TALLER" }).getByRole("button").click();
-  await taller.getByLabel("Preset").selectOption("software-tdd");
-  await taller.getByRole("button", { name: "Cambiar el preset: vista previa" }).click();
-  await expect(taller.getByRole("region", { name: "Vista previa: Cambiar el preset" })).toContainText("software-tdd");
-  const archivo = path.join(servidor.arbol.docs, "TALLER", "phase-gate.json");
-  const datos = JSON.parse(fs.readFileSync(archivo, "utf-8"));
-  fs.writeFileSync(archivo, `${JSON.stringify({ ...datos, fase5: { prPorRepo: true } }, null, 2)}\n`, "utf-8");
-  await taller.getByRole("button", { name: "Aplicar" }).click();
-  await expect(taller.getByRole("alert")).toContainText("El disco cambió desde que viste el cambio. Revísalo otra vez.");
-  expect(JSON.parse(fs.readFileSync(archivo, "utf-8")).preset).toBe("ai-agent-ops");
-  await taller.getByRole("button", { name: "Ver el cambio otra vez" }).click();
-  await expect(taller.getByRole("region", { name: "Vista previa: Cambiar el preset" })).toContainText("prPorRepo");
-});
-
-test("crear phase-gate.json desde la Red, con su vista previa", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/red`);
-  await ponerTema(page, "oscuro");
-  const nuevo = page.getByRole("article", { name: "NUEVO" });
-  await nuevo.getByRole("heading", { level: 2, name: "NUEVO" }).getByRole("button").click();
-  await expect(nuevo.locator(".campo-manifiesto dd")).toHaveText("sin phase-gate.json");
-  await nuevo.getByLabel("Preset del phase-gate.json nuevo").selectOption("research-ops");
-  await nuevo.getByRole("button", { name: "Crear phase-gate.json: vista previa" }).click();
-  const previa = nuevo.getByRole("region", { name: "Vista previa: Crear phase-gate.json" });
-  await expect(previa).toContainText("Crea");
-  await expect(previa.locator(".diff-mas").filter({ hasText: '"preset": "research-ops"' })).toHaveCount(1);
-  await previa.getByRole("button", { name: "Aplicar" }).click();
-  await expect(nuevo.locator(".campo-manifiesto dd")).toHaveText("phase-gate.json válido");
-  await expect(nuevo.locator(".campo-preset dd")).toHaveText("research-ops · del proyecto");
+test("las reglas del proyecto se leen en el Taller y se cambian en Ajustes: el enlace lleva a la página del proyecto", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/taller/TIENDA?fase=3`);
+  const reglas = page.getByRole("region", { name: "Reglas de TIENDA" });
+  await expect(reglas).toContainText("Preset: multi-repo-feature (del proyecto)");
+  await expect(reglas).toContainText(/Lotes: (sí|no) · Commits: /);
+  // Solo se leen: ni un control para cambiarlas ni una vista previa.
+  await expect(reglas.getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Cambiar las reglas/ })).toHaveCount(0);
+  await reglas.getByRole("link", { name: "Cambiar en Ajustes" }).click();
+  await expect(page).toHaveURL(/#\/ajustes\/proyecto\/TIENDA$/);
+  await expect(page.getByRole("heading", { level: 2, name: "Proyecto TIENDA" })).toBeVisible();
 });
 
 test("el Taller en un teléfono (390×844) no desborda", async ({ page, servidor }) => {

@@ -307,7 +307,7 @@ export const es = {
   "ajustes.env.archivoIlegible": "{cliente}: no se pudo leer {archivo}.",
   "ajustes.sesiones.titulo": "Servidores abiertos",
   "ajustes.sesiones.nota": "Un servidor abierto conserva lo que recibió al arrancar: para que use lo nuevo, reinicia ese cliente.",
-  "ajustes.sesiones.de": "{cliente} (pid {pid})",
+  "ajustes.sesiones.de": "{cliente}",
   "ajustes.sesiones.sinRutas": "es un servidor 3.x y no dice sus rutas",
   "ajustes.proyecto.titulo": "Proyecto {proyecto}",
   "ajustes.proyecto.intro": "Lo que se guarda en el phase-gate.json de este proyecto, que viaja con la Documentación, y la ruta propia de sus repos en esta computadora, que va en machine.json.",

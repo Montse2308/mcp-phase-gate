@@ -1,0 +1,93 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- note: "Demo: datos de ejemplo. Todo es de solo lectura."
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - list:
+        - listitem:
+          - link "Este equipo":
+            - /url: "#/ajustes/equipo"
+        - listitem:
+          - text: Proyectos
+          - link "ASISTENTE":
+            - /url: "#/ajustes/proyecto/ASISTENTE"
+        - listitem:
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "TIENDA":
+            - /url: "#/ajustes/proyecto/TIENDA"
+        - listitem:
+          - link "Clientes MCP":
+            - /url: "#/ajustes/clientes"
+        - listitem:
+          - link "Studio":
+            - /url: "#/ajustes/studio"
+        - listitem:
+          - link "Avanzado":
+            - /url: "#/ajustes/avanzado"
+    - heading "Este equipo" [level=2]
+    - paragraph: Dónde están tu Documentación y tus repos en esta computadora, y los valores por defecto. Se guardan en machine.json, que leen igual el servidor de cada cliente y este Studio.
+    - paragraph: sin machine.json todavía
+    - text: Carpeta de la Documentación
+    - textbox "Carpeta de la Documentación" [disabled]
+    - paragraph: Ahora se usa <Documentación>, de entorno.
+    - text: Carpeta de los repos
+    - textbox "Carpeta de los repos" [disabled]
+    - paragraph: Ahora se usa <repos>, de entorno.
+    - text: Subcarpeta de las tareas
+    - textbox "Subcarpeta de las tareas" [disabled]
+    - paragraph: Ahora se usa Proyectos, de entorno.
+    - paragraph:
+      - 'checkbox "Sin subcarpeta: las tareas cuelgan directo del proyecto" [disabled]'
+      - text: "Sin subcarpeta: las tareas cuelgan directo del proyecto"
+    - text: Idioma por defecto del equipo
+    - combobox "Idioma por defecto del equipo" [disabled]:
+      - option "(sin elegir)" [selected]
+      - option "Español"
+      - option "English"
+    - paragraph: Ahora se usa Español, de el sistema.
+    - text: Preset para los proyectos sin phase-gate.json
+    - combobox "Preset para los proyectos sin phase-gate.json" [disabled]:
+      - option "(sin elegir)" [selected]
+      - option "ai-agent-ops"
+      - option "multi-repo-feature"
+      - option "research-ops"
+      - option "software"
+      - option "software-replica"
+      - option "software-tdd"
+    - paragraph:
+      - button "Guardar los cambios" [disabled]
+      - text: En la demo publicada todo es de solo lectura. Pruébalo en tu equipo con npx mcp-phase-gate ui --demo.
+    - region "Lo que dicen los clientes en su env":
+      - heading "Lo que dicen los clientes en su env" [level=3]
+      - paragraph: Un valor en el env de un cliente gana a machine.json, aunque cambies Ajustes. Quitarlo deja una vista previa, y nada se escribe sin ella.
+      - paragraph: Ningún cliente tiene rutas ni idioma en su env.

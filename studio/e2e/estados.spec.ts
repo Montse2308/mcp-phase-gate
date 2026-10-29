@@ -58,10 +58,20 @@ const VIGIA: Omit<Caso, "donde">[] = [
   { clave: "vigia-errores", forma: "rombo", tono: "rojo", insignia: true, texto: "Errores (1)", titulo: true },
   { clave: "vigia-avisos", forma: "triangulo", tono: "ambar", insignia: true, texto: "Avisos (2)", titulo: true },
   { clave: "vigia-info", forma: "vacio", tono: "apagado", insignia: false, texto: "Información (1)" },
-  { clave: "vigia-cliente-detectado", forma: "lleno", tono: "verde", insignia: false, texto: "detectado en este equipo" },
-  { clave: "vigia-cliente-no-detectado", forma: "vacio", tono: "apagado", insignia: false, texto: "no detectado" },
 ];
-const CLAVES = new Set([...FASES, ...LOTES, ...RED, ...VIGIA].map((c) => c.clave));
+const AJUSTES: Omit<Caso, "donde">[] = [
+  { clave: "ajustes-cambiado", forma: "anillo", tono: "ambar", insignia: false, texto: "Cambiado, sin aplicar" },
+  { clave: "ajustes-conflicto", forma: "rombo", tono: "rojo", insignia: true, texto: "En conflicto" },
+  { clave: "ajustes-maquina-valida", forma: "lleno", tono: "verde", insignia: false, texto: "machine.json válido" },
+  { clave: "ajustes-maquina-ausente", forma: "vacio", tono: "apagado", insignia: false, texto: "sin machine.json todavía" },
+  { clave: "ajustes-maquina-invalida", forma: "rombo", tono: "rojo", insignia: true, texto: "machine.json inválido" },
+  { clave: "ajustes-env-pisa", forma: "triangulo", tono: "ambar", insignia: true, texto: "PHASE_GATE_DOCS_PATH = /otra/docs: gana a machine.json", literal: true },
+  { clave: "ajustes-env-coincide", forma: "lleno", tono: "verde", insignia: false, texto: "PHASE_GATE_REPOS_PATH = /x/repos: coincide con machine.json" },
+  { clave: "ajustes-env-sin-valor", forma: "vacio", tono: "apagado", insignia: false, texto: "PHASE_GATE_LANG = es: machine.json no lo tiene" },
+  { clave: "ajustes-cliente-detectado", forma: "lleno", tono: "verde", insignia: false, texto: "detectado en este equipo" },
+  { clave: "ajustes-cliente-no-detectado", forma: "vacio", tono: "apagado", insignia: false, texto: "no detectado" },
+];
+const CLAVES = new Set([...FASES, ...LOTES, ...RED, ...VIGIA, ...AJUSTES].map((c) => c.clave));
 
 // ─── Lo que se comprueba de cada fila ────────────────────────────────────────────────────────────────
 async function comprobar(page: Page, caso: Caso): Promise<void> {
@@ -219,15 +229,95 @@ test("la Red: cada estado de un repo y el error de configuración, con respuesta
 });
 
 // ─── El Vigía ────────────────────────────────────────────────────────────────────────────────────────
-test("el Vigía: errores, avisos e información, y los clientes detectados y no detectados", async ({ page, servidor }) => {
+test("el Vigía: errores, avisos e información", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/vigia`);
   await expect(page.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
-  await expect(page.getByRole("article", { name: "Cursor" })).toBeVisible();
   await comprobar(page, con(VIGIA, "vigia-errores", null, (p) => p.getByRole("heading", { level: 3, name: "Errores (1)" }).locator(".indicador")));
   await comprobar(page, con(VIGIA, "vigia-avisos", null, (p) => p.getByRole("heading", { level: 3, name: "Avisos (2)" }).locator(".indicador")));
   await comprobar(page, con(VIGIA, "vigia-info", null, (p) => p.getByRole("heading", { level: 3, name: "Información (1)" }).locator(".indicador")));
-  await comprobar(page, con(VIGIA, "vigia-cliente-detectado", null, (p) => p.getByRole("article", { name: "Claude Code" }).locator(".indicador")));
-  await comprobar(page, con(VIGIA, "vigia-cliente-no-detectado", null, (p) => p.getByRole("article", { name: "VS Code" }).locator(".indicador")));
+  await soloEstadosDeLaTabla(page);
+});
+
+// ─── Ajustes ─────────────────────────────────────────────────────────────────────────────────────────
+// Cambia en el navegador la respuesta de /api/ajustes: el árbol de prueba no tiene un machine.json roto ni un
+// cliente con el env lleno, y cambiarlos en el disco tocaría lo de las demás pruebas.
+async function cambiarAjustes(page: Page, cambiar: (datos: any) => void): Promise<void> {
+  await page.route("**/api/ajustes", async (route) => {
+    const respuesta = await route.fetch();
+    const datos = await respuesta.json();
+    cambiar(datos);
+    await route.fulfill({ response: respuesta, json: datos });
+  });
+}
+const deLaMaquina = (p: Page) => p.locator(".estado-de-maquina .indicador");
+
+test("Ajustes: machine.json ausente, válido e inválido", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/ajustes/equipo`);
+  await expect(page.getByRole("heading", { level: 2, name: "Este equipo" })).toBeVisible();
+  await comprobar(page, con(AJUSTES, "ajustes-maquina-ausente", null, deLaMaquina));
+  await soloEstadosDeLaTabla(page);
+
+  await cambiarAjustes(page, (d) => Object.assign(d.maquina, { estado: "valido", version: 2 }));
+  await page.reload();
+  await comprobar(page, con(AJUSTES, "ajustes-maquina-valida", null, deLaMaquina));
+
+  await page.unroute("**/api/ajustes");
+  await cambiarAjustes(page, (d) => Object.assign(d.maquina, { estado: "invalido", error: "machine.json no es válido: carácter inesperado en la línea 1", version: null }));
+  await page.reload();
+  await comprobar(page, con(AJUSTES, "ajustes-maquina-invalida", null, deLaMaquina));
+});
+
+test("Ajustes: lo que dice el env de un cliente, si pisa, si coincide o si machine.json no lo tiene", async ({ page, servidor }) => {
+  await cambiarAjustes(page, (d) => {
+    const claude = d.clientes.find((c: { cliente: string }) => c.cliente === "claude-code");
+    claude.lectura = "leido";
+    claude.entradas = [
+      {
+        clave: "pg",
+        ambito: "usuario",
+        carpeta: null,
+        variables: [
+          { campo: "documentacion", variable: "PHASE_GATE_DOCS_PATH", valor: "/otra/docs", estado: "pisa" },
+          { campo: "carpetaDeRepos", variable: "PHASE_GATE_REPOS_PATH", valor: "/x/repos", estado: "coincide" },
+          { campo: "idioma", variable: "PHASE_GATE_LANG", valor: "es", estado: "sin-valor-en-maquina" },
+        ],
+      },
+    ];
+  });
+  await page.goto(`${servidor.origen}/#/ajustes/equipo`);
+  const claude = (p: Page) => p.getByRole("article", { name: "Claude Code" });
+  await expect(claude(page)).toBeVisible();
+  await comprobar(page, con(AJUSTES, "ajustes-env-pisa", null, (p) => claude(p).locator(".indicador.ajustes-env-pisa")));
+  await comprobar(page, con(AJUSTES, "ajustes-env-coincide", null, (p) => claude(p).locator(".indicador.ajustes-env-coincide")));
+  await comprobar(page, con(AJUSTES, "ajustes-env-sin-valor", null, (p) => claude(p).locator(".indicador.ajustes-env-sin-valor")));
+  await soloEstadosDeLaTabla(page);
+});
+
+test("Ajustes: un campo cambiado y un campo en conflicto con el disco", async ({ page, servidor }) => {
+  let enElDisco: string | null = null;
+  await page.route("**/api/ajustes/proyectos/TIENDA", async (route) => {
+    const respuesta = await route.fetch();
+    const datos = await respuesta.json();
+    if (enElDisco !== null && datos.archivo) datos.archivo.commits = enElDisco;
+    await route.fulfill({ response: respuesta, json: datos });
+  });
+  await page.goto(`${servidor.origen}/#/ajustes/proyecto/TIENDA`);
+  await page.getByLabel("Política de commits").selectOption("agente-propone");
+  await comprobar(page, con(AJUSTES, "ajustes-cambiado", null, (p) => p.locator(".indicador.ajustes-cambiado")));
+  // El disco cambia ese mismo campo; cambiar el idioma de la interfaz vuelve a pedir los datos.
+  enElDisco = "ninguno";
+  await page.getByRole("group", { name: "Idioma" }).getByRole("button", { name: "EN" }).click();
+  await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "ES" }).click();
+  await comprobar(page, con(AJUSTES, "ajustes-conflicto", null, (p) => p.getByRole("group", { name: "En conflicto" }).locator(".indicador")));
+  await soloEstadosDeLaTabla(page);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
+test("Ajustes: los clientes detectados y no detectados", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/ajustes/clientes`);
+  await expect(page.getByRole("article", { name: "Cursor" })).toBeVisible();
+  await comprobar(page, con(AJUSTES, "ajustes-cliente-detectado", null, (p) => p.getByRole("article", { name: "Claude Code" }).locator(".indicador")));
+  await comprobar(page, con(AJUSTES, "ajustes-cliente-no-detectado", null, (p) => p.getByRole("article", { name: "VS Code" }).locator(".indicador")));
   await soloEstadosDeLaTabla(page);
 });
 
@@ -237,10 +327,12 @@ test("la tabla cubre cada estado que puede pintar el código: ni uno de más ni 
   const delCodigo = [...fuente.matchAll(/^\s*"([a-z-]+)": \{ forma:/gm)].map((m) => m[1]!);
   expect(delCodigo.length, "leo las claves de indicador.tsx").toBeGreaterThan(0);
   expect([...CLAVES].sort()).toEqual([...new Set(delCodigo)].sort());
-  // 5 fases, 10 lotes, 11 estados de la Red y 5 del Vigía (el repo con error de git y el que no respondió son uno).
+  // 5 fases, 10 lotes, 11 estados de la Red, 3 del Vigía y 10 de Ajustes (el repo con error de git y el que no
+  // respondió son uno).
   expect(FASES).toHaveLength(5);
   expect(LOTES).toHaveLength(10);
   expect(new Set(RED.map((c) => c.clave)).size).toBe(11);
-  expect(VIGIA).toHaveLength(5);
-  expect(CLAVES.size).toBe(31);
+  expect(VIGIA).toHaveLength(3);
+  expect(AJUSTES).toHaveLength(10);
+  expect(CLAVES.size).toBe(39);
 });

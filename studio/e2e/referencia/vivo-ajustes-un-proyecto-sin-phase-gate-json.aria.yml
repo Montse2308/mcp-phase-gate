@@ -1,0 +1,75 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - list:
+        - listitem:
+          - link "Este equipo":
+            - /url: "#/ajustes/equipo"
+        - listitem:
+          - text: Proyectos
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "NUEVO":
+            - /url: "#/ajustes/proyecto/NUEVO"
+        - listitem:
+          - link "ROTO":
+            - /url: "#/ajustes/proyecto/ROTO"
+        - listitem:
+          - link "TALLER":
+            - /url: "#/ajustes/proyecto/TALLER"
+        - listitem:
+          - link "TIENDA":
+            - /url: "#/ajustes/proyecto/TIENDA"
+        - listitem:
+          - link "Clientes MCP":
+            - /url: "#/ajustes/clientes"
+        - listitem:
+          - link "Studio":
+            - /url: "#/ajustes/studio"
+        - listitem:
+          - link "Avanzado":
+            - /url: "#/ajustes/avanzado"
+    - heading "Proyecto NUEVO" [level=2]
+    - paragraph: Lo que se guarda en el phase-gate.json de este proyecto, que viaja con la Documentación, y la ruta propia de sus repos en esta computadora, que va en machine.json.
+    - region "Crear phase-gate.json":
+      - paragraph: Este proyecto no tiene phase-gate.json todavía.
+      - paragraph:
+        - text: Preset del phase-gate.json nuevo
+        - combobox "Preset del phase-gate.json nuevo":
+          - option "ai-agent-ops"
+          - option "multi-repo-feature"
+          - option "research-ops"
+          - option "software"
+          - option "software-replica" [selected]
+          - option "software-tdd"
+      - 'button "Crear phase-gate.json: vista previa"'

@@ -1,0 +1,77 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - list:
+        - listitem:
+          - link "Este equipo":
+            - /url: "#/ajustes/equipo"
+        - listitem:
+          - text: Proyectos
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "NUEVO":
+            - /url: "#/ajustes/proyecto/NUEVO"
+        - listitem:
+          - link "ROTO":
+            - /url: "#/ajustes/proyecto/ROTO"
+        - listitem:
+          - link "TALLER":
+            - /url: "#/ajustes/proyecto/TALLER"
+        - listitem:
+          - link "TIENDA":
+            - /url: "#/ajustes/proyecto/TIENDA"
+        - listitem:
+          - link "Clientes MCP":
+            - /url: "#/ajustes/clientes"
+        - listitem:
+          - link "Studio":
+            - /url: "#/ajustes/studio"
+        - listitem:
+          - link "Avanzado":
+            - /url: "#/ajustes/avanzado"
+    - heading "Studio" [level=2]
+    - paragraph: "La apariencia de este navegador. Se aplica al momento, sin vista previa: no escribe en el disco."
+    - group "Tema":
+      - text: Tema
+      - radio "Sistema"
+      - text: Sistema
+      - radio "Claro" [checked]
+      - text: Claro
+      - radio "Oscuro"
+      - text: Oscuro
+    - group "Idioma de la interfaz":
+      - text: Idioma de la interfaz
+      - radio "Español" [checked]
+      - text: Español
+      - radio "English"
+      - text: English

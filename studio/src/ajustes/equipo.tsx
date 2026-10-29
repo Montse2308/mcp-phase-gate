@@ -129,13 +129,13 @@ function Sesiones({ a }: { a: AjustesRespuesta }) {
         {conRutas.map((s) =>
           s.sinRutas ? (
             <li key={s.pid}>
-              {t("ajustes.sesiones.de", { cliente: s.cliente, pid: s.pid })}: {t("ajustes.sesiones.sinRutas")}
+              {t("ajustes.sesiones.de", { cliente: s.cliente })}: {t("ajustes.sesiones.sinRutas")}
             </li>
           ) : (
             s.variables.map((v) => (
               <li key={`${s.pid}-${v.variable}`}>
                 <IndicadorDeEstado estado={ESTADO_DE_ENV[v.estado].estado} texto={t(ESTADO_DE_ENV[v.estado].texto, { variable: v.variable, valor: v.valor })} literal />
-                <span class="secundaria"> ({t("ajustes.sesiones.de", { cliente: s.cliente, pid: s.pid })})</span>
+                <span class="secundaria"> ({t("ajustes.sesiones.de", { cliente: s.cliente })})</span>
               </li>
             ))
           )

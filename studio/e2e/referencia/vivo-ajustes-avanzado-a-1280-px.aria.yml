@@ -1,0 +1,113 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - list:
+        - listitem:
+          - link "Este equipo":
+            - /url: "#/ajustes/equipo"
+        - listitem:
+          - text: Proyectos
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "NUEVO":
+            - /url: "#/ajustes/proyecto/NUEVO"
+        - listitem:
+          - link "ROTO":
+            - /url: "#/ajustes/proyecto/ROTO"
+        - listitem:
+          - link "TALLER":
+            - /url: "#/ajustes/proyecto/TALLER"
+        - listitem:
+          - link "TIENDA":
+            - /url: "#/ajustes/proyecto/TIENDA"
+        - listitem:
+          - link "Clientes MCP":
+            - /url: "#/ajustes/clientes"
+        - listitem:
+          - link "Studio":
+            - /url: "#/ajustes/studio"
+        - listitem:
+          - link "Avanzado":
+            - /url: "#/ajustes/avanzado"
+    - heading "Avanzado" [level=2]
+    - paragraph: "Estas variables se muestran con su valor y su origen, pero no se editan aquí: se definen en el entorno de cada cliente."
+    - table "Variables avanzadas":
+      - caption: Variables avanzadas
+      - rowgroup:
+        - row "Variable Nombre usado Valor De dónde sale Cómo cambiarla":
+          - columnheader "Variable"
+          - columnheader "Nombre usado"
+          - columnheader "Valor"
+          - columnheader "De dónde sale"
+          - columnheader "Cómo cambiarla"
+      - rowgroup:
+        - 'row "PHASE_GATE_PROMPTS_PATH Carpeta con prompts de fase propios, que se superponen a los del paquete. — sin definir sin definir No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_PROMPTS_PATH."':
+          - rowheader "PHASE_GATE_PROMPTS_PATH Carpeta con prompts de fase propios, que se superponen a los del paquete.":
+            - code: PHASE_GATE_PROMPTS_PATH
+            - text: Carpeta con prompts de fase propios, que se superponen a los del paquete.
+          - cell "—"
+          - cell "sin definir"
+          - cell "sin definir"
+          - 'cell "No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_PROMPTS_PATH."'
+        - 'row "PHASE_GATE_STATE_PATH Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya. PHASE_GATE_STATE_PATH <raiz>/estado entorno No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_STATE_PATH."':
+          - rowheader "PHASE_GATE_STATE_PATH Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya.":
+            - code: PHASE_GATE_STATE_PATH
+            - text: Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya.
+          - cell "PHASE_GATE_STATE_PATH"
+          - cell "<raiz>/estado"
+          - cell "entorno"
+          - 'cell "No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_STATE_PATH."'
+        - 'row "PHASE_GATE_CONFIG_PATH La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts. PHASE_GATE_CONFIG_PATH <raiz>/config entorno No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_CONFIG_PATH."':
+          - 'rowheader "PHASE_GATE_CONFIG_PATH La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts."':
+            - code: PHASE_GATE_CONFIG_PATH
+            - text: "La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts."
+          - cell "PHASE_GATE_CONFIG_PATH"
+          - cell "<raiz>/config"
+          - cell "entorno"
+          - 'cell "No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_CONFIG_PATH."'
+        - 'row "PHASE_GATE_ELICITATION «off» para que el servidor no pida confirmaciones al cliente y las pida en el chat. — sin definir sin definir No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_ELICITATION."':
+          - rowheader "PHASE_GATE_ELICITATION «off» para que el servidor no pida confirmaciones al cliente y las pida en el chat.":
+            - code: PHASE_GATE_ELICITATION
+            - text: «off» para que el servidor no pida confirmaciones al cliente y las pida en el chat.
+          - cell "—"
+          - cell "sin definir"
+          - cell "sin definir"
+          - 'cell "No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_ELICITATION."'
+        - 'row "PHASE_GATE_LANG El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo. PHASE_GATE_LANG es entorno No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_LANG."':
+          - 'rowheader "PHASE_GATE_LANG El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo."':
+            - code: PHASE_GATE_LANG
+            - text: "El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo."
+          - cell "PHASE_GATE_LANG"
+          - cell "es"
+          - cell "entorno"
+          - 'cell "No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_LANG."'

@@ -297,7 +297,7 @@ export const en = {
   "ajustes.env.archivoIlegible": "{cliente}: {archivo} could not be read.",
   "ajustes.sesiones.titulo": "Open servers",
   "ajustes.sesiones.nota": "An open server keeps what it received at start: for it to use the new values, restart that client.",
-  "ajustes.sesiones.de": "{cliente} (pid {pid})",
+  "ajustes.sesiones.de": "{cliente}",
   "ajustes.sesiones.sinRutas": "it is a 3.x server and does not report its paths",
   "ajustes.proyecto.titulo": "Project {proyecto}",
   "ajustes.proyecto.intro": "What is saved in this project's phase-gate.json, which travels with the Documentation, and the own path of its repos on this computer, which goes in machine.json.",

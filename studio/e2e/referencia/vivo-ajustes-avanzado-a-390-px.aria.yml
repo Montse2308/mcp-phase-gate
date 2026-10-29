@@ -1,0 +1,95 @@
+- link "Saltar al contenido":
+  - /url: "#contenido"
+- banner:
+  - paragraph: mcp-phase-gate Studio
+  - navigation "Vistas":
+    - list:
+      - listitem:
+        - link "Red":
+          - /url: "#/red"
+      - listitem:
+        - link "Tablero":
+          - /url: "#/tablero"
+      - listitem:
+        - link "Taller":
+          - /url: "#/taller"
+      - listitem:
+        - link "Vigía":
+          - /url: "#/vigia"
+      - listitem:
+        - link "Bitácora":
+          - /url: "#/bitacora"
+      - listitem:
+        - link "Ajustes":
+          - /url: "#/ajustes"
+  - button "Tema oscuro"
+  - group "Idioma":
+    - button "ES" [pressed]
+    - button "EN"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=1]
+    - navigation "Páginas de Ajustes":
+      - text: Ir a la página
+      - combobox "Ir a la página":
+        - option "Este equipo"
+        - option "INVESTIGACION"
+        - option "NUEVO"
+        - option "ROTO"
+        - option "TALLER"
+        - option "TIENDA"
+        - option "Clientes MCP"
+        - option "Studio"
+        - option "Avanzado" [selected]
+    - heading "Avanzado" [level=2]
+    - paragraph: "Estas variables se muestran con su valor y su origen, pero no se editan aquí: se definen en el entorno de cada cliente."
+    - table "Variables avanzadas":
+      - caption: Variables avanzadas
+      - rowgroup:
+        - row "Variable Nombre usado Valor De dónde sale Cómo cambiarla":
+          - columnheader "Variable"
+          - columnheader "Nombre usado"
+          - columnheader "Valor"
+          - columnheader "De dónde sale"
+          - columnheader "Cómo cambiarla"
+      - rowgroup:
+        - 'row "PHASE_GATE_PROMPTS_PATH Carpeta con prompts de fase propios, que se superponen a los del paquete. Nombre usado: — Valor: sin definir De dónde sale: sin definir Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_PROMPTS_PATH."':
+          - rowheader "PHASE_GATE_PROMPTS_PATH Carpeta con prompts de fase propios, que se superponen a los del paquete.":
+            - code: PHASE_GATE_PROMPTS_PATH
+            - text: Carpeta con prompts de fase propios, que se superponen a los del paquete.
+          - 'cell "Nombre usado: —"'
+          - 'cell "Valor: sin definir"'
+          - 'cell "De dónde sale: sin definir"'
+          - 'cell "Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_PROMPTS_PATH."'
+        - 'row "PHASE_GATE_STATE_PATH Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya. Nombre usado: PHASE_GATE_STATE_PATH Valor: <raiz>/estado De dónde sale: entorno Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_STATE_PATH."':
+          - rowheader "PHASE_GATE_STATE_PATH Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya.":
+            - code: PHASE_GATE_STATE_PATH
+            - text: Dónde se guardan los punteros de tarea activa y las sesiones. Cada registro del servidor con su propia Documentación necesita la suya.
+          - 'cell "Nombre usado: PHASE_GATE_STATE_PATH"'
+          - 'cell "Valor: <raiz>/estado"'
+          - 'cell "De dónde sale: entorno"'
+          - 'cell "Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_STATE_PATH."'
+        - 'row "PHASE_GATE_CONFIG_PATH La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts. Nombre usado: PHASE_GATE_CONFIG_PATH Valor: <raiz>/config De dónde sale: entorno Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_CONFIG_PATH."':
+          - 'rowheader "PHASE_GATE_CONFIG_PATH La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts."':
+            - code: PHASE_GATE_CONFIG_PATH
+            - text: "La carpeta de configuración de este equipo: machine.json, los presets propios y la capa global de prompts."
+          - 'cell "Nombre usado: PHASE_GATE_CONFIG_PATH"'
+          - 'cell "Valor: <raiz>/config"'
+          - 'cell "De dónde sale: entorno"'
+          - 'cell "Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_CONFIG_PATH."'
+        - 'row "PHASE_GATE_ELICITATION «off» para que el servidor no pida confirmaciones al cliente y las pida en el chat. Nombre usado: — Valor: sin definir De dónde sale: sin definir Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_ELICITATION."':
+          - rowheader "PHASE_GATE_ELICITATION «off» para que el servidor no pida confirmaciones al cliente y las pida en el chat.":
+            - code: PHASE_GATE_ELICITATION
+            - text: «off» para que el servidor no pida confirmaciones al cliente y las pida en el chat.
+          - 'cell "Nombre usado: —"'
+          - 'cell "Valor: sin definir"'
+          - 'cell "De dónde sale: sin definir"'
+          - 'cell "Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_ELICITATION."'
+        - 'row "PHASE_GATE_LANG El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo. Nombre usado: PHASE_GATE_LANG Valor: es De dónde sale: entorno Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_LANG."':
+          - 'rowheader "PHASE_GATE_LANG El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo."':
+            - code: PHASE_GATE_LANG
+            - text: "El idioma del servidor: el de sus mensajes y el de los proyectos sin idioma propio. Gana al idioma por defecto de este equipo."
+          - 'cell "Nombre usado: PHASE_GATE_LANG"'
+          - 'cell "Valor: es"'
+          - 'cell "De dónde sale: entorno"'
+          - 'cell "Cómo cambiarla: No se edita desde Ajustes. Se cambia en el bloque \"env\" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): PHASE_GATE_LANG."'

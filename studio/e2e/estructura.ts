@@ -45,9 +45,12 @@ export async function fotografiar(page: Page): Promise<Foto> {
 const esElBotonDelTema = (n: Nodo) => n.etiqueta === "button" && /(?:^|\s)interruptor(?:\s|$)/.test(n.atributos["class"] ?? "");
 const seIgnora = (n: Nodo, atributo: string) => (n.etiqueta === "html" && atributo === "data-tema") || (esElBotonDelTema(n) && atributo === "aria-pressed");
 
-// En el árbol de accesibilidad, el botón del tema se lee «button "Tema oscuro" [pressed]»: se quita el estado.
+// En el árbol de accesibilidad, el botón del tema se lee «button "Tema oscuro" [pressed]»: se quita el estado. Lo
+// mismo con la casilla marcada del selector de tema de Ajustes (Sistema, Claro u Oscuro): que sea una u otra es
+// justo lo que cambia al cambiar de tema, y no es estructura.
 const BOTON_DEL_TEMA = /^(\s*- button "(?:Tema oscuro|Dark theme)")(?: \[pressed(?:=mixed)?\])/;
-const sinElPulsado = (linea: string) => linea.replace(BOTON_DEL_TEMA, "$1");
+const CASILLA_DEL_TEMA = /^(\s*- radio "(?:Sistema|Claro|Oscuro|System|Light|Dark)")(?: \[checked\])/;
+const sinElPulsado = (linea: string) => linea.replace(BOTON_DEL_TEMA, "$1").replace(CASILLA_DEL_TEMA, "$1");
 
 const comillas = (texto: string) => JSON.stringify(texto.length > 80 ? `${texto.slice(0, 80)}…` : texto);
 

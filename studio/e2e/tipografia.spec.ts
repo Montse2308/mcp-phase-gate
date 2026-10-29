@@ -9,7 +9,9 @@ import { expect, fasesDeLaTarea, lotesDeLaFase, test } from "./ayudas";
 
 const MINIMO = 12;
 
-type Vista = { nombre: string; hash: string; ancho: number; listo: (p: Page) => Promise<void>; despues?: (p: Page) => Promise<void> };
+// `minimoDeTextos`: cuántos textos tiene que medir la prueba para valer (40 si no se dice). El Vigía, ahora sin sus
+// clientes ni su tabla de variables, tiene menos.
+type Vista = { nombre: string; hash: string; ancho: number; minimoDeTextos?: number; listo: (p: Page) => Promise<void>; despues?: (p: Page) => Promise<void> };
 
 const botonDeFila = (p: Page, nombre: string) => p.getByRole("article", { name: nombre }).getByRole("heading", { level: 2, name: nombre }).getByRole("button");
 
@@ -54,16 +56,58 @@ const VISTAS: Vista[] = [
     },
   })),
   ...[1280, 390].map((ancho) => ({
-    nombre: `el Vigía con la vista previa de un cliente a ${ancho} px`,
+    nombre: `el Vigía a ${ancho} px`,
     hash: "#/vigia",
     ancho,
+    minimoDeTextos: 30,
     listo: async (p: Page) => {
-      await expect(p.getByRole("table", { name: "Variables de entorno" })).toBeVisible();
+      await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
+    },
+  })),
+  ...[1280, 390].map((ancho) => ({
+    nombre: `Ajustes, Este equipo, a ${ancho} px`,
+    hash: "#/ajustes/equipo",
+    ancho,
+    listo: async (p: Page) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("region", { name: "Lo que dicen los clientes en su env" })).toBeVisible();
+    },
+  })),
+  ...[1280, 390].map((ancho) => ({
+    nombre: `Ajustes, un proyecto con un cambio y la vista previa a ${ancho} px`,
+    hash: "#/ajustes/proyecto/TIENDA",
+    ancho,
+    listo: async (p: Page) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("table", { name: "Repos del proyecto" })).toBeVisible();
+    },
+    despues: async (p: Page) => {
+      await p.getByLabel("Preset", { exact: true }).selectOption("software");
+      await p.getByRole("button", { name: "Guardar los cambios: vista previa" }).click();
+      await expect(p.getByRole("region", { name: "Vista previa: Guardar los cambios" }).locator(".diff-mas").first()).toBeVisible();
+    },
+  })),
+  ...[1280, 390].map((ancho) => ({
+    nombre: `Ajustes, Clientes MCP con la vista previa de un cliente a ${ancho} px`,
+    hash: "#/ajustes/clientes",
+    ancho,
+    listo: async (p: Page) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("article", { name: "Cursor" })).toBeVisible();
     },
     despues: async (p: Page) => {
       const cursor = p.getByRole("article", { name: "Cursor" });
       await cursor.getByRole("button", { name: "Configurar Cursor: vista previa" }).click();
       await expect(cursor.getByRole("region", { name: "Vista previa: Configurar Cursor" })).toBeVisible();
+    },
+  })),
+  ...[1280, 390].map((ancho) => ({
+    nombre: `Ajustes, Avanzado, a ${ancho} px`,
+    hash: "#/ajustes/avanzado",
+    ancho,
+    listo: async (p: Page) => {
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("table", { name: "Variables avanzadas" })).toBeVisible();
     },
   })),
   ...[1280, 390].map((ancho) => ({
@@ -111,7 +155,7 @@ for (const tema of ["claro", "oscuro"] as const) {
       await v.despues?.(page);
       await expect(page.locator("html")).toHaveAttribute("data-tema", tema);
       const { cuerpo, pequenos, vistos } = await page.evaluate(textosPequenos, MINIMO);
-      expect(vistos, "la prueba mide textos de verdad").toBeGreaterThan(40);
+      expect(vistos, "la prueba mide textos de verdad").toBeGreaterThan(v.minimoDeTextos ?? 40);
       expect(cuerpo).toBe("15px");
       expect(pequenos, `textos por debajo de ${MINIMO} px`).toEqual([]);
     });
