@@ -12,7 +12,7 @@ It opens a local web app with what the server sees, built from the same function
 |---|---|
 | **Network** | One row per project that expands: its preset (with a warning if the manifest is invalid), its repos with branch and pending changes, the active task with its phase, and which MCP client has it open right now; expanded, the manifest and the rules. The preset and the manifest are changed in Settings: the row links to it |
 | **Board** | A task's phases as six cards (closed, in progress, with pending items, gap, pending), and the phase 4 batches as a table: verified (its commit is on the branch), sealed (sha256), with pending items, pending commit, stale (the anchor no longer matches), rejected, discarded, manual, note and no receipt, each with its detail, its anchor and its receipt. Click to read the document or the receipt |
-| **Workshop** | The prompt each phase receives, slot by slot: which layer and `file:line` won, a diff against the packaged text, and `eject` to edit it |
+| **Workshop** | The prompt each phase receives, slot by slot: which layer and `file:line` won, a diff against the packaged text, and `eject` to edit it. The project's rules are shown there, and changed in Settings |
 | **Lookout** | `doctor`'s findings with how to fix each one |
 | **Logbook** | The task's timeline: documents, receipts, commits with their subject, re-anchors and the phase 4 close |
 | **Settings** | Everything you can configure, in one place ([below](#settings)) |

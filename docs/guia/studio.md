@@ -12,7 +12,7 @@ Abre una aplicación web local con lo que ve el servidor, armada con las mismas 
 |---|---|
 | **Red** | Una fila por proyecto, que se despliega: su preset (y un aviso si el manifiesto es inválido), sus repos con rama y cambios pendientes, la tarea activa con su fase y qué cliente MCP lo tiene abierto ahora mismo; al desplegarla, el manifiesto y las reglas. El preset y el manifiesto se cambian en Ajustes: la fila enlaza a él |
 | **Tablero** | Las fases de una tarea como seis tarjetas (cerrada, en curso, con pendientes, hueco, pendiente), y los lotes de la Fase 4 como una tabla: verificado (su commit está en la rama), sellado (sha256), con pendientes, commit pendiente, no vigente (el ancla ya no coincide), rechazado, descartado, manual, nota y sin recibo, cada uno con su detalle, su ancla y su recibo. Un clic abre el documento o el recibo |
-| **Taller** | El prompt que recibe cada fase, ranura por ranura: qué capa y qué `archivo:línea` ganó, el diff frente al texto de fábrica y `eject` para editarlo |
+| **Taller** | El prompt que recibe cada fase, ranura por ranura: qué capa y qué `archivo:línea` ganó, el diff frente al texto de fábrica y `eject` para editarlo. Las reglas del proyecto se leen ahí, y se cambian en Ajustes |
 | **Vigía** | Los hallazgos de `doctor` con cómo se arregla cada uno |
 | **Bitácora** | La línea de tiempo de la tarea: documentos, recibos, commits con su asunto, reanclajes y el cierre de la Fase 4 |
 | **Ajustes** | Todo lo que se puede configurar, en un solo sitio ([abajo](#ajustes)) |
