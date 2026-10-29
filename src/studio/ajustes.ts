@@ -4,15 +4,18 @@
 // .cursor/mcp.json and .vscode/mcp.json of each project, the VS Code profiles, other clients and the servers
 // with another PHASE_GATE_STATE_PATH, whose sessions the Studio does not see.
 
+import * as fs from "fs";
 import * as path from "path";
 
+import { configuracionDe } from "../capas.js";
 import { VARIABLES, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, leerVariable, maquinaVigente, valorDeMaquina } from "../config.js";
 import type { NombreLogico } from "../config.js";
 import { mensaje } from "../i18n/mensajes.js";
 import { CLIENTES, carpetaDelCliente, ejecutaPhaseGate, leerJsonTolerante, rutasDelEnvDeEntrada, variableDeRutaEnEntrada } from "../init.js";
 import type { Cliente, EntornoInit, QuitaDelEntorno } from "../init.js";
+import { claveDeRepo, leerManifiesto, leerMaquina } from "../manifiesto.js";
 import type { SesionAbierta } from "../sesiones.js";
-import type { AjustesRespuesta, AvanzadaApi, CampoAjustes, ClienteAjustes, EntradaDeCliente, EnvDeCliente, NombreDeCampo, SesionDeAjustes } from "./contrato.js";
+import type { AjustesDeProyecto, AjustesRespuesta, AvanzadaApi, CampoAjustes, ClienteAjustes, EntradaDeCliente, EnvDeCliente, NombreDeCampo, SesionDeAjustes } from "./contrato.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 
 const CAMPOS: { campo: Exclude<NombreDeCampo, "idioma">; logica: NombreLogico }[] = [
@@ -171,10 +174,51 @@ export function ajustesDeEsteEquipo(ctx: { entornoInit: () => EntornoInit; sesio
       // The process keeps the last valid file if this one broke: what still applies is not what is on disk.
       deMemoria: maquina.deMemoria,
       version,
+      presetPorDefecto: maquina.config?.presetPorDefecto ?? null,
     },
     campos,
     clientes: CLIENTES.map((cliente) => (cliente === "claude-code" ? clienteDeClaude(entorno, enMaquina) : clienteDeArchivo(cliente, entorno, enMaquina))),
     sesiones: ctx.sesiones().map((s) => sesionDeAjustes(s, enMaquina)),
     avanzadas: avanzadas(),
   };
+}
+
+// ─── What the page of a project edits ───────────────────────────────────────
+// `nombre` is the project already resolved by the caller. A key the file does not have is null: the preset or
+// the team decides it, and `efectivo` says what.
+export function ajustesDeProyecto(nombre: string): AjustesDeProyecto {
+  const lectura = leerManifiesto(nombre);
+  const manifiesto = { estado: lectura.estado, error: lectura.estado === "invalido" ? sinRutasDelEquipo(lectura.error) : null };
+
+  let archivo: AjustesDeProyecto["archivo"] = null;
+  const rutasPropias: Record<string, string> = {};
+  if (lectura.estado === "valido") {
+    const m = lectura.manifiesto;
+    // The parsed manifest fills in the preset; what the file really says is in the raw text.
+    const crudo = JSON.parse(fs.readFileSync(lectura.ruta, "utf-8").replace(/^﻿/, "")) as { preset?: unknown };
+    archivo = {
+      preset: typeof crudo.preset === "string" ? crudo.preset : null,
+      idioma: m.idioma ?? null,
+      lotes: m.reglas.lotes ?? null,
+      commits: m.reglas.commits ?? null,
+      verificacion: m.reglas.verificacion ?? null,
+      prPorRepo: m.fase5.prPorRepo ?? null,
+      repos: m.repos.map((r) => ({ id: r.id, dir: r.dir, rol: r.rol ?? null })),
+    };
+    // A broken machine.json has no own paths to show: the "Este equipo" page says it is broken.
+    const maquina = leerMaquina();
+    for (const r of m.repos) {
+      const propia = maquina.repos.get(claveDeRepo(nombre, r.id));
+      if (propia !== undefined) rutasPropias[r.id] = propia;
+    }
+  }
+
+  let efectivo: AjustesDeProyecto["efectivo"] = null;
+  try {
+    const config = configuracionDe(nombre);
+    efectivo = { preset: config.preset.nombre, origenDelPreset: config.origenPreset, lotes: config.reglas.lotes, commits: config.reglas.commits };
+  } catch {
+    efectivo = null;
+  }
+  return { proyecto: nombre, manifiesto, archivo, efectivo, rutasPropias };
 }

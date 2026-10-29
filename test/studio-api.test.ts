@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { cargarEnv, configDir, fijarRaizDelPaquete } from "../src/config.js";
 import { registrarLote } from "../src/lotes.js";
 import {
+  AjustesDeProyecto,
   AjustesRespuesta,
   BitacoraRespuesta,
   ClientesRespuesta,
@@ -322,7 +323,7 @@ describe("API del Studio: /api/ajustes", () => {
     const { docs, repos } = await instalacion();
     const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
 
-    assert.deepEqual(r.maquina, { estado: "ausente", error: null, deMemoria: false, version: null });
+    assert.deepEqual(r.maquina, { estado: "ausente", error: null, deMemoria: false, version: null, presetPorDefecto: null });
     assert.deepEqual(r.campos.map((c) => c.campo), ["documentacion", "carpetaDeRepos", "subcarpetaTareas", "idioma"]);
     assert.deepEqual(
       r.campos.map((c) => [c.variable, c.enMaquina, c.efectivo, c.fuente, c.propioStudioPisa, c.sinGuardar]),
@@ -605,6 +606,8 @@ describe("API del Studio: parámetros, errores y lo que no se hace", () => {
       "/api/prompts/Q/1",
       "/api/clientes",
       "/api/ajustes",
+      "/api/ajustes/proyectos/P",
+      "/api/ajustes/proyectos/R",
       "/api/proyectos/R/tareas",
     ]) {
       await s.get(ruta);
@@ -617,5 +620,68 @@ describe("API del Studio: parámetros, errores y lo que no se hace", () => {
     const texto = `${path.join(docs, "P")} · ${path.join(repos, "api")} · ${config} · ${estado} · ${path.join(os.homedir(), "x")} · ${docs.replace(/\\/g, "/")}/y`;
     const limpio = sinRutasDelEquipo(texto);
     assert.equal(limpio, `${path.join("<Documentación>", "P")} · ${path.join("<repos>", "api")} · <configuración> · <estado> · ${path.join("~", "x")} · <Documentación>/y`);
+  });
+});
+
+describe("API del Studio: /api/ajustes/proyectos/:p", () => {
+  async function pedirProyecto(nombre: string): Promise<{ estado: number; datos: AjustesDeProyecto | null; texto: string }> {
+    const s = await studioConApi({ entornoInit: () => entornoInitDePrueba() });
+    const r = await s.get(`/api/ajustes/proyectos/${nombre}`);
+    return { estado: r.estado, datos: r.estado === 200 ? AjustesDeProyecto.parse(r.json) : null, texto: r.texto };
+  }
+
+  it("lo que dice phase-gate.json (null donde decide el preset), lo que aplica y la ruta propia de cada repo", async () => {
+    const { docs, config } = await instalacion();
+    const propia = path.join(carpetaTemporal("propia"), "api-aqui");
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 2, repos: { "p/api": propia, "otro/api": "/x/y" } }), "utf-8");
+    fs.writeFileSync(
+      path.join(docs, "P", "phase-gate.json"),
+      JSON.stringify({ version: 1, preset: "software", idioma: "en", repos: [{ id: "api", dir: "api", rol: "backend" }, { id: "web", dir: "web" }], reglas: { lotes: false, verificacion: ["npm test"] }, fase5: { prPorRepo: true } }),
+      "utf-8"
+    );
+    const { estado, datos } = await pedirProyecto("P");
+    assert.equal(estado, 200);
+    assert.deepEqual(datos!.manifiesto, { estado: "valido", error: null });
+    assert.deepEqual(datos!.archivo, {
+      preset: "software",
+      idioma: "en",
+      lotes: false,
+      commits: null,
+      verificacion: ["npm test"],
+      prPorRepo: true,
+      repos: [{ id: "api", dir: "api", rol: "backend" }, { id: "web", dir: "web", rol: null }],
+    });
+    assert.deepEqual(datos!.efectivo?.preset, "software");
+    assert.equal(datos!.efectivo?.lotes, false);
+    // Solo las claves de este proyecto, y con la ruta resuelta de este equipo.
+    assert.deepEqual(datos!.rutasPropias, { api: path.resolve(propia) });
+  });
+
+  it("sin preset en el archivo, preset es null y el efectivo dice el que aplica", async () => {
+    const { docs } = await instalacion();
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1 }), "utf-8");
+    const { datos } = await pedirProyecto("P");
+    assert.equal(datos!.archivo!.preset, null);
+    assert.deepEqual(datos!.archivo!.repos, []);
+    assert.equal(datos!.efectivo?.preset, "software");
+    assert.deepEqual(datos!.rutasPropias, {});
+  });
+
+  it("un proyecto sin phase-gate.json no tiene archivo, y uno roto trae su error sin las rutas del equipo", async () => {
+    const { docs } = await instalacion();
+    const sin = await pedirProyecto("Q");
+    assert.equal(sin.datos!.manifiesto.estado, "ausente");
+    assert.equal(sin.datos!.archivo, null);
+    assert.ok(sin.datos!.efectivo, "aun sin manifiesto, el preset que aplica se dice");
+    const roto = await pedirProyecto("R");
+    assert.equal(roto.datos!.manifiesto.estado, "invalido");
+    assert.equal(roto.datos!.archivo, null);
+    assert.ok(!roto.datos!.manifiesto.error!.includes(docs));
+  });
+
+  it("un proyecto que no existe da 404 y un nombre inválido, 400", async () => {
+    await instalacion();
+    assert.equal((await pedirProyecto("NoExiste")).estado, 404);
+    assert.equal((await pedirProyecto("..")).estado, 400);
   });
 });
