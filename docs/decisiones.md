@@ -12,6 +12,65 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-28 — Ajustes es el único lugar donde se edita la configuración
+
+> **Reemplaza en parte** la entrada siguiente (la de `machine.json` versión 2), en un punto: las acciones `preset` y
+> `reglas`, que allí conviven con las nuevas «mientras la interfaz las use», ya salieron. Las acciones del Studio son
+> cinco: `crear-manifiesto`, `eject`, `init-cliente`, `equipo` y `proyecto`. `proyecto` hace lo que hacían las dos que
+> salen, con las mismas protecciones (destinos cerrados por archivo y por clave, un solo shape de validación y la
+> huella).
+
+**Decisión.**
+
+- **Ajustes es una vista nueva, la sexta, y el único lugar donde se edita la configuración.** El preset (antes en la
+  Red), las reglas (antes en el Taller) y la conexión de los clientes y las variables (antes en el Vigía) se mudan
+  ahí, y esas vistas muestran el valor con un enlace «Cambiar en Ajustes». El eject se queda en el Taller, porque es
+  de prompts.
+- **Un menú a la izquierda y una página por archivo:** Este equipo (`machine.json`), cada proyecto (su
+  `phase-gate.json`), Clientes MCP, Studio y Avanzado. En un teléfono, el menú pasa a un selector arriba. Cada página
+  tiene su borrador, su diff y su Aplicar al pie.
+- **Los cambios se aplican juntos por archivo.** Se cambian varios campos y se ve un solo diff por archivo, con un
+  solo Aplicar o Descartar, con la huella y el 409 de siempre. Cada campo cambiado lo dice («Cambiado, sin aplicar»)
+  y el menú cuenta los cambios de cada página. Si el archivo cambia en el disco mientras hay un borrador, la página
+  lo dice y vuelve a pedir el plan; si lo que cambió es un campo que también está en el borrador, ese campo queda
+  en conflicto y la persona elige entre el suyo y el del disco, en vez de que se pise en silencio. Salir de una
+  página con cambios sin aplicar, o cerrar la pestaña, pide confirmación.
+- **La página de un proyecto es la única que escribe dos archivos.** Al agregar o cambiar un repo, su ruta propia en
+  esta computadora se escribe en `machine.json` desde la misma página, con dos diffs («viaja con la Documentación» y
+  «solo esta computadora») y un solo Aplicar. `machine.json` se escribe primero. El id de un repo no se renombra: se
+  quita y se agrega, con el aviso de si algún recibo lo cita.
+- **Las cinco variables avanzadas se muestran, no se editan:** su valor, su origen y cómo cambiarlas. El idioma sí se
+  edita: el de la interfaz, el de cada proyecto y el idioma por defecto del equipo, que cede ante `PHASE_GATE_LANG`
+  si está en el entorno.
+- **La página Studio no escribe en el disco:** el tema (Sistema, Claro u Oscuro; sin elección guardada, sigue al del
+  sistema) y el idioma de la interfaz se aplican al momento y los recuerda el navegador. El botón de la barra y el
+  selector ES / EN se quedan como atajos.
+- **El primer arranque abre Ajustes.** Sin Documentación configurada, abrir el Studio lleva a Este equipo, que pide
+  dónde está, en vez de enseñar una Red vacía. Si las rutas salen del entorno y `machine.json` no las tiene, la
+  página ofrece guardarlas ahí, con su vista previa.
+- **Lo que enseña Ajustes sale de dos lecturas que no escriben:** `GET /api/ajustes` (lo del equipo y sus avisos) y
+  `GET /api/ajustes/proyectos/<P>` (lo que dice el `phase-gate.json` de un proyecto, lo que de verdad aplica y las
+  rutas propias de sus repos). La segunda hace falta porque ninguna otra lectura enseña la carpeta de cada repo, el
+  idioma ni los comandos de verificación.
+- **En el sitio exportado, Ajustes se ve de solo lectura**, como las acciones de siempre, y la página Studio
+  funciona, porque solo cambia el navegador. Con `--incluir-datos-reales`, las páginas que enseñan rutas (Este
+  equipo, cada proyecto, Clientes MCP y Avanzado) no se exportan y dicen «No disponible en una exportación»: el
+  sustituto de nombres del export solo reconoce las raíces conocidas, y una ruta de otro sitio se colaría.
+
+**Descartado.**
+
+- **Las otras dos maquetas** (A y C) frente a la B de menú a la izquierda y una página por archivo.
+- **Aplicar campo por campo:** cada campo con su propia vista previa. Cambiar tres cosas de un proyecto eran tres
+  diffs del mismo archivo, tres huellas y tres escrituras, y entre una y otra el archivo ya no es el que se vio.
+- **Variables avanzadas editables:** carpetas de prompts, estado y config, preguntas de confirmación e idioma del
+  servidor. Cambiarlas desde un proceso que ya corre con ellas no las cambia para ese proceso, y la del estado o la
+  de config movería hasta el archivo que las edita.
+- **La ruta propia de un repo solo en Este equipo:** obliga a ir y volver entre dos páginas para algo que es de un
+  proyecto, y deja agregar un repo a medias hasta que alguien recuerda la segunda. En la página del proyecto se ven
+  juntos el repo y dónde está en esta computadora.
+
+---
+
 ## 2026-10-28 — Las rutas de este equipo y el idioma por defecto viven en `machine.json`, que pasa a la versión 2, y el entorno siempre gana
 
 > **Reemplaza en parte** dos entradas. De "El Studio solo ejecuta acciones del CLI, con vista previa y huella"
@@ -23,6 +82,9 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 > equipo" (2026-10-19) y del paso 3 de "El idioma es del proyecto y se deduce primero del disco…" (2026-10-18):
 > solo el orden entre `idiomaPorDefecto` de `machine.json` y `PHASE_GATE_LANG`, que se invierte. El resto de esas
 > entradas sigue vigente.
+
+> **Reemplazada en parte** el 2026-10-28 por "Ajustes es el único lugar donde se edita la configuración": `preset`
+> y `reglas` ya salieron, y las acciones son cinco.
 
 **Decisión.**
 
