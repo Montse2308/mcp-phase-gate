@@ -52,6 +52,20 @@ function titulos(texto: string): { nivel: number; texto: string }[] {
     .map((m) => ({ nivel: (m[1] ?? "").length, texto: (m[2] ?? "").trim() }));
 }
 
+// Cada título con las líneas de su sección, hasta el título siguiente. Las de un bloque de código se
+// conservan, para contarlas; lo que parece un título dentro de uno no lo es.
+function seccionesDe(texto: string): { nivel: number; titulo: string; cuerpo: string[] }[] {
+  const secciones: { nivel: number; titulo: string; cuerpo: string[] }[] = [];
+  let cerca = false;
+  for (const linea of texto.split("\n")) {
+    if (/^\s*```/.test(linea)) cerca = !cerca;
+    const m = cerca || /^\s*```/.test(linea) ? null : /^(#{1,6}) (.*)$/.exec(linea);
+    if (m) secciones.push({ nivel: (m[1] ?? "").length, titulo: (m[2] ?? "").trim(), cuerpo: [] });
+    else secciones[secciones.length - 1]?.cuerpo.push(linea);
+  }
+  return secciones;
+}
+
 // El ancla que GitHub le da a un título: minúsculas, sin signos ni emoji, y un guion por espacio.
 function ancla(titulo: string): string {
   return titulo
@@ -118,9 +132,18 @@ describe("los README y las guías", () => {
     }
 
     // Gemelos: la misma lista de títulos en el mismo orden. Los textos se traducen, así que se compara lo que no
-    // cambia con el idioma: el nivel de cada título y lo que va entre comillas invertidas.
+    // cambia con el idioma: el nivel de cada título, lo que va entre comillas invertidas, y la huella de su
+    // sección (cuántos bloques de código, filas de tabla, viñetas y enlaces trae). Con eso, dos títulos vecinos
+    // que se cambian de sitio, aunque ninguno lleve comillas, dejan de coincidir.
     function forma(texto: string): string[] {
-      return titulos(texto).map(({ nivel, texto: t }) => `${nivel}:${(t.match(/`[^`]+`/g) ?? []).join(" ").replace(/<[^>]+>/g, "<>")}`);
+      return seccionesDe(texto).map(({ nivel, titulo, cuerpo }) => {
+        const codigo = (titulo.match(/`[^`]+`/g) ?? []).join(" ").replace(/<[^>]+>/g, "<>");
+        const bloques = cuerpo.filter((l) => /^\s*```/.test(l)).length / 2;
+        const filas = cuerpo.filter((l) => /^\|/.test(l)).length;
+        const vinietas = cuerpo.filter((l) => /^\s*(?:[-*]|\d+\.) /.test(l)).length;
+        const enlaces = enlacesDe(cuerpo.join("\n")).length;
+        return `${nivel}:${codigo}:b${bloques}:f${filas}:v${vinietas}:e${enlaces}`;
+      });
     }
     function mismaForma(en: string, es: string): void {
       const a = titulos(leer(en));
@@ -239,6 +262,25 @@ describe("los README y las guías", () => {
         for (const bloque of bloques) {
           assert.ok(!(/"env"\s*:/.test(bloque) && /PHASE_GATE_DOCS_PATH/.test(bloque)), `${readme} tiene un bloque env con PHASE_GATE_DOCS_PATH`);
         }
+      });
+    }
+
+    // En las guías hay un solo sitio donde las rutas sí van en el `env` de un cliente: registrar el servidor
+    // más de una vez, con una Documentación distinta en cada registro. Ahí el entorno gana a machine.json, y
+    // es justo lo que se enseña. En cualquier otra sección sería enseñar lo que `init` ya no escribe.
+    const VARIAS_CARPETAS = ["more-than-one-documentation-folder-optional", "varias-carpetas-de-documentación-opcional"];
+    for (const archivo of [...GUIAS.flat(), "CONTRIBUTING.md"]) {
+      it(`${archivo} solo pone rutas en un bloque env en la sección de varias carpetas de Documentación`, () => {
+        const sitios: string[] = [];
+        for (const { titulo, cuerpo } of seccionesDe(leer(archivo))) {
+          const bloques = [...cuerpo.join("\n").matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1] ?? "");
+          if (bloques.some((b) => /"env"\s*:/.test(b) && /PHASE_GATE_DOCS_PATH/.test(b))) sitios.push(ancla(titulo));
+        }
+        assert.deepEqual(
+          sitios.filter((s) => !VARIAS_CARPETAS.includes(s)),
+          [],
+          `${archivo} enseña rutas en un bloque env fuera de la sección de varias carpetas`,
+        );
       });
     }
   });
