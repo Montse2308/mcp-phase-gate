@@ -30,11 +30,12 @@ on:
 permissions:
   contents: read
 
-# Las construcciones van por ref: una corrida manual sobre una rama no cancela la de un tag. El despliegue tiene
-# su propio grupo, y no se cancela.
+# Las construcciones van por ref: una corrida manual sobre una rama no cancela la de un tag. Y la de un tag no se
+# cancela nunca, ni siquiera por otra corrida sobre el mismo tag: cancelar a mitad del despliegue dejaría el sitio
+# a medias. El despliegue tiene además su propio grupo, para que dos tags publiquen uno detrás de otro.
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   sitio:
@@ -57,6 +58,15 @@ jobs:
       - run: node build/index.js ui --export-static studio-public/demo
 
       - run: node scripts/portada.mjs --salida studio-public
+
+      # «Instalar» es uno de los dos botones de la portada y lleva a estas dos guías: si no existen, el sitio no
+      # se publica con un botón roto. Solo al publicar: mientras la v4 se construye, las guías pueden no estar.
+      - name: Las guías a las que lleva «Instalar» existen
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          for guia in docs/guide/installation.md docs/guia/instalacion.md; do
+            test -f "$guia" || { echo "::error::Falta $guia, y «Instalar» de la portada apunta ahí."; exit 1; }
+          done
 
       # Con include-hidden-files: el .nojekyll empieza por punto.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -191,6 +201,25 @@ jobs:
           done
           find sitio-completo -type f | sort
 
+      # El mismo tope que vigila studio/e2e/portada.spec.ts, pero sobre lo que de verdad se publica: las capturas
+      # se regeneran en cada corrida y cambian de peso, así que el e2e solo mide las suyas.
+      - name: La primera carga de la portada no pasa de 300 kB
+        working-directory: sitio-completo
+        run: |
+          comunes="portada.css tema-claro.css portada.js demo/fuentes/inter-latin-wght-normal.woff2 demo/fuentes/jetbrains-mono-latin-wght-normal.woff2"
+          falla=0
+          for idioma in en es; do
+            if [ "$idioma" = es ]; then pagina=es/index.html; else pagina=index.html; fi
+            total=0
+            for archivo in $pagina $comunes medios/captura-red-$idioma.* medios/captura-tablero-$idioma.* medios/captura-ajustes-$idioma.*; do
+              test -f "$archivo" || { echo "::error::Falta $archivo: la portada en $idioma no está completa."; exit 1; }
+              total=$((total + $(wc -c < "$archivo")))
+            done
+            echo "primera carga ($idioma): $total bytes"
+            [ "$total" -le 300000 ] || { echo "::error::La portada en $idioma pesa $total bytes en su primera carga: pasa de 300000."; falla=1; }
+          done
+          exit $falla
+
       # El artefacto del sitio entero: con include-hidden-files, porque el .nojekyll empieza por punto.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -202,6 +231,7 @@ jobs:
   desplegar:
     needs: ensamblar
     # Solo un tag de versión sin guion: una beta nunca publica. Una corrida manual sobre una rama solo construye.
+    # La forma exacta del tag la comprueba el primer paso del job.
     if: ${{ !cancelled() && needs.ensamblar.result == 'success' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
@@ -214,6 +244,17 @@ jobs:
       name: github-pages
       url: ${{ steps.despliegue.outputs.page_url }}
     steps:
+      # El `if` del job deja pasar cualquier tag que empiece por v y no lleve guion (vnext, v4.0.0.rc1). Aquí se
+      # exige la forma de una versión: si no la tiene, no se publica y se dice por qué.
+      - name: El tag es una versión
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo "::error::El tag $TAG no es una versión (vMAYOR.MENOR.PARCHE): no se publica."
+            exit 1
+          }
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sitio-completo
