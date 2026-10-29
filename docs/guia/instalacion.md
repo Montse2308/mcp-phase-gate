@@ -37,7 +37,7 @@ No hay nada que instalar: `npx` descarga el paquete la primera vez y lo cachea. 
 **La clave que le pongas es la que identifica al servidor y la que prefija sus tools y sus comandos**, así que puedes ponerle la que quieras. En los ejemplos va `mcp-phase-gate`, igual que el nombre del paquete y el que el servidor declara de sí mismo. Si lo registras por primera vez, una clave corta como `pg` deja los comandos más cortos (`/pg:f1` en Claude Code). **Si ya lo tienes registrado, conserva tu clave**: cambiarla cambia el nombre de todas las tools y comandos, y tendrías que volver a conceder sus permisos.
 
 <details open>
-<summary><b>Cursor</b> — <code>C:\Users\&lt;TU_USUARIO&gt;\.cursor\mcp.json</code> (créalo si no existe)</summary>
+<summary><b>Cursor</b> — <code>~/.cursor/mcp.json</code>, en Windows <code>C:\Users\&lt;TU_USUARIO&gt;\.cursor\mcp.json</code> (créalo si no existe)</summary>
 
 ```json
 {
@@ -54,7 +54,7 @@ En Windows, Cursor tiene abierto un bug en el que el formulario de confirmación
 </details>
 
 <details>
-<summary><b>VS Code</b> — <code>C:\Users\&lt;TU_USUARIO&gt;\AppData\Roaming\Code\User\mcp.json</code></summary>
+<summary><b>VS Code</b> — <code>%APPDATA%\Code\User\mcp.json</code></summary>
 
 Ojo con dos diferencias: la clave de arriba es `servers`, no `mcpServers`, y hay que declarar `type`.
 
@@ -235,6 +235,6 @@ Cómo se ven en cada cliente:
 **Si tu cliente no los muestra cómodamente**, usa los archivos: en este repo, Claude Code ya
 los lee de [`.claude/commands/`](../../.claude/commands) (idénticos a `prompts/es/comandos/`); para
 usarlos en tus otros proyectos, `npx mcp-phase-gate init --comandos` los copia, en el idioma de tu equipo, a
-`C:\Users\<TU_USUARIO>\.claude\commands\` o a `C:\Users\<TU_USUARIO>\.cursor\commands\`, sin
+`~/.claude/commands/` o a `~/.cursor/commands/` (en Windows, `C:\Users\<TU_USUARIO>\.claude\commands\` o `C:\Users\<TU_USUARIO>\.cursor\commands\`), sin
 pisar los que ya tengas tuyos. Más detalle en
 [`docs/comandos-de-fase.md`](../comandos-de-fase.md).
