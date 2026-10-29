@@ -30,7 +30,7 @@ const { values: argumentos } = parseArgs({ options: { idioma: { type: "string" }
 const idioma = argumentos.idioma === "en" ? "en" : "es";
 if (!argumentos.salida || !argumentos.sitio) throw new Error("Uso: node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo>");
 fs.mkdirSync(path.resolve(argumentos.salida), { recursive: true });
-// El nombre largo y real: en Windows, borrar por un nombre corto (USUARI~1) falla con EPERM.
+// El nombre largo y real: en Windows, borrar por un nombre corto (8.3) falla con EPERM.
 const salida = fs.realpathSync.native(path.resolve(argumentos.salida));
 const sitio = path.resolve(argumentos.sitio);
 
