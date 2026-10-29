@@ -211,6 +211,25 @@ test.describe("compararEstructuras", () => {
     expect(compararEstructuras(foto(), mas)).toEqual(["html > body[1] > main#contenido[1]: tiene 2 hijos y 3"]);
   });
 
+  test("el texto suelto de un elemento con hijos se compara, con su sitio: <span><svg/> {texto}</span>", () => {
+    // Un <span> con un hijo y dos tramos de texto suelto: el espacio antes del texto y el texto, tras el hijo.
+    const conTextos = (textos?: string[]): Foto => {
+      const f = foto();
+      principal(f).hijos.push({ etiqueta: "span", atributos: {}, hijos: [n("svg")], ...(textos ? { textos } : {}) });
+      return f;
+    };
+    const base = ["", " Hola"];
+    expect(compararEstructuras(conTextos(base), conTextos([...base]))).toEqual([]);
+    expect(compararEstructuras(conTextos(base), conTextos(["", " Adiós"]))).toEqual(['html > body[1] > main#contenido[1] > span[2]: el texto suelto del final es " Hola" y " Adiós"']);
+    // El mismo texto pero antes del hijo en lugar de después: cambia el orden, y se señalan los dos tramos.
+    expect(compararEstructuras(conTextos(base), conTextos([" Hola", ""]))).toEqual([
+      'html > body[1] > main#contenido[1] > span[2]: el texto suelto antes del hijo 0 es "" y " Hola"',
+      'html > body[1] > main#contenido[1] > span[2]: el texto suelto del final es " Hola" y ""',
+    ]);
+    // Con texto contra sin texto suelto.
+    expect(compararEstructuras(conTextos(base), conTextos())).toEqual(['html > body[1] > main#contenido[1] > span[2]: el texto suelto del final es " Hola" y ""']);
+  });
+
   test("un texto distinto se señala, en el árbol y en el de accesibilidad", () => {
     const otro = foto();
     principal(otro).hijos[1]!.texto = "Adiós";

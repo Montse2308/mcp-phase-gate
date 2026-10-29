@@ -6,17 +6,34 @@
 
 import type { Page } from "@playwright/test";
 
-export type Nodo = { etiqueta: string; atributos: Record<string, string>; texto?: string; hijos: Nodo[] };
+// `texto` es el de un elemento sin hijos. En uno con hijos, `textos` guarda los nodos de texto sueltos en su
+// orden: `textos[i]` es el que va antes de `hijos[i]`, y el último, el que va después del último hijo (así
+// `<span><Marca/> {texto}</span>` guarda " " y el texto, y no solo lo que hay dentro de los hijos). Solo está
+// si algún tramo no es vacío.
+export type Nodo = { etiqueta: string; atributos: Record<string, string>; texto?: string; textos?: string[]; hijos: Nodo[] };
 export type Foto = { arbol: Nodo; aria: string };
 
 // Corre dentro de la página: tiene que bastarse sola, sin nada del módulo.
 function arbolEnLaPagina(): Nodo {
-  const nodo = (el: Element): Nodo => ({
-    etiqueta: el.localName,
-    atributos: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])),
-    ...(el.children.length === 0 ? { texto: el.textContent ?? "" } : {}),
-    hijos: [...el.children].map(nodo),
-  });
+  const nodo = (el: Element): Nodo => {
+    const hijos: Nodo[] = [];
+    const textos: string[] = [""];
+    for (const hijo of el.childNodes) {
+      if (hijo.nodeType === Node.ELEMENT_NODE) {
+        hijos.push(nodo(hijo as Element));
+        textos.push("");
+      } else if (hijo.nodeType === Node.TEXT_NODE) {
+        textos[textos.length - 1] += hijo.textContent ?? "";
+      }
+    }
+    return {
+      etiqueta: el.localName,
+      atributos: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])),
+      ...(hijos.length === 0 ? { texto: el.textContent ?? "" } : {}),
+      ...(hijos.length > 0 && textos.some((x) => x !== "") ? { textos } : {}),
+      hijos,
+    };
+  };
   return nodo(document.documentElement);
 }
 
@@ -56,6 +73,14 @@ function diferenciasDelArbol(a: Nodo, b: Nodo, ruta: string, fuera: string[]): v
   }
   if ((a.texto ?? null) !== (b.texto ?? null)) fuera.push(`${ruta}: el texto es ${comillas(a.texto ?? "(con hijos)")} y ${comillas(b.texto ?? "(con hijos)")}`);
   if (a.hijos.length !== b.hijos.length) fuera.push(`${ruta}: tiene ${a.hijos.length} hijos y ${b.hijos.length}`);
+  else {
+    // Los textos sueltos entre los hijos: con el mismo número de hijos, tramo a tramo.
+    const ta = a.textos ?? a.hijos.map(() => "").concat("");
+    const tb = b.textos ?? b.hijos.map(() => "").concat("");
+    for (let i = 0; i < ta.length; i++) {
+      if (ta[i] !== tb[i]) fuera.push(`${ruta}: el texto suelto ${i === ta.length - 1 ? "del final" : `antes del hijo ${i}`} es ${comillas(ta[i]!)} y ${comillas(tb[i]!)}`);
+    }
+  }
   for (let i = 0; i < Math.min(a.hijos.length, b.hijos.length); i++) {
     diferenciasDelArbol(a.hijos[i]!, b.hijos[i]!, `${ruta} > ${etiquetaDe(a.hijos[i]!, i)}`, fuera);
   }
