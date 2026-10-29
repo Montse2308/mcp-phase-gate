@@ -139,6 +139,9 @@ test("con una Documentación exportada, las páginas de Ajustes que enseñan rut
       await page.goto(`${origen}${hash}`);
       await expect(page.getByText("No disponible en una exportación.")).toBeVisible();
     }
+    // La exportación de una Documentación no es una demo: su banda lo dice y no enlaza a la portada del proyecto.
+    await expect(page.locator(".banda-demo")).toHaveText("Exportación de una Documentación: solo lectura.");
+    await expect(page.locator(".banda-demo").getByRole("link")).toHaveCount(0);
     // Los menús siguen, y la página Studio funciona.
     await expect(page.getByRole("navigation", { name: "Páginas de Ajustes" }).getByRole("link", { name: "REAL", exact: true })).toBeVisible();
     await page.goto(`${origen}#/ajustes/studio`);
