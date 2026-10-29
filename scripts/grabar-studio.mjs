@@ -28,9 +28,10 @@ const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { values: argumentos } = parseArgs({ options: { idioma: { type: "string" }, salida: { type: "string" }, sitio: { type: "string" } } });
 const idioma = argumentos.idioma === "en" ? "en" : "es";
 if (!argumentos.salida || !argumentos.sitio) throw new Error("Uso: node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo>");
-const salida = path.resolve(argumentos.salida);
+fs.mkdirSync(path.resolve(argumentos.salida), { recursive: true });
+// El nombre largo y real: en Windows, borrar por un nombre corto (USUARI~1) falla con EPERM.
+const salida = fs.realpathSync.native(path.resolve(argumentos.salida));
 const sitio = path.resolve(argumentos.sitio);
-fs.mkdirSync(salida, { recursive: true });
 
 const importar = (relativa) => import(pathToFileURL(path.join(raiz, "build", relativa)).href);
 const { carpetasDeDemo, carpetaDeTextos, entornoDeDemo } = await importar("studio/demo.js");
@@ -58,11 +59,13 @@ const { name: nombre, value: valor } = demoEnVivo.cookie;
 
 // ─── El sitio completo, bajo un subdirectorio como en Pages ─────────────────
 const PREFIJO = "/mcp-phase-gate/";
-const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
+const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".webp": "image/webp", ".png": "image/png" };
 const estatico = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url ?? "/").split("?")[0]);
   if (!url.startsWith(PREFIJO)) return res.writeHead(404).end();
-  const ruta = path.resolve(sitio, url.slice(PREFIJO.length) || "index.html");
+  // Una carpeta (la raíz, es/, demo/) sirve su index.html, como GitHub Pages.
+  const pedida = url.slice(PREFIJO.length);
+  const ruta = path.resolve(sitio, pedida === "" || pedida.endsWith("/") ? `${pedida}index.html` : pedida);
   if (path.relative(sitio, ruta).startsWith("..") || !fs.statSync(ruta, { throwIfNoEntry: false })?.isFile()) return res.writeHead(404).end();
   res.writeHead(200, { "Content-Type": TIPOS[path.extname(ruta)] ?? "application/octet-stream" }).end(fs.readFileSync(ruta));
 });
@@ -184,5 +187,10 @@ try {
   await navegador.close();
   estatico.close();
   await demoEnVivo.detener();
-  fs.rmSync(crudo, { recursive: true, force: true, maxRetries: 3 });
+  // Borrar lo crudo es limpieza: si falla (en Windows, un video aún abierto), no tapa el error de la escena.
+  try {
+    fs.rmSync(crudo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch (error) {
+    console.warn(`No se pudo borrar ${crudo}: ${error.message}`);
+  }
 }
