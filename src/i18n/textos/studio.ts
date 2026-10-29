@@ -213,8 +213,8 @@ export const TEXTOS_STUDIO = {
     en: "The disk changed since you saw the change. Review it again.",
   },
   "STUDIO-PETICION-DE-PLAN": {
-    es: "La petición tiene que ser { accion, argumentos }, con una de: preset, reglas, crear-manifiesto, eject, init-cliente.",
-    en: "The request must be { accion, argumentos }, with one of: preset, reglas, crear-manifiesto, eject, init-cliente.",
+    es: "La petición tiene que ser { accion, argumentos }, con una de: crear-manifiesto, eject, init-cliente, equipo, proyecto.",
+    en: "The request must be { accion, argumentos }, with one of: crear-manifiesto, eject, init-cliente, equipo, proyecto.",
   },
   "STUDIO-PETICION-DE-APLICAR": {
     es: "La petición tiene que ser { accion, argumentos, huella }, con la huella del plan.",
