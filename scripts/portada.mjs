@@ -7,6 +7,10 @@
 // Las fuentes y las capturas no las escribe: se enlazan desde demo/fuentes/ (donde las deja el export del
 // Studio) y desde medios/captura-<vista>-<idioma>.<ext> (que saca capturas-studio.mjs).
 //
+// En el <html> deja dos datos que portada.js necesita antes de pintar: data-base (dónde está la raíz del sitio)
+// y data-vistas (las vistas del Studio, copiadas de studio/src/rutas.ts, para distinguir un hash de la demo de
+// un ancla de la portada).
+//
 // Uso, después de `npm run build`:
 //   node scripts/portada.mjs --salida <carpeta>
 
@@ -24,12 +28,24 @@ const GUIAS = {
 // El formato de las tres capturas de medios/. Lo mismo lo dice capturas-studio.mjs.
 export const EXTENSION_DE_LAS_CAPTURAS = "webp";
 
+// Las vistas del Studio, tal como las declara studio/src/rutas.ts. La portada las necesita para saber qué hash
+// es de la demo (#red) y qué hash es suyo (#fases, y cualquier ancla que gane después), y no las copia: si
+// rutas.ts cambia de forma, esto falla al armar el sitio en vez de callar y mandar gente a la demo.
+function vistasDelStudio() {
+  const rutas = fs.readFileSync(path.join(raiz, "studio", "src", "rutas.ts"), "utf-8");
+  const lista = rutas.match(/export const VISTAS: Vista\[\] = \[([^\]]+)\]/);
+  const vistas = lista?.[1].match(/"([a-z]+)"/g)?.map((v) => v.replaceAll('"', ""));
+  if (!vistas?.length) throw new Error("studio/src/rutas.ts ya no declara VISTAS como esperaba scripts/portada.mjs.");
+  return vistas;
+}
+
 export function armarPortada(salida) {
   const textos = JSON.parse(fs.readFileSync(path.join(raiz, "sitio", "textos.json"), "utf-8"));
   const plantilla = fs.readFileSync(path.join(raiz, "sitio", "plantilla.html"), "utf-8");
   const { version } = JSON.parse(fs.readFileSync(path.join(raiz, "package.json"), "utf-8"));
 
   const usadas = new Set();
+  const vistas = vistasDelStudio().join(" ");
   const paginas = { en: "index.html", es: path.join("es", "index.html") };
   for (const idioma of ["en", "es"]) {
     const propios = textos[idioma];
@@ -42,6 +58,7 @@ export function armarPortada(salida) {
       idioma,
       base,
       version,
+      "vistas-demo": vistas,
       "ext-captura": EXTENSION_DE_LAS_CAPTURAS,
       "url-esta": enEspanol ? `${SITIO}es/` : SITIO,
       "url-en": SITIO,

@@ -166,11 +166,23 @@ test.describe("con el navegador en inglés", () => {
     }
   });
 
-  test("las anclas de la portada no la redirigen", async ({ page, sitio }) => {
-    for (const ancla of ["fases", "capturas", "probar"]) {
+  test("los fragmentos que no son de la demo se quedan en la portada, incluso uno que la portada aún no tiene", async ({ page, sitio }) => {
+    // Las anclas de hoy salen de la propia plantilla, no de una lista escrita aquí: así el test cubre también las
+    // secciones que la portada gane después.
+    const plantilla = fs.readFileSync(path.join(AQUI, "..", "..", "sitio", "plantilla.html"), "utf-8");
+    const anclas = [...plantilla.matchAll(/\sid="([a-z0-9-]+)"/g)].map(([, id]) => id);
+    expect(anclas, "la plantilla declara anclas").toContain("contenido");
+    // «instalar» no existe todavía: es el fragmento de mañana, y tampoco puede acabar en la demo.
+    for (const ancla of [...anclas, "instalar"]) {
       await page.goto(portada(sitio, `#${ancla}`));
       await expect(page).toHaveURL(portada(sitio, `#${ancla}`));
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    }
+    // Ni el hash vacío ni un «#» suelto mueven de sitio.
+    for (const hash of ["", "#"]) {
+      await page.goto(portada(sitio, hash));
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      expect(new URL(page.url()).pathname, "sigue en la portada").toBe(new URL(portada(sitio)).pathname);
     }
   });
 
@@ -187,6 +199,15 @@ test.describe("con el navegador en inglés", () => {
     // Y la vista que dice el hash es la que se abre (el navegador va en inglés, y la demo con él).
     await page.goto(portada(sitio, "#/taller/SHOP"));
     await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "Workshop" })).toHaveAttribute("aria-current", "page");
+  });
+
+  test("un enlace con idioma y vista a la vez abre la demo en ese idioma", async ({ page, sitio }) => {
+    // El salto a demo/ no se lleva la consulta, pero sí guarda el idioma: el Studio lee la misma clave.
+    await page.goto(portada(sitio, "?lang=es#/red"));
+    await expect(page).toHaveURL(portada(sitio, "demo/#/red"));
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+    expect(await idiomaGuardado(page)).toBe("es");
+    await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
   });
 });
 
