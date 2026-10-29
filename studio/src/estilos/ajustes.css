@@ -156,6 +156,11 @@ fieldset.campo-ajuste legend {
   width: 100%;
   min-width: 8rem;
 }
+/* El id de un repo no se parte: es un identificador. En un teléfono, la ficha ya lo pone en su propia línea. */
+.pagina-proyecto .tabla tbody th {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 .en-ajustes {
   margin-top: 1.5rem;
 }

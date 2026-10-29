@@ -295,7 +295,7 @@ export const es = {
   "ajustes.quitarDeMaquina": "Quitar de machine.json",
   "fuente.envFile": ".env",
   "fuente.maquina": "machine.json",
-  "fuente.sistema": "el sistema",
+  "fuente.sistema": "la configuración del sistema",
   "ajustes.env.titulo": "Lo que dicen los clientes en su env",
   "ajustes.env.nota": "Un valor en el env de un cliente gana a machine.json, aunque cambies Ajustes. Quitarlo deja una vista previa, y nada se escribe sin ella.",
   "ajustes.env.ninguno": "Ningún cliente tiene rutas ni idioma en su env.",
