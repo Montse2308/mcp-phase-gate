@@ -43,12 +43,21 @@ const ESTADOS = {
   "red-sesion-abierta": { forma: "lleno", tono: "verde", insignia: false },
   "red-sesion-ninguna": { forma: "vacio", tono: "apagado", insignia: false },
   "red-configuracion-con-error": { forma: "triangulo", tono: "ambar", insignia: true },
-  // El Vigía: los hallazgos por severidad y los clientes
+  // El Vigía: los hallazgos por severidad
   "vigia-errores": { forma: "rombo", tono: "rojo", insignia: true },
   "vigia-avisos": { forma: "triangulo", tono: "ambar", insignia: true },
   "vigia-info": { forma: "vacio", tono: "apagado", insignia: false },
-  "vigia-cliente-detectado": { forma: "lleno", tono: "verde", insignia: false },
-  "vigia-cliente-no-detectado": { forma: "vacio", tono: "apagado", insignia: false },
+  // Ajustes: un campo con cambios sin aplicar, el estado de machine.json, lo que dice un env y los clientes
+  "ajustes-cambiado": { forma: "anillo", tono: "ambar", insignia: false },
+  "ajustes-conflicto": { forma: "rombo", tono: "rojo", insignia: true },
+  "ajustes-maquina-valida": { forma: "lleno", tono: "verde", insignia: false },
+  "ajustes-maquina-ausente": { forma: "vacio", tono: "apagado", insignia: false },
+  "ajustes-maquina-invalida": { forma: "rombo", tono: "rojo", insignia: true },
+  "ajustes-env-pisa": { forma: "triangulo", tono: "ambar", insignia: true },
+  "ajustes-env-coincide": { forma: "lleno", tono: "verde", insignia: false },
+  "ajustes-env-sin-valor": { forma: "vacio", tono: "apagado", insignia: false },
+  "ajustes-cliente-detectado": { forma: "lleno", tono: "verde", insignia: false },
+  "ajustes-cliente-no-detectado": { forma: "vacio", tono: "apagado", insignia: false },
 } as const satisfies Record<string, Definicion>;
 
 export type ClaveDeEstado = keyof typeof ESTADOS;

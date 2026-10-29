@@ -8,6 +8,7 @@ import "./estilos/tema-claro.css";
 import "./estilos/tema-oscuro.css";
 import "./estilos/tablero.css";
 import "./estilos/taller.css";
+import "./estilos/ajustes.css";
 
 iniciarTema();
 iniciarIdioma(); // fija <html lang> antes del primer render

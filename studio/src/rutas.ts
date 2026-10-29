@@ -1,4 +1,4 @@
-// Navegación por hash (#/tablero/P/t?x=1): funciona igual servida en la raíz o bajo un subdirectorio, y
+// Navegación por hash (#/tablero/P/t?x=1, #/ajustes/proyecto/P): funciona igual servida en la raíz o bajo un subdirectorio, y
 // nunca pide al servidor una ruta que no existe.
 
 // Los hashes no se traducen (#/red, #/tablero…): un enlace sirve igual en los dos idiomas. El nombre de
@@ -6,8 +6,8 @@
 
 import { useEffect, useMemo, useState } from "preact/hooks";
 
-export type Vista = "red" | "tablero" | "taller" | "vigia" | "bitacora";
-export const VISTAS: Vista[] = ["red", "tablero", "taller", "vigia", "bitacora"];
+export type Vista = "red" | "tablero" | "taller" | "vigia" | "bitacora" | "ajustes";
+export const VISTAS: Vista[] = ["red", "tablero", "taller", "vigia", "bitacora", "ajustes"];
 
 export type Ruta = { vista: Vista; partes: string[]; consulta: URLSearchParams };
 
