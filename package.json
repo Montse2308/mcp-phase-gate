@@ -44,7 +44,7 @@
   "bugs": {
     "url": "https://github.com/Montse2308/mcp-phase-gate/issues"
   },
-  "homepage": "https://github.com/Montse2308/mcp-phase-gate#readme",
+  "homepage": "https://montse2308.github.io/mcp-phase-gate/",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "zod": "^4.4.3"
