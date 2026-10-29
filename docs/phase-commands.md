@@ -1,9 +1,9 @@
 # The phase commands
 
 The `/f1`…`/f5` commands start the flow: each one tells the model which tools to call, and in
-what order, to begin its phase. Their text lives in **a single source**:
-[`prompts/es/comandos/`](../prompts/es/comandos), which travels inside the npm package (the
-English texts are in [`prompts/en/commands/`](../prompts/en/commands)).
+what order, to begin its phase. Their text lives in **a single source per language**:
+[`prompts/es/comandos/`](../prompts/es/comandos) and [`prompts/en/commands/`](../prompts/en/commands),
+which travel inside the npm package.
 
 *The Spanish original of this page is [`comandos-de-fase.md`](comandos-de-fase.md); change one, change the other.*
 
@@ -12,7 +12,8 @@ English texts are in [`prompts/en/commands/`](../prompts/en/commands)).
 **As MCP Prompts (since version 2.2.0).** The server offers each command as an MCP prompt called
 `f1`, `f2`… Clients that show prompts list them on their own, with nothing to copy into any
 folder, and they update with every package version. This is how they look, according to each
-client's documentation (what was observed in each one goes in the clients table of the README):
+client's documentation (what was observed in each one goes in the clients table of the
+[installation guide](guide/installation.md#the-phase-commands)):
 
 | Client | How they are invoked |
 |--------|----------------------|
@@ -31,10 +32,11 @@ long context can be pasted after the command as plain chat text.
 **As file commands.** For whoever works in this repo, or with a client that doesn't show MCP
 prompts well, there is an identical copy in [`.claude/commands/`](../.claude/commands), which
 Claude Code reads when it opens the repo. To use them in other projects, or in Cursor without MCP prompts,
-`npx mcp-phase-gate init --comandos` copies the ones in `prompts/es/comandos/` (or the English ones, if
-your machine is set to English) to `~/.claude/commands/` or `~/.cursor/commands/`, with a mark on the first line; a file of
-your own, without the mark, is never overwritten. A test (`test/docs.test.ts`) forces `.claude/commands/` and `prompts/es/comandos/`
-to be identical.
+`npx mcp-phase-gate init --comandos` copies the ones of your machine's language (the ones in
+`prompts/es/comandos/` or the ones in `prompts/en/commands/`) to `~/.claude/commands/` or
+`~/.cursor/commands/`, with a mark on the first line; a file of your own, without the mark, is never
+overwritten. A test (`test/docs.test.ts`) forces `.claude/commands/` and `prompts/es/comandos/` to be
+identical.
 
 **Your own commands.** A `comandos/fN.md` in your own prompts folder
 (`PHASE_GATE_PROMPTS_PATH`) wins over the packaged one, like the phase prompts do; one in a
