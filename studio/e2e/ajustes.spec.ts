@@ -306,7 +306,10 @@ test("si el disco cambia entre la vista previa y Aplicar, 409: se dice, el borra
 test("un campo que cambió en el disco y también está en el borrador se marca en conflicto: ni se pisa ni se descarta en silencio", async ({ page, servidor }) => {
   const archivo = manifiestoDe(servidor, "TALLER");
   const ponerEnElDisco = (commits: string) => fs.writeFileSync(archivo, `${JSON.stringify({ ...leerJson(archivo), reglas: { ...leerJson(archivo).reglas, commits } }, null, 2)}\n`, "utf-8");
+  // El disco no se toca hasta que el SSE esté conectado: un cambio anterior a la conexión no llega a la página.
+  const conectado = page.waitForResponse((respuesta) => respuesta.url().includes("/api/eventos"));
   await abrirProyecto(page, servidor, "TALLER");
+  await conectado;
   await page.getByLabel("Política de commits").selectOption("agente-propone");
   await expect(cambiados(page)).toHaveCount(1);
   ponerEnElDisco("ninguno");
@@ -349,7 +352,10 @@ test("salir de una página con cambios sin aplicar pide confirmación: si se can
   // Aceptando, se va y el borrador se pierde.
   aceptar = true;
   await MENU(page).getByRole("link", { name: "Clientes MCP" }).click();
+  // Hasta que se haya respondido el diálogo no se toca la página: la confirmación es lo que decide si se va.
+  await expect.poll(() => mensajes.length).toBe(3);
   await expect(page).toHaveURL(/#\/ajustes\/clientes$/);
+  await expect(MENU(page).getByRole("link", { name: "Clientes MCP" })).toHaveAttribute("aria-current", "page");
   await abrirProyecto(page, servidor, "TIENDA");
   await expect(cambiados(page)).toHaveCount(0);
   await expect(page.getByLabel("Idioma del proyecto")).toHaveValue("");
