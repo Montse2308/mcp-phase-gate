@@ -1,4 +1,4 @@
-// El Vigía (§7.7.4 del plan) en Chromium real: el diagnóstico de doctor. Los clientes MCP y las variables, que
+// El Vigía en Chromium real: el diagnóstico de doctor. Los clientes MCP y las variables, que
 // antes estaban aquí, se mudaron a Ajustes (ajustes.spec.ts).
 
 import { expect, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
