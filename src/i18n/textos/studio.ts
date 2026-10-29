@@ -253,7 +253,7 @@ export const TEXTOS_STUDIO = {
     en: "That destination is neither a prompts layer nor the presets folder: the Studio does not write there.",
   },
 
-  // ─── studio/acciones.ts: el manifiesto (preset, reglas, crear) ───
+  // ─── studio/acciones.ts: el manifiesto (crear) ───
   "STUDIO-SIN-MANIFIESTO": {
     es: (p: { proyecto: string }) => `${p.proyecto} no tiene phase-gate.json: créalo primero con «Crear phase-gate.json».`,
     en: (p: { proyecto: string }) => `${p.proyecto} has no phase-gate.json: create it first with "Create phase-gate.json".`,
@@ -269,35 +269,6 @@ export const TEXTOS_STUDIO = {
   "STUDIO-PRESET-NO-EXISTE": {
     es: (p: { preset: string; disponibles: string[] | null }) => `No existe el preset "${p.preset}".${p.disponibles ? ` Los disponibles son: ${p.disponibles.join(", ")}.` : ""}`,
     en: (p: { preset: string; disponibles: string[] | null }) => `The preset "${p.preset}" does not exist.${p.disponibles ? ` The available ones are: ${p.disponibles.join(", ")}.` : ""}`,
-  },
-  "STUDIO-PRESET-YA-EN-USO": {
-    es: (p: { proyecto: string; preset: string }) => `${p.proyecto} ya usa el preset "${p.preset}".`,
-    en: (p: { proyecto: string; preset: string }) => `${p.proyecto} already uses the preset "${p.preset}".`,
-  },
-  "STUDIO-PRESET-RESUMEN": {
-    es: (p: { proyecto: string; preset: string }) => `El preset de ${p.proyecto} pasa a ser "${p.preset}".`,
-    en: (p: { proyecto: string; preset: string }) => `The preset of ${p.proyecto} becomes "${p.preset}".`,
-  },
-  "STUDIO-PRESET-HECHO": {
-    es: (p: { proyecto: string; preset: string }) => `${p.proyecto} usa ahora el preset "${p.preset}".`,
-    en: (p: { proyecto: string; preset: string }) => `${p.proyecto} now uses the preset "${p.preset}".`,
-  },
-  // `lotes` y `commits` son claves del manifiesto: no se traducen; el sí o el no, sí.
-  "STUDIO-REGLA-LOTES": {
-    es: (p: { lotes: boolean }) => `lotes: ${p.lotes ? "sí" : "no"}`,
-    en: (p: { lotes: boolean }) => `lotes: ${p.lotes ? "yes" : "no"}`,
-  },
-  "STUDIO-REGLAS-IGUALES": {
-    es: (p: { proyecto: string }) => `Las reglas de ${p.proyecto} ya son esas: no hay nada que cambiar.`,
-    en: (p: { proyecto: string }) => `The rules of ${p.proyecto} are already those: there is nothing to change.`,
-  },
-  "STUDIO-REGLAS-RESUMEN": {
-    es: (p: { proyecto: string; cambios: string }) => `Reglas de ${p.proyecto}: ${p.cambios}.`,
-    en: (p: { proyecto: string; cambios: string }) => `Rules of ${p.proyecto}: ${p.cambios}.`,
-  },
-  "STUDIO-REGLAS-HECHO": {
-    es: (p: { proyecto: string; cambios: string }) => `Reglas de ${p.proyecto} cambiadas: ${p.cambios}.`,
-    en: (p: { proyecto: string; cambios: string }) => `Rules of ${p.proyecto} changed: ${p.cambios}.`,
   },
   "STUDIO-YA-TIENE-MANIFIESTO": {
     es: (p: { proyecto: string }) => `${p.proyecto} ya tiene phase-gate.json: «Crear» solo crea, nunca sobrescribe.`,

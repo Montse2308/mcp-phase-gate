@@ -75,19 +75,19 @@ async function planPosible(s: Awaited<ReturnType<typeof studioConApi>>, accion: 
 
 const aplicar = (s: Awaited<ReturnType<typeof studioConApi>>, accion: string, argumentos: unknown, huella: string) => s.post("/api/acciones/aplicar", { accion, argumentos, huella });
 
-describe("acciones: el manifiesto (preset, reglas, crear)", () => {
-  it("preset: vista previa con diff y huella; al aplicar conserva las demás claves y su orden, 2 espacios, LF, y deja .bak", async () => {
+describe("acciones: el manifiesto (el preset y las reglas de un proyecto, y crearlo)", () => {
+  it("proyecto, el preset: vista previa con diff y huella; al aplicar conserva las demás claves y su orden, 2 espacios, LF, y deja .bak", async () => {
     const { manifiesto } = instalacion();
     const entorno = entornoInitDePrueba();
     const s = await studioConApi({ entornoInit: () => entorno });
-    const p = await planPosible(s, "preset", { proyecto: "P", preset: "ai-agent-ops" });
+    const p = await planPosible(s, "proyecto", { proyecto: "P", preset: "ai-agent-ops" });
     assert.match(p.resumen, /ai-agent-ops/);
     assert.match(p.diff, /^- {3}"preset": "software",$/m);
     assert.match(p.diff, /^\+ {3}"preset": "ai-agent-ops",$/m);
     assert.deepEqual(p.cambios, [{ archivo: path.join("<Documentación>", "P", "phase-gate.json"), tipo: "reemplazar" }]);
     assert.ok(!fs.readFileSync(manifiesto, "utf-8").includes("ai-agent-ops"), "el plan no escribe");
 
-    const r = await aplicar(s, "preset", { proyecto: "P", preset: "ai-agent-ops" }, p.huella);
+    const r = await aplicar(s, "proyecto", { proyecto: "P", preset: "ai-agent-ops" }, p.huella);
     assert.equal(r.estado, 200, r.texto);
     const hecho = AplicarRespuesta.parse(r.json);
     const texto = fs.readFileSync(manifiesto, "utf-8");
@@ -103,22 +103,22 @@ describe("acciones: el manifiesto (preset, reglas, crear)", () => {
     assert.equal(fs.readFileSync(path.join(path.dirname(manifiesto), copias[0]!), "utf-8"), MANIFIESTO);
 
     // La misma huella otra vez: 409. Y el mismo preset otra vez: no hay nada que hacer.
-    const otra = await aplicar(s, "preset", { proyecto: "P", preset: "ai-agent-ops" }, p.huella);
+    const otra = await aplicar(s, "proyecto", { proyecto: "P", preset: "ai-agent-ops" }, p.huella);
     assert.equal(otra.estado, 409);
     assert.match(otra.json.error, new RegExp(DISCO_CAMBIADO.replace(/\./g, "\\.")));
-    const igual = await plan(s, "preset", { proyecto: "P", preset: "ai-agent-ops" });
+    const igual = await plan(s, "proyecto", { proyecto: "P", preset: "ai-agent-ops" });
     assert.equal(igual.posible, false);
   });
 
-  it("reglas: las claves nuevas van al final de reglas, las de antes se quedan donde estaban", async () => {
+  it("proyecto, las reglas: las claves nuevas van al final de reglas, las de antes se quedan donde estaban", async () => {
     const { manifiesto } = instalacion();
     const s = await studioConApi();
-    const p = await planPosible(s, "reglas", { proyecto: "P", commits: "auto", lotes: false });
-    assert.equal((await aplicar(s, "reglas", { proyecto: "P", commits: "auto", lotes: false }, p.huella)).estado, 200);
+    const p = await planPosible(s, "proyecto", { proyecto: "P", reglas: { commits: "auto", lotes: false } });
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", reglas: { commits: "auto", lotes: false } }, p.huella)).estado, 200);
     const datos = JSON.parse(fs.readFileSync(manifiesto, "utf-8"));
     assert.deepEqual(Object.keys(datos.reglas), ["verificacion", "lotes", "commits"]);
     assert.deepEqual(datos.reglas, { verificacion: ["npm test"], lotes: false, commits: "auto" });
-    assert.equal((await plan(s, "reglas", { proyecto: "P", commits: "auto" })).posible, false, "sin cambios no hay plan");
+    assert.equal((await plan(s, "proyecto", { proyecto: "P", reglas: { commits: "auto" } })).posible, false, "sin cambios no hay plan");
   });
 
   it("crear-manifiesto: solo crea, con el mismo texto que init --migrate; si aparece uno entre el plan y el aplicar, 409", async () => {
@@ -143,10 +143,10 @@ describe("acciones: el manifiesto (preset, reglas, crear)", () => {
     const { docs } = instalacion();
     fs.writeFileSync(path.join(docs, "Q", "phase-gate.json"), "{ roto", "utf-8");
     const s = await studioConApi();
-    const roto = await plan(s, "preset", { proyecto: "Q", preset: "software" });
+    const roto = await plan(s, "proyecto", { proyecto: "Q", preset: "software" });
     assert.ok(!roto.posible && /no es un JSON válido/.test(roto.motivo) && !roto.motivo.includes(docs));
     crearProyecto(docs, "S");
-    const ausente = await plan(s, "reglas", { proyecto: "S", lotes: false });
+    const ausente = await plan(s, "proyecto", { proyecto: "S", reglas: { lotes: false } });
     assert.ok(!ausente.posible && /no tiene phase-gate.json/.test(ausente.motivo));
   });
 });
@@ -155,32 +155,32 @@ describe("acciones: la huella", () => {
   it("si el archivo cambia entre la vista previa y el aplicar (contenido o solo la fecha), 409 y no se escribe", async () => {
     const { manifiesto } = instalacion();
     const s = await studioConApi();
-    const p = await planPosible(s, "preset", { proyecto: "P", preset: "software-tdd" });
+    const p = await planPosible(s, "proyecto", { proyecto: "P", preset: "software-tdd" });
     fs.writeFileSync(manifiesto, MANIFIESTO.replace('"npm test"', '"npm run test"'), "utf-8");
-    const r = await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, p.huella);
+    const r = await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, p.huella);
     assert.equal(r.estado, 409);
     assert.equal(r.json.error, DISCO_CAMBIADO);
     assert.ok(!fs.readFileSync(manifiesto, "utf-8").includes("software-tdd"));
 
     // Solo la fecha: el contenido es el mismo, pero la huella cubre el mtimeMs.
-    const q = await planPosible(s, "preset", { proyecto: "P", preset: "software-tdd" });
+    const q = await planPosible(s, "proyecto", { proyecto: "P", preset: "software-tdd" });
     const futuro = new Date(Date.now() + 60_000);
     fs.utimesSync(manifiesto, futuro, futuro);
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, q.huella)).estado, 409);
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, q.huella)).estado, 409);
   });
 
   it("una huella de otra acción, de otros argumentos o inventada es 409; una mal formada, 400", async () => {
     instalacion();
     const s = await studioConApi();
-    const reglas = await planPosible(s, "reglas", { proyecto: "P", lotes: false });
-    const preset = await planPosible(s, "preset", { proyecto: "P", preset: "software-tdd" });
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, reglas.huella)).estado, 409);
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "ai-agent-ops" }, preset.huella)).estado, 409);
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, "0".repeat(64))).estado, 409);
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, "xyz")).estado, 400);
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, preset.huella.toUpperCase())).estado, 400);
+    const reglas = await planPosible(s, "proyecto", { proyecto: "P", reglas: { lotes: false } });
+    const preset = await planPosible(s, "proyecto", { proyecto: "P", preset: "software-tdd" });
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, reglas.huella)).estado, 409);
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "ai-agent-ops" }, preset.huella)).estado, 409);
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, "0".repeat(64))).estado, 409);
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, "xyz")).estado, 400);
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, preset.huella.toUpperCase())).estado, 400);
     // Y la buena sigue valiendo: las fallidas no la gastaron.
-    assert.equal((await aplicar(s, "preset", { proyecto: "P", preset: "software-tdd" }, preset.huella)).estado, 200);
+    assert.equal((await aplicar(s, "proyecto", { proyecto: "P", preset: "software-tdd" }, preset.huella)).estado, 200);
   });
 
   it("argumentos hostiles: acción desconocida, claves de más, __proto__, tipos raros, rutas: 400; un proyecto que no existe, 404", async () => {
@@ -189,19 +189,22 @@ describe("acciones: la huella", () => {
     const crudo = (cuerpo: string) => pedir(s.puerto, "POST", "/api/acciones/plan", { Cookie: s.cookie, "X-Phase-Gate": "1" }, cuerpo);
     for (const cuerpo of [
       '{"accion":"borrar","argumentos":{}}',
-      '{"accion":"preset"}',
-      '{"accion":"preset","argumentos":{"proyecto":"P","preset":"software-tdd"},"extra":1}',
-      '{"accion":"preset","argumentos":{"proyecto":"P","preset":"software-tdd","otra":1}}',
-      '{"accion":"preset","argumentos":{"proyecto":"P","preset":"software-tdd","__proto__":{"admin":true}}}',
-      '{"__proto__":{"accion":"preset"},"accion":"preset","argumentos":{"proyecto":"P","preset":"x"}}',
-      '{"accion":"preset","argumentos":{"proyecto":1,"preset":"software-tdd"}}',
-      '{"accion":"preset","argumentos":{"proyecto":"P","preset":"../../evil"}}',
-      '{"accion":"preset","argumentos":{"proyecto":"../P","preset":"software-tdd"}}',
-      '{"accion":"preset","argumentos":{"proyecto":"P\\\\..\\\\Q","preset":"software-tdd"}}',
-      '{"accion":"preset","argumentos":{"proyecto":"con","preset":"software-tdd"}}',
-      '{"accion":"preset","argumentos":["P","software-tdd"]}',
-      '{"accion":"reglas","argumentos":{"proyecto":"P"}}',
-      '{"accion":"reglas","argumentos":{"proyecto":"P","commits":"push-directo"}}',
+      // Las acciones que se retiraron: ya no existen, y lo que hacían lo hace proyecto.
+      '{"accion":"preset","argumentos":{"proyecto":"P","preset":"software-tdd"}}',
+      '{"accion":"reglas","argumentos":{"proyecto":"P","lotes":false}}',
+      '{"accion":"proyecto"}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P","preset":"software-tdd"},"extra":1}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P","preset":"software-tdd","otra":1}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P","preset":"software-tdd","__proto__":{"admin":true}}}',
+      '{"__proto__":{"accion":"proyecto"},"accion":"proyecto","argumentos":{"proyecto":"P","preset":"x"}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":1,"preset":"software-tdd"}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P","preset":"../../evil"}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"../P","preset":"software-tdd"}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P\\\\..\\\\Q","preset":"software-tdd"}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"con","preset":"software-tdd"}}',
+      '{"accion":"proyecto","argumentos":["P","software-tdd"]}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P"}}',
+      '{"accion":"proyecto","argumentos":{"proyecto":"P","reglas":{"commits":"push-directo"}}}',
       '{"accion":"init-cliente","argumentos":{"cliente":"emacs"}}',
       '{"accion":"init-cliente","argumentos":{"cliente":"cursor","clave":"a b"}}',
       '{"accion":"eject","argumentos":{"objetivo":"fase-3","destino":"global","fuerza":"si"}}',
@@ -211,7 +214,7 @@ describe("acciones: la huella", () => {
       const r = await crudo(cuerpo);
       assert.equal(r.estado, 400, `${cuerpo} → ${r.estado}: ${r.texto}`);
     }
-    assert.equal((await crudo('{"accion":"preset","argumentos":{"proyecto":"NOEXISTE","preset":"software-tdd"}}')).estado, 404);
+    assert.equal((await crudo('{"accion":"proyecto","argumentos":{"proyecto":"NOEXISTE","preset":"software-tdd"}}')).estado, 404);
     assert.equal(fs.readFileSync(manifiesto, "utf-8"), MANIFIESTO, "nada cambió");
     assert.equal(({} as Record<string, unknown>).admin, undefined, "ningún prototipo contaminado");
   });
@@ -243,8 +246,8 @@ describe("acciones: la huella", () => {
         hijo.on("exit", () => resolver(salida.trim()));
       });
     for (const [ronda, preset] of ["software-tdd", "ai-agent-ops", "software-tdd", "research-ops", "software"].entries()) {
-      const p = await planPosible(s, "preset", { proyecto: "P", preset });
-      const peticion = { accion: "preset", argumentos: { proyecto: "P", preset }, huella: p.huella };
+      const p = await planPosible(s, "proyecto", { proyecto: "P", preset });
+      const peticion = { accion: "proyecto", argumentos: { proyecto: "P", preset }, huella: p.huella };
       const resultados = (await Promise.all([lanzar(peticion), lanzar(peticion)])).sort();
       assert.deepEqual(resultados, ["409", "ok"], `ronda ${ronda}: ${resultados.join(", ")}`);
       assert.equal(JSON.parse(fs.readFileSync(manifiesto, "utf-8")).preset, preset);
