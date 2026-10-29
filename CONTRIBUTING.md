@@ -32,7 +32,7 @@ flowchart LR
 - **The Central Documentation** is a plain folder you own (synced or not). The server only writes inside task folders, and phase 4's receipts only through `record_batch`.
 - **The Studio** is a separate process, loaded only by `ui`: a local HTTP API with live events (SSE) over the same functions the tools use. It never writes task documents or receipts. `--export-static` turns it into the read-only site published on GitHub Pages.
 
-Every design choice is recorded with its reason and the alternative it discarded in [`docs/decisiones.md`](docs/decisiones.md), the **architecture decision record**: 101 entries, newest first (in Spanish).
+Every design choice is recorded with its reason and the alternative it discarded in [`docs/decisiones.md`](docs/decisiones.md), the **architecture decision record**, newest first (in Spanish).
 
 ## Development (if you change the code)
 
@@ -155,7 +155,7 @@ flowchart LR
 - **La Documentación Central** es una carpeta tuya, sincronizada o no. El servidor solo escribe dentro de las carpetas de tarea, y los recibos de la Fase 4 solo con `record_batch`.
 - **El Studio** es un proceso aparte, que solo carga `ui`: una API HTTP local con eventos en vivo (SSE) sobre las mismas funciones que usan las tools. Nunca escribe documentos de tareas ni recibos. `--export-static` lo convierte en el sitio de solo lectura que se publica en GitHub Pages.
 
-Cada decisión de diseño está registrada, con su porqué y la alternativa que descartó, en [`docs/decisiones.md`](docs/decisiones.md), el **registro de decisiones de arquitectura**: 101 entradas, la más reciente arriba.
+Cada decisión de diseño está registrada, con su porqué y la alternativa que descartó, en [`docs/decisiones.md`](docs/decisiones.md), el **registro de decisiones de arquitectura**, la más reciente arriba.
 
 ## Desarrollo (si modificas el código)
 
