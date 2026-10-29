@@ -25,6 +25,7 @@ export const es = {
   "banda.demoEn": "Demo: datos de ejemplo en {raiz}",
   "banda.estaticoDemo": "Demo: datos de ejemplo. Todo es de solo lectura.",
   "banda.estaticoDatos": "Exportación de una Documentación: solo lectura.",
+  "banda.queEs": "Qué es mcp-phase-gate",
 
   // ─── Comunes ───
   "comun.cargando": "Cargando…",

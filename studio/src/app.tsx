@@ -5,7 +5,7 @@
 import { Ajustes } from "./ajustes/ajustes";
 import { guardarSalida } from "./ajustes/borrador";
 import { Bitacora } from "./bitacora/bitacora";
-import { MODO, get, textoDeLaBanda } from "./datos";
+import { MODO, enlaceDeLaPortada, get, textoDeLaBanda } from "./datos";
 import { IDIOMAS_UI, NOMBRE_DEL_IDIOMA, cambiarIdioma, t, useIdioma } from "./i18n/idioma";
 import { cambiarTema, useTemaOscuro } from "./preferencias";
 import { Red } from "./red/red";
@@ -88,6 +88,12 @@ export function App() {
       {MODO !== "vivo" ? (
         <p class="banda-demo" role="note">
           {textoDeLaBanda()}
+          {enlaceDeLaPortada() ? (
+            <>
+              {" "}
+              <a href={enlaceDeLaPortada()!}>{t("banda.queEs")}</a>
+            </>
+          ) : null}
         </p>
       ) : null}
       <header class="barra">

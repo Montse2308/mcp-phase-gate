@@ -5,18 +5,18 @@ An MCP server that turns any AI coding agent into a gated, auditable, batch-by-b
 *This is the main README, in English · Read it in [Spanish](README.es.md).*
 
 <p align="center">
-  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.gif" alt="The demo, about 42 seconds: init --dry-run and doctor in a terminal; then the Studio: the project network, a finished task's board with its seals, a pending batch that turns VERIFIED live when its commit is recorded, the Workshop, and the published site on a phone" width="760"></a>
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.gif" alt="The demo, about 42 seconds: doctor in a terminal; then the Studio: the project network, a finished task's board with its seals, a pending batch that turns VERIFIED live when its commit is recorded, a project's commit policy changed in Settings with its diff, the Workshop, and the published site on a phone" width="760"></a>
 </p>
 
 [![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/mcp-phase-gate)](https://www.npmjs.com/package/mcp-phase-gate)
 [![npm provenance](https://img.shields.io/badge/npm-provenance-blue)](https://www.npmjs.com/package/mcp-phase-gate#provenance)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/Montse2308/mcp-phase-gate/blob/master/LICENSE)
-[![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-blue)](https://montse2308.github.io/mcp-phase-gate/)
+[![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-blue)](https://montse2308.github.io/mcp-phase-gate/demo/)
 
 **Problem:** an AI coding agent jumps straight to code, makes decisions nobody asked it to make, and its reasoning dies with the chat.<br>
 **Solution:** five phases with a gate between them, each one leaving a document on disk; in phase 4 the server itself writes each batch's receipt after checking the commit against git.<br>
-**See it:** the [live demo](https://montse2308.github.io/mcp-phase-gate/) is the Studio on example data, read-only, in English and Spanish.
+**See it:** the [live demo](https://montse2308.github.io/mcp-phase-gate/demo/) is the Studio on example data, read-only, in English and Spanish; it hangs off the [project site](https://montse2308.github.io/mcp-phase-gate/).
 
 ## Try it in 10 seconds
 
@@ -978,7 +978,7 @@ Tests live in `test/` and need no extra dependency: they use `node:test`, which 
 Node. The Studio's end-to-end tests live in `studio/e2e/`. They build a throwaway central-documentation tree in a temp folder, so they never touch
 yours. CI runs them on every PR.
 
-The README's GIF, video and poster are not in git: `scripts/medios.mjs` generates them from the real demo in the GitHub Pages workflow on every tag, in both languages, and they are published at `https://montse2308.github.io/mcp-phase-gate/medios/`.
+The README's GIF, video and poster are not in git: `scripts/medios.mjs` generates them from the real demo in the GitHub Pages workflow on every version tag, in both languages, and they are published at `https://montse2308.github.io/mcp-phase-gate/medios/`.
 
 ### Where everything is
 

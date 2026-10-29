@@ -19,6 +19,7 @@ export const en = {
   "banda.demoEn": "Demo: sample data in {raiz}",
   "banda.estaticoDemo": "Demo: sample data. Everything is read-only.",
   "banda.estaticoDatos": "Export of a Documentation: read-only.",
+  "banda.queEs": "What is mcp-phase-gate",
 
   // ─── Comunes ───
   "comun.cargando": "Loading…",

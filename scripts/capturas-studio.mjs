@@ -3,18 +3,27 @@
 // en el tema oscuro y en el claro, y se escriben en docs/medios/. Con --vistas se capturan otras vistas y, en ese caso,
 // la página completa (para no cortar el contenido al comparar); --salida elige la carpeta.
 //
+// Con --portada se sacan las tres de la portada del sitio: la Red, el Tablero y Ajustes, en tema claro y en los
+// dos idiomas, contra un `ui --demo` en vivo, porque Ajustes sobre el sitio estático saldría de solo lectura.
+// Cada una son 1280×720 de interfaz, empezando bajo la banda de la demo (que solo dice en qué carpeta temporal
+// vive, y en la portada es ruido), y se escribe en --salida (obligatoria) como captura-<vista>-<idioma>.<ext>.
+//
 // Uso, después de `npm run build` y con Chromium instalado
 // (PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium):
 //   node scripts/capturas-studio.mjs
 //   node scripts/capturas-studio.mjs --vistas red,tablero,taller,vigia,bitacora --salida <carpeta>
+//   node scripts/capturas-studio.mjs --portada --salida <carpeta>
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+
+import { lanzarDemoEnVivo } from "./demo-en-vivo.mjs";
+import { EXTENSION_DE_LAS_CAPTURAS } from "./portada.mjs";
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= "0";
 const { chromium } = await import("@playwright/test");
@@ -34,9 +43,86 @@ const VISTAS = {
 
 // --vistas y --salida. Sin --vistas se captura solo el tablero, como antes de que existieran las opciones.
 const { values: argumentos } = parseArgs({
-  options: { vistas: { type: "string" }, salida: { type: "string" } },
+  options: { vistas: { type: "string" }, salida: { type: "string" }, portada: { type: "boolean" } },
   strict: true,
 });
+
+// Las tres capturas de la portada, contra un `ui --demo` en vivo por idioma.
+async function capturarPortada() {
+  if (!argumentos.salida?.trim()) throw new Error("--portada necesita --salida <carpeta>.");
+  if (argumentos.vistas !== undefined) throw new Error("--portada saca siempre la Red, el Tablero y Ajustes: no admite --vistas.");
+  const salidaPortada = path.resolve(argumentos.salida);
+  const idiomas = ["es", "en"];
+  const { carpetaDeTextos } = await import(pathToFileURL(path.join(raiz, "build", "studio", "demo.js")).href);
+  fs.mkdirSync(salidaPortada, { recursive: true });
+  const navegador = await chromium.launch();
+  try {
+    for (const idioma of idiomas) {
+      const guion = JSON.parse(fs.readFileSync(path.join(carpetaDeTextos(idioma), "demo.json"), "utf-8"));
+      const tienda = guion.proyectos.find((p) => p.repos && Object.values(p.repos).some((r) => r.git));
+      const terminada = tienda.tareas.find((t) => t.cerrar);
+      const vistasDeLaPortada = {
+        red: { hash: "/red", listo: async (p) => { for (const proyecto of guion.proyectos) await p.getByRole("heading", { name: proyecto.nombre }).waitFor(); } },
+        tablero: { hash: `/tablero/${tienda.nombre}/${terminada.nombre}`, listo: async (p) => { await p.locator(".estado-verificado").nth(2).waitFor(); await p.locator(".estado-descartado").first().waitFor(); } },
+        // La lista de presets llega un instante después del formulario: sin esperarla, el select sale en blanco.
+        ajustes: { hash: `/ajustes/proyecto/${tienda.nombre}`, listo: async (p) => { await p.locator('[data-campo="commits"] select').waitFor(); await p.waitForFunction(() => document.querySelector('[data-campo="preset"] select')?.value); } },
+      };
+      const demo = await lanzarDemoEnVivo({ raiz, idioma });
+      try {
+        const contexto = await navegador.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce", colorScheme: "light", locale: idioma === "en" ? "en-US" : "es-ES" });
+        await contexto.addCookies([{ name: demo.cookie.name, value: demo.cookie.value, url: demo.origen }]);
+        for (const [vista, { hash, listo }] of Object.entries(vistasDeLaPortada)) {
+          const pagina = await contexto.newPage();
+          await pagina.goto(`${demo.origen}/#${hash}?lang=${idioma}`);
+          await listo(pagina);
+          await pagina.evaluate(() => document.fonts.ready);
+          // La banda de la demo dice en qué carpeta temporal se generó, y eso no le dice nada a quien llega a la
+          // portada: la foto empieza justo debajo. La ventana crece lo que mide la banda para que la captura
+          // siga siendo de 1280×720 de interfaz, que es lo que declara la plantilla.
+          const banda = await pagina.evaluate(() => Math.ceil(document.querySelector(".banda-demo")?.getBoundingClientRect().height ?? 0));
+          if (banda > 0) await pagina.setViewportSize({ width: 1280, height: 720 + banda });
+          await listo(pagina);
+          const archivo = path.join(salidaPortada, `captura-${vista}-${idioma}.${EXTENSION_DE_LAS_CAPTURAS}`);
+          fs.writeFileSync(archivo, await fotografiar(navegador, pagina, { x: 0, y: banda, width: 1280, height: 720 }));
+          console.log(`${archivo}: ${fs.statSync(archivo).size} bytes`);
+          await pagina.close();
+        }
+        await contexto.close();
+      } finally {
+        await demo.detener();
+      }
+    }
+  } finally {
+    await navegador.close();
+  }
+}
+
+// La foto de la página en el formato de la portada. Chromium solo da PNG y JPEG: el WebP, mucho más chico para una
+// interfaz de colores planos, lo codifica el propio navegador con un canvas, sin ninguna herramienta más.
+async function fotografiar(navegador, pagina, recorte) {
+  const png = await pagina.screenshot({ type: "png", clip: recorte });
+  const aparte = await navegador.newPage();
+  try {
+    const base64 = await aparte.evaluate(async (origen) => {
+      const imagen = new Image();
+      imagen.src = `data:image/png;base64,${origen}`;
+      await imagen.decode();
+      const lienzo = document.createElement("canvas");
+      lienzo.width = imagen.width;
+      lienzo.height = imagen.height;
+      lienzo.getContext("2d").drawImage(imagen, 0, 0);
+      return lienzo.toDataURL("image/webp", 0.8).split(",")[1];
+    }, png.toString("base64"));
+    return Buffer.from(base64, "base64");
+  } finally {
+    await aparte.close();
+  }
+}
+
+if (argumentos.portada) {
+  await capturarPortada();
+  process.exit(0);
+}
 const vistas = (argumentos.vistas ?? "tablero").split(",").map((v) => v.trim()).filter(Boolean);
 if (vistas.length === 0) throw new Error("--vistas necesita al menos una vista: red, tablero, taller, vigia, bitacora.");
 for (const vista of vistas) if (!Object.hasOwn(VISTAS, vista)) throw new Error(`Vista desconocida: ${vista}. Valores: ${Object.keys(VISTAS).join(", ")}.`);

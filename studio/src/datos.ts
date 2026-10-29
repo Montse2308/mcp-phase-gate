@@ -33,6 +33,13 @@ export function textoDeLaBanda(): string {
   return window.PG_BANDA ?? t("banda.demo");
 }
 
+// La portada del sitio, con su URL absoluta: cualquier `ui --export-static` sin datos reales muestra la misma banda,
+// y en otro sitio un enlace relativo se rompería. La exportación de datos propios no es una demo: no lleva el enlace.
+export function enlaceDeLaPortada(): string | null {
+  if (window.PG_BANDA_CLAVE === "estatico-datos") return null;
+  return idiomaActual() === "es" ? "https://montse2308.github.io/mcp-phase-gate/es/" : "https://montse2308.github.io/mcp-phase-gate/";
+}
+
 export class ErrorDeApi extends Error {
   constructor(
     readonly estado: number,
