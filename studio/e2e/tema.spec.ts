@@ -567,6 +567,8 @@ const ESTATICAS: Escenario[] = [
     ancho,
     contiene: "Diagnóstico",
     listo: async (p: Page) => {
+      // El enlace a Ajustes se pinta antes que los datos: se espera también al diagnóstico.
+      await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
       await expect(p.getByRole("link", { name: "Abrir Ajustes" })).toBeVisible();
     },
   })),

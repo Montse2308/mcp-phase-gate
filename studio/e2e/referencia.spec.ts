@@ -58,6 +58,8 @@ function normalizar(aria: string, raiz: string, ordenar: boolean): string {
     .replace(/mcp-phase-gate \d+\.\d+\.\d+(?:-[\w.]+)?(?: \(clon\))?/g, "mcp-phase-gate <versión>")
     .replace(/Node v\d+\.\d+\.\d+/g, "Node <versión>")
     .replace(/\b[0-9a-f]{7,64}\b/g, "<sha>")
+    // Un SHA que parece un número sale entre comillas en el árbol de accesibilidad: sin ellas, es el mismo.
+    .replace(/"<sha>"/g, "<sha>")
     .replace(/\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z?)?/g, "<fecha>")
     .trimEnd();
   return `${ordenar ? ordenarElementos(texto) : texto}\n`;
@@ -305,6 +307,8 @@ const ESTATICAS: Escenario[] = [
     hash: "#/vigia",
     ancho,
     listo: async (p: Page) => {
+      // El enlace a Ajustes se pinta antes que los datos: se espera también al diagnóstico.
+      await expect(p.getByRole("heading", { name: "Diagnóstico" })).toBeVisible();
       await expect(p.getByRole("link", { name: "Abrir Ajustes" })).toBeVisible();
     },
   })),
