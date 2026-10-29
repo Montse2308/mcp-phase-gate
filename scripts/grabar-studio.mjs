@@ -1,23 +1,25 @@
-// Las escenas del Studio para el GIF y el video (§8.8 del plan): Chromium de Playwright graba cada escena
-// con recordVideo a 1280×720 contra un `ui --demo` de verdad, y la última contra el sitio estático en un
+// Las escenas del Studio para el GIF y el video: Chromium de Playwright graba cada escena con recordVideo a
+// 1280×720 contra un `ui --demo` de verdad, en tema claro, y la última contra el sitio estático en un
 // teléfono. Demo honesta: todo sale de código real ejecutándose. La escena en vivo hace lo que haría el
 // agente —el commit del lote pendiente y `record_batch` con su SHA (registrarLote)— sobre la carpeta de la
-// demo, y el sello llega por SSE. No se escenifica ninguna conversación ni ninguna sesión MCP.
+// demo, y el sello llega por SSE. La de Ajustes cambia la política de commits de un proyecto y la aplica, con
+// su diff. No se escenifica ninguna conversación ni ninguna sesión MCP.
 //
 // Las esperas son de eventos del DOM (un sello, un encabezado); después de cada una se deja la imagen quieta
 // el tiempo justo para leerla, que es lo único que se mide en milisegundos.
 //
 // Uso, después de `npm run build` y con Chromium instalado (PLAYWRIGHT_BROWSERS_PATH=0):
-//   node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <export estático>
-// Escribe en <carpeta> escena-3.webm … escena-7.webm.
+//   node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo>
+// <sitio completo> es lo que se publica: la portada en la raíz (en inglés) y en es/, y la demo en demo/.
+// Escribe en <carpeta> escena-2.webm … escena-7.webm; la 1, la terminal, es de VHS.
 
-import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
-import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+
+import { lanzarDemoEnVivo } from "./demo-en-vivo.mjs";
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= "0";
 const { chromium } = await import("@playwright/test");
@@ -25,7 +27,7 @@ const { chromium } = await import("@playwright/test");
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { values: argumentos } = parseArgs({ options: { idioma: { type: "string" }, salida: { type: "string" }, sitio: { type: "string" } } });
 const idioma = argumentos.idioma === "en" ? "en" : "es";
-if (!argumentos.salida || !argumentos.sitio) throw new Error("Uso: node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <export estático>");
+if (!argumentos.salida || !argumentos.sitio) throw new Error("Uso: node scripts/grabar-studio.mjs --idioma es|en --salida <carpeta> --sitio <sitio completo>");
 const salida = path.resolve(argumentos.salida);
 const sitio = path.resolve(argumentos.sitio);
 fs.mkdirSync(salida, { recursive: true });
@@ -50,43 +52,11 @@ const TELEFONO = { width: 390, height: 844 };
 const quieto = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── ui --demo, en una carpeta propia ───────────────────────────────────────
-// La banda de la demo dice dónde está (§7.8), y esa ruta sale en el video: en la CI de Pages es /tmp/…, pero en
-// un equipo puede llevar el nombre de quien graba. Se avisa; MEDIOS_TEMPORAL permite elegir otra base.
-const base = fs.realpathSync.native(process.env.MEDIOS_TEMPORAL ?? os.tmpdir());
-if (base.toLowerCase().includes(os.userInfo().username.toLowerCase())) {
-  console.warn(`Aviso: la ruta de la demo (${base}) lleva el nombre del usuario y saldrá en la banda: no publiques estos medios.`);
-}
-const trabajo = fs.mkdtempSync(path.join(base, "mcp-phase-gate-medios-"));
-const temporal = path.join(trabajo, "tmp");
-const vacias = Object.fromEntries(["DOCS", "REPOS", "STATE", "CONFIG"].map((n) => [`PHASE_GATE_${n}_PATH`, path.join(trabajo, n.toLowerCase())]));
-for (const carpeta of [temporal, ...Object.values(vacias)]) fs.mkdirSync(carpeta, { recursive: true });
-const limpio = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(PHASE_GATE_|ORQUESTADOR_|GIT_)/i.test(k)));
-const hijo = spawn(process.execPath, [path.join(raiz, "build", "index.js"), "ui", "--demo", "--no-abrir", "--idioma", idioma], {
-  env: { ...limpio, ...vacias, PHASE_GATE_LANG: idioma, TEMP: temporal, TMP: temporal, TMPDIR: temporal },
-  stdio: ["ignore", "pipe", "pipe"],
-});
-const enlace = await new Promise((resolver, rechazar) => {
-  let texto = "";
-  const plazo = setTimeout(() => rechazar(new Error(`ui --demo no imprimió su enlace: ${texto}`)), 120_000);
-  const leer = (d) => {
-    texto += d.toString("utf-8");
-    const m = texto.match(/http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+/);
-    if (m) {
-      clearTimeout(plazo);
-      resolver(new URL(m[0]));
-    }
-  };
-  hijo.stdout.on("data", leer);
-  hijo.stderr.on("data", leer);
-  hijo.on("exit", (codigo) => rechazar(new Error(`ui --demo terminó con ${codigo}: ${texto}`)));
-});
-// El token es de un solo uso: se canjea aquí una vez y cada contexto grabado recibe la cookie.
-const canje = await fetch(enlace, { redirect: "manual" });
-const [nombre, valor] = (canje.headers.get("set-cookie") ?? "").split(";")[0].split("=");
-const origen = enlace.origin;
-const raizDeLaDemo = path.join(temporal, process.getuid ? `mcp-phase-gate-demo${idioma === "es" ? "" : `-${idioma}`}-${process.getuid()}` : `mcp-phase-gate-demo${idioma === "es" ? "" : `-${idioma}`}`);
+const demoEnVivo = await lanzarDemoEnVivo({ raiz, idioma });
+const { origen, raizDeLaDemo } = demoEnVivo;
+const { name: nombre, value: valor } = demoEnVivo.cookie;
 
-// ─── El sitio estático, bajo un subdirectorio como en Pages ─────────────────
+// ─── El sitio completo, bajo un subdirectorio como en Pages ─────────────────
 const PREFIJO = "/mcp-phase-gate/";
 const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
 const estatico = http.createServer((req, res) => {
@@ -101,9 +71,11 @@ const origenEstatico = `http://127.0.0.1:${estatico.address().port}${PREFIJO}`;
 
 // ─── Las escenas ────────────────────────────────────────────────────────────
 const navegador = await chromium.launch();
+// Lo que graba Playwright, en bruto, junto a la salida: se borra al terminar.
+const crudo = fs.mkdtempSync(path.join(salida, "crudo-"));
 async function escena(numero, tamano, grabar) {
-  const carpeta = path.join(trabajo, `escena-${numero}`);
-  const contexto = await navegador.newContext({ viewport: tamano, recordVideo: { dir: carpeta, size: tamano }, reducedMotion: "no-preference", colorScheme: "dark", locale: idioma === "en" ? "en-US" : "es-ES" });
+  const carpeta = path.join(crudo, `escena-${numero}`);
+  const contexto = await navegador.newContext({ viewport: tamano, recordVideo: { dir: carpeta, size: tamano }, reducedMotion: "no-preference", colorScheme: "light", locale: idioma === "en" ? "en-US" : "es-ES" });
   await contexto.addCookies([{ name: nombre, value: valor, url: origen }]);
   const pagina = await contexto.newPage();
   await grabar(pagina);
@@ -116,33 +88,33 @@ const vista = (hash) => `${origen}/#${hash}${hash.includes("?") ? "&" : "?"}lang
 const listo = (pagina) => pagina.evaluate(() => document.fonts.ready);
 
 try {
-  // 3. La Red: los tres proyectos de la demo, una fila cada uno con su preset, sus repos y su rama.
-  await escena(3, TAMANO, async (p) => {
+  // 2. La Red: los tres proyectos de la demo, una fila cada uno con su preset, sus repos y su rama.
+  await escena(2, TAMANO, async (p) => {
     await p.goto(vista("/red"));
     for (const proyecto of guion.proyectos) await p.getByRole("heading", { name: proyecto.nombre }).waitFor();
     await listo(p);
-    await quieto(4000);
+    await quieto(2800);
   });
 
-  // 4. El tablero de la tarea terminada: las fases cerradas y la tabla de lotes de la Fase 4 con su estado; un clic
+  // 3. El tablero de la tarea terminada: las fases cerradas y la tabla de lotes de la Fase 4 con su estado; un clic
   //    en el recibo de un lote lo abre en el visor.
-  await escena(4, TAMANO, async (p) => {
+  await escena(3, TAMANO, async (p) => {
     await p.goto(vista(`/tablero/${tienda.nombre}/${terminada.nombre}`));
     await p.locator(".estado-verificado").nth(2).waitFor();
     await p.locator(".estado-descartado").first().waitFor();
     await listo(p);
     await quieto(2500);
     await p.getByRole("row").filter({ has: p.locator(".estado-verificado") }).first().getByRole("button").click();
-    await quieto(3000);
+    await quieto(2800);
   });
 
-  // 5. En vivo: el lote con el commit pendiente se commitea y se ancla con record_batch, y su estado
+  // 4. En vivo: el lote con el commit pendiente se commitea y se ancla con record_batch, y su estado
   //    verificado llega por SSE sin recargar, con la fila resaltada.
-  await escena(5, TAMANO, async (p) => {
+  await escena(4, TAMANO, async (p) => {
     await p.goto(vista(`/tablero/${tienda.nombre}/${enCurso.nombre}`));
     await p.locator(".estado-commit-pendiente").first().waitFor();
     await listo(p);
-    await quieto(2000);
+    await quieto(1500);
     const demo = carpetasDeDemo(raizDeLaDemo, idioma);
     const dir = path.join(demo.repos, dirDelRepo);
     const autor = { fecha: new Date().toISOString(), ...guion.autor };
@@ -160,7 +132,30 @@ try {
       Object.assign(process.env, antes);
     }
     await p.locator(".estado-nuevo").first().waitFor({ timeout: 30_000 });
-    await quieto(3500);
+    await quieto(3000);
+  });
+
+  // 5. Ajustes: la política de commits de TIENDA cambia, la vista previa enseña su diff de un solo archivo y se
+  //    aplica. Es el ciclo de siempre del Studio, el que sustituye a `init` en la v4.
+  await escena(5, TAMANO, async (p) => {
+    const manifiesto = path.join(carpetasDeDemo(raizDeLaDemo, idioma).docs, tienda.nombre, "phase-gate.json");
+    const antes = JSON.parse(fs.readFileSync(manifiesto, "utf-8"));
+    const nueva = antes.reglas?.commits === "auto" ? "agente-propone" : "auto";
+    await p.goto(vista(`/ajustes/proyecto/${tienda.nombre}`));
+    const politica = p.locator('[data-campo="commits"] select');
+    await politica.waitFor();
+    // La lista de presets llega un instante después del formulario: sin esperarla, ese select se ve en blanco.
+    await p.waitForFunction(() => document.querySelector('[data-campo="preset"] select')?.value);
+    await listo(p);
+    await quieto(1000);
+    await politica.selectOption(nueva);
+    await quieto(700);
+    await p.locator(".pie-ajustes .accion > button").click();
+    await p.locator(".vista-previa .diff-mas").first().waitFor();
+    await quieto(2500);
+    await p.locator(".vista-previa .boton-principal").click();
+    await p.locator(".aviso-hecho").waitFor();
+    await quieto(2000);
   });
 
   // 6. El Taller: de dónde sale la ranura de pruebas de la Fase 3 (el preset frente a la fábrica), con su diff.
@@ -169,31 +164,25 @@ try {
     const ranura = p.getByRole("button", { name: /fase-3\/pruebas/ }).first();
     await ranura.waitFor();
     await listo(p);
-    await quieto(1000);
+    await quieto(800);
     await ranura.click();
-    await quieto(3500);
+    await quieto(3000);
   });
 
-  // 7. El cierre: el sitio publicado, en un teléfono.
+  // 7. El cierre: el sitio publicado, en un teléfono. La portada y, con su botón, la demo.
   await escena(7, TELEFONO, async (p) => {
-    await p.goto(`${origenEstatico}#/red?lang=${idioma}`);
+    await p.goto(`${origenEstatico}${idioma === "es" ? "es/" : ""}`);
+    await p.locator(".boton-principal").waitFor();
+    await listo(p);
+    await quieto(2200);
+    await p.locator(".boton-principal").click();
     await p.getByRole("heading", { name: guion.proyectos[0].nombre }).waitFor();
     await listo(p);
-    await quieto(1200);
-    await p.goto(`${origenEstatico}#/tablero/${tienda.nombre}/${terminada.nombre}?lang=${idioma}`);
-    await p.locator(".estado-verificado, .estado-descartado").first().waitFor();
     await quieto(2000);
   });
 } finally {
   await navegador.close();
   estatico.close();
-  hijo.kill();
-  await new Promise((r) => (hijo.exitCode !== null ? r() : hijo.on("exit", r)));
-  try {
-    const { borrarDemo } = await importar("studio/demo.js");
-    if (fs.existsSync(raizDeLaDemo)) borrarDemo(raizDeLaDemo);
-  } catch {
-    // la demo vive en el temporal de este trabajo: se borra con él
-  }
-  fs.rmSync(trabajo, { recursive: true, force: true, maxRetries: 3 });
+  await demoEnVivo.detener();
+  fs.rmSync(crudo, { recursive: true, force: true, maxRetries: 3 });
 }
