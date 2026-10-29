@@ -12,6 +12,76 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 
 ---
 
+## 2026-10-29 — Los README son cortos y el detalle vive en cinco guías gemelas; las notas de cada versión van en sus Releases
+
+> **Reemplaza en parte** "El README principal pasa a inglés" (2026-10-18), en tres cosas: los dos README ya no
+> son completos sino cortos, con guías gemelas que llevan el detalle; la arquitectura queda en un párrafo y los
+> idiomas pasan a la guía de configuración; y la mitigación de "Dónde está cada cosa" pasa a `CONTRIBUTING.md`.
+> La apertura en cinco puntos y los gemelos siguen vigentes, y el riesgo que esa entrada aceptaba («ningún test
+> compara su estructura») lo cubre ahora `test/readme.test.ts`.
+
+> **Amplía** "Publicable en npm: los prompts se superponen en capas" (2026-08-10), que ya había descartado un
+> `CHANGELOG.md`: las notas de cada versión viven en los Releases de GitHub, y ahora se escriben de verdad.
+
+**Decisión.**
+
+- **Los dos README bajan a menos de 200 líneas** (de 1,002 y 1,046 a 105 cada uno). Abren como antes, y después
+  traen: para quién es y la arquitectura, un párrafo cada una; cómo funciona, con las cinco fases; una
+  instalación corta; el Studio en un párrafo; «Qué cambia si actualizas de la 3.x»; y los enlaces a las guías.
+  Dejan de enseñar lo que la v4 quitó: bloques `env` con rutas, el modo de pantalla y la metáfora de la vía.
+- **Cinco guías, gemelas, en `docs/guide/` (inglés) y `docs/guia/` (español)**, con los mismos títulos y las
+  mismas anclas: instalación (`installation.md` e `instalacion.md`), configuración (`configuration.md` y
+  `configuracion.md`, que abre con Ajustes y con quién gana), el Studio (`studio.md` en las dos), herramientas y
+  recursos (`tools.md` y `herramientas.md`) y prompts y capas (`prompts.md` en las dos). Cada sección de los README
+  de antes tiene su lugar en una guía, en `CONTRIBUTING.md` o en las notas, y nada se pierde: lo que cambia de
+  fondo (rutas en `machine.json`, el entorno que gana, Ajustes) está escrito con la 4.0, no con la 3.x.
+- **`CONTRIBUTING.md`**, que GitHub enlaza solo, recibe «Desarrollo» y «Dónde está cada cosa», y el diagrama de
+  la arquitectura. `docs/phase-commands.md` es el gemelo en inglés de `docs/comandos-de-fase.md`.
+- **Los enlaces de los README son absolutos**, a `blob/master/` y al sitio, porque el README también se ve en
+  npmjs.com y `docs/` no viaja en el paquete. Los de las guías son relativos. `test/readme.test.ts` comprueba el
+  tamaño, que los gemelos tengan los mismos títulos en el mismo orden, que cada enlace lleve a un archivo y a un
+  ancla que existen (o a un nombre que generan `medios.mjs` y `portada.mjs`), y que no queden las formas exactas
+  de lo que se quitó.
+- **Sin `CHANGELOG.md`.** Las notas de cada versión van en su Release. Los borradores viven en
+  `docs/notas/v<versión>.md`, en inglés y con una sección en español, y la de la 4.0.0 trae «Qué cambia si
+  actualizas» (el mismo texto, resumido, de la sección del README). Lo que decía «Migrar a la 3.0 en 3 pasos» pasa
+  a las notas de la 3.0.0.
+- **La historia de versiones se arregla con Releases:** uno por cada tag que existe (v2.0.1, v2.1.0, v2.2.0,
+  v3.0.0 y v3.2.0), más el de la 4.0.0, con notas que cuentan lo que faltaba. La 2.0.0 se publicó a mano en npm
+  el 2026-08-10 y no tiene tag. La 3.0.0-beta.0 se preparó pero nunca llegó a npm. La 3.1.0 falló: su tag se
+  empujó sobre un commit donde `package.json` todavía decía 3.0.0, el workflow de publicación lo rechazó en su
+  comprobación del tag, y ese tag ya no existe; lo que iba a ser la 3.1.0 salió en la 3.2.0. No se crea ningún tag
+  nuevo ni se publica la 3.1.0: en este repositorio empujar un tag publica en npm y en el sitio, y cada Release se
+  crea sobre su tag existente con `gh release create <tag> --verify-tag --notes-file docs/notas/<tag>.md`, que no
+  dispara ningún workflow.
+- **Las notas salen del historial y de lo medible:** de `git log` entre tags, de las fechas de publicación de npm
+  (`npm view mcp-phase-gate time`), de las corridas de CI (`gh run list`) y de este registro. Lo que no se pudo
+  comprobar con ninguna de las cuatro queda marcado `[REVISAR: …]` en el borrador, para quien lo publique.
+
+**Por qué.**
+
+- Un README de más de mil líneas es lo primero que ve quien llega, y no se entiende en diez segundos qué es y
+  cómo probarlo. Con la portada del sitio y un README corto, el detalle está a un enlace.
+- Las dos copias ya cambiaban juntas por disciplina; ahora las dos cosas que se rompían en silencio al mover
+  texto, los enlaces y los títulos de los gemelos, las vigila un test.
+- Sin Releases, quien mira el historial de versiones ve tags sin notas, una 2.0.0 sin tag y una 3.1.0 que no
+  existe en npm. Las notas lo cuentan una vez, en el sitio donde la gente lo busca.
+
+**Descartado.**
+
+- **Las guías como páginas del sitio.** El sitio solo se publica con un tag, y las guías se leen mejor en GitHub,
+  con sus enlaces relativos y su historial, que en una página aparte que mantener.
+- **Releases solo de aquí en adelante.** Dejaría la historia de versiones con huecos justo donde más confunde
+  (la 2.0.0, la beta y la 3.1.0).
+- **Publicar o etiquetar ahora la 3.1.0 o la 2.0.0.** Empujar un tag publica en npm y en el sitio, y publicaría un
+  commit viejo con su versión equivocada o duplicaría una versión que ya existe.
+
+**Riesgo aceptado.** Los enlaces de los README a `blob/master/docs/…` dan 404 mientras la v4 vive en
+`v4/integracion`: el README de `master` sigue siendo el de la 3.x hasta que la v4 llegue a `master`. El test los
+comprueba contra la copia local, que es la que llegará.
+
+---
+
 ## 2026-10-29 — El sitio tiene una portada completa, la demo se muda a `demo/` y el video son dos piezas
 
 > **Reemplaza en parte** "Los medios se generan de la demo real y se publican en Pages, no en git" (2026-10-18):
@@ -505,6 +575,11 @@ en una línea o con otro formato cambia de forma (no de contenido). Queda la cop
 > **Reemplazada en parte** el 2026-10-27 por "El Studio tiene una sola estructura por vista, y el tema, claro
 > u oscuro, solo cambia colores; el modo Cabina se elimina": las capturas `tablero-cabina.png` y
 > `tablero-sobrio.png` enseñaban dos modos que ya no existen. El resto sigue vigente.
+
+> **Reemplazada en parte** el 2026-10-29 por "Los README son cortos y el detalle vive en cinco guías gemelas…": los
+> dos README ya no son completos sino cortos, la arquitectura queda en un párrafo y los idiomas pasan a la guía de
+> configuración, y «Dónde está cada cosa» pasa a `CONTRIBUTING.md`. La apertura en cinco puntos y los gemelos
+> siguen vigentes.
 
 **Decisión.** `README.md`, en inglés, es el principal: el que fija la estructura y el primero que se
 actualiza. `README.es.md` es su gemelo completo, con las mismas secciones en el mismo orden, las mismas
