@@ -121,7 +121,10 @@ const seg = (...partes: (string | number)[]): string => partes.map((p) => encode
 export type Respuestas = Map<string, { estado: number; json: unknown }>;
 export type RespuestasPorIdioma = Record<Idioma, Respuestas>;
 
-async function recorrer(api: ManejadorApi): Promise<Respuestas> {
+// Con `conAjustes`, también lo que enseña Ajustes. Con datos reales no: son rutas de este equipo, que el
+// sustituidor de nombres no reconoce si caen fuera de las raíces conocidas, así que esas páginas dicen que no
+// están disponibles en una exportación.
+async function recorrer(api: ManejadorApi, conAjustes: boolean): Promise<Respuestas> {
   const respuestas: Respuestas = new Map();
   const pedir = async (ruta: string): Promise<any> => {
     const corte = ruta.indexOf("?");
@@ -134,8 +137,10 @@ async function recorrer(api: ManejadorApi): Promise<Respuestas> {
 
   await pedir("/api/estado");
   await pedir("/api/clientes");
+  if (conAjustes) await pedir("/api/ajustes");
   const proyectos = await pedir("/api/proyectos");
   for (const p of proyectos?.proyectos ?? []) {
+    if (conAjustes) await pedir(`/api/ajustes/proyectos/${seg(p.nombre)}`);
     const tareas = await pedir(`/api/proyectos/${seg(p.nombre)}/tareas`);
     const primera = await pedir(`/api/prompts/${seg(p.nombre, 1)}`);
     const fases: number[] = (primera?.fases ?? [{ numero: 1 }]).map((f: { numero: number }) => f.numero);
@@ -328,14 +333,14 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
     for (const idioma of IDIOMAS) {
       // Los textos del servidor (estados, avisos, el prompt ensamblado…), en el idioma del conjunto.
       if (opciones.datosReales) {
-        porIdioma[idioma] = await enIdioma(idioma, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitVacio(casa) })));
+        porIdioma[idioma] = await enIdioma(idioma, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitVacio(casa) }), false));
       } else {
         // La demo de ese idioma, nunca la Documentación de quien exporta: se genera aquí y se lee con su
         // entorno prestado.
         const c = await generarDemo(path.join(trabajo, `demo-${idioma}`), idioma);
         demos.push(c);
         porIdioma[idioma] = await enIdioma(idioma, () =>
-          conEntornoDeDemo(c, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDeDemo(c) })))
+          conEntornoDeDemo(c, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDeDemo(c) }), true))
         );
       }
     }
