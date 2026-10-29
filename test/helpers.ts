@@ -10,9 +10,14 @@ import * as os from "os";
 import * as path from "path";
 import { after } from "node:test";
 
-import { VARIABLES, reiniciarEnv } from "../src/config.js";
+import { VARIABLES, reiniciarEnv, reiniciarMaquina } from "../src/config.js";
 
 export const SUBDIR_POR_DEFECTO = "Proyectos";
+
+// La carpeta personal y APPDATA de quien corre la suite, tal como eran antes de aislarlas
+// (aislarCarpetasDelUsuario las cambia al importar este módulo): sirven para comprobar que ningún test
+// tocó la configuración real de los clientes.
+export const CARPETAS_REALES = { home: os.homedir(), appData: process.env.APPDATA ?? null };
 
 // Todo lo que crea carpetaTemporal se borra al terminar. Antes no se borraba nada: cada
 // ejecución de la suite dejaba unas 145 carpetas orq-* en la carpeta temporal del sistema.
@@ -119,15 +124,36 @@ export function estadoTemporal(): string {
 // Después deja PHASE_GATE_CONFIG_PATH apuntando a una carpeta vacía: sin ella, cualquier test que
 // resuelva un proyecto leería el machine.json, los presets y la carpeta prompts/ reales de quien
 // corre la suite (en Windows, %APPDATA%\mcp-phase-gate). El test que quiera la ruta por defecto la
-// borra.
+// borra, y entonces cae en la carpeta falsa de aislarCarpetasDelUsuario.
 export function limpiarEntorno(): void {
   reiniciarEnv();
+  reiniciarMaquina();
   for (const { principal, alias } of Object.values(VARIABLES)) {
     delete process.env[principal];
     if (alias) delete process.env[alias];
   }
   configTemporal();
+  aislarCarpetasDelUsuario();
   idiomaDeLosTests();
+}
+
+// machine.json puede dar rutas, así que ya no basta con apuntar PHASE_GATE_CONFIG_PATH a una carpeta
+// vacía: un test que la borre (para probar la ruta por defecto) leería el machine.json real. Por eso
+// HOME, USERPROFILE, APPDATA y XDG_CONFIG_HOME también van a carpetas temporales: configDir() y
+// stateDir() las usan para calcular la ruta de cada sistema, y los hijos que heredan process.env
+// también las ven.
+export function aislarCarpetasDelUsuario(): void {
+  const raiz = carpetaTemporal("usuario");
+  const carpeta = (nombre: string): string => {
+    const ruta = path.join(raiz, nombre);
+    fs.mkdirSync(ruta, { recursive: true });
+    return ruta;
+  };
+  const home = carpeta("home");
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  process.env.APPDATA = carpeta("appdata");
+  process.env.XDG_CONFIG_HOME = carpeta("config");
 }
 
 // Desde la Etapa 6, un proyecto sin manifiesto ni documentos toma el idioma del equipo, y en último lugar

@@ -27,6 +27,7 @@ import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requir
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
 import { etiquetaDeLote, parsearRecibo } from "../recibos.js";
+import type { SesionAbierta } from "../sesiones.js";
 import type { Recibo } from "../recibos.js";
 import { archivoDeTarea } from "../recursos.js";
 import { estadosConPlazo, resolverRepo } from "../repos.js";
@@ -34,6 +35,7 @@ import { textoDelPromptDeFase } from "../servidor.js";
 import { avisoDeCompuerta, avisoDePendientes, describeEstado, detectarSalto, listarTareas, tareaActiva, tieneValidacionesPendientes } from "../tasks.js";
 import type { EstadoTarea } from "../tasks.js";
 import type {
+  AjustesRespuesta,
   BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
@@ -53,13 +55,14 @@ import type {
   TareasRespuesta,
 } from "./contrato.js";
 import { ErrorDeAccion, crearAcciones } from "./acciones.js";
+import { ajustesDeEsteEquipo } from "./ajustes.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
 export type ContextoApi = {
   modo: Modo; // "estatico" solo al exportar (exportar.ts): ningún servidor sirve en ese modo
   watcher: () => EstadoRespuesta["studio"]["watcher"];
-  sesiones: () => SesionApi[];
+  sesiones: () => SesionAbierta[];
   // Para /api/clientes: la carpeta del usuario, APPDATA y cómo se ejecuta `claude`. En los tests y en la
   // demo, uno falso: nunca la configuración real de los clientes.
   entornoInit: () => EntornoInit;
@@ -160,7 +163,7 @@ async function estado(ctx: ContextoApi): Promise<EstadoRespuesta> {
 }
 
 // ─── /api/proyectos ─────────────────────────────────────────────────────────
-async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<ProyectoApi> {
+async function proyecto(nombre: string, sesiones: SesionAbierta[]): Promise<ProyectoApi> {
   const lectura = leerManifiesto(nombre);
   let errorDeConfiguracion: string | null = null;
   let preset: ProyectoApi["preset"] = null;
@@ -234,7 +237,9 @@ async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<Proyecto
     repos,
     tareas,
     activa,
-    sesiones: sesiones.filter((s) => s.proyecto !== null && s.proyecto.toLowerCase() === nombre.toLowerCase()),
+    sesiones: sesiones
+      .filter((s) => s.proyecto !== null && s.proyecto.toLowerCase() === nombre.toLowerCase())
+      .map(({ pid, cliente, proyecto, desde, actualizado }) => ({ pid, cliente, proyecto, desde, actualizado })),
   };
 }
 
@@ -595,27 +600,27 @@ export async function planesDeClientes(entorno: EntornoInit): Promise<PlanDeClie
   const repos = leerVariable("REPOS_PATH").valor;
   const existe = (ruta: string | undefined): ruta is string => Boolean(ruta) && (fs.statSync(path.resolve(ruta!), { throwIfNoEntry: false })?.isDirectory() ?? false);
   const detectados = await detectarClientes(entorno);
-  const rutas = existe(docs) && existe(repos) ? { docs: path.resolve(docs), repos: path.resolve(repos) } : null;
+  const hayRutas = existe(docs) && existe(repos);
 
   const planes: PlanDeClienteApi[] = [];
   for (const cliente of CLIENTES) {
     const base = { cliente, nombre: NOMBRES[cliente], detectado: detectados.includes(cliente) };
-    if (!rutas) {
+    if (!hayRutas) {
       planes.push({ ...base, estado: "sin-rutas", archivo: null, comando: null, diff: null, mensaje: mensaje("STUDIO-SIN-RUTAS") });
       continue;
     }
     if (cliente === "claude-code") {
-      const plan = await planDeClaude(rutas, null, entorno);
+      const plan = await planDeClaude(null, entorno);
       const texto =
         plan.estado === "sin-lista"
           ? mensaje("STUDIO-CLIENTE-SIN-LISTA", { detalle: sinRutasDelEquipo(plan.mensaje) })
           : plan.estado === "existente"
-            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente })
+            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente, conRutas: plan.rehacer.length > 0 })
             : mensaje("STUDIO-CLIENTE-CLAUDE-NUEVO", { clave: plan.clave });
       planes.push({ ...base, estado: plan.estado, archivo: null, comando: plan.estado === "sin-lista" ? null : plan.comando, diff: null, mensaje: texto });
       continue;
     }
-    const plan = planDeArchivo(cliente, rutas, null, entorno);
+    const plan = planDeArchivo(cliente, null, entorno);
     const archivo = conTilde(plan.archivo, entorno.home);
     let texto: string;
     let diff: string | null = null;
@@ -657,6 +662,7 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     { patron: /^\/tareas\/([^/]+)\/([^/]+)\/bitacora$/, atender: (m) => bitacora(m[1]!, m[2]!) },
     { patron: /^\/prompts\/([^/]+)\/([^/]+)$/, atender: (m, p) => prompt(m[1]!, m[2]!, p.consulta) },
     { patron: /^\/clientes$/, atender: async (): Promise<ClientesRespuesta> => ({ clientes: await planesDeClientes(ctx.entornoInit()) }) },
+    { patron: /^\/ajustes$/, atender: (): AjustesRespuesta => ajustesDeEsteEquipo({ entornoInit: ctx.entornoInit, sesiones: ctx.sesiones }) },
   ];
 
   const acciones = crearAcciones({ entornoInit: ctx.entornoInit });
@@ -672,7 +678,10 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
         return { estado: 200, json: peticion.ruta === "/acciones/plan" ? await acciones.plan(peticion.cuerpo) : await acciones.aplicar(peticion.cuerpo) };
       } catch (error) {
         const codigo = error instanceof ErrorDeAccion ? error.estado : estadoDe(error);
-        return { estado: codigo, json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error) } };
+        return {
+          estado: codigo,
+          json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error), ...(error instanceof ErrorDeAccion ? error.extra : {}) },
+        };
       }
     }
     for (const { patron, atender } of rutas) {

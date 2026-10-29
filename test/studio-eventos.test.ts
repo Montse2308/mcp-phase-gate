@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { configDir, fijarRaizDelPaquete, stateDir, stateFile } from "../src/config.js";
 import { crearEventos, esRuido, traducir } from "../src/studio/eventos.js";
 import type { Eventos, Vigilante } from "../src/studio/eventos.js";
-import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno, promptsTemporales } from "./helpers.js";
+import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno, promptsTemporales } from "./helpers.js";
 import { studioConApi } from "./studio-ayudas.js";
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -98,7 +98,7 @@ describe("eventos: agrupación y tipos", () => {
     assert.ok(Date.now() - t0 >= 300);
   });
 
-  it("los seis tipos: documento, recibo, config, prompts, sesiones y punteros", async () => {
+  it("los siete tipos: documento, recibo, config, prompts, equipo, sesiones y punteros", async () => {
     const { docs, tarea } = instalacion();
     const global = promptsTemporales({});
     const s = simulado();
@@ -123,6 +123,7 @@ describe("eventos: agrupación y tipos", () => {
     assert.deepEqual(vistos, [
       'config {"p":"P"}',
       'documento {"p":"P","t":"t","archivo":"02 - Decisiones.md"}',
+      "equipo {}",
       "prompts {}",
       "punteros {}",
       'recibo {"p":"P","t":"t","lote":"L02"}',
@@ -145,6 +146,68 @@ describe("eventos: agrupación y tipos", () => {
     abiertos.push(crearEventos({ vigilar: otro.vigilar }));
     assert.ok(!otro.raices.includes(path.resolve(stateDir())));
     assert.ok(otro.raices.includes(path.resolve(configDir())));
+  });
+});
+
+describe("eventos: machine.json", () => {
+  it("cambia la Documentación en machine.json: emite equipo, vigila la carpeta nueva, deja la vieja y recibe eventos de la nueva", async () => {
+    fijarRaizDelPaquete(RAIZ);
+    estadoTemporal();
+    const vieja = carpetaTemporal("docs-vieja");
+    const nueva = carpetaTemporal("docs-nueva");
+    crearProyecto(vieja, "P");
+    crearProyecto(nueva, "P2");
+    const tareaNueva = crearTarea(nueva, "P2", "t", ["00 - Contexto Inicial.md"]);
+    const archivo = path.join(configDir(), "machine.json");
+    fs.writeFileSync(archivo, JSON.stringify({ version: 2, rutas: { documentacion: vieja } }), "utf-8");
+
+    const abiertas: string[] = [];
+    const cerradas: string[] = [];
+    const avisos: ((ruta: string | null) => void)[] = [];
+    const vigilar: Vigilante = (raiz, alCambiar) => {
+      abiertas.push(raiz);
+      avisos.push(alCambiar);
+      return { cerrar: () => void cerradas.push(raiz) };
+    };
+    const eventos = crearEventos({ vigilar });
+    abiertos.push(eventos);
+    const { recibidos } = oyente(eventos);
+    assert.ok(abiertas.includes(path.resolve(vieja)) && !abiertas.includes(path.resolve(nueva)));
+    const avisar = (ruta: string) => avisos.forEach((a) => a(ruta));
+
+    // Cambia la Documentación en machine.json, sin reiniciar nada.
+    await esperar(30);
+    fs.writeFileSync(archivo, JSON.stringify({ version: 2, rutas: { documentacion: nueva } }), "utf-8");
+    avisar(archivo);
+    await esperar(450);
+    assert.deepEqual(recibidos.map((r) => r.tipo), ["equipo"]);
+    assert.ok(abiertas.includes(path.resolve(nueva)), "vigila la Documentación nueva");
+    assert.deepEqual(cerradas, [path.resolve(vieja)], "y deja de vigilar la vieja");
+    assert.equal(eventos.estado(), "activo");
+
+    // Lo que pasa en la carpeta nueva llega como evento de dominio, con el nombre de su proyecto.
+    recibidos.length = 0;
+    avisar(escribir(path.join(tareaNueva, "01 - Análisis Técnico.md")));
+    await esperar(450);
+    assert.deepEqual(recibidos, [{ tipo: "documento", datos: { p: "P2", t: "t", archivo: "01 - Análisis Técnico.md" } }]);
+
+    // Un machine.json roto no cambia las carpetas: el proceso sigue con la última válida.
+    recibidos.length = 0;
+    const antes = abiertas.length;
+    await esperar(30);
+    fs.writeFileSync(archivo, "{ roto", "utf-8");
+    avisar(archivo);
+    await esperar(450);
+    assert.deepEqual(recibidos.map((r) => r.tipo), ["equipo"]);
+    assert.equal(abiertas.length, antes, "no se abrió ninguna carpeta más");
+    assert.deepEqual(cerradas, [path.resolve(vieja)], "ni se cerró otra");
+  });
+
+  it("los cambios de machine.json son del tipo equipo, y los presets y la capa global siguen siendo prompts", () => {
+    instalacion();
+    assert.deepEqual(traducir(path.join(configDir(), "machine.json")), { tipo: "equipo", datos: {} });
+    assert.deepEqual(traducir(path.join(configDir(), "presets", "mio.md")), { tipo: "prompts", datos: {} });
+    assert.deepEqual(traducir(path.join(configDir(), "prompts", "bloques.md")), { tipo: "prompts", datos: {} });
   });
 });
 

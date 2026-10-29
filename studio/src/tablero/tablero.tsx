@@ -154,7 +154,7 @@ function TableroDeTarea({ p, t: nombre }: { p: string; t: string }) {
     if (ev.key === "Escape" && abierto) cerrar();
   };
   const deEsta = (_tipo: string, d: Record<string, string>): boolean => !d.p || (d.p === p && (!d.t || d.t === nombre));
-  const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, nombre)}`, ["documento", "recibo", "config", "prompts"], deEsta);
+  const tarea = useRecurso<TareaRespuesta>(`/api/tareas/${ruta(p, nombre)}`, ["documento", "recibo", "config", "prompts", "equipo"], deEsta);
   const lotes = useRecurso<LotesRespuesta>(`/api/tareas/${ruta(p, nombre)}/lotes${reverificar ? "?reverificar=1" : ""}`, ["documento", "recibo", "config"], deEsta);
 
   // El estado que aparece en una recarga (por un evento), y no estaba, resalta su fila un momento.

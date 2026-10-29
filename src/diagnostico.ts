@@ -20,15 +20,20 @@ import {
   REPOS,
   SERVER_NAME,
   SERVER_VERSION,
+  CLAVE_EN_MAQUINA,
   TASKS_SUBDIR_POR_DEFECTO,
+  VARIABLES,
   configDir,
   errorDeEnv,
   idiomaDeEtiqueta,
+  idiomaDeMaquina,
+  idiomaDelEntorno,
   idiomaDelSistema,
   leerVariable,
   promptsLayers,
   requireBasePath,
   stateFile,
+  valorDeMaquina,
 } from "./config.js";
 import type { LecturaVariable, NombreLogico, RutaRequerida } from "./config.js";
 import { discoverProjects, estaDentro, findProjectFolder, leerTextoAcotado, requireProjectFolder } from "./paths.js";
@@ -136,6 +141,32 @@ function estadoLegible(archivo: string): boolean {
   } catch {
     return false;
   }
+}
+
+// What the environment or the .env say and override what machine.json says, with another value: the
+// environment wins, and whoever put the variable in a client's "env" block rarely knows. It says which one
+// wins and how to remove it.
+function pisadasDeMaquina(variables: LecturaVariable[]): Hallazgo[] {
+  const hallazgos: Hallazgo[] = [];
+  for (const lectura of variables) {
+    const clave = CLAVE_EN_MAQUINA[lectura.logica];
+    if (!clave || lectura.usada === null || lectura.valor === undefined || (lectura.fuente !== "entorno" && lectura.fuente !== ".env")) continue;
+    const guardado = valorDeMaquina(lectura.logica);
+    if (guardado === undefined) continue;
+    const comparable = (valor: string): string => (VARIABLES[lectura.logica].esRuta && valor.trim() ? path.resolve(valor.trim()) : valor.trim());
+    if (comparable(guardado) === comparable(lectura.valor)) continue;
+    hallazgos.push({
+      severidad: "aviso",
+      codigo: "VAR-PISA-MAQUINA",
+      texto: mensaje("VAR-PISA-MAQUINA", { variable: lectura.usada, origen: lectura.fuente, clave: `rutas.${clave}`, valor: lectura.valor, guardado }),
+    });
+  }
+  const delEntorno = idiomaDelEntorno();
+  const deMaquina = idiomaDeMaquina();
+  if (delEntorno && deMaquina && delEntorno !== deMaquina) {
+    hallazgos.push({ severidad: "aviso", codigo: "LANG-PISA-MAQUINA", texto: mensaje("LANG-PISA-MAQUINA", { valor: process.env.PHASE_GATE_LANG ?? delEntorno, guardado: deMaquina }) });
+  }
+  return hallazgos;
 }
 
 function estadoRuta(requerida: RutaRequerida): EstadoRuta {
@@ -502,6 +533,7 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
   for (const { discrepancia } of variables) {
     if (discrepancia) hallar("aviso", "VAR-DISCREPA", discrepancia);
   }
+  for (const hallazgo of pisadasDeMaquina(variables)) hallazgos.push(hallazgo);
 
   // Un PHASE_GATE_LANG que no dice es ni en no cuenta: se ignora y el idioma sale del sistema. Se avisa,
   // porque quien lo puso esperaba otra cosa (hallazgo 10 de la auditoría de la Etapa 6). Vacío es como no

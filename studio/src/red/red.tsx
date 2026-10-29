@@ -261,7 +261,7 @@ function FilaDeProyecto({ p, presets, recargar }: { p: ProyectoApi; presets: str
 }
 
 export function Red() {
-  const { datos, error, cargando, recargar } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts"]);
+  const { datos, error, cargando, recargar } = useRecurso<ProyectosRespuesta>("/api/proyectos", ["sesiones", "config", "punteros", "documento", "recibo", "prompts", "equipo"]);
   return (
     <section class="vista vista-red" aria-labelledby="titulo-red">
       <h1 id="titulo-red">{t("red.titulo")}</h1>

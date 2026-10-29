@@ -13,7 +13,7 @@ import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fasesDe } from "../src/capas.js";
 import { fijarRaizDelPaquete } from "../src/config.js";
 import type { ResultadoConfirmacion } from "../src/confirmacion.js";
-import { bloqueDeCommits, bloqueDeCommitsConPlazo, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote, traducirEscritura } from "../src/lotes.js";
+import { bloqueDeCommits, bloqueDeCommitsConPlazo, ensamblarIndice, estadoDeLotes, leerTablaDeLotes, registrarLote, renombrarConReintentos, traducirEscritura } from "../src/lotes.js";
 import type { EntradaDeLote } from "../src/lotes.js";
 import { escribirRecibo, leerRecibo, nombreDeRecibo, parsearRecibo } from "../src/recibos.js";
 import type { Recibo } from "../src/recibos.js";
@@ -1177,5 +1177,34 @@ describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () =
   it("un artefacto que no existe se nombra por su ruta relativa, no por la del equipo (hallazgo 9)", async () => {
     instalacion({ sinGit: ["api"] });
     await assert.rejects(registrar(contenido(1, { artifact_path: "no-esta.md" })), (e: Error) => e.message === "El artefacto `repo:api/no-esta.md` no existe.");
+  });
+});
+
+describe("la escritura atómica: el renombrado se reintenta en Windows", () => {
+  const ocupado = (codigo: string): Error => Object.assign(new Error(codigo), { code: codigo });
+
+  it("un EPERM, EACCES o EBUSY pasajero se reintenta hasta que sale", () => {
+    for (const codigo of ["EPERM", "EACCES", "EBUSY"]) {
+      let intentos = 0;
+      renombrarConReintentos("a", "b", () => {
+        intentos++;
+        if (intentos < 3) throw ocupado(codigo);
+      }, [1, 1, 1], true);
+      assert.equal(intentos, 3, codigo);
+    }
+  });
+
+  it("si sigue ocupado tras las esperas, lanza el último error; y otro error, o fuera de Windows, no se reintenta", () => {
+    let intentos = 0;
+    assert.throws(() => renombrarConReintentos("a", "b", () => { intentos++; throw ocupado("EPERM"); }, [1, 1], true), /EPERM/);
+    assert.equal(intentos, 3, "el primero y uno por cada espera");
+
+    intentos = 0;
+    assert.throws(() => renombrarConReintentos("a", "b", () => { intentos++; throw ocupado("ENOENT"); }, [1, 1], true), /ENOENT/);
+    assert.equal(intentos, 1);
+
+    intentos = 0;
+    assert.throws(() => renombrarConReintentos("a", "b", () => { intentos++; throw ocupado("EACCES"); }, [1, 1], false), /EACCES/);
+    assert.equal(intentos, 1, "en macOS y Linux un EACCES es un permiso, no un lector");
   });
 });

@@ -2,7 +2,7 @@
 // ellos, y el frontend importa los tipos (solo los tipos: `import type`, que no lleva zod al bundle).
 //
 // Las respuestas no llevan las rutas absolutas del equipo salvo donde la vista las necesita para
-// decir dónde editar algo (el diagnóstico y las capas de prompts): una tarea se identifica por su
+// decir dónde editar algo (el diagnóstico, las capas de prompts y Ajustes): una tarea se identifica por su
 // proyecto y su nombre, no por su carpeta.
 
 import { z } from "zod";
@@ -223,11 +223,86 @@ export const PlanDeClienteApi = z.object({
 
 export const ClientesRespuesta = z.object({ clientes: z.array(PlanDeClienteApi) });
 
+// ─── /api/ajustes ───────────────────────────────────────────────────────────
+// For each path of this machine and for the language: what machine.json says, what really applies and where it
+// comes from; and who overrides it with their own env.
+export const NombreDeCampo = z.enum(["documentacion", "carpetaDeRepos", "subcarpetaTareas", "idioma"]);
+
+export const CampoAjustes = z.object({
+  campo: NombreDeCampo,
+  variable: z.string(), // la variable de entorno que lo pisaría
+  enMaquina: z.string().nullable(), // lo que dice machine.json
+  efectivo: z.string().nullable(), // lo que vale ahora en este Studio
+  fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "sin definir"]),
+  // This same Studio, through its environment or its .env, uses another value than machine.json: the first warning.
+  propioStudioPisa: z.boolean(),
+  // Its environment or its .env say something machine.json does not have: it can be saved there.
+  sinGuardar: z.boolean(),
+});
+
+// What an env says of a field, compared with machine.json.
+export const EnvDeCliente = z.object({
+  campo: NombreDeCampo,
+  variable: z.string(),
+  valor: z.string(),
+  estado: z.enum(["pisa", "coincide", "sin-valor-en-maquina"]),
+});
+
+export const EntradaDeCliente = z.object({
+  clave: z.string(), // la clave de la entrada en el archivo del cliente
+  ambito: z.enum(["archivo", "usuario", "local"]),
+  carpeta: z.string().nullable(), // en Claude Code, la carpeta de un ámbito local
+  variables: z.array(EnvDeCliente),
+});
+
+export const ClienteAjustes = z.object({
+  cliente: z.enum(["claude-code", "cursor", "vscode"]),
+  nombre: z.string(),
+  archivo: z.string(), // con ~ en lugar de la carpeta del usuario
+  lectura: z.enum(["leido", "no-existe", "ilegible"]),
+  entradas: z.array(EntradaDeCliente),
+});
+
+// An open server, of any client: its paths are the ones it received at start.
+export const SesionDeAjustes = z.object({
+  pid: z.number().int(),
+  cliente: z.string(),
+  proyecto: z.string().nullable(),
+  sinRutas: z.boolean(), // es de un servidor 3.x, que no anota sus rutas
+  variables: z.array(EnvDeCliente),
+});
+
+export const AvanzadaApi = z.object({
+  logica: z.string(),
+  variable: z.string(),
+  descripcion: z.string(),
+  valor: z.string().nullable(),
+  usada: z.string().nullable(),
+  fuente: z.enum(["entorno", ".env", "machine.json", "sin definir"]),
+  comoCambiarla: z.string(),
+});
+
+export const AjustesRespuesta = z.object({
+  maquina: z.object({
+    estado: z.enum(["ausente", "valido", "invalido"]),
+    error: z.string().nullable(),
+    // With the file broken, this process goes on with the last valid one it read.
+    deMemoria: z.boolean(),
+    version: z.number().int().nullable(),
+  }),
+  campos: z.array(CampoAjustes),
+  clientes: z.array(ClienteAjustes),
+  sesiones: z.array(SesionDeAjustes),
+  avanzadas: z.array(AvanzadaApi),
+});
+
 // ─── Acciones (§7.6) ────────────────────────────────────────────────────────
 export const PlanRespuesta = z.union([
   z.object({
     posible: z.literal(true),
     resumen: z.string(),
+    // What the plan warns about and does not prevent: a path that does not exist, a receipt that cites a repo being removed.
+    avisos: z.array(z.string()),
     diff: z.string(),
     huella: z.string().regex(/^[0-9a-f]{64}$/),
     cambios: z.array(z.object({ archivo: z.string(), tipo: z.enum(["crear", "reemplazar", "comando"]) })),
@@ -258,5 +333,13 @@ export type Modo = z.infer<typeof Modo>;
 export type EventoDeBitacora = z.infer<typeof EventoDeBitacora>;
 export type BitacoraRespuesta = z.infer<typeof BitacoraRespuesta>;
 export type PlanRespuesta = z.infer<typeof PlanRespuesta>;
+export type NombreDeCampo = z.infer<typeof NombreDeCampo>;
+export type CampoAjustes = z.infer<typeof CampoAjustes>;
+export type EnvDeCliente = z.infer<typeof EnvDeCliente>;
+export type EntradaDeCliente = z.infer<typeof EntradaDeCliente>;
+export type ClienteAjustes = z.infer<typeof ClienteAjustes>;
+export type SesionDeAjustes = z.infer<typeof SesionDeAjustes>;
+export type AvanzadaApi = z.infer<typeof AvanzadaApi>;
+export type AjustesRespuesta = z.infer<typeof AjustesRespuesta>;
 export type AplicarRespuesta = z.infer<typeof AplicarRespuesta>;
 export type EstadoDelWatcher = z.infer<typeof EstadoDelWatcher>;

@@ -14,7 +14,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-import { fijarRaizDelPaquete } from "../src/config.js";
+import { configDir, fijarRaizDelPaquete } from "../src/config.js";
 import { crearServidor } from "../src/servidor.js";
 import { CADUCIDAD_MS, carpetaDeSesiones, escribirAtomico, pidVivo, registrarSesion, sesionesAbiertas } from "../src/sesiones.js";
 import type { Escritor, OpcionesDeRegistro } from "../src/sesiones.js";
@@ -89,13 +89,14 @@ async function sesionEnMemoria(raices: { actuales: string[] }, opciones: Opcione
 const leerArchivo = (pid: number) => JSON.parse(fs.readFileSync(path.join(carpetaDeSesiones(), `${pid}.json`), "utf-8"));
 
 describe("sesiones: el servidor las escribe", () => {
-  it("al recibir las raíces: pid, cliente, raíces, el proyecto deducido y las fechas; nada de la conversación", async () => {
-    const { api } = instalacion();
+  it("al recibir las raíces: pid, cliente, raíces, el proyecto deducido, las rutas del entorno y las fechas; nada de la conversación", async () => {
+    const { api, docs, repos } = instalacion();
     await sesionEnMemoria({ actuales: [api] }, { pid: 4242 });
     const archivo = path.join(carpetaDeSesiones(), "4242.json");
     assert.ok(await hasta(() => fs.existsSync(archivo)));
     const datos = leerArchivo(4242);
-    assert.deepEqual(Object.keys(datos).sort(), ["actualizado", "cliente", "desde", "pid", "proyecto", "raices"]);
+    assert.deepEqual(Object.keys(datos).sort(), ["actualizado", "cliente", "desde", "pid", "proyecto", "raices", "rutas"]);
+    assert.deepEqual(datos.rutas, { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "Proyectos" });
     assert.equal(datos.pid, 4242);
     assert.equal(datos.cliente, "cliente-de-prueba 1.0.0");
     assert.deepEqual(datos.raices, [api]);
@@ -103,8 +104,32 @@ describe("sesiones: el servidor las escribe", () => {
     assert.ok(!Number.isNaN(Date.parse(datos.desde)) && !Number.isNaN(Date.parse(datos.actualizado)));
   });
 
+  it("anota el valor que vino del entorno al arrancar, no el efectivo: lo de machine.json no va, y sin rutas en el entorno el campo no está", async () => {
+    const { api, docs } = instalacion();
+    const config = configDir();
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 2, rutas: { carpetaDeRepos: carpetaTemporal("de-maquina") } }), "utf-8");
+    delete process.env.PHASE_GATE_REPOS_PATH;
+    delete process.env.ORQUESTADOR_TASKS_SUBDIR;
+    await sesionEnMemoria({ actuales: [api] }, { pid: 4244 });
+    assert.ok(await hasta(() => fs.existsSync(path.join(carpetaDeSesiones(), "4244.json"))));
+    assert.deepEqual(leerArchivo(4244).rutas, { documentacion: docs });
+
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    await sesionEnMemoria({ actuales: [api] }, { pid: 4245 });
+    assert.ok(await hasta(() => fs.existsSync(path.join(carpetaDeSesiones(), "4245.json"))));
+    assert.equal("rutas" in leerArchivo(4245), false);
+  });
+
+  it("una ruta más larga que el tope no se anota, y las demás sí", async () => {
+    const { api, docs } = instalacion();
+    process.env.PHASE_GATE_REPOS_PATH = path.join(docs, "x".repeat(1100));
+    await sesionEnMemoria({ actuales: [api] }, { pid: 4246 });
+    assert.ok(await hasta(() => fs.existsSync(path.join(carpetaDeSesiones(), "4246.json"))));
+    assert.deepEqual(leerArchivo(4246).rutas, { documentacion: docs, subcarpetaTareas: "Proyectos" });
+  });
+
   it("un cliente sin roots también queda registrado, sin proyecto", async () => {
-    instalacion();
+    const { docs, repos } = instalacion();
     const servidor = crearServidor();
     const { proceso } = procesoFalso();
     const registro = registrarSesion(servidor, { pid: 4343, proceso });
@@ -117,7 +142,15 @@ describe("sesiones: el servidor las escribe", () => {
       await servidor.close();
     });
     assert.ok(await hasta(() => fs.existsSync(path.join(carpetaDeSesiones(), "4343.json"))));
-    assert.deepEqual({ ...leerArchivo(4343), desde: "", actualizado: "" }, { pid: 4343, cliente: "sin-roots 2", raices: [], proyecto: null, desde: "", actualizado: "" });
+    assert.deepEqual({ ...leerArchivo(4343), desde: "", actualizado: "" }, {
+      pid: 4343,
+      cliente: "sin-roots 2",
+      raices: [],
+      proyecto: null,
+      rutas: { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "Proyectos" },
+      desde: "",
+      actualizado: "",
+    });
   });
 
   it("como mucho una escritura por intervalo: un cambio de raíces dentro de él se escribe al acabarlo", async () => {
@@ -217,6 +250,25 @@ describe("sesiones: el Studio las lee como entrada no confiable", () => {
 
     sesionesAbiertas({ vivo: (pid) => vivos.has(pid), borrar: true });
     assert.deepEqual(fs.readdirSync(carpeta), ["111.json"]);
+  });
+
+  it("las rutas: se leen si cuadran con su shape; una sesión de un servidor 3.x, sin ellas, sigue valiendo; una mal formada se ignora sin romper la lista", () => {
+    instalacion();
+    const carpeta = carpetaDeSesiones();
+    fs.mkdirSync(carpeta, { recursive: true });
+    const con = (pid: number, rutas: unknown) => JSON.stringify({ ...JSON.parse(sesionValida(pid)), rutas });
+    const escribir = (nombre: string, contenido: string) => fs.writeFileSync(path.join(carpeta, nombre), contenido);
+    escribir("101.json", sesionValida(101)); // un servidor 3.x
+    escribir("102.json", con(102, { documentacion: "/mi/docs", carpetaDeRepos: "/mi/repos", subcarpetaTareas: "" }));
+    escribir("103.json", con(103, { documentacion: 42 })); // un tipo que no es
+    escribir("104.json", con(104, { documentacion: "x".repeat(1025) })); // más larga que el tope
+    escribir("105.json", con(105, { inventada: "x" })); // una clave de más
+    escribir("106.json", con(106, "/mi/docs")); // ni siquiera un objeto
+
+    const vistas = sesionesAbiertas({ vivo: () => true });
+    assert.deepEqual(vistas.map((s) => s.pid), [101, 102]);
+    assert.equal("rutas" in vistas[0]!, false);
+    assert.deepEqual(vistas[1]!.rutas, { documentacion: "/mi/docs", carpetaDeRepos: "/mi/repos", subcarpetaTareas: "" });
   });
 
   it("borra sin seguir enlaces: ni el destino de un enlace ni lo que hay tras una junction; una carpeta de verdad no se toca", (t) => {

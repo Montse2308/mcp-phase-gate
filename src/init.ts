@@ -18,9 +18,12 @@ import * as readline from "readline/promises";
 
 import { capasDeCuerpos, fasesDe, rutasDeCuerpos } from "./capas.js";
 import type { Salida } from "./cli.js";
-import { SERVER_NAME, SERVER_VERSION, leerVariable } from "./config.js";
+import { SERVER_NAME, SERVER_VERSION, leerArchivoDeMaquinaDelDisco, leerVariable } from "./config.js";
 import { diagnosticar, formatearDiagnostico } from "./diagnostico.js";
-import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_MAQUINA, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import { leerMaquinaParaEditar, planDeEdicion } from "./ajustes/edicion-maquina.js";
+import { escribirAtomico } from "./lotes.js";
+import { ARCHIVO_MANIFIESTO, URL_ESQUEMA_PROYECTO, describirPresets, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, leerMaquina, presetsDisponibles, rutaMaquina } from "./manifiesto.js";
+import { URL_ESQUEMA_MAQUINA, VERSION_DE_MAQUINA } from "./maquina.js";
 import type { Idioma } from "./vocabulario.js";
 import { discoverProjects } from "./paths.js";
 import { leerPromptNormalizado, resolveCommandFile } from "./phases.js";
@@ -263,7 +266,9 @@ function escribirConCopia(ctx: Contexto, archivo: string, texto: string): string
     fs.copyFileSync(archivo, copia);
   }
   fs.mkdirSync(path.dirname(archivo), { recursive: true });
-  fs.writeFileSync(archivo, texto, "utf-8");
+  // A temporary file and a rename, like the Studio does: a running server that reads machine.json at that
+  // moment sees the old file or the new one, never half of it.
+  escribirAtomico(archivo, texto);
   return copia;
 }
 
@@ -273,7 +278,7 @@ async function rutaPedida(ctx: Contexto, valor: string | null, logica: "DOCS_PAT
   let crudo = valor ?? leerVariable(logica).valor ?? null;
   if (!crudo && ctx.entorno.esTerminal) crudo = (await ctx.entorno.preguntar(mensaje("INIT-PREGUNTA-RUTA", { que }))).trim() || null;
   if (!crudo) {
-    ctx.entorno.salida.err(mensaje("INIT-FALTA-RUTA", { que, bandera: logica === "DOCS_PATH" ? "--docs" : "--repos", logica }));
+    ctx.entorno.salida.err(mensaje("INIT-FALTA-RUTA", { que, bandera: logica === "DOCS_PATH" ? "--docs" : "--repos", logica, clave: logica === "DOCS_PATH" ? "rutas.documentacion" : "rutas.carpetaDeRepos" }));
     return null;
   }
   const ruta = path.resolve(crudo);
@@ -282,6 +287,35 @@ async function rutaPedida(ctx: Contexto, valor: string | null, logica: "DOCS_PAT
     return null;
   }
   return ruta;
+}
+
+// This machine's paths are saved in machine.json, not in each client's "env": that way the server of each
+// client and the Studio read them the same. It goes before registering anything, so that an entry that already
+// carried the paths in its "env" does not stop working when they are taken out. It returns false if it could not.
+async function guardarRutas(ctx: Contexto, rutas: Rutas): Promise<boolean> {
+  const maquina = leerMaquinaParaEditar();
+  if (maquina.estado === "invalido") {
+    fallar(ctx, mensaje("INIT-NO-SE-TOCA", { error: maquina.error }));
+    return false;
+  }
+  const planeada = planDeEdicion(maquina, { rutas: { documentacion: rutas.docs, carpetaDeRepos: rutas.repos } });
+  if (!planeada) {
+    ctx.entorno.salida.out(mensaje("INIT-MAQUINA-RUTAS-IGUALES"));
+    return true;
+  }
+  // A value different from the one that was there is confirmed, like the preset: another client uses it.
+  const guardadas = maquina.objeto && esObjetoPlano(maquina.objeto.rutas) ? maquina.objeto.rutas : {};
+  const cambia = [
+    ...(typeof guardadas.documentacion === "string" && guardadas.documentacion !== rutas.docs ? [`documentacion: ${guardadas.documentacion} -> ${rutas.docs}`] : []),
+    ...(typeof guardadas.carpetaDeRepos === "string" && guardadas.carpetaDeRepos !== rutas.repos ? [`carpetaDeRepos: ${guardadas.carpetaDeRepos} -> ${rutas.repos}`] : []),
+  ];
+  if (cambia.length && !ctx.opciones.dryRun && !(await confirmar(ctx, mensaje("INIT-PREGUNTA-CAMBIAR-RUTAS", { cambios: cambia })))) {
+    fallar(ctx, mensaje("INIT-MAQUINA-NO-CAMBIADA"));
+    return false;
+  }
+  const copia = escribirConCopia(ctx, planeada.escritura.ruta, planeada.escritura.despues);
+  decir(ctx, mensaje("INIT-MAQUINA-RUTAS-ESCRITA", { archivo: planeada.escritura.ruta, copia }));
+  return true;
 }
 
 // ─── 2. Clientes ────────────────────────────────────────────────────────────
@@ -309,13 +343,83 @@ export async function detectarClientes(entorno: EntornoInit): Promise<Cliente[]>
 
 type Rutas = { docs: string; repos: string };
 
-export function entradaDelServidor(cliente: Cliente, rutas: Rutas, plataforma: NodeJS.Platform): Record<string, unknown> {
-  const env: Record<string, string> = { PHASE_GATE_DOCS_PATH: rutas.docs, PHASE_GATE_REPOS_PATH: rutas.repos };
+// The paths of this machine live in machine.json, not in the client's "env": the server of each client and the
+// Studio read them from there. An entry only carries an "env" for what is really about that client.
+export function entradaDelServidor(cliente: Cliente, plataforma: NodeJS.Platform): Record<string, unknown> {
+  const env: Record<string, string> = {};
   // Cursor para Windows tiene abierto un bug en el que el formulario de confirmación no aparece
   // (validación V4): se registra con las confirmaciones en el chat.
   if (cliente === "cursor" && plataforma === "win32") env.PHASE_GATE_ELICITATION = "off";
-  const base = { command: "npx", args: ["-y", SERVER_NAME], env };
+  const base = { command: "npx", args: ["-y", SERVER_NAME], ...(Object.keys(env).length ? { env } : {}) };
   return cliente === "vscode" ? { type: "stdio", ...base } : base;
+}
+
+// What an entry had in its "env" and is taken out: this machine's paths (and their ORQUESTADOR_* aliases) and,
+// with `quitarIdioma`, PHASE_GATE_LANG.
+export type QuitaDelEntorno = { documentacion?: string; carpetaDeRepos?: string; idioma?: string };
+// `todas`: every path goes, also one that is different from machine.json's: `init --docs --repos` was given the
+// paths of this machine, and they replace the old ones, as init always did.
+export type OpcionesDeEntrada = { quitarIdioma?: boolean; todas?: boolean };
+// A path that the entry keeps because it is not the one in machine.json: that client keeps using its own.
+export type RutaDistinta = { clave: "documentacion" | "carpetaDeRepos"; variable: string; valor: string; guardada: string };
+
+const NOMBRES_DE_RUTA = {
+  documentacion: ["PHASE_GATE_DOCS_PATH", "ORQUESTADOR_DOCS_PATH"],
+  carpetaDeRepos: ["PHASE_GATE_REPOS_PATH", "ORQUESTADOR_REPOS_PATH"],
+} as const;
+
+// The variable an entry's "env" really uses for a path: PHASE_GATE_* before its alias, and an empty one does not count.
+export function variableDeRutaEnEntrada(env: Record<string, unknown>, clave: "documentacion" | "carpetaDeRepos"): string | null {
+  return NOMBRES_DE_RUTA[clave].find((nombre) => typeof env[nombre] === "string" && env[nombre].trim() !== "") ?? null;
+}
+
+function rutasGuardadas(): { documentacion?: string | undefined; carpetaDeRepos?: string | undefined } {
+  const rutas = leerArchivoDeMaquinaDelDisco().config?.rutas;
+  return { documentacion: rutas?.documentacion, carpetaDeRepos: rutas?.carpetaDeRepos };
+}
+
+const mismaRuta = (a: string, b: string): boolean => {
+  const [x, y] = [path.resolve(a), path.resolve(b)];
+  return process.platform === "win32" ? x.toLowerCase() === y.toLowerCase() : x === y;
+};
+
+// What an entry's "env" says: the value that would win (PHASE_GATE_* before its alias).
+export function rutasDelEnvDeEntrada(env: Record<string, unknown>): QuitaDelEntorno {
+  const texto = (valor: unknown): string | undefined => (typeof valor === "string" && valor.trim() !== "" ? valor.trim() : undefined);
+  const documentacion = texto(env.PHASE_GATE_DOCS_PATH) ?? texto(env.ORQUESTADOR_DOCS_PATH);
+  const carpetaDeRepos = texto(env.PHASE_GATE_REPOS_PATH) ?? texto(env.ORQUESTADOR_REPOS_PATH);
+  const idioma = texto(env.PHASE_GATE_LANG);
+  return { ...(documentacion ? { documentacion } : {}), ...(carpetaDeRepos ? { carpetaDeRepos } : {}), ...(idioma ? { idioma } : {}) };
+}
+
+// What the "env" of an entry that already exists stops carrying, and what is taken out of it. A path is taken out
+// only if it is the one machine.json has, or if machine.json has none (then it moves there). One that is
+// different stays, with its aliases: it is how a client uses another folder, and taking it out would switch that
+// client to machine.json's without anyone deciding it. It comes back in `distintas`, to be said.
+export function sinRutasEnElEntorno(
+  env: Record<string, unknown>,
+  opciones: OpcionesDeEntrada = {}
+): { env: Record<string, unknown>; quita: QuitaDelEntorno; distintas: RutaDistinta[] } {
+  const dicho = rutasDelEnvDeEntrada(env);
+  const guardadas = opciones.todas ? {} : rutasGuardadas();
+  const quita: QuitaDelEntorno = {};
+  const distintas: RutaDistinta[] = [];
+  const resto = { ...env };
+  for (const clave of ["documentacion", "carpetaDeRepos"] as const) {
+    const valor = dicho[clave];
+    const guardada = guardadas[clave];
+    if (valor !== undefined && guardada !== undefined && !mismaRuta(valor, guardada)) {
+      distintas.push({ clave, variable: variableDeRutaEnEntrada(env, clave)!, valor, guardada });
+      continue;
+    }
+    for (const variable of NOMBRES_DE_RUTA[clave]) delete resto[variable];
+    if (valor !== undefined) quita[clave] = valor;
+  }
+  if (opciones.quitarIdioma && dicho.idioma !== undefined) {
+    delete resto.PHASE_GATE_LANG;
+    quita.idioma = dicho.idioma;
+  }
+  return { env: resto, quita, distintas };
 }
 
 // ¿Esta parte de un comando lanza mcp-phase-gate? El paquete exacto (`mcp-phase-gate`, o con versión
@@ -342,15 +446,24 @@ export function ejecutaPhaseGate(entrada: unknown): boolean {
   return partes.some(lanzaPhaseGate);
 }
 
-// Lo que cambia init en una entrada que ya existe: las dos rutas, con los nombres nuevos. Conserva el
-// comando (un clon de desarrollo sigue lanzando su build/index.js) y el resto de variables, salvo los
-// alias ORQUESTADOR_* de esas dos, que quedarían en discrepancia.
-function actualizarEntrada(existente: Record<string, unknown>, nueva: Record<string, unknown>): Record<string, unknown> {
-  const env = { ...((existente.env as Record<string, string> | undefined) ?? {}) };
-  delete env.ORQUESTADOR_DOCS_PATH;
-  delete env.ORQUESTADOR_REPOS_PATH;
-  return { ...existente, env: { ...env, ...(nueva.env as Record<string, string>) } };
+// What init changes in an entry that already exists: it stops carrying the paths in its "env" (with their
+// ORQUESTADOR_* aliases), except one that is not machine.json's (sinRutasEnElEntorno), and, if asked, PHASE_GATE_LANG. It keeps the command (a development clone still
+// launches its build/index.js) and everything else, such as Cursor's PHASE_GATE_ELICITATION on Windows.
+function actualizarEntrada(
+  existente: Record<string, unknown>,
+  nueva: Record<string, unknown>,
+  opciones: OpcionesDeEntrada
+): { entrada: Record<string, unknown>; quita: QuitaDelEntorno; distintas: RutaDistinta[] } {
+  const actual = esObjetoPlano(existente.env) ? existente.env : {};
+  const { env, quita, distintas } = sinRutasEnElEntorno(actual, opciones);
+  const nuevo = { ...env, ...(esObjetoPlano(nueva.env) ? nueva.env : {}) };
+  const entrada = { ...existente };
+  if (Object.keys(nuevo).length) entrada.env = nuevo;
+  else delete entrada.env;
+  return { entrada, quita, distintas };
 }
+
+const esObjetoPlano = (valor: unknown): valor is Record<string, unknown> => valor !== null && typeof valor === "object" && !Array.isArray(valor);
 
 function bloqueParaPegar(seccion: string, clave: string, entrada: Record<string, unknown>): string {
   return json({ [seccion]: { [clave]: entrada } });
@@ -370,10 +483,12 @@ export type PlanDeArchivo =
   | (BaseDePlan & { estado: "roto"; error: string | null; paraPegar: string })
   | (BaseDePlan & { estado: "forma-rara"; paraPegar: string })
   | (BaseDePlan & { estado: "clave-ocupada" })
-  | (BaseDePlan & { estado: "sin-cambios"; claveFinal: string })
+  | (BaseDePlan & { estado: "sin-cambios"; claveFinal: string; distintas: RutaDistinta[] })
   | (BaseDePlan & {
       estado: "nuevo" | "actualiza";
       claveFinal: string;
+      quita: QuitaDelEntorno; // lo que el "env" de la entrada llevaba y deja de llevar
+      distintas: RutaDistinta[]; // las rutas que se quedan porque no son las de machine.json
       renombra: string | null; // la clave que se sustituye por --clave
       conserva: string | null; // la clave que ya tenía y se conserva
       comentarios: boolean;
@@ -386,11 +501,11 @@ export function carpetaDelCliente(cliente: "cursor" | "vscode", entorno: Pick<En
   return cliente === "cursor" ? path.join(entorno.home, ".cursor") : carpetaDeVsCode(entorno as EntornoInit);
 }
 
-export function planDeArchivo(cliente: "cursor" | "vscode", rutas: Rutas, claveDada: string | null, entorno: Pick<EntornoInit, "home" | "appData" | "xdgConfig" | "plataforma">): PlanDeArchivo {
+export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | null, entorno: Pick<EntornoInit, "home" | "appData" | "xdgConfig" | "plataforma">, opciones: OpcionesDeEntrada = {}): PlanDeArchivo {
   const nombre = cliente === "cursor" ? "Cursor" : "VS Code";
   const archivo = path.join(carpetaDelCliente(cliente, entorno), "mcp.json");
   const seccion = cliente === "cursor" ? "mcpServers" : "servers";
-  const deseada = entradaDelServidor(cliente, rutas, entorno.plataforma);
+  const deseada = entradaDelServidor(cliente, entorno.plataforma);
   const clave = claveDada ?? CLAVE_POR_DEFECTO;
   const base = { cliente, nombre, archivo, seccion, clave };
 
@@ -412,11 +527,13 @@ export function planDeArchivo(cliente: "cursor" | "vscode", rutas: Rutas, claveD
 
   let claveFinal = clave;
   let nuevaEntrada = deseada;
+  let quita: QuitaDelEntorno = {};
+  let distintas: RutaDistinta[] = [];
   let renombra: string | null = null;
   let conserva: string | null = null;
 
   if (yaRegistrada) {
-    nuevaEntrada = actualizarEntrada(servidores[yaRegistrada] as Record<string, unknown>, deseada);
+    ({ entrada: nuevaEntrada, quita, distintas } = actualizarEntrada(servidores[yaRegistrada] as Record<string, unknown>, deseada, opciones));
     if (yaRegistrada !== clave && claveDada === null) {
       claveFinal = yaRegistrada;
       conserva = yaRegistrada;
@@ -429,7 +546,7 @@ export function planDeArchivo(cliente: "cursor" | "vscode", rutas: Rutas, claveD
 
   const antes = yaRegistrada ? json(servidores[yaRegistrada]) : "";
   const despues = json(nuevaEntrada);
-  if (yaRegistrada && !renombra && antes === despues) return { ...base, estado: "sin-cambios", claveFinal };
+  if (yaRegistrada && !renombra && antes === despues) return { ...base, estado: "sin-cambios", claveFinal, distintas };
 
   if (renombra) delete servidores[renombra];
   servidores[claveFinal] = nuevaEntrada;
@@ -437,6 +554,8 @@ export function planDeArchivo(cliente: "cursor" | "vscode", rutas: Rutas, claveD
     ...base,
     estado: yaRegistrada ? "actualiza" : "nuevo",
     claveFinal,
+    quita,
+    distintas,
     renombra,
     conserva,
     comentarios: lectura.comentarios,
@@ -446,8 +565,8 @@ export function planDeArchivo(cliente: "cursor" | "vscode", rutas: Rutas, claveD
   };
 }
 
-async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode", rutas: Rutas): Promise<void> {
-  const plan = planDeArchivo(cliente, rutas, ctx.opciones.clave, ctx.entorno);
+async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode"): Promise<void> {
+  const plan = planDeArchivo(cliente, ctx.opciones.clave, ctx.entorno, { todas: true });
   const { nombre, archivo, seccion, clave } = plan;
 
   if (plan.estado === "roto") {
@@ -501,8 +620,60 @@ export function registroEnClaude(lista: string): string | null {
   return null;
 }
 
-function comandoDeClaude(clave: string, rutas: Rutas): string[] {
-  return ["mcp", "add", clave, "--scope", "user", "--env", `PHASE_GATE_DOCS_PATH=${rutas.docs}`, "--env", `PHASE_GATE_REPOS_PATH=${rutas.repos}`, "--", "npx", "-y", SERVER_NAME];
+// No environment variables: the paths live in machine.json.
+function comandoDeClaude(clave: string): string[] {
+  return ["mcp", "add", clave, "--scope", "user", "--", "npx", "-y", SERVER_NAME];
+}
+
+// A server's JSON, as a single argument in the terminal of whoever will run it: PowerShell on Windows (with the
+// double quotes escaped, which is what it expects when calling a program) and a POSIX terminal elsewhere.
+function citarJson(texto: string, plataforma: NodeJS.Platform): string {
+  if (plataforma === "win32") return `'${texto.replace(/'/g, "''").replace(/"/g, '\\"')}'`;
+  return `'${texto.replace(/'/g, "'\\''")}'`;
+}
+
+// What has to be run to redo a Claude Code entry without its paths, in its scope.
+// `comandos` is empty when there is nothing to take out; `distintas` are the paths that stay because they are not
+// the ones in machine.json.
+export type RehacerEnClaude = { ambito: "user" | "local"; carpeta: string | null; comandos: string[]; quita: QuitaDelEntorno; distintas: RutaDistinta[] };
+
+// The entries of this server with that key in ~/.claude.json: the user one and the local ones of each folder.
+function entradasDeClaude(home: string, clave: string): { ambito: "user" | "local"; carpeta: string | null; entrada: Record<string, unknown> }[] {
+  const lectura = leerJsonTolerante(path.join(home, ".claude.json"));
+  if (lectura.estado !== "valido") return [];
+  const encontradas: { ambito: "user" | "local"; carpeta: string | null; entrada: Record<string, unknown> }[] = [];
+  const delUsuario = lectura.datos.mcpServers;
+  if (esObjetoPlano(delUsuario) && esObjetoPlano(delUsuario[clave]) && ejecutaPhaseGate(delUsuario[clave])) encontradas.push({ ambito: "user", carpeta: null, entrada: delUsuario[clave] });
+  const proyectos = lectura.datos.projects;
+  if (esObjetoPlano(proyectos)) {
+    for (const [carpeta, datos] of Object.entries(proyectos)) {
+      const locales = esObjetoPlano(datos) ? datos.mcpServers : undefined;
+      if (esObjetoPlano(locales) && esObjetoPlano(locales[clave]) && ejecutaPhaseGate(locales[clave])) encontradas.push({ ambito: "local", carpeta, entrada: locales[clave] });
+    }
+  }
+  return encontradas;
+}
+
+export function comandosParaRehacer(home: string, clave: string, plataforma: NodeJS.Platform, opciones: OpcionesDeEntrada = {}): RehacerEnClaude[] {
+  const rehacer: RehacerEnClaude[] = [];
+  for (const { ambito, carpeta, entrada } of entradasDeClaude(home, clave)) {
+    const { env, quita, distintas } = sinRutasEnElEntorno(esObjetoPlano(entrada.env) ? entrada.env : {}, opciones);
+    if (!Object.keys(quita).length) {
+      if (distintas.length) rehacer.push({ ambito, carpeta, quita, distintas, comandos: [] });
+      continue;
+    }
+    const nueva = { ...entrada };
+    if (Object.keys(env).length) nueva.env = env;
+    else delete nueva.env;
+    rehacer.push({
+      ambito,
+      carpeta,
+      quita,
+      distintas,
+      comandos: [`claude mcp remove ${clave} --scope ${ambito}`, `claude mcp add-json ${clave} ${citarJson(JSON.stringify(nueva), plataforma)} --scope ${ambito}`],
+    });
+  }
+  return rehacer;
 }
 
 function mostrarComando(args: string[]): string {
@@ -511,12 +682,16 @@ function mostrarComando(args: string[]): string {
 
 // El plan en Claude Code: el comando que se ejecutaría, o por qué no. Lee `claude mcp list`, que no
 // escribe nada.
+// An entry that already exists is not touched: `rehacer` says, for each scope where it is, the two commands
+// that leave it the same but without the paths (`claude mcp remove` and `claude mcp add-json`). The person
+// runs them: if the add failed after the remove, the server would be left unregistered. `quita` is what it
+// carried in its "env".
 export type PlanDeClaude =
   | { cliente: "claude-code"; estado: "sin-lista"; mensaje: string }
-  | { cliente: "claude-code"; estado: "existente"; existente: string; comando: string }
+  | { cliente: "claude-code"; estado: "existente"; existente: string; comando: string | null; rehacer: RehacerEnClaude[]; quita: QuitaDelEntorno; distintas: RutaDistinta[] }
   | { cliente: "claude-code"; estado: "nuevo"; clave: string; args: string[]; comando: string };
 
-export async function planDeClaude(rutas: Rutas, claveDada: string | null, entorno: Pick<EntornoInit, "ejecutar">): Promise<PlanDeClaude> {
+export async function planDeClaude(claveDada: string | null, entorno: Pick<EntornoInit, "ejecutar" | "home" | "plataforma">, opciones: OpcionesDeEntrada = {}): Promise<PlanDeClaude> {
   let lista: Ejecucion;
   try {
     lista = await entorno.ejecutar("claude", ["mcp", "list"]);
@@ -528,25 +703,30 @@ export async function planDeClaude(rutas: Rutas, claveDada: string | null, entor
     return { cliente: "claude-code", estado: "sin-lista", mensaje: mensaje("INIT-CLAUDE-LISTA-FALLO", { stderr: lista.stderr.trim(), codigo: lista.codigo }) };
   }
 
-  // `mcp list` no enseña las variables de un registro, así que uno que ya existe no se toca: se dice
-  // cómo actualizarlo a mano, con su misma clave.
+  // `mcp list` does not show a registration's variables: they are read from ~/.claude.json. One that already
+  // exists is not touched.
   const existente = registroEnClaude(lista.stdout);
   if (existente) {
-    return { cliente: "claude-code", estado: "existente", existente, comando: mensaje("INIT-CLAUDE-COMANDO-EXISTENTE", { existente, comando: mostrarComando(comandoDeClaude(existente, rutas)) }) };
+    const todas = comandosParaRehacer(entorno.home, existente, entorno.plataforma, opciones);
+    const rehacer = todas.filter((r) => r.comandos.length);
+    const distintas = todas.flatMap((r) => r.distintas);
+    const quita: QuitaDelEntorno = Object.assign({}, ...rehacer.map((r) => r.quita).reverse());
+    const comando = rehacer.length ? rehacer.map((r) => mensaje("INIT-CLAUDE-REHACER", { ambito: r.ambito, carpeta: r.carpeta, comandos: r.comandos })).join("\n") : null;
+    return { cliente: "claude-code", estado: "existente", existente, comando, rehacer, quita, distintas };
   }
   const clave = claveDada ?? CLAVE_POR_DEFECTO;
-  const args = comandoDeClaude(clave, rutas);
+  const args = comandoDeClaude(clave);
   return { cliente: "claude-code", estado: "nuevo", clave, args, comando: mostrarComando(args) };
 }
 
-async function registrarEnClaude(ctx: Contexto, rutas: Rutas): Promise<void> {
-  const plan = await planDeClaude(rutas, ctx.opciones.clave, ctx.entorno);
+async function registrarEnClaude(ctx: Contexto): Promise<void> {
+  const plan = await planDeClaude(ctx.opciones.clave, ctx.entorno, { todas: true });
   if (plan.estado === "sin-lista") {
     fallar(ctx, `Claude Code: ${plan.mensaje}`);
     return;
   }
   if (plan.estado === "existente") {
-    ctx.entorno.salida.out(mensaje("INIT-CLAUDE-EXISTENTE", { existente: plan.existente, comando: plan.comando }));
+    ctx.entorno.salida.out(plan.comando ? mensaje("INIT-CLAUDE-EXISTENTE", { existente: plan.existente, comando: plan.comando }) : mensaje("INIT-CLAUDE-AL-DIA", { existente: plan.existente }));
     return;
   }
 
@@ -666,13 +846,16 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
       fallar(ctx, mensaje("INIT-NO-SE-TOCA", { error: lectura.error }));
       return true;
     }
-    const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined; idiomaPorDefecto?: string | undefined } = lectura.config ?? { version: 1 };
+    const actual: Record<string, unknown> & { presetPorDefecto?: string | undefined; idiomaPorDefecto?: string | undefined } = lectura.config ?? { version: VERSION_DE_MAQUINA };
     const idioma = ctx.opciones.idioma ?? null;
     if (actual.presetPorDefecto === preset && (!idioma || actual.idiomaPorDefecto === idioma)) {
       ctx.entorno.salida.out(mensaje("INIT-MAQUINA-SIN-CAMBIOS", { preset, idioma }));
       return true;
     }
-    const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...actual, presetPorDefecto: preset, ...(idioma ? { idiomaPorDefecto: idioma } : {}) };
+    // Everything written is version 2, with the $schema of this series: the one the file had (an old @3)
+    // does not stay, and the other keys keep their order.
+    const { $schema: _anterior, ...resto } = actual;
+    const nuevo = { $schema: URL_ESQUEMA_MAQUINA, ...resto, version: VERSION_DE_MAQUINA, presetPorDefecto: preset, ...(idioma ? { idiomaPorDefecto: idioma } : {}) };
     if (actual.presetPorDefecto && !ctx.opciones.dryRun && !(await confirmar(ctx, mensaje("INIT-PREGUNTA-CAMBIAR-PRESET", { actual: actual.presetPorDefecto, preset })))) {
       fallar(ctx, mensaje("INIT-MAQUINA-NO-CAMBIADA"));
       return true;
@@ -761,19 +944,15 @@ export async function ejecutarInit(opciones: OpcionesInit, entorno: EntornoInit)
   if (!docs) return 2;
   const repos = await rutaPedida(ctx, opciones.repos, "REPOS_PATH");
   if (!repos) return 2;
-  const rutas = { docs, repos };
+  if (!(await guardarRutas(ctx, { docs, repos }))) return 1;
 
   const clientes = opciones.clientes ?? (await detectarClientes(entorno));
   if (clientes.length === 0) {
-    entorno.salida.out(
-      mensaje("INIT-SIN-CLIENTES", {
-        bloque: bloqueParaPegar("mcpServers", opciones.clave ?? CLAVE_POR_DEFECTO, entradaDelServidor("claude-code", rutas, entorno.plataforma)),
-      })
-    );
+    entorno.salida.out(mensaje("INIT-SIN-CLIENTES", { bloque: bloqueParaPegar("mcpServers", opciones.clave ?? CLAVE_POR_DEFECTO, entradaDelServidor("claude-code", entorno.plataforma)) }));
   }
   for (const cliente of clientes) {
-    if (cliente === "claude-code") await registrarEnClaude(ctx, rutas);
-    else await registrarEnArchivo(ctx, cliente, rutas);
+    if (cliente === "claude-code") await registrarEnClaude(ctx);
+    else await registrarEnArchivo(ctx, cliente);
   }
 
   if (opciones.comandos) await copiarComandos(ctx, clientes);

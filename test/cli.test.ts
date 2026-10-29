@@ -75,6 +75,19 @@ describe("ejecutarCli", () => {
     }
   });
 
+  it("--help, en los dos idiomas, dice que las rutas viven en machine.json y que una variable de entorno gana", () => {
+    for (const [idioma, patrones] of [
+      ["es", [/rutas\.documentacion, rutas\.carpetaDeRepos y rutas\.subcarpetaTareas/, /Una variable de entorno gana a machine\.json/, /Gana a idiomaPorDefecto de machine\.json/]],
+      ["en", [/rutas\.documentacion, rutas\.carpetaDeRepos and rutas\.subcarpetaTareas/, /An environment variable wins over machine\.json/, /Wins over idiomaPorDefecto of machine\.json/]],
+    ] as const) {
+      process.env.PHASE_GATE_LANG = idioma;
+      const salida = salidaDePrueba();
+      ejecutarCli(["--help"], salida, false);
+      for (const patron of patrones) assert.match(salida.textoOut(), patron, idioma);
+      assert.doesNotMatch(salida.textoOut(), /"env": \{\s*"PHASE_GATE_DOCS_PATH"/, "el ejemplo de registro ya no lleva las rutas en el env");
+    }
+  });
+
   it("--version y -v imprimen la versión", () => {
     for (const bandera of ["--version", "-v"]) {
       const salida = salidaDePrueba();

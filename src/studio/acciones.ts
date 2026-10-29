@@ -5,34 +5,50 @@
 //   2. aplicar:  { accion, argumentos, huella } → el servidor RECALCULA el plan y solo escribe si la huella
 //                coincide; si no, 409: "El disco cambió desde que viste el cambio. Revísalo otra vez."
 //
-//   preset            el "preset" de <DOCS>/<P>/phase-gate.json
-//   reglas            "reglas.lotes" o "reglas.commits" del mismo archivo
+//   equipo            <configDir>/machine.json: this machine's paths, its default language and preset, and the own
+//                     path of any repo (src/ajustes/equipo.ts)
+//   proyecto          what changed in a project, in a single plan: its phase-gate.json and, in machine.json, only
+//                     the keys of its repos (src/ajustes/proyecto.ts)
 //   crear-manifiesto  init --migrate para un proyecto: crea phase-gate.json (solo crea)
 //   eject             mcp-phase-gate eject <objetivo> --a … (capa global, del proyecto o carpeta de presets)
 //   init-cliente      mcp-phase-gate init --cliente <c>: el mcp.json de Cursor o VS Code, o `claude mcp add`
+//   preset            the "preset" of <DOCS>/<P>/phase-gate.json (to be retired: `proyecto` covers it)
+//   reglas            "reglas.lotes" or "reglas.commits" of the same file (to be retired: `proyecto` covers it)
+//
+// `equipo` and `proyecto` have no CLI command, as `preset` and `reglas` did not either; what this module
+// protects stays: closed destinations per action, a single validation shape and the fingerprint.
 //
 // Cada acción calcula su plan con la MISMA función que el CLI (planDeEject, planDeArchivo, planDeClaude,
 // manifiestoNuevo). Nunca escribe documentos de tareas, recibos ni nada de los repos: cada destino se
 // comprueba antes de escribir. Una huella sirve una sola vez, y aplicar va bajo un candado del estado
 // (`<stateDir>/.studio-acciones.lock`), así que dos Studios con la misma huella no aplican los dos.
+//
+// On top of that, each action has its own closed list of destinations (comprobarLista): per file and, in
+// machine.json, per key.
 
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
+import { ArgumentosDeEquipo, planDeEquipo } from "../ajustes/equipo.js";
+import { leerMaquinaParaEditar, planDeEdicion } from "../ajustes/edicion-maquina.js";
+import { ErrorDeArgumentos } from "../ajustes/plan.js";
+import type { PlanDeAjustes } from "../ajustes/plan.js";
+import { ArgumentosDeProyecto, planDeProyecto } from "../ajustes/proyecto.js";
 import { DOCS, REPOS, carpetaPromptsGlobal, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
 import { carpetaPromptsDeProyecto } from "../capas.js";
 import { ErrorDeEject, planDeEject } from "../eject.js";
 import { mensaje } from "../i18n/mensajes.js";
-import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
-import type { EntornoInit } from "../init.js";
+import { CLAVE_VALIDA, CLIENTES, carpetaDeComandos, carpetaDelCliente, diffDeLineas, idiomaParaManifiesto, manifiestoNuevo, marcaDeTiempo, planDeArchivo, planDeClaude, planDeComandos } from "../init.js";
+import type { EntornoInit, QuitaDelEntorno, RutaDistinta } from "../init.js";
 import { conCandado, escribirAtomico } from "../lotes.js";
-import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, presetsDisponibles, rutaManifiesto } from "../manifiesto.js";
+import { Manifiesto, POLITICAS_COMMIT, carpetaPresetsDelUsuario, idiomaDelEquipo, idiomaDelProyecto, leerManifiesto, presetsDisponibles, rutaManifiesto, rutaMaquina } from "../manifiesto.js";
 import { estaDentroReal, requireProjectFolder, rutaReal, ubicarEnTarea, validarSegmento } from "../paths.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 
-export const ACCIONES = ["preset", "reglas", "crear-manifiesto", "eject", "init-cliente"] as const;
+// preset and reglas stay while the interface uses them; `proyecto` already covers them.
+export const ACCIONES = ["preset", "reglas", "crear-manifiesto", "eject", "init-cliente", "equipo", "proyecto"] as const;
 export type Accion = (typeof ACCIONES)[number];
 
 // El 409 de una huella que ya no vale. Sale en el idioma de la petición; la constante es el texto en
@@ -52,16 +68,21 @@ const ARGUMENTOS = {
     .refine((a) => a.lotes !== undefined || a.commits !== undefined, "indica `lotes` o `commits`"),
   "crear-manifiesto": z.object({ proyecto: Proyecto, preset: z.string().regex(ID).optional() }).strict(),
   eject: z.object({ objetivo: z.string().min(1).max(120), destino: z.string().min(1).max(260), fuerza: z.boolean().optional() }).strict(),
-  "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional(), comandos: z.boolean().optional() }).strict(),
+  // quitarIdioma: also removes PHASE_GATE_LANG from the client's env (the warning that the env wins over machine.json's language).
+  "init-cliente": z.object({ cliente: z.enum(CLIENTES), clave: z.string().regex(CLAVE_VALIDA).optional(), comandos: z.boolean().optional(), quitarIdioma: z.boolean().optional() }).strict(),
+  equipo: ArgumentosDeEquipo,
+  proyecto: ArgumentosDeProyecto,
 } as const;
 
 export const PeticionDePlan = z.object({ accion: z.enum(ACCIONES), argumentos: z.unknown() }).strict();
 export const PeticionDeAplicar = z.object({ accion: z.enum(ACCIONES), argumentos: z.unknown(), huella: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
 
 export class ErrorDeAccion extends Error {
+  // `extra` is added to the body of the error response: with several files, which ones were written.
   constructor(
     readonly estado: 400 | 404 | 409 | 500,
-    message: string
+    message: string,
+    readonly extra: Record<string, unknown> = {}
   ) {
     super(message);
   }
@@ -85,11 +106,14 @@ function proyectoDe(nombre: string): string {
 // ─── El plan ────────────────────────────────────────────────────────────────
 type Escritura = { ruta: string; antes: string | null; despues: string; copia: boolean; exclusiva: boolean };
 type Comando = { comando: string; args: string[]; mostrar: string };
-type PlanInterno = { accion: Accion; resumen: string; escrituras: Escritura[]; comandos: Comando[]; hecho: string };
+// `proyecto` and `cliente` are the ones the action named: its list of destinations depends on them.
+type PlanInterno = { accion: Accion; resumen: string; escrituras: Escritura[]; comandos: Comando[]; hecho: string; avisos?: string[]; proyecto?: string; cliente?: (typeof CLIENTES)[number] };
 type Plan = { posible: true; interno: PlanInterno } | { posible: false; motivo: string };
 
 export type ContextoDeAcciones = {
   entornoInit: () => EntornoInit;
+  // Whoever writes each file; the tests swap it so that a write fails. Without it, the atomic one.
+  escribir?: (ruta: string, contenido: string) => void;
 };
 
 const json2 = (valor: unknown): string => `${JSON.stringify(valor, null, 2)}\n`;
@@ -131,7 +155,7 @@ function planDePreset(a: z.infer<(typeof ARGUMENTOS)["preset"]>): Plan {
   if (error) return { posible: false, motivo: mensaje("STUDIO-MANIFIESTO-NO-VALDRIA", { error }) };
   return {
     posible: true,
-    interno: { accion: "preset", resumen: mensaje("STUDIO-PRESET-RESUMEN", { proyecto, preset: a.preset }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-PRESET-HECHO", { proyecto, preset: a.preset }) },
+    interno: { accion: "preset", proyecto, resumen: mensaje("STUDIO-PRESET-RESUMEN", { proyecto, preset: a.preset }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-PRESET-HECHO", { proyecto, preset: a.preset }) },
   };
 }
 
@@ -156,7 +180,7 @@ function planDeReglas(a: z.infer<(typeof ARGUMENTOS)["reglas"]>): Plan {
   if (error) return { posible: false, motivo: mensaje("STUDIO-MANIFIESTO-NO-VALDRIA", { error }) };
   return {
     posible: true,
-    interno: { accion: "reglas", resumen: mensaje("STUDIO-REGLAS-RESUMEN", { proyecto, cambios: cambios.join(", ") }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-REGLAS-HECHO", { proyecto, cambios: cambios.join(", ") }) },
+    interno: { accion: "reglas", proyecto, resumen: mensaje("STUDIO-REGLAS-RESUMEN", { proyecto, cambios: cambios.join(", ") }), escrituras: [{ ruta: m.ruta, antes: m.crudo, despues, copia: true, exclusiva: false }], comandos: [], hecho: mensaje("STUDIO-REGLAS-HECHO", { proyecto, cambios: cambios.join(", ") }) },
   };
 }
 
@@ -170,7 +194,7 @@ function planDeCrear(a: z.infer<(typeof ARGUMENTOS)["crear-manifiesto"]>): Plan 
   if (fs.existsSync(ruta)) return { posible: false, motivo: mensaje("STUDIO-YA-TIENE-MANIFIESTO", { proyecto }) };
   return {
     posible: true,
-    interno: { accion: "crear-manifiesto", resumen: mensaje("STUDIO-CREAR-RESUMEN", { proyecto, preset }), escrituras: [{ ruta, antes: null, despues: manifiestoNuevo(preset, idioma), copia: false, exclusiva: true }], comandos: [], hecho: mensaje("STUDIO-CREAR-HECHO", { proyecto }) },
+    interno: { accion: "crear-manifiesto", proyecto, resumen: mensaje("STUDIO-CREAR-RESUMEN", { proyecto, preset }), escrituras: [{ ruta, antes: null, despues: manifiestoNuevo(preset, idioma), copia: false, exclusiva: true }], comandos: [], hecho: mensaje("STUDIO-CREAR-HECHO", { proyecto }) },
   };
 }
 
@@ -201,6 +225,7 @@ function planDeEjectAccion(a: z.infer<(typeof ARGUMENTOS)["eject"]>): Plan {
     posible: true,
     interno: {
       accion: "eject",
+      ...(plan.proyecto ? { proyecto: plan.proyecto } : {}),
       resumen: mensaje("STUDIO-EJECT-RESUMEN", { objetivo: a.objetivo, etiqueta: plan.etiqueta, reemplaza: plan.reemplaza }),
       escrituras: [{ ruta: plan.archivo, antes, despues: plan.texto, copia: plan.reemplaza, exclusiva: false }],
       comandos: [],
@@ -209,49 +234,97 @@ function planDeEjectAccion(a: z.infer<(typeof ARGUMENTOS)["eject"]>): Plan {
   };
 }
 
-function rutasDeInit(): { docs: string; repos: string } | null {
-  const docs = leerVariable("DOCS_PATH").valor;
-  const repos = leerVariable("REPOS_PATH").valor;
-  const carpeta = (ruta: string | undefined): string | null => (ruta && fs.statSync(path.resolve(ruta), { throwIfNoEntry: false })?.isDirectory() ? path.resolve(ruta) : null);
-  const d = carpeta(docs);
-  const r = carpeta(repos);
-  return d && r ? { docs: d, repos: r } : null;
+// The paths this Studio works with now (the environment, the .env or machine.json), the ones that exist.
+function rutasEfectivas(): QuitaDelEntorno {
+  const carpeta = (ruta: string | undefined): string | undefined => (ruta && fs.statSync(path.resolve(ruta), { throwIfNoEntry: false })?.isDirectory() ? path.resolve(ruta) : undefined);
+  const documentacion = carpeta(leerVariable("DOCS_PATH").valor);
+  const carpetaDeRepos = carpeta(leerVariable("REPOS_PATH").valor);
+  return { ...(documentacion ? { documentacion } : {}), ...(carpetaDeRepos ? { carpetaDeRepos } : {}) };
 }
 
 // El registro en el cliente y, con `comandos`, los /fN que copiaría `init --comandos` (solo Claude Code y
 // Cursor los leen de archivo). Un /fN que no generó init es de la persona: no se pisa (el CLI pide --yes).
 async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: ContextoDeAcciones): Promise<Plan> {
-  const rutas = rutasDeInit();
-  if (!rutas) return { posible: false, motivo: mensaje("STUDIO-SIN-RUTAS") };
   const entorno = ctx.entornoInit();
+  const opciones = { quitarIdioma: a.quitarIdioma === true };
   const resumen: string[] = [];
   const hecho: string[] = [];
   const motivos: string[] = [];
   const escrituras: Escritura[] = [];
   const comandos: Comando[] = [];
+  let escrituraDelCliente: Escritura | null = null;
+  let quita: QuitaDelEntorno = {};
+  // The paths the entry keeps because they are not machine.json's: that client keeps its own, and it is said.
+  let distintas: RutaDistinta[] = [];
+  let nombreDelCliente = "Claude Code";
+  let esNueva = false;
 
   if (a.cliente === "claude-code") {
-    const plan = await planDeClaude(rutas, a.clave ?? null, entorno);
+    const plan = await planDeClaude(a.clave ?? null, entorno, opciones);
     if (plan.estado === "sin-lista") motivos.push(`Claude Code: ${sinRutasDelEquipo(plan.mensaje)}`);
-    else if (plan.estado === "existente") motivos.push(mensaje("STUDIO-INIT-CLAUDE-EXISTENTE", { clave: plan.existente, comando: plan.comando }));
-    else {
+    else if (plan.estado === "existente") {
+      motivos.push(mensaje("STUDIO-INIT-CLAUDE-EXISTENTE", { clave: plan.existente, comando: plan.comando }));
+      quita = plan.quita;
+      distintas = plan.distintas;
+    } else {
+      esNueva = true;
       resumen.push(mensaje("STUDIO-INIT-CLAUDE-RESUMEN", { clave: plan.clave }));
       comandos.push({ comando: "claude", args: plan.args, mostrar: plan.comando });
       hecho.push(mensaje("STUDIO-INIT-CLAUDE-HECHO", { clave: plan.clave }));
     }
   } else {
-    const plan = planDeArchivo(a.cliente, rutas, a.clave ?? null, entorno);
+    const plan = planDeArchivo(a.cliente, a.clave ?? null, entorno, opciones);
+    nombreDelCliente = plan.nombre;
+    if (plan.estado === "sin-cambios" || plan.estado === "nuevo" || plan.estado === "actualiza") distintas = plan.distintas;
     if (plan.estado === "roto") motivos.push(mensaje("STUDIO-INIT-ROTO", { cliente: plan.nombre, error: plan.error ?? "?" }));
     else if (plan.estado === "forma-rara") motivos.push(mensaje("STUDIO-INIT-FORMA-RARA", { cliente: plan.nombre, seccion: plan.seccion }));
     else if (plan.estado === "clave-ocupada") motivos.push(mensaje("STUDIO-INIT-CLAVE-OCUPADA", { cliente: plan.nombre, clave: plan.clave }));
     else if (plan.estado === "sin-cambios") motivos.push(mensaje("STUDIO-INIT-SIN-CAMBIOS", { cliente: plan.nombre, clave: plan.claveFinal }));
     else {
       const antes = leerCrudo(plan.archivo);
+      esNueva = plan.estado === "nuevo";
+      quita = plan.quita;
       resumen.push(mensaje("STUDIO-INIT-RESUMEN", { nuevo: plan.estado === "nuevo", cliente: plan.nombre, clave: plan.claveFinal, comentarios: plan.comentarios }));
-      escrituras.push({ ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false });
+      const quitadas = [
+        ...(plan.quita.documentacion ? ["PHASE_GATE_DOCS_PATH"] : []),
+        ...(plan.quita.carpetaDeRepos ? ["PHASE_GATE_REPOS_PATH"] : []),
+        ...(plan.quita.idioma ? ["PHASE_GATE_LANG"] : []),
+      ];
+      if (quitadas.length) resumen.push(mensaje("STUDIO-INIT-QUITA-DEL-ENV", { cliente: plan.nombre, quita: quitadas }));
+      escrituraDelCliente = { ruta: plan.archivo, antes, despues: plan.texto, copia: antes !== null && antes.length > 0, exclusiva: false };
       hecho.push(mensaje("STUDIO-INIT-HECHO", { nuevo: plan.estado === "nuevo", cliente: plan.nombre, clave: plan.claveFinal }));
     }
   }
+
+  // The paths the client carried in its env, or the Studio's own, move to machine.json if they are not there
+  // yet: that way nothing stops working when they are taken out. Only the missing ones; machine.json goes first.
+  const avisos: string[] = distintas.map((distinta) => mensaje("INIT-RUTA-DISTINTA", { cliente: nombreDelCliente, ...distinta }));
+  const maquina = leerMaquinaParaEditar();
+  const guardadas = maquina.estado === "valido" && maquina.objeto.rutas !== null && typeof maquina.objeto.rutas === "object" ? (maquina.objeto.rutas as Record<string, unknown>) : {};
+  const efectivas = rutasEfectivas();
+  const agregar: { documentacion?: string; carpetaDeRepos?: string } = {};
+  for (const clave of ["documentacion", "carpetaDeRepos"] as const) {
+    const candidata = quita[clave] ?? efectivas[clave];
+    if (candidata && guardadas[clave] === undefined) agregar[clave] = candidata;
+  }
+  const hayRuta = (clave: "documentacion" | "carpetaDeRepos"): boolean => guardadas[clave] !== undefined || agregar[clave] !== undefined;
+  if (esNueva && !(hayRuta("documentacion") && hayRuta("carpetaDeRepos"))) return { posible: false, motivo: mensaje("STUDIO-SIN-RUTAS") };
+  if (Object.keys(agregar).length) {
+    if (maquina.estado === "invalido") return { posible: false, motivo: sinRutasDelEquipo(mensaje("AJUSTES-MAQUINA-A-MANO", { error: maquina.error })) };
+    let planeada;
+    try {
+      planeada = planDeEdicion(maquina, { rutas: agregar });
+    } catch (error) {
+      if (error instanceof ErrorDeArgumentos) throw new ErrorDeAccion(400, sinRutasDelEquipo(error.message));
+      throw error;
+    }
+    if (planeada) {
+      escrituras.push(planeada.escritura);
+      resumen.unshift(mensaje("STUDIO-INIT-RUTAS-EN-MAQUINA", { cambios: planeada.cambios }));
+      avisos.push(...planeada.faltan.map(({ clave, ruta }) => mensaje("AJUSTES-RUTA-NO-EXISTE", { clave, ruta })));
+    }
+  }
+  if (escrituraDelCliente) escrituras.push(escrituraDelCliente);
 
   if (a.comandos) {
     if (a.cliente === "vscode") motivos.push(mensaje("STUDIO-INIT-VSCODE-SIN-COMANDOS"));
@@ -269,12 +342,37 @@ async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: 
     }
   }
 
-  if (!escrituras.length && !comandos.length) return { posible: false, motivo: motivos.join(" ") };
-  return { posible: true, interno: { accion: "init-cliente", resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" ") } };
+  if (!escrituras.length && !comandos.length) return { posible: false, motivo: [...motivos, ...avisos].join(" ") };
+  return { posible: true, interno: { accion: "init-cliente", cliente: a.cliente, resumen: [...resumen, ...motivos].join(" "), escrituras, comandos, hecho: hecho.join(" "), avisos } };
+}
+
+// What src/ajustes/ computes, in this module's internal shape. machine.json goes first in the list: if the
+// second write fails, the paths end up repeated, but everything works. An argument that would produce a file
+// that cannot be read is a 400, before the preview.
+function planDeAjustes(accion: "equipo" | "proyecto", proyecto: string | null, calcular: () => PlanDeAjustes): Plan {
+  let plan: PlanDeAjustes;
+  try {
+    plan = calcular();
+  } catch (error) {
+    if (error instanceof ErrorDeArgumentos) throw new ErrorDeAccion(400, sinRutasDelEquipo(error.message));
+    throw error;
+  }
+  if (!plan.posible) return { posible: false, motivo: sinRutasDelEquipo(plan.motivo) };
+  return {
+    posible: true,
+    interno: { accion, ...(proyecto ? { proyecto } : {}), resumen: plan.resumen, escrituras: plan.escrituras, comandos: [], hecho: plan.hecho, avisos: plan.avisos },
+  };
 }
 
 async function planificar(accion: Accion, crudo: unknown, ctx: ContextoDeAcciones): Promise<Plan> {
   switch (accion) {
+    case "equipo":
+      return planDeAjustes("equipo", null, () => planDeEquipo(argumentosDe("equipo", crudo)));
+    case "proyecto": {
+      const { proyecto: nombre, ...cambios } = argumentosDe("proyecto", crudo);
+      const proyecto = proyectoDe(nombre);
+      return planDeAjustes("proyecto", proyecto, () => planDeProyecto(proyecto, cambios));
+    }
     case "preset":
       return planDePreset(argumentosDe("preset", crudo));
     case "reglas":
@@ -328,7 +426,7 @@ function diffDe(plan: PlanInterno, ctx: ContextoDeAcciones): string {
 }
 
 export type RespuestaDePlan =
-  | { posible: true; resumen: string; diff: string; huella: string; cambios: { archivo: string; tipo: "crear" | "reemplazar" | "comando" }[] }
+  | { posible: true; resumen: string; avisos: string[]; diff: string; huella: string; cambios: { archivo: string; tipo: "crear" | "reemplazar" | "comando" }[] }
   | { posible: false; motivo: string };
 
 export type RespuestaDeAplicar = { hecho: true; mensaje: string; archivos: string[]; copias: string[] };
@@ -368,6 +466,103 @@ function comprobarDestino(ruta: string): void {
   }
 }
 
+// ─── The closed list of each action ─────────────────────────────────────────
+// On top of what comprobarDestino forbids (it only forbids: outside the Documentation it admits any path),
+// each action has the destinations it can write. Three actions share machine.json, so there the list goes by
+// keys: what changes between what there was and what there will be.
+const CLAVES_DE_ESTRUCTURA = new Set(["$schema", "version"]);
+const mismaRuta = (a: string, b: string): boolean => {
+  try {
+    return rutaReal(a) === rutaReal(b);
+  } catch {
+    return path.resolve(a) === path.resolve(b);
+  }
+};
+const proyectoDeClave = (clave: string): string => clave.slice(0, Math.max(clave.indexOf("/"), 0)).toLowerCase();
+
+// The keys of machine.json that change, at the root and inside `repos` and `rutas`.
+function clavesTocadas(e: Escritura): { raiz: string[]; repos: string[]; rutasNuevas: string[]; rutasCambiadas: string[] } | null {
+  const leer = (texto: string | null): Record<string, unknown> | null => {
+    if (texto === null) return {};
+    try {
+      const datos: unknown = JSON.parse(sinBom(texto));
+      return datos !== null && typeof datos === "object" && !Array.isArray(datos) ? (datos as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  const antes = leer(e.antes);
+  const despues = leer(e.despues);
+  if (!antes || !despues) return null;
+  const distintas = (a: Record<string, unknown>, b: Record<string, unknown>): string[] =>
+    [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  const hijo = (o: Record<string, unknown>, k: string): Record<string, unknown> => (o[k] !== null && typeof o[k] === "object" && !Array.isArray(o[k]) ? (o[k] as Record<string, unknown>) : {});
+  const rutasAntes = hijo(antes, "rutas");
+  const rutasDespues = hijo(despues, "rutas");
+  const rutas = distintas(rutasAntes, rutasDespues);
+  return {
+    raiz: distintas(antes, despues).filter((k) => !CLAVES_DE_ESTRUCTURA.has(k)),
+    repos: distintas(hijo(antes, "repos"), hijo(despues, "repos")),
+    rutasNuevas: rutas.filter((k) => rutasAntes[k] === undefined),
+    rutasCambiadas: rutas.filter((k) => rutasAntes[k] !== undefined),
+  };
+}
+
+export function comprobarLista(plan: PlanInterno, e: Escritura, ctx: ContextoDeAcciones): void {
+  const noEscribe = (): never => {
+    throw new ErrorDeAccion(409, mensaje("AJUSTES-DESTINO-NO-PERMITIDO", { accion: plan.accion, archivo: mostrar(e.ruta, ctx) }));
+  };
+  const claveNoPermitida = (clave: string): never => {
+    throw new ErrorDeAccion(409, mensaje("AJUSTES-CLAVE-NO-PERMITIDA", { accion: plan.accion, clave }));
+  };
+  const esMaquina = mismaRuta(e.ruta, rutaMaquina());
+  const esManifiestoDelProyecto = (): boolean => plan.proyecto !== undefined && mismaRuta(e.ruta, rutaManifiesto(plan.proyecto));
+
+  switch (plan.accion) {
+    case "equipo": {
+      if (!esMaquina) return noEscribe();
+      const tocadas = clavesTocadas(e);
+      if (!tocadas) return noEscribe();
+      for (const clave of tocadas.raiz) if (!["rutas", "idiomaPorDefecto", "presetPorDefecto", "repos"].includes(clave)) claveNoPermitida(clave);
+      return;
+    }
+    case "proyecto": {
+      if (esManifiestoDelProyecto()) return;
+      if (!esMaquina || plan.proyecto === undefined) return noEscribe();
+      const tocadas = clavesTocadas(e);
+      if (!tocadas) return noEscribe();
+      for (const clave of tocadas.raiz) if (clave !== "repos") claveNoPermitida(clave);
+      for (const clave of tocadas.repos) if (proyectoDeClave(clave) !== plan.proyecto.toLowerCase()) claveNoPermitida(`repos.${clave}`);
+      return;
+    }
+    case "preset":
+    case "reglas":
+    case "crear-manifiesto":
+      if (!esManifiestoDelProyecto()) noEscribe();
+      return;
+    case "eject":
+      if (!destinoPermitido(e.ruta, plan.proyecto ?? null)) noEscribe();
+      return;
+    case "init-cliente": {
+      const entorno = ctx.entornoInit();
+      const cliente = plan.cliente;
+      if (esMaquina) {
+        const tocadas = clavesTocadas(e);
+        if (!tocadas) return noEscribe();
+        for (const clave of tocadas.raiz) if (clave !== "rutas") claveNoPermitida(clave);
+        // Only the paths that are missing: one that already has a value is not changed from here.
+        for (const clave of tocadas.rutasCambiadas) claveNoPermitida(`rutas.${clave}`);
+        if (tocadas.repos.length) claveNoPermitida("repos");
+        return;
+      }
+      if (cliente === undefined) return noEscribe();
+      if (cliente !== "claude-code" && mismaRuta(e.ruta, path.join(carpetaDelCliente(cliente, entorno), "mcp.json"))) return;
+      if (cliente !== "vscode" && estaDentroReal(carpetaDeComandos(cliente, entorno), e.ruta)) return;
+      return noEscribe();
+    }
+  }
+}
+
 export type Acciones = {
   plan: (cuerpo: unknown) => Promise<RespuestaDePlan>;
   aplicar: (cuerpo: unknown) => Promise<RespuestaDeAplicar>;
@@ -383,7 +578,10 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
     if (!calculado.posible) return calculado;
     const { interno } = calculado;
     try {
-      for (const e of interno.escrituras) comprobarDestino(e.ruta);
+      for (const e of interno.escrituras) {
+        comprobarDestino(e.ruta);
+        comprobarLista(interno, e, ctx);
+      }
     } catch (error) {
       if (error instanceof ErrorDeAccion) return { posible: false, motivo: error.message };
       throw error;
@@ -391,6 +589,7 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
     return {
       posible: true,
       resumen: interno.resumen,
+      avisos: interno.avisos ?? [],
       diff: diffDe(interno, ctx),
       huella: huellaDe(interno),
       cambios: [
@@ -412,35 +611,48 @@ export function crearAcciones(ctx: ContextoDeAcciones): Acciones {
         if (!calculado.posible) throw new ErrorDeAccion(409, `${discoCambiado()} ${calculado.motivo}`);
         const { interno } = calculado;
         if (usadas.has(huella) || huellaDe(interno) !== huella) throw new ErrorDeAccion(409, discoCambiado());
-        for (const e of interno.escrituras) comprobarDestino(e.ruta);
+        for (const e of interno.escrituras) {
+          comprobarDestino(e.ruta);
+          comprobarLista(interno, e, ctx);
+        }
         usadas.add(huella);
 
         const entorno = ctx.entornoInit();
+        const escribir = ctx.escribir ?? escribirAtomico;
         const archivos: string[] = [];
         const copias: string[] = [];
-        for (const e of interno.escrituras) {
-          if (e.copia && fs.existsSync(e.ruta)) {
-            const copia = `${e.ruta}.bak-${marcaDeTiempo(entorno.ahora())}`;
-            fs.copyFileSync(e.ruta, copia);
-            copias.push(mostrar(copia, ctx));
-          }
-          fs.mkdirSync(path.dirname(e.ruta), { recursive: true });
-          if (e.exclusiva) {
-            try {
-              fs.writeFileSync(e.ruta, e.despues, { encoding: "utf-8", flag: "wx" });
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new ErrorDeAccion(409, discoCambiado());
-              throw error;
+        // With several steps (machine.json and another file, or a file and a command), a failure halfway says what
+        // was written and where the copies are; with a single one, the usual error.
+        const variosPasos = interno.escrituras.length + interno.comandos.length > 1;
+        try {
+          for (const e of interno.escrituras) {
+            if (e.copia && fs.existsSync(e.ruta)) {
+              const copia = `${e.ruta}.bak-${marcaDeTiempo(entorno.ahora())}`;
+              fs.copyFileSync(e.ruta, copia);
+              copias.push(mostrar(copia, ctx));
             }
-          } else {
-            escribirAtomico(e.ruta, e.despues);
+            fs.mkdirSync(path.dirname(e.ruta), { recursive: true });
+            if (e.exclusiva) {
+              try {
+                fs.writeFileSync(e.ruta, e.despues, { encoding: "utf-8", flag: "wx" });
+              } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new ErrorDeAccion(409, discoCambiado());
+                throw error;
+              }
+            } else {
+              escribir(e.ruta, e.despues);
+            }
+            archivos.push(mostrar(e.ruta, ctx));
           }
-          archivos.push(mostrar(e.ruta, ctx));
-        }
-        for (const c of interno.comandos) {
-          const r = await entorno.ejecutar(c.comando, c.args);
-          if (r.codigo !== 0) throw new ErrorDeAccion(500, mensaje("STUDIO-COMANDO-FALLO", { comando: c.mostrar, detalle: r.stderr.trim() ? sinRutasDelEquipo(r.stderr.trim()) : null, codigo: r.codigo }));
-          archivos.push(c.mostrar);
+          for (const c of interno.comandos) {
+            const r = await entorno.ejecutar(c.comando, c.args);
+            if (r.codigo !== 0) throw new ErrorDeAccion(500, mensaje("STUDIO-COMANDO-FALLO", { comando: c.mostrar, detalle: r.stderr.trim() ? sinRutasDelEquipo(r.stderr.trim()) : null, codigo: r.codigo }));
+            archivos.push(c.mostrar);
+          }
+        } catch (error) {
+          if (!variosPasos || (archivos.length === 0 && copias.length === 0)) throw error;
+          const detalle = error instanceof Error ? error.message : String(error);
+          throw new ErrorDeAccion(500, mensaje("AJUSTES-APLICAR-PARCIAL", { detalle: sinRutasDelEquipo(detalle), escritos: archivos, copias }), { escritos: archivos, copias });
         }
         return { hecho: true as const, mensaje: sinRutasDelEquipo(interno.hecho), archivos, copias };
       },

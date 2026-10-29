@@ -1,32 +1,39 @@
 import { strict as assert } from "node:assert";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it, mock } from "node:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import {
   DOCS,
+  REPOS,
   cargarEnv,
+  conMaquinaDeLaLlamada,
+  configDir,
   clavesDeEnv,
   defaultPromptsPath,
   errorDeEnv,
+  idiomaSinProyecto,
   leerVariable,
+  maquinaVigente,
   promptsLayers,
   reiniciarEnv,
   requireBasePath,
   stateDir,
   stateFile,
   tasksSubdir,
+  valorDeMaquina,
 } from "../src/config.js";
-import { carpetaTemporal, limpiarEntorno } from "./helpers.js";
+import { carpetaTemporal, configTemporal, limpiarEntorno } from "./helpers.js";
 
 afterEach(limpiarEntorno);
 
 describe("requireBasePath", () => {
-  it("sin la variable, falla nombrando las dos y diciendo dónde definirla", () => {
+  it("sin la variable, falla nombrando las dos y diciendo dónde definirla: machine.json, o el bloque env de un cliente", () => {
     assert.throws(
       () => requireBasePath(DOCS),
-      /Falta PHASE_GATE_DOCS_PATH \(o su alias ORQUESTADOR_DOCS_PATH\).*\.env/s
+      /Falta PHASE_GATE_DOCS_PATH \(o su alias ORQUESTADOR_DOCS_PATH\).*machine\.json.*"rutas\.documentacion".*bloque "env"/s
     );
+    assert.throws(() => requireBasePath(REPOS), /"rutas\.carpetaDeRepos"/);
   });
 
   // Solo espacios es lo mismo que no tenerla: se recorta antes de mirar.
@@ -353,5 +360,167 @@ describe("leerVariable cuando cada nombre llega por una vía distinta", () => {
 
     assert.equal(requireBasePath(DOCS), carpeta);
     assert.equal(leerVariable("DOCS_PATH").discrepancia, "PHASE_GATE_DOCS_PATH está vacía; se usa ORQUESTADOR_DOCS_PATH.");
+  });
+});
+
+// Las rutas también salen de machine.json: entorno, .env, machine.json y nada, en ese orden.
+describe("rutas desde machine.json", () => {
+  function maquina(contenido: unknown): string {
+    const archivo = path.join(configDir(), "machine.json");
+    fs.writeFileSync(archivo, typeof contenido === "string" ? contenido : JSON.stringify(contenido), "utf-8");
+    return archivo;
+  }
+
+  it("sin entorno ni .env, DOCS_PATH, REPOS_PATH y TASKS_SUBDIR salen de machine.json", () => {
+    const docs = carpetaTemporal("docs");
+    const repos = carpetaTemporal("repos");
+    maquina({ version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "Tareas" } });
+
+    assert.deepEqual(
+      (["DOCS_PATH", "REPOS_PATH", "TASKS_SUBDIR"] as const).map((logica) => {
+        const { valor, usada, fuente, discrepancia } = leerVariable(logica);
+        return { valor, usada, fuente, discrepancia };
+      }),
+      [
+        { valor: docs, usada: "rutas.documentacion", fuente: "machine.json", discrepancia: null },
+        { valor: repos, usada: "rutas.carpetaDeRepos", fuente: "machine.json", discrepancia: null },
+        { valor: "Tareas", usada: "rutas.subcarpetaTareas", fuente: "machine.json", discrepancia: null },
+      ]
+    );
+    assert.equal(requireBasePath(DOCS), docs);
+    assert.equal(requireBasePath(REPOS), repos);
+    assert.equal(tasksSubdir(), "Tareas");
+  });
+
+  it("dentro de una llamada se lee una sola vez, aunque cambie en medio; la llamada siguiente ve el cambio", () => {
+    const primera = carpetaTemporal("primera");
+    const segunda = carpetaTemporal("segunda");
+    maquina({ version: 2, rutas: { documentacion: primera } });
+
+    const dentro = conMaquinaDeLaLlamada(() => {
+      const antes = requireBasePath(DOCS);
+      maquina({ version: 2, rutas: { documentacion: segunda } });
+      return [antes, requireBasePath(DOCS), leerVariable("DOCS_PATH").valor];
+    });
+    assert.deepEqual(dentro, [primera, primera, primera], "una llamada no mezcla dos versiones del archivo");
+    assert.equal(requireBasePath(DOCS), segunda, "fuera de la llamada, y en la siguiente, se lee el disco");
+    assert.equal(conMaquinaDeLaLlamada(() => requireBasePath(DOCS)), segunda);
+  });
+
+  it("el entorno gana a machine.json, y el .env también, cada uno por su lado", () => {
+    const deMaquina = carpetaTemporal("maquina");
+    const delEnv = carpetaTemporal("entorno");
+    const delDotEnv = carpetaTemporal("dotenv");
+    maquina({ version: 2, rutas: { documentacion: deMaquina, carpetaDeRepos: deMaquina } });
+
+    process.env.PHASE_GATE_DOCS_PATH = delEnv;
+    const archivo = path.join(carpetaTemporal("env"), ".env");
+    fs.writeFileSync(archivo, `PHASE_GATE_REPOS_PATH=${delDotEnv}\n`);
+    cargarEnv(archivo);
+
+    assert.deepEqual([leerVariable("DOCS_PATH").valor, leerVariable("DOCS_PATH").fuente], [delEnv, "entorno"]);
+    assert.deepEqual([leerVariable("REPOS_PATH").valor, leerVariable("REPOS_PATH").fuente], [delDotEnv, ".env"]);
+    assert.equal(valorDeMaquina("DOCS_PATH"), deMaquina, "lo que dice machine.json se puede leer aunque no gane");
+  });
+
+  it("sin ninguna fuente, nada: la variable queda sin definir y TASKS_SUBDIR es Proyectos", () => {
+    maquina({ version: 2, presetPorDefecto: "software" });
+
+    assert.equal(leerVariable("DOCS_PATH").fuente, "sin definir");
+    assert.equal(valorDeMaquina("DOCS_PATH"), undefined);
+    assert.equal(tasksSubdir(), "Proyectos");
+    assert.throws(() => requireBasePath(DOCS), /Falta PHASE_GATE_DOCS_PATH.*machine\.json.*"rutas\.documentacion"/s);
+  });
+
+  it("subcarpetaTareas vacía vale: las tareas cuelgan del proyecto", () => {
+    maquina({ version: 2, rutas: { subcarpetaTareas: "" } });
+
+    assert.equal(leerVariable("TASKS_SUBDIR").fuente, "machine.json");
+    assert.equal(tasksSubdir(), "");
+  });
+
+  it("una ruta de machine.json que no existe, o que es un archivo, lo dice nombrando machine.json y no una variable de entorno", () => {
+    const inexistente = path.join(carpetaTemporal("config"), "no-existe");
+    maquina({ version: 2, rutas: { documentacion: inexistente } });
+    assert.throws(() => requireBasePath(DOCS), (error: Error) => {
+      assert.match(error.message, /^machine\.json \(rutas\.documentacion\) apunta a/);
+      assert.ok(error.message.includes(inexistente));
+      assert.match(error.message, /Corrige la ruta en machine\.json\.$/);
+      assert.doesNotMatch(error.message, /PHASE_GATE_DOCS_PATH|\.env/);
+      return true;
+    });
+
+    const archivo = path.join(carpetaTemporal("config"), "docs.txt");
+    fs.writeFileSync(archivo, "x", "utf-8");
+    maquina({ version: 2, rutas: { carpetaDeRepos: archivo } });
+    assert.throws(() => requireBasePath(REPOS), /^Error: machine\.json \(rutas\.carpetaDeRepos\) apunta a ".*docs\.txt", que es un archivo y no una carpeta\./);
+  });
+
+  it("cambia el archivo en disco y la llamada siguiente lo nota, sin reiniciar", () => {
+    const una = carpetaTemporal("una");
+    const otra = carpetaTemporal("otra");
+    maquina({ version: 2, rutas: { documentacion: una } });
+    assert.equal(requireBasePath(DOCS), una);
+
+    maquina({ version: 2, rutas: { documentacion: otra } });
+    assert.equal(requireBasePath(DOCS), otra);
+
+    fs.rmSync(path.join(configDir(), "machine.json"));
+    assert.throws(() => requireBasePath(DOCS), /Falta PHASE_GATE_DOCS_PATH/);
+  });
+
+  describe("cuando machine.json se rompe", () => {
+    it("con un error de sintaxis y sin un archivo válido antes, sus rutas no cuentan y el error dice la línea y la columna", () => {
+      const docs = carpetaTemporal("docs");
+      maquina(`{\n  "version": 2,\n  "rutas": { "documentacion": ${JSON.stringify(docs)} },\n  }`);
+
+      assert.equal(leerVariable("DOCS_PATH").fuente, "sin definir");
+      assert.throws(() => requireBasePath(DOCS), (error: Error) => {
+        assert.match(error.message, /Falta PHASE_GATE_DOCS_PATH/);
+        assert.match(error.message, /machine\.json no es válido \(.*machine\.json\): no es un JSON válido: carácter inesperado «\}» \(línea 4, columna 3\)/);
+        return true;
+      });
+    });
+
+    it("con un error de forma, nombra el campo", () => {
+      maquina({ version: 2, rutas: { documentacion: "relativa" } });
+
+      assert.throws(() => requireBasePath(DOCS), /machine\.json no es válido .*rutas\.documentacion: tiene que ser una ruta absoluta/);
+    });
+
+    it("si antes era válido, el proceso conserva el último válido, avisa una sola vez y se recupera al arreglarlo", () => {
+      const docs = carpetaTemporal("docs");
+      const aviso = mock.method(console, "error", () => {});
+      try {
+        maquina({ version: 2, rutas: { documentacion: docs }, idiomaPorDefecto: "en" });
+        assert.equal(requireBasePath(DOCS), docs);
+
+        maquina("{ roto");
+        assert.equal(requireBasePath(DOCS), docs, "las rutas siguen valiendo");
+        assert.equal(leerVariable("DOCS_PATH").fuente, "machine.json");
+        delete process.env.PHASE_GATE_LANG; // la suite la fija en es, y entonces ganaría a machine.json
+        assert.equal(idiomaSinProyecto(), "en", "y el idioma también");
+        assert.equal(maquinaVigente().deMemoria, true);
+        assert.equal(aviso.mock.callCount(), 1, "el aviso sale una vez por error, no una vez por lectura");
+        assert.match(String(aviso.mock.calls[0]!.arguments[0]), /machine\.json dejó de ser válido.*última lectura buena.*carácter inesperado/s);
+
+        const otra = carpetaTemporal("otra");
+        maquina({ version: 2, rutas: { documentacion: otra } });
+        assert.equal(requireBasePath(DOCS), otra);
+        assert.equal(maquinaVigente().deMemoria, false);
+      } finally {
+        aviso.mock.restore();
+      }
+    });
+
+    it("el último válido es de una carpeta de configuración: otra carpeta, otro archivo roto, no lo hereda", () => {
+      const docs = carpetaTemporal("docs");
+      maquina({ version: 2, rutas: { documentacion: docs } });
+      assert.equal(requireBasePath(DOCS), docs);
+
+      configTemporal();
+      maquina("{ roto");
+      assert.throws(() => requireBasePath(DOCS), /Falta PHASE_GATE_DOCS_PATH/);
+    });
   });
 });

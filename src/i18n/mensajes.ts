@@ -19,6 +19,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Idioma } from "../vocabulario.js";
 import { idiomaDelEntorno, idiomaDelSistema } from "./idioma.js";
+import { TEXTOS_AJUSTES } from "./textos/ajustes.js";
 import { TEXTOS_CLI } from "./textos/cli.js";
 import { TEXTOS_DIAGNOSTICO } from "./textos/diagnostico.js";
 import { TEXTOS_LOTES } from "./textos/lotes.js";
@@ -32,6 +33,7 @@ export type { Catalogo, Plantilla } from "./textos/tipos.js";
 
 // Los catálogos por separado, para que el test pueda decir de cuál es un código repetido.
 export const CATALOGOS: Readonly<Record<string, Catalogo>> = {
+  ajustes: TEXTOS_AJUSTES,
   cli: TEXTOS_CLI,
   diagnostico: TEXTOS_DIAGNOSTICO,
   lotes: TEXTOS_LOTES,

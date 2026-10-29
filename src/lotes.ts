@@ -374,10 +374,30 @@ export function escribirAtomico(ruta: string, contenido: string): void {
   const temporal = path.join(path.dirname(ruta), `.${path.basename(ruta)}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`);
   try {
     fs.writeFileSync(temporal, contenido, "utf-8");
-    fs.renameSync(temporal, ruta);
+    renombrarConReintentos(temporal, ruta);
   } catch (error) {
     borrarArchivo(temporal);
     throw traducirEscritura(error, path.basename(ruta));
+  }
+}
+
+// On Windows a rename over a file that another process has open, even only to read it, fails with EPERM (or
+// EACCES, EBUSY) for as long as that read lasts. machine.json is read by every open server and by the Studio, so
+// that moment happens: it is retried for about a second before giving up. Elsewhere the first try is the answer.
+const ESPERAS_DEL_RENOMBRADO_MS = [5, 10, 20, 40, 80, 160, 320, 400];
+const ESPERA = new Int32Array(new SharedArrayBuffer(4));
+
+export function renombrarConReintentos(origen: string, destino: string, renombrar: (de: string, a: string) => void = fs.renameSync, esperas: readonly number[] = ESPERAS_DEL_RENOMBRADO_MS, enWindows: boolean = process.platform === "win32"): void {
+  for (let intento = 0; ; intento++) {
+    try {
+      renombrar(origen, destino);
+      return;
+    } catch (error) {
+      const codigo = (error as NodeJS.ErrnoException)?.code;
+      const pasajero = enWindows && (codigo === "EPERM" || codigo === "EACCES" || codigo === "EBUSY");
+      if (!pasajero || intento >= esperas.length) throw error;
+      Atomics.wait(ESPERA, 0, 0, esperas[intento]);
+    }
   }
 }
 

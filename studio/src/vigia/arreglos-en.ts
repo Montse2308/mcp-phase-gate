@@ -5,7 +5,9 @@
 import type { ARREGLOS_ES } from "./arreglos-es.js";
 
 export const ARREGLOS_EN = {
-  "VAR-FALTA": "Define the variable in the \"env\" block of your client's mcp.json (or in the .env at the package root), pointing to a folder that exists.",
+  "VAR-FALTA": "Save the path in machine.json (`npx mcp-phase-gate init --docs <path> --repos <path>` writes it), or define the variable in the \"env\" block of your client's mcp.json (or in the .env at the package root), pointing to a folder that exists.",
+  "VAR-PISA-MAQUINA": "The environment variable wins. To use the one in machine.json, remove that variable from the \"env\" block of your client's mcp.json (or from the .env).",
+  "LANG-PISA-MAQUINA": "PHASE_GATE_LANG wins. To use the language in machine.json, remove it from the \"env\" block of your client's mcp.json.",
   "VAR-DISCREPA": "Keep a single name: delete the ORQUESTADOR_* one (the alias) or give it the same value as its PHASE_GATE_*.",
   "LANG-INVALIDO": "Set PHASE_GATE_LANG=es or PHASE_GATE_LANG=en in the \"env\" block of your client's mcp.json, or remove it to use the system language.",
   "ENV-UTF16": "Save the .env again as UTF-8 without BOM (in PowerShell, `> .env` writes it as UTF-16).",

@@ -16,9 +16,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { z } from "zod";
 
-import { DOCS, REPOS, configDir, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, raizPaquete, requireBasePath } from "./config.js";
+import { DOCS, REPOS, conMaquinaDeLaLlamada, configDir, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, idiomaSinProyecto, leerArchivoDeMaquina, raizPaquete, requireBasePath } from "./config.js";
 import type { Hallazgo } from "./diagnostico.js";
 import { ErrorConCodigo, mensaje } from "./i18n/mensajes.js";
+import { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, errorDeZod, rutaDeError } from "./maquina.js";
 import { tasksRootPath, validarSegmento } from "./paths.js";
 import { leerPromptNormalizado, separarFrontmatter } from "./phases.js";
 import { IDIOMAS, VOCABULARIO, valorDePreset } from "./vocabulario.js";
@@ -61,81 +62,13 @@ export const Manifiesto = z
 
 export type Manifiesto = z.output<typeof Manifiesto>;
 
-export const MaquinaConfig = z
-  .object({
-    $schema: z.string().optional(),
-    version: z.literal(1),
-    // "<PROYECTO>/<repo id>" -> ruta absoluta en ESTE equipo
-    // Ruta absoluta: una relativa se resolvería contra el directorio de trabajo del cliente, que es
-    // distinto en cada uno (hallazgo 17 de la auditoría de la Etapa 3).
-    repos: z
-      .record(
-        z.string().regex(/^[^/\\]+\/[a-z0-9][a-z0-9-]{0,39}$/),
-        z
-          .string()
-          .min(1)
-          .refine((ruta) => path.win32.isAbsolute(ruta) || path.posix.isAbsolute(ruta), { error: () => mensaje("MAQUINA-TXT-RUTA-ABSOLUTA") })
-      )
-      .default({}),
-    presetPorDefecto: z.string().optional(), // para proyectos sin manifiesto; si falta, "software"
-    // Para proyectos que no declaran idioma ni tienen documentos que lo digan (§8.3, paso 3).
-    idiomaPorDefecto: z.enum(["es", "en"]).optional(),
-  })
-  .strict();
-
-export type MaquinaConfig = z.output<typeof MaquinaConfig>;
+// The shape of machine.json lives in maquina.ts; it is re-exported here because the rest takes it from here.
+export { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, rutaDeError };
 
 export const ARCHIVO_MANIFIESTO = "phase-gate.json";
-export const ARCHIVO_MAQUINA = "machine.json";
 export const URL_ESQUEMA_PROYECTO = "https://unpkg.com/mcp-phase-gate@3/schema/project.json";
-export const URL_ESQUEMA_MAQUINA = "https://unpkg.com/mcp-phase-gate@3/schema/machine.json";
 
 // ─── Errores legibles ───────────────────────────────────────────────────────
-// "repos[1].dir", no ["repos", 1, "dir"]: es lo que la persona busca en su archivo.
-export function rutaDeError(ruta: readonly PropertyKey[]): string {
-  let texto = "";
-  for (const parte of ruta) texto += typeof parte === "number" ? `[${parte}]` : `${texto ? "." : ""}${String(parte)}`;
-  return texto || mensaje("MANIFIESTO-TXT-RAIZ");
-}
-
-// El valor que había en esa ruta del archivo: zod no lo guarda en el error, y sin él no se distingue
-// un campo que falta de uno que vale otra cosa.
-function valorEn(crudo: unknown, ruta: readonly PropertyKey[]): unknown {
-  let actual: unknown = crudo;
-  for (const parte of ruta) {
-    if (actual === null || typeof actual !== "object") return undefined;
-    actual = (actual as Record<PropertyKey, unknown>)[parte];
-  }
-  return actual;
-}
-
-function mensajeDe(issue: z.core.$ZodIssue, crudo: unknown): string {
-  if ((issue.code === "invalid_type" || issue.code === "invalid_value") && valorEn(crudo, issue.path) === undefined) return mensaje("MANIFIESTO-TXT-FALTA");
-  const i = issue as z.core.$ZodIssue & { keys?: string[]; values?: unknown[]; expected?: string; minimum?: number | bigint; maximum?: number | bigint; origin?: string };
-  switch (i.code) {
-    case "unrecognized_keys":
-      return mensaje("MANIFIESTO-TXT-CLAVE-DESCONOCIDA", { claves: i.keys ?? [] });
-    case "invalid_type":
-      return mensaje("MANIFIESTO-TXT-TIPO", { tipo: i.expected });
-    case "invalid_key":
-      return mensaje("MANIFIESTO-TXT-CLAVE-MAQUINA");
-    case "invalid_value":
-      return mensaje("MANIFIESTO-TXT-VALOR", { valores: i.values ?? [] });
-    case "too_small":
-      return i.origin === "string" && Number(i.minimum) === 1 ? mensaje("MANIFIESTO-TXT-VACIO") : mensaje("MANIFIESTO-TXT-CORTO", { minimo: String(i.minimum) });
-    case "too_big":
-      return mensaje("MANIFIESTO-TXT-LARGO", { maximo: String(i.maximum) });
-    case "invalid_format":
-      return /^Invalid/.test(i.message) ? mensaje("MANIFIESTO-TXT-FORMATO") : i.message;
-    default:
-      return i.message;
-  }
-}
-
-function errorDeZod(error: z.ZodError, crudo: unknown): string {
-  return error.issues.map((issue) => `${rutaDeError(issue.path)}: ${mensajeDe(issue, crudo)}`).join("; ");
-}
-
 // Un JSON con BOM (el Bloc de notas lo pone) se lee igual.
 function leerJson(ruta: string): unknown {
   return JSON.parse(fs.readFileSync(ruta, "utf-8").replace(/^\uFEFF/, ""));
@@ -239,6 +172,22 @@ function errorDeDir(dir: string): string | null {
   return null;
 }
 
+// What makes a manifest valid, without looking at the disk: its shape and what zod does not express (a
+// repeated repo id, a folder that leaves PHASE_GATE_REPOS_PATH). Used by leerManifiesto and the Ajustes plans,
+// so that "valid" means the same when reading and when writing.
+export function validarManifiesto(crudo: unknown): { ok: true; manifiesto: Manifiesto } | { ok: false; error: string } {
+  const leido = Manifiesto.safeParse(crudo);
+  if (!leido.success) return { ok: false, error: `${errorDeZod(leido.error, crudo)}.` };
+  const vistos = new Set<string>();
+  for (const [i, repo] of leido.data.repos.entries()) {
+    if (vistos.has(repo.id)) return { ok: false, error: mensaje("MANIFIESTO-TXT-ID-REPETIDO", { i, id: repo.id }) };
+    vistos.add(repo.id);
+    const problema = errorDeDir(repo.dir);
+    if (problema) return { ok: false, error: `repos[${i}].dir: ${problema}` };
+  }
+  return { ok: true, manifiesto: leido.data };
+}
+
 export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
   const ruta = rutaManifiesto(carpetaProyecto);
   if (!fs.existsSync(ruta)) return { estado: "ausente", ruta };
@@ -257,18 +206,9 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
     return invalido(mensaje("MANIFIESTO-TXT-JSON-INVALIDO", { detalle: error instanceof Error ? error.message : String(error) }));
   }
 
-  const leido = Manifiesto.safeParse(crudo);
-  if (!leido.success) return invalido(`${errorDeZod(leido.error, crudo)}.`);
-  const manifiesto = leido.data;
-
-  // Lo que zod no expresa.
-  const vistos = new Set<string>();
-  for (const [i, repo] of manifiesto.repos.entries()) {
-    if (vistos.has(repo.id)) return invalido(mensaje("MANIFIESTO-TXT-ID-REPETIDO", { i, id: repo.id }));
-    vistos.add(repo.id);
-    const problema = errorDeDir(repo.dir);
-    if (problema) return invalido(`repos[${i}].dir: ${problema}`);
-  }
+  const validado = validarManifiesto(crudo);
+  if (!validado.ok) return invalido(validado.error);
+  const manifiesto = validado.manifiesto;
 
   const presets = presetsDisponibles(idiomaDelProyecto(carpetaProyecto, manifiesto).idioma);
   if (!presets.has(manifiesto.preset)) {
@@ -307,8 +247,8 @@ export function copiasEnConflicto(carpetaProyecto: string): string[] {
 //   2. lo que ya hay en disco: el idioma de los documentos de sus tareas ("el disco es la verdad": un
 //      proyecto sin manifiesto, con tareas en español, no se ve de golpe sin fases hechas porque el
 //      sistema esté en inglés); con documentos de los dos, el que más tenga, y doctor da IDIOMA-MIXTO;
-//   3. `idiomaPorDefecto` de machine.json;
-//   4. PHASE_GATE_LANG;
+//   3. PHASE_GATE_LANG: what belongs to the run wins over what is stored, as in the paths;
+//   4. `idiomaPorDefecto` of machine.json;
 //   5. el idioma del sistema (es si su locale empieza por "es"; si no, en). Salvo para un proyecto con un
 //      manifiesto sin `idioma`: ese manifiesto es de la 3.0 o la 3.1, cuyo esquema daba "es" por defecto, y
 //      sigue en español aunque el sistema esté en inglés, como en un Linux sin LANG (hallazgo 2 de la
@@ -336,11 +276,11 @@ const NOMBRES_POR_IDIOMA: ReadonlyArray<[Idioma, ReadonlySet<string>]> = IDIOMAS
 // proyecto se pregunta muchas veces en la misma llamada (el idioma de los mensajes, el de los presets al leer
 // el manifiesto, el de las capas, el del prompt…), y cada recuento lee todas sus carpetas de tarea. Con esto,
 // una vez por proyecto y por llamada (hallazgo 3 de la auditoría de la Etapa 6). Fuera de una llamada no hay
-// caché: cada pregunta mira el disco.
+// caché: cada pregunta mira el disco. The same call also reads machine.json once (conMaquinaDeLaLlamada).
 const recuentosDeLaLlamada = new AsyncLocalStorage<Map<string, DocumentosPorIdioma>>();
 
 export function conCacheDelIdioma<T>(funcion: () => T): T {
-  return recuentosDeLaLlamada.getStore() ? funcion() : recuentosDeLaLlamada.run(new Map(), funcion);
+  return conMaquinaDeLaLlamada(() => (recuentosDeLaLlamada.getStore() ? funcion() : recuentosDeLaLlamada.run(new Map(), funcion)));
 }
 
 // Cuántos documentos de fase con nombre de cada idioma tienen las tareas del proyecto, y en qué tareas.
@@ -392,10 +332,10 @@ function contarDocumentos(raiz: string): DocumentosPorIdioma {
 // Los pasos 3 a 5: el idioma de este equipo, sin proyecto. Un machine.json inválido no tumba nada aquí:
 // lo dice doctor, y quien lo necesite para trabajar lo lee con maquinaDe.
 export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelIdioma, "del proyecto" | "de sus documentos"> } {
-  const maquina = leerMaquina();
-  if (maquina.config?.idiomaPorDefecto) return { idioma: maquina.config.idiomaPorDefecto, origen: "de machine.json" };
   const delEntorno = idiomaDelEntorno();
   if (delEntorno) return { idioma: delEntorno, origen: "de PHASE_GATE_LANG" };
+  const deMaquina = idiomaDeMaquina();
+  if (deMaquina) return { idioma: deMaquina, origen: "de machine.json" };
   return { idioma: idiomaDelSistema(), origen: "del sistema" };
 }
 
@@ -486,31 +426,17 @@ function normalizarClave(clave: string): string {
 }
 
 export function leerMaquina(): LecturaMaquina {
-  const ruta = rutaMaquina();
+  const archivo = leerArchivoDeMaquina();
+  const { ruta } = archivo;
   const vacia = { config: null, repos: new Map<string, string>(), avisos: [] };
-  if (!fs.existsSync(ruta)) return { estado: "ausente", ruta, error: null, ...vacia };
-
-  const invalido = (error: string): LecturaMaquina => ({
-    estado: "invalido",
-    ruta,
-    error: mensaje("MAQUINA-TXT-INVALIDA", { archivo: ARCHIVO_MAQUINA, ruta, error }),
-    ...vacia,
-  });
-
-  let crudo: unknown;
-  try {
-    crudo = leerJson(ruta);
-  } catch (error) {
-    return invalido(mensaje("MANIFIESTO-TXT-JSON-INVALIDO", { detalle: error instanceof Error ? error.message : String(error) }));
-  }
-
-  const leido = MaquinaConfig.safeParse(crudo);
-  if (!leido.success) return invalido(`${errorDeZod(leido.error, crudo)}.`);
+  if (archivo.estado === "ausente") return { estado: "ausente", ruta, error: null, ...vacia };
+  if (archivo.estado === "invalido") return { estado: "invalido", ruta, error: archivo.error, ...vacia };
+  const config = archivo.config!;
 
   // "proyecto-a/api" y "PROYECTO-A/api" son la misma clave. Si hay dos, vale la primera.
   const repos = new Map<string, string>();
   const avisos: Hallazgo[] = [];
-  for (const [clave, destino] of Object.entries(leido.data.repos)) {
+  for (const [clave, destino] of Object.entries(config.repos)) {
     const normalizada = normalizarClave(clave);
     if (repos.has(normalizada)) {
       avisos.push({
@@ -523,7 +449,7 @@ export function leerMaquina(): LecturaMaquina {
     repos.set(normalizada, path.resolve(destino));
   }
 
-  return { estado: "valido", ruta, config: leido.data, repos, error: null, avisos };
+  return { estado: "valido", ruta, config, repos, error: null, avisos };
 }
 
 // Para quien necesita machine.json para trabajar: un archivo inválido es un error, no un "no hay".
@@ -607,7 +533,7 @@ export function esquemasPublicados(): Record<"project.json" | "machine.json", Re
       MaquinaConfig,
       URL_ESQUEMA_MAQUINA,
       "machine.json",
-      "Configuración de mcp-phase-gate en este equipo: rutas de repos que salen de PHASE_GATE_REPOS_PATH y preset por defecto para proyectos sin manifiesto."
+      "Configuración de mcp-phase-gate en este equipo: las rutas de la Documentación y de los repos, la ruta propia de cada repo, el preset por defecto para proyectos sin manifiesto y el idioma por defecto. Vive en la carpeta de configuración de este equipo, no en la Documentación."
     ),
   };
 }
