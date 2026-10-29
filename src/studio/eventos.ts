@@ -49,9 +49,81 @@ export type EventoDeDominio =
 export type Vigilante = (raiz: string, alCambiar: (ruta: string | null) => void, alFallar: (error: Error) => void) => { cerrar: () => void };
 
 export const vigilanteDeFs: Vigilante = (raiz, alCambiar, alFallar) => {
+  if (process.platform === "linux") return vigilarPorCarpetas(raiz, alCambiar, alFallar);
   const watcher = fs.watch(raiz, { recursive: true, persistent: false }, (_evento, nombre) => alCambiar(nombre ? path.join(raiz, nombre.toString()) : null));
   watcher.on("error", (error) => alFallar(error));
   return { cerrar: () => watcher.close() };
+};
+
+// On Linux, Node's recursive fs.watch watches each file by its inode: a file replaced by a rename (the atomic
+// write of the Studio itself, and of many editors) keeps the watcher on the old inode, and from then on its
+// changes are never reported. Here each folder is watched instead, which reports every name that changes
+// inside it, whatever the inode. A folder that appears is walked and watched, and what it already holds is
+// reported (it may have been written before its watcher existed).
+export const vigilarPorCarpetas: Vigilante = (raiz, alCambiar, alFallar) => {
+  const watchers = new Map<string, fs.FSWatcher>();
+  let cerrado = false;
+
+  const soltar = (carpeta: string): void => {
+    for (const [otra, watcher] of watchers) {
+      if (otra === carpeta || estaDentro(carpeta, otra)) {
+        watcher.close();
+        watchers.delete(otra);
+      }
+    }
+  };
+
+  const abrir = (carpeta: string): void => {
+    if (cerrado || watchers.has(carpeta)) return;
+    const watcher = fs.watch(carpeta, { persistent: false }, (_evento, nombre) => {
+      if (cerrado) return;
+      if (!nombre) return alCambiar(null);
+      const ruta = path.join(carpeta, nombre.toString());
+      const info = fs.statSync(ruta, { throwIfNoEntry: false });
+      if (info?.isDirectory()) {
+        if (!watchers.has(ruta)) recorrer(ruta, true);
+      } else if (!info && watchers.has(ruta)) {
+        soltar(ruta);
+      }
+      alCambiar(ruta);
+    });
+    watcher.on("error", (error) => {
+      watcher.close();
+      watchers.delete(carpeta);
+      // A subfolder that is deleted is not a failure of the watcher.
+      if (carpeta === raiz) alFallar(error);
+    });
+    watchers.set(carpeta, watcher);
+  };
+
+  const recorrer = (carpeta: string, avisar: boolean): void => {
+    try {
+      abrir(carpeta);
+    } catch (error) {
+      if (carpeta === raiz) throw error;
+      return;
+    }
+    let entradas: fs.Dirent[];
+    try {
+      entradas = fs.readdirSync(carpeta, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entradas) {
+      const ruta = path.join(carpeta, e.name);
+      if (e.isDirectory() && !e.isSymbolicLink()) recorrer(ruta, avisar);
+      else if (avisar) alCambiar(ruta);
+    }
+  };
+
+  recorrer(raiz, false);
+  return {
+    cerrar: () => {
+      cerrado = true;
+      for (const watcher of watchers.values()) watcher.close();
+      watchers.clear();
+    },
+  };
 };
 
 export type OpcionesEventos = {

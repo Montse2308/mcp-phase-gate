@@ -11,7 +11,7 @@ import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { configDir, fijarRaizDelPaquete, stateDir, stateFile } from "../src/config.js";
-import { crearEventos, esRuido, traducir } from "../src/studio/eventos.js";
+import { crearEventos, esRuido, traducir, vigilarPorCarpetas } from "../src/studio/eventos.js";
 import type { Eventos, Vigilante } from "../src/studio/eventos.js";
 import { carpetaTemporal, crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno, promptsTemporales } from "./helpers.js";
 import { studioConApi } from "./studio-ayudas.js";
@@ -385,5 +385,84 @@ describe("eventos: con fs.watch de verdad", () => {
     const limite = Date.now() + 5000;
     while (!recibidos.length && Date.now() < limite) await esperar(50);
     assert.deepEqual(recibidos[0], { tipo: "documento", datos: { p: "P", t: "t", archivo: "02 - Decisiones.md" } });
+  });
+
+  it("un phase-gate.json reemplazado con un rename sigue avisando después: el siguiente cambio también llega", async (t) => {
+    const { docs } = instalacion();
+    const manifiesto = escribir(path.join(docs, "P", "phase-gate.json"), '{"version":1}\n');
+    let eventos: Eventos;
+    try {
+      eventos = crearEventos();
+    } catch (error) {
+      t.skip(`fs.watch no está disponible: ${String(error)}`);
+      return;
+    }
+    abiertos.push(eventos);
+    if (eventos.estado() === "apagado") {
+      t.skip("fs.watch no está disponible en este sistema");
+      return;
+    }
+    const { recibidos } = oyente(eventos);
+    const deConfig = () => recibidos.filter((r) => r.tipo === "config").length;
+    const hasta = async (n: number) => {
+      const limite = Date.now() + 5000;
+      while (deConfig() < n && Date.now() < limite) await esperar(50);
+      assert.equal(deConfig(), n);
+    };
+    await esperar(200);
+    // Como la escritura atómica: un temporal que se renombra encima.
+    escribir(`${manifiesto}.tmp`, '{"version":1,"preset":"software"}\n');
+    fs.renameSync(`${manifiesto}.tmp`, manifiesto);
+    await hasta(1);
+    await esperar(400);
+    escribir(manifiesto, '{"version":1,"preset":"software-tdd"}\n');
+    await hasta(2);
+  });
+});
+
+describe("eventos: el vigilante por carpetas (el de Linux)", () => {
+  const avisosDe = (raiz: string) => {
+    const rutas: string[] = [];
+    const vigilante = vigilarPorCarpetas(raiz, (r) => void (r !== null && rutas.push(r)), () => {});
+    return { rutas, cerrar: vigilante.cerrar };
+  };
+  const hasta = async (rutas: string[], ruta: string, desde = 0) => {
+    const limite = Date.now() + 5000;
+    while (!rutas.slice(desde).includes(ruta) && Date.now() < limite) await esperar(50);
+    assert.ok(rutas.slice(desde).includes(ruta), `no avisó de ${ruta}: ${rutas.join(", ")}`);
+  };
+
+  it("un archivo reemplazado con un rename se sigue viendo, porque se vigila la carpeta y no el archivo", async () => {
+    const raiz = carpetaTemporal("vigilante");
+    const archivo = escribir(path.join(raiz, "P", "phase-gate.json"), "1");
+    const v = avisosDe(raiz);
+    try {
+      await esperar(100);
+      escribir(`${archivo}.tmp`, "2");
+      fs.renameSync(`${archivo}.tmp`, archivo);
+      await hasta(v.rutas, archivo);
+      await esperar(200);
+      const antes = v.rutas.length;
+      escribir(archivo, "3");
+      await hasta(v.rutas, archivo, antes);
+    } finally {
+      v.cerrar();
+    }
+  });
+
+  it("una carpeta nueva se vigila, y avisa de lo que ya traía", async () => {
+    const raiz = carpetaTemporal("vigilante");
+    const v = avisosDe(raiz);
+    try {
+      await esperar(100);
+      const dentro = escribir(path.join(raiz, "OTRO", "Proyectos", "una", "00 - Contexto Inicial.md"), "# Una\n");
+      await hasta(v.rutas, dentro);
+      await esperar(200);
+      const antes = v.rutas.length;
+      const despues = escribir(path.join(raiz, "OTRO", "Proyectos", "una", "01 - Descubrimiento.md"), "# Dos\n");
+      await hasta(v.rutas, despues, antes);
+    } finally {
+      v.cerrar();
+    }
   });
 });
