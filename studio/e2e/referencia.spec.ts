@@ -142,28 +142,28 @@ const vigiaListo = async (p: Page) => {
   await expect(p.getByRole("link", { name: "Abrir Ajustes" })).toBeVisible();
 };
 const ajustesEquipoListo = async (p: Page) => {
-  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
   await expect(p.getByRole("heading", { level: 2, name: "Este equipo" })).toBeVisible();
   await expect(p.getByLabel("Carpeta de la Documentación")).toBeVisible();
   await expect(p.getByRole("region", { name: "Lo que dicen los clientes en su env" })).toBeVisible();
   await expect(p.getByText("Servidores abiertos")).toBeVisible();
 };
 const ajustesProyectoListo = async (p: Page) => {
-  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
   await expect(p.getByRole("heading", { level: 2, name: "Proyecto TIENDA" })).toBeVisible();
   await expect(p.getByRole("table", { name: "Repos del proyecto" }).getByRole("row")).toHaveCount(4);
 };
 const ajustesClientesListo = async (p: Page) => {
-  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
   await expect(p.getByRole("article", { name: "Cursor" })).toBeVisible();
   await expect(p.getByRole("article", { name: "Claude Code" })).toBeVisible();
 };
 const ajustesAvanzadoListo = async (p: Page) => {
-  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
   await expect(p.getByRole("table", { name: "Variables avanzadas" }).getByRole("row")).toHaveCount(6);
 };
 const ajustesStudioListo = async (p: Page) => {
-  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+  await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
   await expect(p.getByRole("group", { name: "Tema" })).toBeVisible();
   await expect(p.getByRole("group", { name: "Idioma de la interfaz" })).toBeVisible();
 };
@@ -243,7 +243,7 @@ const VIVAS: Escenario[] = [
     hash: "#/ajustes/proyecto/NUEVO",
     ancho: 1280,
     listo: async (p) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
       await expect(p.getByRole("button", { name: "Crear phase-gate.json: vista previa" })).toBeVisible();
     },
   },
@@ -313,7 +313,7 @@ const ESTATICAS: Escenario[] = [
     hash: "#/ajustes/proyecto/TIENDA",
     ancho,
     listo: async (p: Page) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/ASISTENTE"], option[value="#/ajustes/proyecto/ASISTENTE"]')).toHaveCount(2);
       await expect(p.getByText("En la demo publicada todo es de solo lectura.").first()).toBeVisible();
     },
   })),
@@ -322,7 +322,7 @@ const ESTATICAS: Escenario[] = [
     hash: "#/ajustes/equipo",
     ancho,
     listo: async (p: Page) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/ASISTENTE"], option[value="#/ajustes/proyecto/ASISTENTE"]')).toHaveCount(2);
       await expect(p.getByText("Ahora se usa <Documentación>, de entorno.")).toBeVisible();
     },
   })),

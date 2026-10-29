@@ -340,7 +340,7 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
         const c = await generarDemo(path.join(trabajo, `demo-${idioma}`), idioma);
         demos.push(c);
         porIdioma[idioma] = await enIdioma(idioma, () =>
-          conEntornoDeDemo(c, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDeDemo(c) }), true))
+          conEntornoDeDemo(c, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitDeDemo(c) }), true), { PHASE_GATE_LANG: idioma })
         );
       }
     }

@@ -35,6 +35,19 @@
           - link "Este equipo":
             - /url: "#/ajustes/equipo"
         - listitem:
+          - text: Proyectos
+          - link "INVESTIGACION":
+            - /url: "#/ajustes/proyecto/INVESTIGACION"
+        - listitem:
+          - link "NUEVO":
+            - /url: "#/ajustes/proyecto/NUEVO"
+        - listitem:
+          - link "ROTO":
+            - /url: "#/ajustes/proyecto/ROTO"
+        - listitem:
+          - link "TALLER":
+            - /url: "#/ajustes/proyecto/TALLER"
+        - listitem:
           - link "TIENDA":
             - /url: "#/ajustes/proyecto/TIENDA"
         - listitem:
@@ -51,6 +64,12 @@
     - text: Preset
     - combobox "Preset":
       - option "(sin elegir)"
+      - option "ai-agent-ops"
+      - option "multi-repo-feature" [selected]
+      - option "research-ops"
+      - option "software"
+      - option "software-replica"
+      - option "software-tdd"
     - paragraph: Ahora se usa multi-repo-feature, de del proyecto.
     - text: Idioma del proyecto
     - combobox "Idioma del proyecto":

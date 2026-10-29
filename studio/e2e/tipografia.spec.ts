@@ -69,7 +69,7 @@ const VISTAS: Vista[] = [
     hash: "#/ajustes/equipo",
     ancho,
     listo: async (p: Page) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
       await expect(p.getByRole("region", { name: "Lo que dicen los clientes en su env" })).toBeVisible();
     },
   })),
@@ -78,7 +78,7 @@ const VISTAS: Vista[] = [
     hash: "#/ajustes/proyecto/TIENDA",
     ancho,
     listo: async (p: Page) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
       await expect(p.getByRole("table", { name: "Repos del proyecto" })).toBeVisible();
     },
     despues: async (p: Page) => {
@@ -92,7 +92,7 @@ const VISTAS: Vista[] = [
     hash: "#/ajustes/clientes",
     ancho,
     listo: async (p: Page) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
       await expect(p.getByRole("article", { name: "Cursor" })).toBeVisible();
     },
     despues: async (p: Page) => {
@@ -106,7 +106,7 @@ const VISTAS: Vista[] = [
     hash: "#/ajustes/avanzado",
     ancho,
     listo: async (p: Page) => {
-      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TIENDA"], option[value="#/ajustes/proyecto/TIENDA"]')).toHaveCount(2);
+      await expect(p.getByRole("navigation", { name: "Páginas de Ajustes" }).locator('a[href="#/ajustes/proyecto/TALLER"], option[value="#/ajustes/proyecto/TALLER"]')).toHaveCount(2);
       await expect(p.getByRole("table", { name: "Variables avanzadas" })).toBeVisible();
     },
   })),

@@ -74,7 +74,7 @@
       - option "(sin elegir)" [selected]
       - option "Español"
       - option "English"
-    - paragraph: Ahora se usa Español, de el sistema.
+    - paragraph: Ahora se usa Español, de entorno.
     - text: Preset para los proyectos sin phase-gate.json
     - combobox "Preset para los proyectos sin phase-gate.json" [disabled]:
       - option "(sin elegir)" [selected]
