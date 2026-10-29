@@ -233,7 +233,7 @@ export const CampoAjustes = z.object({
   variable: z.string(), // la variable de entorno que lo pisaría
   enMaquina: z.string().nullable(), // lo que dice machine.json
   efectivo: z.string().nullable(), // lo que vale ahora en este Studio
-  fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "sin definir"]),
+  fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "por defecto", "sin definir"]),
   // This same Studio, through its environment or its .env, uses another value than machine.json: the first warning.
   propioStudioPisa: z.boolean(),
   // Its environment or its .env say something machine.json does not have: it can be saved there.
@@ -315,7 +315,10 @@ export const AjustesDeProyecto = z.object({
       repos: z.array(z.object({ id: z.string(), dir: z.string(), rol: z.string().nullable() })),
     })
     .nullable(),
-  efectivo: z.object({ preset: z.string(), origenDelPreset: z.string(), lotes: z.boolean(), commits: z.string() }).nullable(),
+  // delPreset: what the preset alone decides, without the file: what applies if the key is removed.
+  efectivo: z
+    .object({ preset: z.string(), origenDelPreset: z.string(), lotes: z.boolean(), commits: z.string(), delPreset: z.object({ lotes: z.boolean(), commits: z.string() }) })
+    .nullable(),
   rutasPropias: z.record(z.string(), z.string()),
 });
 

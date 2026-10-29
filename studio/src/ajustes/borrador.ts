@@ -108,6 +108,10 @@ export function useBorrador<T extends Record<string, unknown>>(pagina: string, d
     }
     return b;
   };
+  // La persona resolvió lo que cambió en el disco: el aviso de «el archivo cambió» parte de aquí.
+  const visto = (): void => {
+    if (inicial.current) inicial.current = { pagina, texto: textoDelDisco };
+  };
   const limpiarSiVacio = (): void => {
     if (cuantosCambios(pagina) === 0) borradores.delete(pagina);
   };
@@ -133,6 +137,7 @@ export function useBorrador<T extends Record<string, unknown>>(pagina: string, d
     quitar: (campo) => {
       const b = borradores.get(pagina);
       if (!b) return;
+      visto();
       delete b.valores[campo as string];
       delete b.base[campo as string];
       limpiarSiVacio();
@@ -141,6 +146,7 @@ export function useBorrador<T extends Record<string, unknown>>(pagina: string, d
     conservar: (campo) => {
       const b = borradores.get(pagina);
       if (!b || !disco) return;
+      visto();
       b.base[campo as string] = delDisco(campo);
       avisar();
     },
@@ -178,8 +184,11 @@ export function guardarSalida(): () => void {
       descartarTodo();
       return;
     }
+    // Se vuelve sin dejar otra entrada en el historial: con `location.hash = anterior`, cada «Atrás» volvería a
+    // la página de la que no se salió y preguntaría otra vez. El router se entera por un hashchange propio.
     hashActual = anterior;
-    window.location.hash = anterior;
+    window.history.replaceState(window.history.state, "", anterior);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
   };
   const alCerrar = (e: BeforeUnloadEvent): void => {
     if (!hayCambios()) return;

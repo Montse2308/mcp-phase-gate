@@ -70,7 +70,7 @@
       - option "software"
       - option "software-replica"
       - option "software-tdd"
-    - paragraph: Ahora se usa multi-repo-feature, de del proyecto.
+    - paragraph: Ahora se usa multi-repo-feature, del proyecto.
     - text: Idioma del proyecto
     - combobox "Idioma del proyecto":
       - option "(sin elegir)" [selected]

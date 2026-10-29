@@ -70,7 +70,7 @@
       - option "software" [selected]
       - option "software-replica"
       - option "software-tdd"
-    - paragraph: Ahora se usa multi-repo-feature, de del proyecto.
+    - paragraph: Ahora se usa multi-repo-feature, del proyecto.
     - paragraph: Cambiado, sin aplicar
     - text: Idioma del proyecto
     - combobox "Idioma del proyecto":
@@ -79,12 +79,12 @@
       - option "English"
     - text: Lotes
     - combobox "Lotes":
-      - 'option "(lo decide el preset: sí)" [selected]'
+      - option "(lo decide el preset que elijas)" [selected]
       - option "Con lotes"
       - option "Sin lotes"
     - text: Política de commits
     - combobox "Política de commits":
-      - 'option "(lo decide el preset: agente-commitea-con-OK)" [selected]'
+      - option "(lo decide el preset que elijas)" [selected]
       - option "agente-commitea-con-OK"
       - option "agente-propone"
       - option "auto"

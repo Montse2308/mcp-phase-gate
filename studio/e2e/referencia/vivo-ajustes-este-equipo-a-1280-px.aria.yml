@@ -76,7 +76,7 @@
       - button "Guardarlo en machine.json"
     - text: Subcarpeta de las tareas
     - textbox "Subcarpeta de las tareas"
-    - paragraph: Ahora no hay ningún valor.
+    - paragraph: Ahora se usa Proyectos, el valor por defecto.
     - paragraph:
       - 'checkbox "Sin subcarpeta: las tareas cuelgan directo del proyecto"'
       - text: "Sin subcarpeta: las tareas cuelgan directo del proyecto"

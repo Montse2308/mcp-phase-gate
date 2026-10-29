@@ -665,6 +665,15 @@ describe("API del Studio: /api/ajustes/proyectos/:p", () => {
     assert.deepEqual(datos!.archivo!.repos, []);
     assert.equal(datos!.efectivo?.preset, "software");
     assert.deepEqual(datos!.rutasPropias, {});
+    // Sin reglas en el archivo, lo que decide el preset es lo que aplica.
+    const delPreset = datos!.efectivo!.delPreset;
+    assert.deepEqual(delPreset, { lotes: datos!.efectivo!.lotes, commits: datos!.efectivo!.commits });
+    // Con una regla en el archivo, el efectivo es el del archivo, y delPreset sigue diciendo lo del preset: lo que
+    // valdría si se quita la clave.
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, reglas: { commits: "ninguno", lotes: !delPreset.lotes } }), "utf-8");
+    const conReglas = (await pedirProyecto("P")).datos!;
+    assert.equal(conReglas.efectivo?.commits, "ninguno");
+    assert.deepEqual(conReglas.efectivo?.delPreset, delPreset);
   });
 
   it("un proyecto sin phase-gate.json no tiene archivo, y uno roto trae su error sin las rutas del equipo", async () => {

@@ -279,6 +279,24 @@ test("el preset de un proyecto: su vista previa con el diff, y Cancelar no escri
   await expect(page.getByLabel("Preset", { exact: true })).toHaveValue("multi-repo-feature");
 });
 
+test("los comandos de verificación se escriben tecla a tecla: un espacio y una línea nueva no se pierden", async ({ page, servidor }) => {
+  await abrirProyecto(page, servidor, "TIENDA");
+  const campo = page.getByLabel("Comandos de verificación (uno por línea)");
+  const antes = await campo.inputValue();
+  await campo.focus();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("Enter");
+  await campo.pressSequentially("npm run lint ");
+  await expect(campo).toHaveValue(`${antes}\nnpm run lint `);
+  await expect(cambiados(page)).toHaveCount(1);
+  await page.getByRole("button", { name: "Guardar los cambios: vista previa" }).click();
+  await expect(previa(page).locator(".diff-mas").filter({ hasText: '"npm run lint"' })).toHaveCount(1);
+  await previa(page).getByRole("button", { name: "Cancelar" }).click();
+  // Descartar devuelve el texto al del disco.
+  await page.getByRole("button", { name: "Descartar los cambios" }).click();
+  await expect(campo).toHaveValue(antes);
+});
+
 test("si el disco cambia entre la vista previa y Aplicar, 409: se dice, el borrador se conserva y se puede volver a ver el cambio", async ({ page, servidor, registro }) => {
   registro.permitidos.push(/the server responded with a status of 409/);
   // Sin SSE, la página no se entera del cambio: lo único que la protege es la huella.
@@ -339,10 +357,13 @@ test("salir de una página con cambios sin aplicar pide confirmación: si se can
   await abrirProyecto(page, servidor, "TIENDA");
   await page.getByLabel("Idioma del proyecto").selectOption("en");
   await expect(cambiados(page)).toHaveCount(1);
+  const historial = await page.evaluate(() => history.length);
   await MENU(page).getByRole("link", { name: "Clientes MCP" }).click();
   await expect.poll(() => mensajes.length).toBe(1);
   expect(mensajes[0]).toContain("cambios sin aplicar");
   await expect(page).toHaveURL(/#\/ajustes\/proyecto\/TIENDA$/);
+  // Quedarse no deja una entrada de más: «Atrás» no vuelve a preguntar por la misma página.
+  expect(await page.evaluate(() => history.length)).toBe(historial + 1);
   await expect(page.getByLabel("Idioma del proyecto")).toHaveValue("en");
   await expect(cambiados(page)).toHaveCount(1);
   // Cambiar a otra vista, también.

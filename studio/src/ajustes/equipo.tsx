@@ -217,7 +217,7 @@ export function PaginaEquipo({ presets }: { presets: string[] }) {
               borrador={b}
               ayuda={
                 <>
-                  <p class="secundaria">{subcarpeta!.efectivo !== null ? t("ajustes.ahoraSeUsa", { valor: subcarpeta!.efectivo || "∅", fuente: fuenteVisible(subcarpeta!.fuente) }) : t("ajustes.ahoraNada")}</p>
+                  <p class="secundaria">{subcarpeta!.fuente === "por defecto" ? t("ajustes.ahoraPorDefecto", { valor: subcarpeta!.efectivo ?? "" }) : subcarpeta!.efectivo !== null ? t("ajustes.ahoraSeUsa", { valor: subcarpeta!.efectivo || "∅", fuente: fuenteVisible(subcarpeta!.fuente) }) : t("ajustes.ahoraNada")}</p>
                   <p>
                     <label>
                       <input type="checkbox" checked={b.valor("subcarpetaTareas") === ""} disabled={SOLO_LECTURA} onChange={(e) => b.poner("subcarpetaTareas", (e.target as HTMLInputElement).checked ? "" : null)} /> {t("ajustes.campo.sinSubcarpeta")}

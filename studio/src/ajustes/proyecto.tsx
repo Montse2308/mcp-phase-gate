@@ -74,6 +74,35 @@ export function argumentosDeProyecto(proyecto: string, c: Partial<DiscoProyecto>
   return argumentos;
 }
 
+const lineasDe = (texto: string): string[] => texto.split("\n").map((l) => l.trim()).filter(Boolean);
+
+// Los comandos de verificación, uno por línea. El texto se guarda tal como se escribe (un espacio al final, una
+// línea vacía, que todavía se están escribiendo) y al borrador va ya limpio. Si el valor cambia por otro lado (el
+// disco, Descartar, el conflicto), el texto pasa a ser ese.
+function ComandosDeVerificacion({ id, b }: { id: string; b: ControlDeBorrador<DiscoProyecto> }) {
+  const lineas = b.valor("verificacion") ?? [];
+  const [texto, setTexto] = useState(lineas.join("\n"));
+  const clave = JSON.stringify(lineas);
+  useEffect(() => {
+    if (JSON.stringify(lineasDe(texto)) !== clave) setTexto(lineas.join("\n"));
+  }, [clave]);
+  return (
+    <textarea
+      id={id}
+      rows={3}
+      class="entrada-ancha"
+      disabled={SOLO_LECTURA}
+      value={texto}
+      onInput={(e) => {
+        const valor = (e.target as HTMLTextAreaElement).value;
+        setTexto(valor);
+        const limpias = lineasDe(valor);
+        b.poner("verificacion", limpias.length ? limpias : null);
+      }}
+    />
+  );
+}
+
 const triEstado = (v: boolean | null): string => (v === null ? "" : v ? "si" : "no");
 const deTriEstado = (s: string): boolean | null => (s === "" ? null : s === "si");
 
@@ -215,6 +244,8 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
     if (datos?.manifiesto.estado === "ausente") setSeCreo(true);
   }, [datos]);
   const efectivo = datos?.efectivo ?? null;
+  // Lo que decide el preset si se quita la clave. Con otro preset en el borrador ya no es ese: se dice sin valor.
+  const delPreset = efectivo && !b.cambiado("preset") ? efectivo.delPreset : null;
 
   return (
     <div class="pagina-ajustes pagina-proyecto">
@@ -235,7 +266,7 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
       {datos && disco ? (
         <>
           <form class="formulario-ajustes" onSubmit={(e) => e.preventDefault()}>
-            <Campo nombre="preset" etiqueta={t("ajustes.campo.preset")} borrador={b} ayuda={efectivo ? <p class="secundaria">{t("ajustes.ahoraSeUsa", { valor: efectivo.preset, fuente: origenDelPreset(efectivo.origenDelPreset) })}</p> : null}>
+            <Campo nombre="preset" etiqueta={t("ajustes.campo.preset")} borrador={b} ayuda={efectivo ? <p class="secundaria">{t("ajustes.ahoraSeUsaPreset", { valor: efectivo.preset, origen: origenDelPreset(efectivo.origenDelPreset) })}</p> : null}>
               {(id) => (
                 <select id={id} value={b.valor("preset") ?? ""} disabled={SOLO_LECTURA} onChange={(e) => b.poner("preset", (e.target as HTMLSelectElement).value || null)}>
                   <option value="">{t("ajustes.sinElegir")}</option>
@@ -259,7 +290,7 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
             <Campo nombre="lotes" etiqueta={t("ajustes.campo.lotes")} borrador={b}>
               {(id) => (
                 <select id={id} value={triEstado(b.valor("lotes"))} disabled={SOLO_LECTURA} onChange={(e) => b.poner("lotes", deTriEstado((e.target as HTMLSelectElement).value))}>
-                  <option value="">{efectivo ? t("ajustes.loDecideElPreset", { valor: t(efectivo.lotes ? "comun.si" : "comun.no") }) : t("ajustes.sinElegir")}</option>
+                  <option value="">{delPreset ? t("ajustes.loDecideElPreset", { valor: t(delPreset.lotes ? "comun.si" : "comun.no") }) : t("ajustes.loDecideElPresetElegido")}</option>
                   <option value="si">{t("ajustes.lotes.si")}</option>
                   <option value="no">{t("ajustes.lotes.no")}</option>
                 </select>
@@ -268,7 +299,7 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
             <Campo nombre="commits" etiqueta={t("ajustes.campo.commits")} borrador={b}>
               {(id) => (
                 <select id={id} value={b.valor("commits") ?? ""} disabled={SOLO_LECTURA} onChange={(e) => b.poner("commits", (e.target as HTMLSelectElement).value || null)}>
-                  <option value="">{efectivo ? t("ajustes.loDecideElPreset", { valor: efectivo.commits }) : t("ajustes.sinElegir")}</option>
+                  <option value="">{delPreset ? t("ajustes.loDecideElPreset", { valor: delPreset.commits }) : t("ajustes.loDecideElPresetElegido")}</option>
                   {POLITICAS.map((p) => (
                     <option key={p} value={p}>
                       {p}
@@ -278,19 +309,7 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
               )}
             </Campo>
             <Campo nombre="verificacion" etiqueta={t("ajustes.campo.verificacion")} borrador={b}>
-              {(id) => (
-                <textarea
-                  id={id}
-                  rows={3}
-                  class="entrada-ancha"
-                  disabled={SOLO_LECTURA}
-                  value={(b.valor("verificacion") ?? []).join("\n")}
-                  onInput={(e) => {
-                    const lineas = (e.target as HTMLTextAreaElement).value.split("\n").map((l) => l.trim()).filter(Boolean);
-                    b.poner("verificacion", lineas.length ? lineas : null);
-                  }}
-                />
-              )}
+              {(id) => <ComandosDeVerificacion id={id} b={b} />}
             </Campo>
             <Campo nombre="prPorRepo" etiqueta={t("ajustes.campo.prPorRepo")} borrador={b}>
               {(id) => (

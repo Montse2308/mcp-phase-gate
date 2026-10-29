@@ -7,8 +7,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { configuracionDe } from "../capas.js";
-import { VARIABLES, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, leerVariable, maquinaVigente, valorDeMaquina } from "../config.js";
+import { COMMITS_DE_FABRICA, LOTES_DE_FABRICA, configuracionDe } from "../capas.js";
+import { TASKS_SUBDIR_POR_DEFECTO, VARIABLES, idiomaDeMaquina, idiomaDelEntorno, idiomaDelSistema, leerVariable, maquinaVigente, valorDeMaquina } from "../config.js";
 import type { NombreLogico } from "../config.js";
 import { mensaje } from "../i18n/mensajes.js";
 import { CLIENTES, carpetaDelCliente, ejecutaPhaseGate, leerJsonTolerante, rutasDelEnvDeEntrada, variableDeRutaEnEntrada } from "../init.js";
@@ -44,8 +44,10 @@ function camposDeEsteEquipo(): CampoAjustes[] {
       campo,
       variable: VARIABLES[logica].principal,
       enMaquina,
-      efectivo: lectura.valor ?? null,
-      fuente: lectura.fuente,
+      // The tasks subfolder always has a value: unset, it is the default one.
+      ...(logica === "TASKS_SUBDIR" && lectura.valor === undefined
+        ? { efectivo: TASKS_SUBDIR_POR_DEFECTO, fuente: "por defecto" as const }
+        : { efectivo: lectura.valor ?? null, fuente: lectura.fuente }),
       // This same Studio, through its environment or its .env, uses another value than machine.json.
       propioStudioPisa: delEntorno && enMaquina !== null && lectura.valor !== undefined && !igual(campo, lectura.valor, enMaquina),
       // And a value from the environment that machine.json does not have: it can be saved there.
@@ -216,7 +218,13 @@ export function ajustesDeProyecto(nombre: string): AjustesDeProyecto {
   let efectivo: AjustesDeProyecto["efectivo"] = null;
   try {
     const config = configuracionDe(nombre);
-    efectivo = { preset: config.preset.nombre, origenDelPreset: config.origenPreset, lotes: config.reglas.lotes, commits: config.reglas.commits };
+    efectivo = {
+      preset: config.preset.nombre,
+      origenDelPreset: config.origenPreset,
+      lotes: config.reglas.lotes,
+      commits: config.reglas.commits,
+      delPreset: { lotes: config.preset.lotes ?? LOTES_DE_FABRICA, commits: config.preset.commits ?? COMMITS_DE_FABRICA },
+    };
   } catch {
     efectivo = null;
   }
