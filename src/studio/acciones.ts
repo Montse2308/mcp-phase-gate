@@ -6,7 +6,7 @@
 //   2. aplicar:  { accion, argumentos, huella } → the server RECOMPUTES the plan and writes only if the
 //                fingerprint matches; otherwise 409 ("the disk changed since you saw the change").
 //
-//   equipo           <configDir>/machine.json: this machine's paths, its default language and preset, and the own
+//   equipo            <configDir>/machine.json: this machine's paths, its default language and preset, and the own
 //                     path of any repo (src/ajustes/equipo.ts)
 //   proyecto          what changed in a project, in a single plan: its phase-gate.json and, in machine.json, only
 //                     the keys of its repos (src/ajustes/proyecto.ts)

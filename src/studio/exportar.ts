@@ -192,7 +192,6 @@ export function escribirSitio(
   normalizar: (valor: unknown, raices: Raiz[]) => unknown = sinRutasEnTodo
 ): { rutas: number; archivos: number } {
   if (!fs.existsSync(path.join(dist, "index.html"))) throw fallo("STUDIO-EXPORT-SIN-FRONTEND", { dist });
-  // Per language: datos/<language>/indice.json and the files of its responses.
   const conjuntos = IDIOMAS.map((idioma) => {
     const indice: Indice = { rutas: {} };
     const archivos = new Map<string, string>();

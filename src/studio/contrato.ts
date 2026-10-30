@@ -94,7 +94,7 @@ export const ProyectoApi = z.object({
 
 export const ProyectosRespuesta = z.object({
   proyectos: z.array(ProyectoApi),
-  presets: z.array(z.string()), // the available ones, for the selector
+  presets: z.array(z.string()),
   error: z.string().nullable(), // no Documentation configured, for example
 });
 
@@ -172,7 +172,7 @@ export const EventoDeBitacora = z.object({
   tipo: z.enum(["documento", "recibo", "commit", "reanclaje", "fase-cerrada"]),
   fecha: z.string(), // ISO; a re-anchor only carries the day
   titulo: z.string(),
-  archivo: z.string().nullable(), // the document or the receipt, inside the task
+  archivo: z.string().nullable(),
   lote: z.string().nullable(),
   commit: z.object({ corto: z.string(), asunto: z.string() }).nullable(),
 });
@@ -230,7 +230,7 @@ export const NombreDeCampo = z.enum(["documentacion", "carpetaDeRepos", "subcarp
 
 export const CampoAjustes = z.object({
   campo: NombreDeCampo,
-  variable: z.string(), // the environment variable that would override it
+  variable: z.string(),
   enMaquina: z.string().nullable(),
   efectivo: z.string().nullable(),
   fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "por defecto", "sin definir"]),

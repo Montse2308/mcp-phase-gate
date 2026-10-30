@@ -228,7 +228,6 @@ export type Eventos = {
   manejar: (req: http.IncomingMessage, res: http.ServerResponse) => void;
   estado: () => EstadoDelWatcher;
   conexiones: () => number;
-  // For the tests and for the poll: emit an event to everyone.
   emitir: (evento: EventoDeDominio) => void;
   cerrar: () => void;
 };

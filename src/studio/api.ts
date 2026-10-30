@@ -115,7 +115,6 @@ function estadoDe(error: unknown): number {
 }
 
 // ─── Parameters ─────────────────────────────────────────────────────────────
-// A segment of the API route, decoded once and validated.
 function segmento(crudo: string, campo: string): string {
   let valor: string;
   try {
