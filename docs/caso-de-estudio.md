@@ -68,7 +68,7 @@ Para el lanzamiento, la regla es que no existe el tag `v4.0.0` mientras haya un 
 
 ## 7. Lo que se midió
 
-La columna de la 3.2 se midió a mano en un Windows con Node 24.11.0, antes de empezar la 4.0. En la columna de la 4.0, las cifras de pruebas y del frontend salen de la corrida de CI del último commit de este pull request, y las de la portada y los medios, de la corrida manual del workflow de Pages 41110638939 (solo construye, no despliega) sobre el commit `dfc96c6`, este pull request con la misma cadena de medios. Cuatro cifras no salen del CI ni de un workflow sino de un comando que cualquiera puede correr sobre el mismo commit, y la tabla dice cuáles: el paquete, el registro de decisiones, los mensajes y los README.
+La columna de la 3.2 se midió a mano en un Windows con Node 24.11.0, antes de empezar la 4.0. En la columna de la 4.0, las cifras de pruebas y del frontend salen de la corrida de CI del último commit de este pull request, y las de la portada y los medios, de la corrida manual del workflow de Pages 41127672319 (solo construye, no despliega) sobre el commit `5d5ba7c`, este pull request con la misma cadena de medios. Cuatro cifras no salen del CI ni de un workflow sino de un comando que cualquiera puede correr sobre el mismo commit, y la tabla dice cuáles: el paquete, el registro de decisiones, los mensajes y los README.
 
 | Cifra | 3.2 | 4.0 | De dónde sale la cifra de la 4.0 |
 |---|---|---|---|
@@ -79,10 +79,10 @@ La columna de la 3.2 se midió a mano en un Windows con Node 24.11.0, antes de e
 | Registro de decisiones | 101 entradas | 107 entradas | comando: `node scripts/indice-decisiones.mjs`, que arma el índice con ellas |
 | Mensajes del servidor | 724 códigos en español y en inglés, 7 catálogos | 756 códigos, 8 catálogos | comando: claves de cada objeto `TEXTOS_*` de `build/i18n/textos/*.js` |
 | README | 1002 y 1046 líneas | 105 líneas cada uno | comando: `wc -l`; en el CI, `test/readme.test.ts` falla por encima de 200 |
-| Portada, primera carga con sus tres capturas | no había | 245 555 bytes en inglés y 251 105 en español, de un presupuesto de 300 000 | job `ensamblar` de la corrida de Pages, que falla si pasa del presupuesto |
-| Imagen de la vista previa del link, 1200 × 630 | no había | 107 111 bytes (inglés) y 113 449 (español), PNG | job `capturas` de la corrida de Pages; GitHub admite hasta 1 MB |
-| Video | 41,3 s y 42,4 s; MP4 de 1,52 MB cada uno | 41,6 s (inglés) y 41,7 s (español); MP4 de 1 102 541 y 1 224 881 bytes | `medios.json` de la corrida de Pages |
-| GIF del README | 42 s, 4,93 MB y 4,72 MB, a 8 fps y 760 px | 21,8 s (inglés) y 21,9 s (español), 2 345 102 y 2 554 825 bytes, a 10 fps y 840 px; presupuesto de 2 621 440 (2,5 MiB) | `medios.json` de la corrida de Pages |
+| Portada, primera carga con sus tres capturas | no había | 245 555 bytes en inglés y 250 551 en español, de un presupuesto de 300 000 | job `ensamblar` de la corrida de Pages, que falla si pasa del presupuesto |
+| Imagen de la vista previa del link, 1200 × 630 | no había | 107 111 bytes (inglés) y 113 350 (español), PNG | job `capturas` de la corrida de Pages; GitHub admite hasta 1 MB |
+| Video | 41,3 s y 42,4 s; MP4 de 1,52 MB cada uno | 41,6 s (inglés) y 41,7 s (español); MP4 de 1 100 799 y 1 154 349 bytes | `medios.json` de la corrida de Pages |
+| GIF del README | 42 s, 4,93 MB y 4,72 MB, a 8 fps y 760 px | 21,8 s (inglés) y 21,9 s (español), 2 305 855 y 2 235 759 bytes, a 10 fps y 840 px; presupuesto de 2 621 440 (2,5 MiB) | `medios.json` de la corrida de Pages |
 
 La demo, contada generándola en los dos idiomas, listando sus recibos y con `git rev-list --count HEAD` en cada repo: tres proyectos, dos repos de git con seis commits reales y ocho recibos. Seis están sellados (cuatro a un commit, dos a un sha256), uno se descartó con una nota y otro espera su commit.
 
