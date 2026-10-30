@@ -12,7 +12,8 @@
     "presets",
     "schema",
     "studio/dist",
-    "!build/**/*.map"
+    "!build/**/*.map",
+    "!build/**/*.d.ts"
   ],
   "engines": {
     "node": ">=22"
