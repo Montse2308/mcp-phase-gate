@@ -14,7 +14,9 @@ name: Studio en GitHub Pages
 # Cinco jobs:
 #   - sitio: compila, exporta la demo y arma la portada. Solo puede leer el repo.
 #   - capturas: las tres capturas de la portada, de un `ui --demo` en vivo (Ajustes no sale de solo lectura), en
-#     tema claro y en los dos idiomas. Sin ellas la portada no está completa, y por eso bloquean el sitio.
+#     tema claro y en los dos idiomas, y la imagen de 1200×630 de la vista previa del link (social-preview-en.png y
+#     social-preview-es.png). Sin ellas la portada no está completa, y por eso bloquean el sitio. A diferencia de los
+#     medios, no están en la lista de respaldo de ensamblar: nunca faltan, y un respaldo la pisaría o la borraría.
 #   - medios: el GIF, el video y el póster de cada idioma. Instala VHS, ffmpeg y Chromium, así que tampoco
 #     tiene más permiso que leer. Si falla, el sitio sale igual, con los medios que ya había.
 #   - ensamblar: sin permisos, junta todo en el artefacto sitio-completo.
@@ -196,7 +198,7 @@ jobs:
 
       - name: El sitio trae todo lo que tiene que traer
         run: |
-          for ruta in index.html es/index.html demo/index.html medios .nojekyll; do
+          for ruta in index.html es/index.html demo/index.html medios medios/social-preview-en.png medios/social-preview-es.png .nojekyll; do
             test -e "sitio-completo/$ruta" || { echo "::error::Falta $ruta en el sitio."; exit 1; }
           done
           find sitio-completo -type f | sort

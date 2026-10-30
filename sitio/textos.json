@@ -2,6 +2,8 @@
   "en": {
     "titulo": "mcp-phase-gate · gated, auditable AI coding",
     "descripcion": "An MCP server that turns any AI coding agent into a gated, auditable, batch-by-batch engineering workflow.",
+    "imagen-alt": "mcp-phase-gate, an MCP server for gated, auditable AI coding, next to the Studio board of a finished task with its five phases.",
+    "social-lema": "An MCP server for gated, auditable AI coding.",
     "saltar": "Skip to the content",
     "idiomas": "Language",
     "lema": "An MCP server that turns any AI coding agent into a gated, auditable, batch-by-batch engineering workflow.",
@@ -34,6 +36,8 @@
   "es": {
     "titulo": "mcp-phase-gate · código con IA, con compuertas y auditable",
     "descripcion": "Un servidor MCP que convierte a cualquier agente de IA que programa en un flujo de ingeniería con compuertas, auditable y lote por lote.",
+    "imagen-alt": "mcp-phase-gate, un servidor MCP para programar con IA, con compuertas y auditable, junto al Tablero del Studio de una tarea terminada con sus cinco fases.",
+    "social-lema": "Un servidor MCP para programar con IA, con compuertas y auditable.",
     "saltar": "Saltar al contenido",
     "idiomas": "Idioma",
     "lema": "Un servidor MCP que convierte a cualquier agente de IA que programa en un flujo de ingeniería con compuertas, auditable y lote por lote.",

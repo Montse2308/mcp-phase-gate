@@ -136,6 +136,28 @@ test.describe("con el navegador en inglés", () => {
     await expect(page.getByRole("link", { name: "Install" })).toHaveAttribute("href", GUIA.en);
   });
 
+  test("la vista previa del link: etiquetas Open Graph y de Twitter, con una imagen de 1200 × 630 en cada idioma", async ({ sitio }) => {
+    const meta = (html: string, atributo: "property" | "name", nombre: string) => html.match(new RegExp(`<meta ${atributo}="${nombre}" content="([^"]*)"`))?.[1];
+    for (const [idioma, pagina, url] of [["en", "index.html", "https://montse2308.github.io/mcp-phase-gate/"], ["es", "es/index.html", "https://montse2308.github.io/mcp-phase-gate/es/"]] as const) {
+      const html = fs.readFileSync(path.join(sitio.raiz, pagina), "utf-8");
+      const imagen = `https://montse2308.github.io/mcp-phase-gate/medios/social-preview-${idioma}.png`;
+      expect(meta(html, "property", "og:image"), `og:image en ${idioma}`).toBe(imagen);
+      expect(meta(html, "name", "twitter:image"), `twitter:image en ${idioma}`).toBe(imagen);
+      expect(meta(html, "property", "og:url")).toBe(url);
+      expect(meta(html, "property", "og:title")).toBe(meta(html, "name", "twitter:title"));
+      expect(meta(html, "property", "og:description")).toBe(meta(html, "name", "description"));
+      expect(meta(html, "property", "og:image:alt"), "el texto alternativo de la imagen").toBeTruthy();
+      expect(meta(html, "name", "twitter:card")).toBe("summary_large_image");
+      expect(meta(html, "property", "og:image:width")).toBe("1200");
+      expect(meta(html, "property", "og:image:height")).toBe("630");
+      // La imagen que nombran las etiquetas existe, es un PNG y mide lo que dicen.
+      const archivo = fs.readFileSync(path.join(sitio.raiz, "medios", `social-preview-${idioma}.png`));
+      expect(archivo.subarray(1, 4).toString("latin1")).toBe("PNG");
+      expect([archivo.readUInt32BE(16), archivo.readUInt32BE(20)], `las medidas de la imagen en ${idioma}`).toEqual([1200, 630]);
+      expect(archivo.length, "GitHub admite hasta 1 MB como social preview").toBeLessThanOrEqual(1_000_000);
+    }
+  });
+
   test("a 390 px nada desborda, y el selector y los botones se ven", async ({ page, sitio }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(portada(sitio));

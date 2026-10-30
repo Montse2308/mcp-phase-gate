@@ -5,7 +5,9 @@
 //   portada.css, portada.js y tema-claro.css (copiado tal cual de los tokens del Studio)
 //   .nojekyll      para que Pages sirva los archivos tal cual
 // Las fuentes y las capturas no las escribe: se enlazan desde demo/fuentes/ (donde las deja el export del
-// Studio) y desde medios/captura-<vista>-<idioma>.<ext> (que saca capturas-studio.mjs).
+// Studio) y desde medios/captura-<vista>-<idioma>.<ext> (que saca capturas-studio.mjs). Lo mismo la imagen de la
+// vista previa del link: la plantilla la nombra en sus etiquetas Open Graph y de Twitter, con la URL absoluta que
+// esas etiquetas exigen, y capturas-studio.mjs la saca a medios/social-preview-<idioma>.png.
 //
 // En el <html> deja dos datos que portada.js necesita antes de pintar: data-base (dónde está la raíz del sitio)
 // y data-vistas (las vistas del Studio, copiadas de studio/src/rutas.ts, para distinguir un hash de la demo de
@@ -27,6 +29,13 @@ const GUIAS = {
 };
 // El formato de las tres capturas de medios/. Lo mismo lo dice capturas-studio.mjs.
 export const EXTENSION_DE_LAS_CAPTURAS = "webp";
+// La imagen de la vista previa del link (Open Graph y Twitter): 1200×630, una por idioma. La saca
+// capturas-studio.mjs --portada, junto a las capturas. La inglesa sirve también como social preview del repo, pero
+// esa se sube a mano en los ajustes de GitHub: ningún workflow puede hacerlo.
+export const MEDIDAS_DE_LA_IMAGEN_SOCIAL = { ancho: 1200, alto: 630 };
+export const nombreDeLaImagenSocial = (idioma) => `social-preview-${idioma}.png`;
+// Las claves de textos.json que usa la imagen y no la plantilla.
+export const TEXTOS_SOLO_DE_LA_IMAGEN = ["social-lema"];
 
 // Las vistas del Studio, tal como las declara studio/src/rutas.ts. La portada las necesita para saber qué hash
 // es de la demo (#red) y qué hash es suyo (#fases, y cualquier ancla que gane después), y no las copia: si
@@ -68,6 +77,11 @@ export function armarPortada(salida) {
       "aria-en": enEspanol ? "" : ' aria-current="true"',
       "aria-es": enEspanol ? ' aria-current="true"' : "",
       "url-guia": GUIAS[idioma],
+      "url-imagen": `${SITIO}medios/${nombreDeLaImagenSocial(idioma)}`,
+      "imagen-ancho": MEDIDAS_DE_LA_IMAGEN_SOCIAL.ancho,
+      "imagen-alto": MEDIDAS_DE_LA_IMAGEN_SOCIAL.alto,
+      "locale-og": enEspanol ? "es_ES" : "en_US",
+      "locale-og-otro": enEspanol ? "en_US" : "es_ES",
     };
     const pagina = plantilla.replace(/\{\{([a-z0-9-]+)\}\}/g, (_, clave) => {
       if (!Object.hasOwn(valores, clave)) throw new Error(`La plantilla pide «${clave}» y sitio/textos.json no lo trae en ${idioma}.`);
@@ -81,7 +95,7 @@ export function armarPortada(salida) {
   // Un texto que ninguna plantilla usa es un texto que sobra, o una clave mal escrita.
   for (const idioma of ["en", "es"]) {
     for (const clave of Object.keys(textos[idioma])) {
-      if (!usadas.has(clave)) throw new Error(`sitio/textos.json trae «${clave}» (${idioma}) y la plantilla no lo usa.`);
+      if (!usadas.has(clave) && !TEXTOS_SOLO_DE_LA_IMAGEN.includes(clave)) throw new Error(`sitio/textos.json trae «${clave}» (${idioma}) y la plantilla no lo usa.`);
     }
   }
   if (JSON.stringify(Object.keys(textos.en).sort()) !== JSON.stringify(Object.keys(textos.es).sort())) {

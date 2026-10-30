@@ -12,7 +12,8 @@
     "presets",
     "schema",
     "studio/dist",
-    "!build/**/*.map"
+    "!build/**/*.map",
+    "!build/**/*.d.ts"
   ],
   "engines": {
     "node": ">=22"
@@ -33,10 +34,11 @@
     "mcp",
     "model-context-protocol",
     "phase-gate",
-    "workflow",
-    "documentation",
+    "ai-agents",
     "cursor",
-    "claude-code"
+    "claude-code",
+    "vscode",
+    "developer-tools"
   ],
   "author": "Montserrat Ximena Hernández Gallegos",
   "license": "MIT",
