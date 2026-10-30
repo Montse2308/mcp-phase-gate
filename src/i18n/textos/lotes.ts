@@ -1,13 +1,12 @@
-// Mensajes del grupo «lotes» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "lotes" group (see i18n/mensajes.ts): each code with its text in Spanish and in English.
+// The Spanish is the original text, byte for byte; the English is natural wording that follows the glossary
+// in docs/glosario.md.
 
 import type { EstadoLote } from "../../recibos.js";
 import { VOCABULARIO } from "../../vocabulario.js";
 import type { Catalogo } from "./tipos.js";
 
-// ─── Piezas comunes ─────────────────────────────────────────────────────────
-// "L01, L02 y L03" / "L01, L02 and L03".
+// ─── Shared pieces ──────────────────────────────────────────────────────────
 function enumerar(elementos: string[], y: string): string {
   if (elementos.length <= 1) return elementos.join("");
   return `${elementos.slice(0, -1).join(", ")} ${y} ${elementos[elementos.length - 1]}`;
@@ -18,16 +17,15 @@ const enumerarEn = (elementos: string[]): string => enumerar(elementos, "and");
 const plural = (n: number, singular: string, varios: string): string => `${n} ${n === 1 ? singular : varios}`;
 const lista = (elementos: string[]): string => elementos.map((e) => `\`${e}\``).join(", ");
 
-// El estado canónico de un lote, tal como se dice en un texto en inglés.
 const estadoEn = (estado: string): string => VOCABULARIO.en.recibo.estados[estado as EstadoLote] ?? estado;
 
-// Un ancla sellada en una frase: `{ tipo: "commit", valor: corto }` o `{ tipo: "sha256", valor: primeros 12 }`.
+// A sealed anchor inside a sentence: `{ tipo: "commit", valor: short hash }` or `{ tipo: "sha256", valor: first 12 characters }`.
 type Sellada = { tipo: "commit" | "sha256"; valor: string };
 const selladaEs = (a: Sellada): string => (a.tipo === "commit" ? `el commit \`${a.valor}\`` : `el sha256 \`${a.valor}…\``);
 const selladaEn = (a: Sellada): string => (a.tipo === "commit" ? `commit \`${a.valor}\`` : `sha256 \`${a.valor}…\``);
 
 export const TEXTOS_LOTES = {
-  // ─── lotes.ts: la fase y el plan ───
+  // ─── lotes.ts: the phase and the plan ───
   "LOTE-SIN-FASE-DE-RECIBOS": {
     es: (p: { proyecto: string }) =>
       `Ninguna fase ${p.proyecto ? `de ${p.proyecto} ` : ""}declara una subcarpeta de recibos (\`recibos:\` en su frontmatter): no hay lotes que registrar.`,
@@ -59,7 +57,7 @@ export const TEXTOS_LOTES = {
     en: (p: { plan: string; valor: string }) => `The frontmatter of \`${p.plan}\` declares \`${p.valor}\` batches, and it must be a whole number from 1 to 99.`,
   },
 
-  // ─── lotes.ts: los recibos que hay ───
+  // ─── lotes.ts: the receipts that exist ───
   "LOTE-RECIBO-ILEGIBLE": {
     es: (p: { ruta: string; error: string }) => `No se pudo leer el recibo \`${p.ruta}\`: ${p.error}`,
     en: (p: { ruta: string; error: string }) => `Could not read receipt \`${p.ruta}\`: ${p.error}`,
@@ -71,7 +69,7 @@ export const TEXTOS_LOTES = {
       `There are ${p.nombres.length} receipts for ${p.lote} in \`${p.carpeta}/\` (${lista(p.nombres)}). Keep only one before continuing.`,
   },
 
-  // ─── lotes.ts: el resumen de un ancla (respuestas de las tools) ───
+  // ─── lotes.ts: the summary of an anchor (tool responses) ───
   "LOTE-RESUMEN-COMMIT": {
     es: (p: { corto: string; repo: string | null; rama: string | null }) => `commit ${p.corto}${p.repo ? ` en \`${p.repo}\`` : ""}${p.rama ? ` (${p.rama})` : ""}`,
     en: (p: { corto: string; repo: string | null; rama: string | null }) => `commit ${p.corto}${p.repo ? ` in \`${p.repo}\`` : ""}${p.rama ? ` (${p.rama})` : ""}`,
@@ -86,7 +84,7 @@ export const TEXTOS_LOTES = {
   },
   "LOTE-RESUMEN-PENDIENTE": { es: "commit pendiente", en: "pending commit" },
 
-  // ─── lotes.ts: registrar un lote ───
+  // ─── lotes.ts: recording a batch ───
   "LOTE-FALTAN-CAMPOS": {
     es: (p: { modo: "crear" | "reemplazar"; lote: string; faltan: string[] }) =>
       `Para ${p.modo === "crear" ? `crear el recibo de ${p.lote}` : `reemplazar el recibo de ${p.lote}`} faltan ${lista(p.faltan)}.`,
@@ -224,7 +222,6 @@ export const TEXTOS_LOTES = {
     en: (p: { lotes: string[] }) =>
       `${enumerarEn(p.lotes)} ${p.lotes.length === 1 ? "is" : "are"} missing: to close the phase without ${p.lotes.length === 1 ? "it" : "them"}, pass \`motivo_descarte\` (the user decides).`,
   },
-  // Lo que deja el cierre: los lotes que se descartan (con su motivo) y los fallidos.
   "LOTE-CIERRE-RESUMEN": {
     es: (p: { faltan: string[]; motivo: string; fallidos: string[] }) => {
       const partes: string[] = [];
@@ -262,7 +259,7 @@ export const TEXTOS_LOTES = {
     en: (p: { carpeta: string }) => `\`${p.carpeta}\` exists in the task and is not a folder.`,
   },
 
-  // ─── lotes.ts: la respuesta de record_batch ───
+  // ─── lotes.ts: the record_batch response ───
   "LOTE-FASE-CERRADA-MOVIDO": {
     es: (p: { numero: number; documento: string }) => `Fase ${p.numero} cerrada: el recibo pasó a ser \`${p.documento}\`.`,
     en: (p: { numero: number; documento: string }) => `Phase ${p.numero} closed: the receipt became \`${p.documento}\`.`,
@@ -352,7 +349,7 @@ export const TEXTOS_LOTES = {
       "Changing the anchor of a sealed receipt is the user's decision: ask them for explicit confirmation in the chat and call again with " +
       `\`reanclar: true\` and force: true.${p.nota}`,
   },
-  // `donde`: el repo y la rama del commit nuevo, o la ruta del artefacto.
+  // `donde`: the repo and branch of the new commit, or the path of the artifact.
   "LOTE-REANCLADO": {
     es: (p: { lote: string; viejo: string; nueva: string; donde: { repo: string; rama: string } | { ruta: string }; documento: string | null }) =>
       `${p.lote} reanclado: \`${p.viejo}\` → \`${p.nueva}\`` +
@@ -392,7 +389,7 @@ export const TEXTOS_LOTES = {
     en: (p: { documento: string | null }) =>
       `All batches have a receipt, but \`${p.documento}\` is missing: call \`record_batch\` with \`cerrar_fase: true\` to generate it.`,
   },
-  // Las columnas de la tabla de get_batch_status, separadas por "|" (la última solo con reverificar).
+  // The columns of the get_batch_status table, separated by "|" (the last one only with reverificar).
   "LOTE-ESTADO-COLUMNAS": {
     es: "Lote|Repo|Objetivo|Commit propuesto|Recibo|Estado|Ancla|Origen|Vigente",
     en: "Batch|Repo|Goal|Proposed commit|Receipt|Status|Anchor|Origin|Valid",
@@ -419,7 +416,7 @@ export const TEXTOS_LOTES = {
   },
   "LOTE-ESTADO-AVISOS-TITULO": { es: "Avisos:", en: "Warnings:" },
 
-  // ─── lotes.ts: el bloque de commits del prompt de la Fase 5 (idioma del proyecto) ───
+  // ─── lotes.ts: the commits block of the Phase 5 prompt (project language) ───
   "LOTE-COMMITS-RECIBOS-ILEGIBLES": {
     es: (p: { error: string }) => `No se pudieron leer los recibos: ${p.error} Arréglalo (o usa \`get_batch_status\`) antes de auditar.`,
     en: (p: { error: string }) => `The receipts could not be read: ${p.error} Fix it (or use \`get_batch_status\`) before auditing.`,
@@ -428,7 +425,7 @@ export const TEXTOS_LOTES = {
     es: (p: { lote: string }) => `- ${p.lote}: sin recibo.`,
     en: (p: { lote: string }) => `- ${p.lote}: no receipt.`,
   },
-  // `motivo`: la nota del lote, o null si su ancla no es una nota.
+  // `motivo`: the batch's note, or null if its anchor is not a note.
   "LOTE-COMMITS-CERRADO": {
     es: (p: { lote: string; estado: string; motivo: string | null }) => `- ${p.lote}: ${p.estado}${p.motivo !== null ? ` («${p.motivo}»)` : ""}.`,
     en: (p: { lote: string; estado: string; motivo: string | null }) => `- ${p.lote}: ${estadoEn(p.estado)}${p.motivo !== null ? ` ("${p.motivo}")` : ""}.`,
@@ -474,10 +471,10 @@ export const TEXTOS_LOTES = {
     es: (p: { segundos: number }) => `No se pudieron verificar a tiempo (${p.segundos} s). Usa \`get_batch_status\` con \`reverificar\` antes de auditar.`,
     en: (p: { segundos: number }) => `They could not be verified in time (${p.segundos} s). Use \`get_batch_status\` with \`reverificar\` before auditing.`,
   },
-  // El encabezado del bloque cuando no se sabe el número de la fase de los lotes.
+  // The block's heading when the number of the batches' phase is not known.
   "LOTE-COMMITS-FASE-ANTERIOR": { es: "COMMITS DE LA FASE anterior", en: "PREVIOUS PHASE COMMITS" },
 
-  // ─── anclas.ts: el commit ───
+  // ─── anclas.ts: the commit ───
   "ANCLA-COINCIDE": {
     es: (p: { n: number }) =>
       p.n === 0
@@ -531,7 +528,7 @@ export const TEXTOS_LOTES = {
     en: (p: { corto: string; repo: string; salida: string }) => `Could not check whether \`${p.corto}\` is on the current branch of \`${p.repo}\`: ${p.salida}`,
   },
 
-  // ─── anclas.ts: el artefacto ───
+  // ─── anclas.ts: the artifact ───
   "ANCLA-ARTEFACTO-ABSOLUTO": {
     es: (p: { ruta: string }) => `\`artifact_path\` no puede ser una ruta absoluta ("${p.ruta}"): es relativa a la raíz del repo o del proyecto.`,
     en: (p: { ruta: string }) => `\`artifact_path\` cannot be an absolute path ("${p.ruta}"): it is relative to the root of the repo or of the project.`,
@@ -608,7 +605,7 @@ export const TEXTOS_LOTES = {
     es: (p: { lote: unknown }) => `El número de lote tiene que ser un entero de 1 a 99 (llegó ${p.lote}).`,
     en: (p: { lote: unknown }) => `The batch number must be a whole number from 1 to 99 (got ${p.lote}).`,
   },
-  // Cómo se nombra el campo en el error de validarSegmento (paths.ts).
+  // How the field is named in the error of validarSegmento (paths.ts).
   "RECIBOS-CAMPO-NOMBRE": { es: "el nombre del recibo", en: "the receipt name" },
 
   // ─── git.ts ───
