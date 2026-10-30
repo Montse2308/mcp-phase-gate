@@ -1,9 +1,9 @@
-// El contrato de la API del Studio: un shape zod por respuesta. Los tests validan cada respuesta con
-// ellos, y el frontend importa los tipos (solo los tipos: `import type`, que no lleva zod al bundle).
+// The Studio API contract: one zod shape per response. The tests validate each response against them, and the
+// frontend imports the types (only the types, with `import type`, so zod does not reach the bundle).
 //
-// Las respuestas no llevan las rutas absolutas del equipo salvo donde la vista las necesita para
-// decir dónde editar algo (el diagnóstico, las capas de prompts y Ajustes): una tarea se identifica por su
-// proyecto y su nombre, no por su carpeta.
+// Responses do not carry this machine's absolute paths except where the view needs them to say where to edit
+// something (the diagnostic, the prompt layers and Ajustes): a task is identified by its project and its name,
+// not by its folder.
 
 import { z } from "zod";
 
@@ -13,7 +13,7 @@ export const ErrorApi = z.object({ error: z.string() });
 
 // ─── /api/estado ────────────────────────────────────────────────────────────
 export const Modo = z.enum(["vivo", "demo", "estatico"]);
-// activo: el watcher avisa; degradado: el sondeo vio un cambio que el watcher no avisó; apagado: no hay.
+// activo: the watcher reports; degradado: polling saw a change the watcher did not report; apagado: there is none.
 export const EstadoDelWatcher = z.enum(["activo", "degradado", "apagado"]);
 
 export const EstadoRespuesta = z.object({
@@ -21,7 +21,7 @@ export const EstadoRespuesta = z.object({
   studio: z.object({ version: z.string(), modo: Modo, watcher: EstadoDelWatcher }),
 });
 
-// ─── Tareas ─────────────────────────────────────────────────────────────────
+// ─── Tasks ──────────────────────────────────────────────────────────────────
 export const Progreso = z.object({
   total: z.number().int().nullable(),
   cerrados: z.number().int(),
@@ -45,7 +45,7 @@ export const TareasRespuesta = z.object({
   tareas: z.array(EstadoTareaApi),
 });
 
-// ─── Proyectos ──────────────────────────────────────────────────────────────
+// ─── Projects ───────────────────────────────────────────────────────────────
 export const RepoApi = z.object({
   id: z.string(),
   rol: z.string().nullable(),
@@ -60,7 +60,7 @@ export const RepoApi = z.object({
   limpio: z.boolean().nullable(),
   cambios: z.number().int(),
   sinSeguimiento: z.number().int(),
-  respondio: z.boolean(), // false: git no contestó a tiempo
+  respondio: z.boolean(), // false: git did not answer in time
   error: z.string().nullable(),
 });
 
@@ -94,24 +94,24 @@ export const ProyectoApi = z.object({
 
 export const ProyectosRespuesta = z.object({
   proyectos: z.array(ProyectoApi),
-  presets: z.array(z.string()), // los disponibles, para el selector
-  error: z.string().nullable(), // sin Documentación configurada, por ejemplo
+  presets: z.array(z.string()), // the available ones, for the selector
+  error: z.string().nullable(), // no Documentation configured, for example
 });
 
-// ─── Una tarea ──────────────────────────────────────────────────────────────
-// La señal de cada estación del tablero (§7.7.2): forma, texto y color salen de aquí.
+// ─── One task ───────────────────────────────────────────────────────────────
+// The signal of each station on the board: shape, text and colour all come from here.
 export const Senal = z.enum(["verde", "ambar", "rojo", "apagado"]);
 export const TextoDeSenal = z.enum(["cerrada", "con pendientes", "en curso", "hueco", "pendiente"]);
 
 export const Estacion = z.object({
-  numero: z.number().int(), // 0 es el contexto inicial
+  numero: z.number().int(), // 0 is the initial context
   titulo: z.string(),
   documento: z.string(),
   existe: z.boolean(),
   senal: Senal,
   texto: TextoDeSenal,
   mtimeMs: z.number().nullable(),
-  recibos: z.string().nullable(), // la subcarpeta, en la fase que la declara
+  recibos: z.string().nullable(), // the subfolder, in the phase that declares it
 });
 
 export const TareaRespuesta = z.object({
@@ -119,8 +119,8 @@ export const TareaRespuesta = z.object({
   estado: EstadoTareaApi,
   estaciones: z.array(Estacion),
   recibos: z.array(z.string()), // "04 - Ejecución/L01 - x.md"
-  compuerta: z.string().nullable(), // el aviso de compuerta que recibiría la fase siguiente
-  pendientes: z.string().nullable(), // el aviso de pendientes heredados de la fase siguiente
+  compuerta: z.string().nullable(), // the gate warning the next phase would receive
+  pendientes: z.string().nullable(), // the warning about pending items inherited by the next phase
 });
 
 export const DocumentoRespuesta = z.object({
@@ -132,7 +132,7 @@ export const DocumentoRespuesta = z.object({
   mtimeMs: z.number(),
 });
 
-// ─── Lotes ──────────────────────────────────────────────────────────────────
+// ─── Batches ────────────────────────────────────────────────────────────────
 export const FilaDeLote = z.object({
   lote: z.string(),
   repo: z.string().nullable(),
@@ -144,7 +144,7 @@ export const FilaDeLote = z.object({
   origen: z.enum(["servidor", "manual"]).nullable(),
   vigente: z.boolean().nullable(),
   problema: z.string().nullable(),
-  // Lo que pinta el sello: el SHA corto, los 8 primeros del sha256 y la fecha del recibo.
+  // What the seal paints: the short SHA, the first 8 characters of the sha256 and the receipt's date.
   sello: z.object({ corto: z.string().nullable(), sha256: z.string().nullable(), fecha: z.string().nullable() }).nullable(),
 });
 
@@ -167,12 +167,12 @@ export const LotesRespuesta = z.union([
   z.object({ disponible: z.literal(false), motivo: z.string() }),
 ]);
 
-// ─── Bitácora ───────────────────────────────────────────────────────────────
+// ─── Log (bitácora) ─────────────────────────────────────────────────────────
 export const EventoDeBitacora = z.object({
   tipo: z.enum(["documento", "recibo", "commit", "reanclaje", "fase-cerrada"]),
-  fecha: z.string(), // ISO; un reanclaje solo lleva el día
+  fecha: z.string(), // ISO; a re-anchor only carries the day
   titulo: z.string(),
-  archivo: z.string().nullable(), // el documento o el recibo, dentro de la tarea
+  archivo: z.string().nullable(), // the document or the receipt, inside the task
   lote: z.string().nullable(),
   commit: z.object({ corto: z.string(), asunto: z.string() }).nullable(),
 });
@@ -182,11 +182,11 @@ export const BitacoraRespuesta = z.object({ proyecto: z.string(), tarea: z.strin
 // ─── Prompts ────────────────────────────────────────────────────────────────
 export const RanuraApi = z.object({
   id: z.string(), // "fase-3/pruebas", "global/evidencia"
-  contenidoDe: z.string(), // "fábrica", o "<archivo>:<línea>" del bloque que ganó
-  capa: z.string(), // "fábrica", "preset: <nombre>", "reglas: <variante>", "global" o "proyecto"
+  contenidoDe: z.string(), // "fábrica", or "<file>:<line>" of the block that won
+  capa: z.string(), // "fábrica", "preset: <name>", "reglas: <variant>", "global" or "proyecto"
   modos: z.array(z.string()),
   efectivo: z.string(),
-  fabrica: z.string().nullable(), // null si la ranura no existe en el cuerpo de fábrica
+  fabrica: z.string().nullable(), // null if the slot does not exist in the factory body
 });
 
 export const CapaApi = z.object({
@@ -200,7 +200,7 @@ export const PromptRespuesta = z.object({
   proyecto: z.string(),
   fase: z.number().int(),
   tarea: z.string().nullable(),
-  texto: z.string(), // el de get_phase_prompt para este proyecto y esta tarea
+  texto: z.string(), // what get_phase_prompt returns for this project and task
   capas: z.array(CapaApi),
   ranuras: z.array(RanuraApi),
   avisos: z.array(z.object({ severidad: z.enum(["error", "aviso", "info"]), codigo: z.string(), texto: z.string() })),
@@ -209,13 +209,13 @@ export const PromptRespuesta = z.object({
   fases: z.array(z.object({ numero: z.number().int(), titulo: z.string() })),
 });
 
-// ─── Clientes ───────────────────────────────────────────────────────────────
+// ─── Clients ────────────────────────────────────────────────────────────────
 export const PlanDeClienteApi = z.object({
   cliente: z.enum(["claude-code", "cursor", "vscode"]),
   nombre: z.string(),
   detectado: z.boolean(),
   estado: z.enum(["nuevo", "actualiza", "sin-cambios", "roto", "forma-rara", "clave-ocupada", "existente", "sin-lista", "sin-rutas"]),
-  archivo: z.string().nullable(), // con ~ en lugar de la carpeta del usuario
+  archivo: z.string().nullable(), // with ~ instead of the user's folder
   comando: z.string().nullable(),
   diff: z.string().nullable(),
   mensaje: z.string(),
@@ -230,9 +230,9 @@ export const NombreDeCampo = z.enum(["documentacion", "carpetaDeRepos", "subcarp
 
 export const CampoAjustes = z.object({
   campo: NombreDeCampo,
-  variable: z.string(), // la variable de entorno que lo pisaría
-  enMaquina: z.string().nullable(), // lo que dice machine.json
-  efectivo: z.string().nullable(), // lo que vale ahora en este Studio
+  variable: z.string(), // the environment variable that would override it
+  enMaquina: z.string().nullable(),
+  efectivo: z.string().nullable(),
   fuente: z.enum(["entorno", ".env", "machine.json", "sistema", "por defecto", "sin definir"]),
   // This same Studio, through its environment or its .env, uses another value than machine.json: the first warning.
   propioStudioPisa: z.boolean(),
@@ -249,16 +249,16 @@ export const EnvDeCliente = z.object({
 });
 
 export const EntradaDeCliente = z.object({
-  clave: z.string(), // la clave de la entrada en el archivo del cliente
+  clave: z.string(),
   ambito: z.enum(["archivo", "usuario", "local"]),
-  carpeta: z.string().nullable(), // en Claude Code, la carpeta de un ámbito local
+  carpeta: z.string().nullable(), // in Claude Code, the folder of a local scope
   variables: z.array(EnvDeCliente),
 });
 
 export const ClienteAjustes = z.object({
   cliente: z.enum(["claude-code", "cursor", "vscode"]),
   nombre: z.string(),
-  archivo: z.string(), // con ~ en lugar de la carpeta del usuario
+  archivo: z.string(), // with ~ instead of the user's folder
   lectura: z.enum(["leido", "no-existe", "ilegible"]),
   entradas: z.array(EntradaDeCliente),
 });
@@ -268,7 +268,7 @@ export const SesionDeAjustes = z.object({
   pid: z.number().int(),
   cliente: z.string(),
   proyecto: z.string().nullable(),
-  sinRutas: z.boolean(), // es de un servidor 3.x, que no anota sus rutas
+  sinRutas: z.boolean(), // it is a 3.x server, which does not record its paths
   variables: z.array(EnvDeCliente),
 });
 
@@ -299,7 +299,7 @@ export const AjustesRespuesta = z.object({
 });
 
 // ─── /api/ajustes/proyectos/:p ──────────────────────────────────────────────
-// What the "cada proyecto" page edits: what phase-gate.json says (null: the key is not there and the preset
+// What the per-project page ("cada proyecto") edits: what phase-gate.json says (null: the key is not there and the preset
 // or the team decides), what really applies, and the own path of each repo in this machine's machine.json.
 export const AjustesDeProyecto = z.object({
   proyecto: z.string(),
@@ -322,7 +322,7 @@ export const AjustesDeProyecto = z.object({
   rutasPropias: z.record(z.string(), z.string()),
 });
 
-// ─── Acciones (§7.6) ────────────────────────────────────────────────────────
+// ─── Actions ────────────────────────────────────────────────────────────────
 export const PlanRespuesta = z.union([
   z.object({
     posible: z.literal(true),
