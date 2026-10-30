@@ -1,6 +1,6 @@
-// Mensajes del grupo «cli» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "cli" group (see i18n/mensajes.ts): each code with its text in Spanish and in English.
+// The Spanish is the original text, byte for byte; the English is natural wording that follows the glossary
+// in docs/glosario.md.
 
 import type { Catalogo } from "./tipos.js";
 
