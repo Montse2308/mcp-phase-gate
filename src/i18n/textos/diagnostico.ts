@@ -1,11 +1,10 @@
-// Mensajes del grupo «diagnostico» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "diagnostico" group (see i18n/mensajes.ts): each code with its text in Spanish and in English;
+// the English follows the glossary in docs/glosario.md.
 
 import type { Catalogo } from "./tipos.js";
 
-// Los valores de los enums del diagnóstico (severidades, capas, orígenes…) son canónicos, en español, y
-// así van en el objeto estructurado. Solo al escribir un texto en inglés se traducen.
+// The values of the diagnostic enums (severities, layers, origins…) are canonical, in Spanish, and they go
+// that way in the structured object. They are translated only when writing a text in English.
 const VALORES_EN: Readonly<Record<string, string>> = {
   error: "error",
   aviso: "warning",
@@ -57,7 +56,7 @@ type LineaRepo = { id: string; ruta: string | null; origen: string | null; exist
 type LineaMaquina = { existe: boolean; valido: boolean; overrides: number; presetPorDefecto: string | null };
 
 export const TEXTOS_DIAGNOSTICO = {
-  // ─── diagnostico.ts: los hallazgos ─────────────────────────────────────────
+  // ─── diagnostico.ts: the findings ──────────────────────────────────────────
   "MANIFIESTO-CONFLICTO": {
     es: (p: { proyecto: string; copias: string[] }) =>
       `En la carpeta de ${p.proyecto} hay ${p.copias.map((c) => `"${c}"`).join(", ")}, que parece${p.copias.length === 1 ? "" : "n"} una copia en ` +
@@ -240,8 +239,7 @@ export const TEXTOS_DIAGNOSTICO = {
     en: (p: { error: string }) => `Could not read the Central Documentation: ${p.error}`,
   },
 
-  // ─── diagnostico.ts: el informe de doctor (texto y Markdown) ──────────────
-  // Un valor canónico de un enum (severidad, capa, origen…) tal como se enseña.
+  // ─── diagnostico.ts: the doctor report (text and Markdown) ─────────────────
   "DOCTOR-VALOR": {
     es: (p: { valor: string }) => p.valor,
     en: (p: { valor: string }) => en(p.valor),
@@ -373,14 +371,14 @@ export const TEXTOS_DIAGNOSTICO = {
   "DOCTOR-PROYECTOS-NINGUNO-TEXTO": { es: "(ninguno todavía)", en: "(none yet)" },
   "DOCTOR-PROYECTOS-SIN-DOCS-MD": { es: "No se pueden listar sin `DOCS_PATH`.", en: "They cannot be listed without `DOCS_PATH`." },
   "DOCTOR-PROYECTOS-NINGUNO-MD": { es: "Ninguno todavía.", en: "None yet." },
-  // Las cabeceras de las tablas Markdown, separadas por "|" (una barra no puede ir en una cabecera).
+  // The headers of the Markdown tables, separated by "|" (a bar cannot appear inside a header).
   "DOCTOR-TABLA-VARIABLES": { es: "Variable||Valor|Nombre usado · fuente", en: "Variable||Value|Name used · source" },
   "DOCTOR-TABLA-CAPAS": { es: "Capa|Ruta|Existe", en: "Layer|Path|Exists" },
   "DOCTOR-TABLA-FASES": { es: "Fase|Título|Capa|Documento|Recibos|Comando|Archivo", en: "Phase|Title|Layer|Document|Receipts|Command|File" },
   "DOCTOR-TABLA-PROYECTOS": { es: "Proyecto|Tareas|Tarea activa|Fase|Configuración|Repos", en: "Project|Tasks|Active task|Phase|Configuration|Repos" },
   "DOCTOR-TABLA-HALLAZGOS": { es: "Severidad|Código|Detalle", en: "Severity|Code|Detail" },
 
-  // ─── diagnostico.ts: la procedencia de una fase (doctor --fase) ───────────
+  // ─── diagnostico.ts: where a phase comes from (doctor --fase) ─────────────
   "DOCTOR-PROCEDENCIA-CABECERA": {
     es: (p: { fase: number; proyecto: string | null; tarea: string | null; preset: string; origen: string }) => {
       const donde = p.proyecto ? ` · ${p.proyecto}${p.tarea ? ` · tarea activa: ${p.tarea}` : ""}` : " · sin proyecto";
@@ -395,7 +393,7 @@ export const TEXTOS_DIAGNOSTICO = {
   "DOCTOR-PROCEDENCIA-GANA": { es: "Gana", en: "Wins" },
   "DOCTOR-PROCEDENCIA-AVISOS": { es: "Avisos", en: "Warnings" },
 
-  // ─── diagnostico.ts: la configuración de un proyecto (phase-gate://configuracion) ───
+  // ─── diagnostico.ts: a project's configuration (phase-gate://configuracion) ───
   "DOCTOR-CONFIG-TITULO": {
     es: (p: { proyecto: string }) => `### Configuración de ${p.proyecto}`,
     en: (p: { proyecto: string }) => `### Configuration of ${p.proyecto}`,

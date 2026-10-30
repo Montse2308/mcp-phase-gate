@@ -1,29 +1,27 @@
-// Mensajes del grupo «studio» (ver i18n/mensajes.ts): lo que la API del Studio dice por su cuenta (sus
-// errores, los títulos de la Bitácora, el asistente de clientes y las acciones con huella). El español es el
-// texto de siempre, byte a byte; el inglés, una redacción natural con el glosario de docs/glosario.md.
+// Messages of the "studio" group (see i18n/mensajes.ts): what the Studio API says on its own (its errors,
+// the Logbook titles, the clients assistant and the actions with a fingerprint). Each code has its text in
+// Spanish and in English; the English follows the glossary in docs/glosario.md.
 //
-// Salen en el idioma de la interfaz: el frontend lo manda en cada petición (X-Phase-Gate-Lang) y el
-// servidor atiende la petición dentro de `enIdioma` (studio/servidor.ts). Los identificadores no se
-// traducen: nombres de presets, claves del manifiesto (`lotes`, `commits`), ids de lote y de ranura.
+// They come out in the interface language: the frontend sends it with every request (X-Phase-Gate-Lang) and
+// the server handles the request inside `enIdioma` (studio/servidor.ts). Identifiers are not translated:
+// preset names, manifest keys (`lotes`, `commits`), batch and slot ids.
 
 import type { EstadoLote } from "../../recibos.js";
 import { VOCABULARIO } from "../../vocabulario.js";
 import type { Catalogo } from "./tipos.js";
 
-// El nombre de un parámetro de la API ("proyecto", "tarea"), dicho en inglés.
 const CAMPO_EN: Record<string, string> = { proyecto: "project", tarea: "task" };
 const campoEn = (campo: string): string => CAMPO_EN[campo] ?? campo;
 
-// El estado canónico de un recibo, tal como se dice en inglés.
 const estadoEn = (estado: string): string => VOCABULARIO.en.recibo.estados[estado as EstadoLote] ?? estado;
 
 const faseEs = (numero: number): string => (numero === 0 ? "00" : `Fase ${numero}`);
 const faseEn = (numero: number): string => (numero === 0 ? "00" : `Phase ${numero}`);
 
 export const TEXTOS_STUDIO = {
-  // ─── El filtro de seguridad de studio/servidor.ts ───
-  // Antes de que la petición diga su idioma: salen en el del proceso (PHASE_GATE_LANG o el del sistema). El
-  // filtro no lee la cabecera de idioma (hallazgo 9 de la auditoría de la Etapa 6).
+  // ─── The security filter of studio/servidor.ts ───
+  // They come out before the request states its language, so in the process's (PHASE_GATE_LANG or the
+  // system's): the filter does not read the language header.
   "STUDIO-FILTRO-CUERPO-GRANDE": {
     es: (p: { kb: number }) => `El cuerpo pasa de ${p.kb} kB.`,
     en: (p: { kb: number }) => `The body is larger than ${p.kb} kB.`,
@@ -51,7 +49,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { maximo: number }) => `There are ${p.maximo} event connections open: close some Studio tab.`,
   },
 
-  // ─── `mcp-phase-gate ui` en la terminal: en el idioma de --idioma, o en el del proceso ───
+  // ─── `mcp-phase-gate ui` in the terminal: in the language of --idioma, or the process's ───
   "UI-DEMO-GENERADA": {
     es: (p: { raiz: string }) => `Demo generada en ${p.raiz}.`,
     en: (p: { raiz: string }) => `Demo generated in ${p.raiz}.`,
@@ -93,7 +91,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { raiz: string }) => `${p.raiz} is not a demo folder: it is not deleted.`,
   },
 
-  // ─── studio/servidor.ts y el enrutado de studio/api.ts ───
+  // ─── studio/servidor.ts and the routing of studio/api.ts ───
   "STUDIO-JSON-INVALIDO": { es: "El cuerpo no es un JSON válido.", en: "The body is not valid JSON." },
   "STUDIO-RUTA-NO-EXISTE": { es: "No existe esa ruta de la API.", en: "That API route does not exist." },
   "STUDIO-ERROR-INTERNO-DEL-STUDIO": { es: "Error interno del Studio.", en: "Internal Studio error." },
@@ -104,7 +102,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { detalle: string }) => `Internal error: ${p.detalle}`,
   },
 
-  // ─── studio/api.ts: parámetros ───
+  // ─── studio/api.ts: parameters ───
   "STUDIO-CODIFICACION-INVALIDA": {
     es: (p: { campo: string }) => `${p.campo} no es una codificación porcentual válida.`,
     en: (p: { campo: string }) => `${campoEn(p.campo)} is not valid percent-encoding.`,
@@ -128,7 +126,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { fase: number; proyecto: string; fases: string }) => `Phase ${p.fase} does not exist in ${p.proyecto}. The phases are: ${p.fases}.`,
   },
 
-  // ─── studio/api.ts: el tablero y la Bitácora ───
+  // ─── studio/api.ts: the Board and the Logbook (Bitácora) ───
   "STUDIO-CONTEXTO-INICIAL": { es: "Contexto inicial", en: "Initial context" },
   "STUDIO-BITACORA-DOCUMENTO": {
     es: (p: { numero: number; titulo: string; documento: string }) => `${faseEs(p.numero)} · ${p.titulo}: ${p.documento}`,
@@ -147,7 +145,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { numero: number; titulo: string; documento: string }) => `Phase ${p.numero} (${p.titulo}) closed: ${p.documento}`,
   },
 
-  // ─── studio/api.ts: el asistente de clientes del Vigía ───
+  // ─── studio/api.ts: the clients assistant of the Lookout (Vigía) ───
   "STUDIO-SIN-RUTAS": {
     es: "Faltan la Documentación y la carpeta de repos (o no existen): ni machine.json ni el entorno las dicen, y el servidor no sabría dónde buscar.",
     en: "The Documentation and the repos folder are missing (or do not exist): neither machine.json nor the environment gives them, and the server would not know where to look.",
@@ -207,7 +205,7 @@ export const TEXTOS_STUDIO = {
     en: " The file has comments: rewriting it will lose them (a .bak copy is kept).",
   },
 
-  // ─── studio/acciones.ts: las peticiones ───
+  // ─── studio/acciones.ts: the requests ───
   "STUDIO-DISCO-CAMBIADO": {
     es: "El disco cambió desde que viste el cambio. Revísalo otra vez.",
     en: "The disk changed since you saw the change. Review it again.",
@@ -235,7 +233,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { comando: string; detalle: string | null; codigo: number }) => `${p.comando} failed: ${p.detalle ?? `exit code ${p.codigo}`}`,
   },
 
-  // ─── studio/acciones.ts: dónde nunca se escribe ───
+  // ─── studio/acciones.ts: where it never writes ───
   "STUDIO-DESTINO-EN-TAREA": {
     es: "Esa acción escribiría dentro de una tarea: el Studio nunca escribe documentos ni recibos.",
     en: "That action would write inside a task: the Studio never writes documents or receipts.",
@@ -253,7 +251,7 @@ export const TEXTOS_STUDIO = {
     en: "That destination is neither a prompts layer nor the presets folder: the Studio does not write there.",
   },
 
-  // ─── studio/acciones.ts: el manifiesto (crear) ───
+  // ─── studio/acciones.ts: the manifest (create) ───
   "STUDIO-SIN-MANIFIESTO": {
     es: (p: { proyecto: string }) => `${p.proyecto} no tiene phase-gate.json: créalo primero con «Crear phase-gate.json».`,
     en: (p: { proyecto: string }) => `${p.proyecto} has no phase-gate.json: create it first with "Create phase-gate.json".`,
@@ -295,7 +293,7 @@ export const TEXTOS_STUDIO = {
     en: (p: { archivo: string }) => `Copied to ${p.archivo}. Edit it there.`,
   },
 
-  // ─── studio/acciones.ts: init en un cliente ───
+  // ─── studio/acciones.ts: init in a client ───
   "STUDIO-INIT-CLAUDE-EXISTENTE": {
     es: (p: { clave: string; comando: string | null }) =>
       p.comando

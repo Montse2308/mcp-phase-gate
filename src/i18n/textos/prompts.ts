@@ -1,12 +1,11 @@
-// Mensajes del grupo «prompts» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "prompts" group (see i18n/mensajes.ts): each code with its text in Spanish and in English;
+// the English follows the glossary in docs/glosario.md.
 
 import { VOCABULARIO } from "../../vocabulario.js";
 import type { Catalogo } from "./tipos.js";
 
-// Los orígenes de un preset (OrigenDelPreset de capas.ts) tal como se le dicen a una persona en inglés.
-// En español, el valor canónico tal cual.
+// The origins of a preset (OrigenDelPreset in capas.ts) as they are told to a person in English.
+// In Spanish, the canonical value as it is.
 const ORIGEN_DEL_PRESET_EN: Record<string, string> = {
   "de la tarea": "from the task",
   "del proyecto": "from the project",
@@ -74,7 +73,7 @@ export const TEXTOS_PROMPTS = {
     en: (p: { id: string; archivo: string; linea: number }) =>
       `> Server note: block «${p.id}» from ${p.archivo}:${p.linea} fits no slot and was ignored.`,
   },
-  // Para un hallazgo que no se construyó aquí (sin sus datos): el texto que trae, con la nota delante.
+  // For a finding that was not built here (so without its data): the text it carries, with the note in front.
   "CAPA-TXT-NOTA-DEL-SERVIDOR": {
     es: (p: { texto: string }) => `> Nota del servidor: ${p.texto.replace(/^El bloque/, "el bloque")}`,
     en: (p: { texto: string }) => `> Server note: ${p.texto}`,
@@ -103,7 +102,7 @@ export const TEXTOS_PROMPTS = {
   },
 
   // ─── bloques.ts ───────────────────────────────────────────────────────────
-  // Con `error`, el archivo no se pudo leer; si no, `motivo` dice qué está mal en la línea `linea`.
+  // With `error`, the file could not be read; otherwise `motivo` says what is wrong on line `linea`.
   "BLOQUE-MAL-FORMADO": {
     es: (p: { archivo: string; linea?: number; motivo?: string; error?: string }) =>
       p.error !== undefined
@@ -156,7 +155,7 @@ export const TEXTOS_PROMPTS = {
     en: (p: { archivo: string; recibos: string }) =>
       `The recibos frontmatter of ${p.archivo} is ignored: ` + `"${p.recibos}" is the name of a phase document.`,
   },
-  // El bloque ARCHIVOS DE ESTA TAREA, en el idioma del proyecto.
+  // The ARCHIVOS DE ESTA TAREA block, in the project's language.
   "FASE-TXT-DOCUMENTO-PREVIO": {
     es: (p: { numero: number; documento: string; recibos: string | null }) =>
       `- Fase ${p.numero}: \`${p.documento}\`${p.recibos ? ` (recibos de lote en \`${p.recibos}/\`)` : ""}`,
@@ -229,7 +228,7 @@ export const TEXTOS_PROMPTS = {
     en: (p: { relativo: string; fase: number; presencia: string }) =>
       `\`${p.relativo}\` is frozen: Phase ${p.fase} is already in progress or closed (${p.presencia}).`,
   },
-  // describeEstado: la frase corta del chat sobre la fase de una tarea.
+  // describeEstado: the short chat sentence about a task's phase.
   "TAREA-ESTADO-DESCONOCIDO": {
     es: "fase desconocida (ningún prompt de fase declara documento, así que no hay nada que deducir)",
     en: "unknown phase (no phase prompt declares a document, so there is nothing to deduce)",
@@ -254,7 +253,7 @@ export const TEXTOS_PROMPTS = {
     es: (p: { cerrados: number; total: number }) => `, ${p.cerrados} de ${p.total} lotes cerrados`,
     en: (p: { cerrados: number; total: number }) => `, ${p.cerrados} of ${p.total} ${p.total === 1 ? "batch" : "batches"} closed`,
   },
-  // `progreso` empieza por ", " o "; " (o es vacío): sin título, va entre paréntesis sin ese principio.
+  // `progreso` starts with ", " or "; " (or is empty): with no title, it goes in parentheses without that start.
   "TAREA-VA-EN-FASE": {
     es: (p: { fase: number; titulo: string | null; progreso: string }) =>
       p.titulo
@@ -273,7 +272,7 @@ export const TEXTOS_PROMPTS = {
     es: (p: { siguiente: string }) => `${p.siguiente}; todavía sin documentos`,
     en: (p: { siguiente: string }) => `${p.siguiente}; no documents yet`,
   },
-  // La compuerta, al principio del prompt (en el idioma del proyecto).
+  // The gate, at the start of the prompt (in the project's language).
   "COMPUERTA-AMBIGUA": {
     es:
       "> Nota: no se comprobó la compuerta de fase porque no se indicó `project` y hay varios " +
@@ -310,7 +309,7 @@ export const TEXTOS_PROMPTS = {
       "Tell the user before anything else and ask whether they prefer to do the missing phase first or continue " +
       "anyway. What follows is the prompt of the phase you asked for: apply it only after resolving this with the user.",
   },
-  // RECIBOS QUE YA EXISTEN, al final del prompt (en el idioma del proyecto).
+  // RECIBOS QUE YA EXISTEN, at the end of the prompt (in the project's language).
   "TAREA-RECIBOS-LEELOS": {
     es: "Léelos con `read_central_doc` usando estas rutas tal cual:",
     en: "Read them with `read_central_doc` using these paths exactly as they are:",
@@ -319,8 +318,8 @@ export const TEXTOS_PROMPTS = {
     es: (p: { fase: number; ruta: string }) => `- Fase ${p.fase}: \`${p.ruta}\``,
     en: (p: { fase: number; ruta: string }) => `- Phase ${p.fase}: \`${p.ruta}\``,
   },
-  // PENDIENTES HEREDADOS (detectados por el servidor), en el idioma del proyecto. `valor` es el estado tal
-  // como lo trae el recibo; `estado`, el canónico.
+  // PENDIENTES HEREDADOS (detected by the server), in the project's language. `valor` is the status as the
+  // receipt carries it; `estado`, the canonical one.
   "PENDIENTES-SECCION": {
     es: (p: { documento: string; encabezado: string }) => `- \`${p.documento}\` tiene una sección \`${p.encabezado}\`.`,
     en: (p: { documento: string; encabezado: string }) => `- \`${p.documento}\` has a \`${p.encabezado}\` section.`,
@@ -418,7 +417,7 @@ export const TEXTOS_PROMPTS = {
     en: (p: { archivo: string; etiqueta: string | null; comprobar: string }) =>
       `Copied to ${p.archivo} (${p.etiqueta}). Edit it there; \`${p.comprobar}\` will show you that it wins.`,
   },
-  // `contenidoDe` es "fábrica" o "archivo:línea"; `modos`, los de los bloques que suman, ya unidos.
+  // `contenidoDe` is "fábrica" or "file:line"; `modos`, those of the blocks that add to it, already joined.
   "EJECT-PROCEDENCIA": {
     es: (p: { id: string; contenidoDe: string; modos: string[] }) =>
       `Procedencia de ${p.id}: ${p.contenidoDe}${p.modos.length ? ` + ${p.modos.join(", ")}` : ""}`,

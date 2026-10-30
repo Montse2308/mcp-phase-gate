@@ -1,19 +1,20 @@
-// Los mensajes del servidor en los dos idiomas (§8.5 del plan maestro v3).
+// The server's messages in both languages.
 //
-// Cada error y cada respuesta de las tools, cada línea de doctor y cada texto que el servidor añade a un
-// prompt tiene un CÓDIGO (`RUTA-FUERA`, `LOTE-FUERA-DE-PLAN`…) y un texto en `es` y en `en`. Los textos
-// viven en los catálogos de i18n/textos/, uno por grupo de módulos; aquí se juntan, y un test exige que
-// todo código tenga los dos idiomas y que ninguno se repita.
+// Every error and every tool response, every doctor line and every text the server adds to a prompt has a
+// CODE (`RUTA-FUERA`, `LOTE-FUERA-DE-PLAN`…) and a text in `es` and in `en`. The texts live in the catalogs
+// of i18n/textos/, one per group of modules; here they are joined, and a test requires every code to have
+// both languages and no code to be repeated.
 //
-// En qué idioma sale un mensaje:
-//   - los bloques que el servidor añade a un prompt (ARCHIVOS DE ESTA TAREA, la compuerta, los pendientes,
-//     CONFIGURACIÓN DEL PROYECTO, COMMITS DE LA FASE 4…), los recibos y el índice: en el idioma del
-//     PROYECTO, que se pasa siempre de forma explícita;
-//   - los errores y las respuestas de una tool: en el del proyecto si la llamada lo resuelve; si no, en el
-//     de PHASE_GATE_LANG; si no, en el del sistema. El servidor abre un contexto por llamada
-//     (`conContextoDeMensajes`) y lo fija en cuanto sabe el proyecto (`fijarIdiomaDeMensajes`), así que el
-//     error que lanza un módulo de abajo sale en el idioma correcto sin pasarle el idioma a cada función;
-//   - doctor y `--help`: con el mismo criterio, sin proyecto.
+// Which language a message comes out in:
+//   - the blocks the server adds to a prompt (ARCHIVOS DE ESTA TAREA, the gate, the pending items,
+//     CONFIGURACIÓN DEL PROYECTO, COMMITS DE LA FASE 4…), the receipts and the index: in the PROJECT's
+//     language, which is always passed explicitly;
+//   - the errors and responses of a tool: in the project's language if the call resolves one; if not, in
+//     PHASE_GATE_LANG's; if not, in the system's. The server opens a context per call
+//     (`conContextoDeMensajes`) and sets it as soon as it knows the project (`fijarIdiomaDeMensajes`), so an
+//     error thrown by a module further down comes out in the right language without passing the language
+//     to every function;
+//   - doctor and `--help`: same rule, with no project.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
@@ -31,7 +32,7 @@ import type { Catalogo } from "./textos/tipos.js";
 
 export type { Catalogo, Plantilla } from "./textos/tipos.js";
 
-// Los catálogos por separado, para que el test pueda decir de cuál es un código repetido.
+// Kept apart so the test can say which catalog a repeated code belongs to.
 export const CATALOGOS: Readonly<Record<string, Catalogo>> = {
   ajustes: TEXTOS_AJUSTES,
   cli: TEXTOS_CLI,
@@ -49,23 +50,22 @@ export function existeMensaje(codigo: string): boolean {
   return Object.prototype.hasOwnProperty.call(TODOS, codigo);
 }
 
-// ─── El idioma de la llamada ────────────────────────────────────────────────
+// ─── The language of the call ───────────────────────────────────────────────
 type Contexto = { idioma: Idioma | null };
 const contexto = new AsyncLocalStorage<Contexto>();
 
-// Un contexto nuevo, sin idioma todavía: el de la llamada a una tool.
 export function conContextoDeMensajes<T>(funcion: () => T): T {
   return contexto.run({ idioma: null }, funcion);
 }
 
-// El proyecto de la llamada se acaba de resolver: sus errores y su respuesta, en su idioma. Fuera de un
-// contexto no hace nada.
+// Called once the call's project is resolved: its errors and its response then come out in its language.
+// Outside a context it does nothing.
 export function fijarIdiomaDeMensajes(idioma: Idioma): void {
   const actual = contexto.getStore();
   if (actual) actual.idioma = idioma;
 }
 
-// Un trozo de código con un idioma fijo (el Studio, con el de la interfaz; un test).
+// Runs code with a fixed language (the Studio, with the interface's; a test).
 export function enIdioma<T>(idioma: Idioma, funcion: () => T): T {
   return contexto.run({ idioma }, funcion);
 }
@@ -74,9 +74,9 @@ export function idiomaDeMensajes(): Idioma {
   return contexto.getStore()?.idioma ?? idiomaDelEntorno() ?? idiomaDelSistema();
 }
 
-// ─── Los mensajes ───────────────────────────────────────────────────────────
-// El texto de un código. Sin idioma, el de la llamada. Un código que no existe es un fallo de programación:
-// se dice con el código, para encontrarlo, en vez de entregar un texto vacío.
+// ─── The messages ───────────────────────────────────────────────────────────
+// The text of a code. With no language, the call's. A code that does not exist is a programming error: it is
+// reported with the code, so it can be found, instead of handing back an empty text.
 export function mensaje(codigo: string, parametros: Record<string, unknown> = {}, idioma: Idioma = idiomaDeMensajes()): string {
   const entrada = TODOS[codigo];
   if (!entrada) return `[${codigo}] ${JSON.stringify(parametros)}`;
@@ -84,8 +84,8 @@ export function mensaje(codigo: string, parametros: Record<string, unknown> = {}
   return typeof plantilla === "function" ? plantilla(parametros as never) : plantilla;
 }
 
-// Un Error con el texto de un código, que guarda el código: quien lo captura (el Studio, un test) puede
-// mirar `codigo` en vez del texto.
+// An Error with the text of a code that also keeps the code: whoever catches it (the Studio, a test) can
+// look at `codigo` instead of the text.
 export class ErrorConCodigo extends Error {
   constructor(
     readonly codigo: string,

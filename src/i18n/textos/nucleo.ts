@@ -1,13 +1,12 @@
-// Mensajes del grupo «nucleo» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "nucleo" group (see i18n/mensajes.ts): each code with its text in Spanish and in English;
+// the English follows the glossary in docs/glosario.md.
 
 import type { Catalogo } from "./tipos.js";
 
 type Detalle = { detalle: string };
 
-// De dónde sale el idioma de un proyecto que no lo declara (OrigenDelIdioma de manifiesto.ts, sin los que
-// lo declaran): el valor canónico va en español y se traduce al escribir en inglés.
+// Where the language of a project that does not declare it comes from (OrigenDelIdioma in manifiesto.ts,
+// without the ones that declare it): the canonical value is in Spanish and is translated when writing in English.
 const ORIGENES_EN: Readonly<Record<string, string>> = {
   "de machine.json": "from machine.json",
   "de PHASE_GATE_LANG": "from PHASE_GATE_LANG",
@@ -83,7 +82,7 @@ export const TEXTOS_NUCLEO = {
     es: ({ error }: { error: string }) => `machine.json dejó de ser válido: se siguen usando sus valores de la última lectura buena hasta que lo arregles. ${error}`,
     en: ({ error }: { error: string }) => `machine.json stopped being valid: the values from the last good read keep being used until you fix it. ${error}`,
   },
-  // index.ts (el log al arrancar)
+  // index.ts (the startup log)
   "CONFIG-ARRANQUE-SIN-CONFIGURAR": {
     es: ({ detalle }: Detalle) => `SIN CONFIGURAR: ${detalle}`,
     en: ({ detalle }: Detalle) => `NOT CONFIGURED: ${detalle}`,
