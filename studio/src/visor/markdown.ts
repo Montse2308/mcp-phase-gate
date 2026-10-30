@@ -1,4 +1,4 @@
-// Markdown sin XSS (§7.3 del plan). Los documentos de las tareas los escribe un modelo que lee texto ajeno:
+// Markdown sin XSS. Los documentos de las tareas los escribe un modelo que lee texto ajeno:
 // un <script> o un <img onerror> inyectado no puede ejecutarse en una página con acciones de escritura.
 // marked.parse y después DOMPurify.sanitize con USE_PROFILES html, sin style, form, input ni iframe, y sin
 // el atributo style; la CSP sin 'unsafe-inline' es la segunda barrera.
