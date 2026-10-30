@@ -9,7 +9,14 @@
 //   - sin distinguir mayúsculas: el signo de sección; las palabras etapa, stage, hallazgo y finding seguidas de
 //     un número; y las dos frases que nombran el documento de trabajo (ver SIN_MAYUSCULAS);
 //   - distinguiendo mayúsculas: los códigos sueltos, una letra de H, R, S, F o A seguida de un número, para no
-//     chocar con h2 y parecidos.
+//     chocar con h2 y parecidos; y las otras familias de códigos de planeación que ya se vieron en el repo: una E con
+//     su número y una letra de riesgo o de deuda con el suyo, unidas por un guion; la palabra validación seguida
+//     de una V y un número (una V con número a secas no se busca: es también el motor de JavaScript); una P con
+//     número; y una L de dos cifras entre paréntesis (las L de dos cifras sueltas son los lotes del producto).
+//
+// Solo revisa los comentarios y los nombres de tests de los archivos de código, CSS, HTML, JSON con comentarios y
+// los que llevan # (YAML, .gitignore…). No revisa el texto de los .md, .txt ni los literales de las cadenas:
+// las carpetas docs y sitio salen con 0 porque ahí no hay comentarios que leer, no porque estén limpias.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -17,7 +24,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { comentariosDe, nombresDeTests } from "./comentarios-del-codigo.mjs";
+import { comentariosDe, esElPrincipal, nombresDeTests } from "./comentarios-del-codigo.mjs";
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -30,7 +37,13 @@ const SIN_MAYUSCULAS = [
   ["del plan", /\bdel plan\b/gi],
   ["plan maestro", /\bplan maestro\b/gi],
 ];
-const CON_MAYUSCULAS = [["código suelto (H3, R6…)", /\b[HRSFA]\d+\b/g]];
+const CON_MAYUSCULAS = [
+  ["código suelto (H3, R6…)", /\b[HRSFA]\d+\b/g],
+  ["código de etapa (E3-D5)", /\bE\d+-[A-Z]\d+\b/g],
+  ["validación V4", /\b(?:validaci[oó]n|validation) V\d+\b/g],
+  ["código P7", /\bP\d+\b/g],
+  ["lote entre paréntesis (L02)", /\(L\d{2}\)/g],
+];
 const REGLAS = [...SIN_MAYUSCULAS, ...CON_MAYUSCULAS];
 
 export const CARPETAS = ["src", "test", "studio/src", "studio/e2e", "scripts", ".github", "sitio", "docs", "el resto (raíz y configuración)"];
@@ -88,7 +101,8 @@ function main() {
   for (const [regla] of REGLAS) console.log(`  ${regla.padEnd(34)} ${String(porRegla.get(regla) ?? 0).padStart(5)}`);
   const porDonde = cuenta((h) => h.donde);
   console.log(`En comentarios: ${porDonde.get("comentario") ?? 0}, en ${distintas("comentario")} líneas. En nombres de tests: ${porDonde.get("nombre de test") ?? 0}, en ${distintas("nombre de test")} nombres.`);
+  console.log("No revisa el texto de los .md ni de los .txt, ni los literales de las cadenas: un 0 en docs o en sitio no dice que estén limpios.");
   process.exitCode = hallazgos.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (esElPrincipal(import.meta.url)) main();
