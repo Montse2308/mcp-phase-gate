@@ -1,0 +1,28 @@
+name: Proposal / Propuesta
+description: An idea to improve mcp-phase-gate. / Una idea para mejorar mcp-phase-gate.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Write in English or in Spanish, whichever is easier for you.
+        Gracias por la idea. Puedes escribir en inglés o en español.
+  - type: textarea
+    id: problema
+    attributes:
+      label: What problem are you trying to solve? / ¿Qué problema quieres resolver?
+      description: Describe the situation before the solution. / Describe la situación antes que la solución.
+    validations:
+      required: true
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: What would you change? / ¿Qué cambiarías?
+      description: What you imagine, even if it's rough. / Lo que imaginas, aunque sea a grandes rasgos.
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: What else did you consider? / ¿Qué otra cosa consideraste?
+      description: Other ways to solve it, or how you work around it today. / Otras formas de resolverlo, o cómo lo resuelves hoy.
