@@ -166,7 +166,6 @@ export async function generarDemo(destino: string, idioma: Idioma = "es"): Promi
       fs.mkdirSync(path.join(carpetaProyecto, delIdioma.subcarpeta), { recursive: true });
       escribir(path.join(carpetaProyecto, "phase-gate.json"), `${JSON.stringify({ $schema: URL_ESQUEMA_PROYECTO, ...p.manifiesto }, null, 2)}\n`, paso());
 
-      // The repos, with their starting files and, if they use git, a first commit.
       const dirs = new Map<string, string>();
       for (const repo of (p.manifiesto.repos as { id: string; dir: string }[] | undefined) ?? []) {
         const dir = path.join(c.repos, repo.dir);

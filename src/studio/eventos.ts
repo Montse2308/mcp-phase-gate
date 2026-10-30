@@ -248,7 +248,6 @@ function raicesAVigilar(): string[] {
   return existentes.filter((c) => !existentes.some((otra) => otra !== c && estaDentro(otra, c)));
 }
 
-// The files of the active tasks, for the poll: their documents and their receipts.
 function archivosDeTareasActivas(): string[] {
   const archivos: string[] = [];
   let proyectos: string[];
