@@ -1,27 +1,27 @@
-// El Studio: una interfaz local que solo VE el estado del orquestador y ejecuta acciones de
-// configuración que ya existían en el CLI (§7 del plan maestro v3). Es otro proceso: el servidor MCP
-// por stdio nunca carga este módulo. Solo lo carga `mcp-phase-gate ui`, con un import dinámico
-// (cli.ts), y ningún archivo de src/ fuera de src/studio/ lo importa (test/aislamiento.test.ts).
+// The Studio: a local interface that only SEES the orchestrator's state and runs configuration actions that
+// already existed in the CLI. It is a separate process: the stdio MCP server never loads this module. Only
+// `mcp-phase-gate ui` loads it, with a dynamic import (cli.ts), and no file in src/ outside src/studio/ imports
+// it (test/aislamiento.test.ts).
 //
-// Un servidor HTTP en 127.0.0.1 es una superficie que el servidor por stdio no tenía: cualquier web
-// abierta en el navegador puede intentar hablarle, y cualquier proceso del equipo puede conectarse.
-// Cada petición pasa por este filtro, en este orden (§7.3):
+// An HTTP server on 127.0.0.1 is a surface the stdio server did not have: any web page open in the browser
+// can try to talk to it, and any process on the machine can connect.
+// Each request goes through this filter, in this order:
 //
-//   1. Host exacto `127.0.0.1:<puerto>` o `localhost:<puerto>`, una sola vez     → 421 (DNS rebinding)
-//   2. Origin, si viene, exacto `http://127.0.0.1:<puerto>` o `localhost`       → 403 (otra web)
-//   3. `GET /?token=<t>`: el token de este arranque, de un solo uso, por cookie → 303 / 401
-//   4. `/api/**` exige la cookie de sesión                                      → 401
-//   5. Un método distinto de GET exige `X-Phase-Gate: 1` y un cuerpo JSON de
-//      hasta 64 kB; la cabecera obliga a un preflight CORS que nunca se concede → 403 / 413
-//   6. Los estáticos se sirven solo desde studio/dist, con la ruta real dentro  → 404
+//   1. Exact Host `127.0.0.1:<port>` or `localhost:<port>`, exactly once        → 421 (DNS rebinding)
+//   2. Origin, if present, exactly `http://127.0.0.1:<port>` or `localhost`    → 403 (another site)
+//   3. `GET /?token=<t>`: this startup's single-use token, exchanged for a cookie → 303 / 401
+//   4. `/api/**` requires the session cookie                                    → 401
+//   5. A method other than GET requires `X-Phase-Gate: 1` and a JSON body of
+//      up to 64 kB; the header forces a CORS preflight that is never granted   → 403 / 413
+//   6. Static files are served only from studio/dist, with the real path inside → 404
 //
-// Toda respuesta lleva la CSP sin 'unsafe-inline', nosniff y no-referrer.
+// Every response carries the CSP without 'unsafe-inline', nosniff and no-referrer.
 //
-// El idioma de lo que dice la API (describeEstado, los hallazgos de doctor, las notas de un prompt, los
-// resúmenes de las acciones y los errores) es el de la interfaz: el frontend lo manda en cada petición en
-// la cabecera X-Phase-Gate-Lang ("es" o "en"; cualquier otro valor se ignora), y la petición se atiende
-// dentro de `enIdioma`. Sin cabecera, el de siempre (PHASE_GATE_LANG o el del sistema). No toca el filtro:
-// una cabecera propia en un fetch del mismo origen no abre nada, y nunca se concede un preflight.
+// The language of what the API says (describeEstado, doctor's findings, a prompt's notes, the actions'
+// summaries and the errors) is the interface's: the frontend sends it with every request in the
+// X-Phase-Gate-Lang header ("es" or "en"; any other value is ignored), and the request is served inside
+// `enIdioma`. Without the header, the usual one (PHASE_GATE_LANG or the system's). It does not touch the
+// filter: a custom header on a same-origin fetch opens nothing, and a preflight is never granted.
 
 import { execFile } from "child_process";
 import * as crypto from "crypto";
@@ -49,9 +49,9 @@ export const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
   "frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
-// La cookie lleva el puerto en el nombre: un navegador no separa las cookies por puerto (RFC 6265,
-// §8.5), así que con dos Studios abiertos a la vez (`ui` y `ui --demo`) el segundo canje pisaría la
-// sesión del primero.
+// The cookie carries the port in its name: a browser does not separate cookies by port (RFC 6265,
+// section 8.5), so with two Studios open at once (`ui` and `ui --demo`) the second exchange would overwrite
+// the first one's session.
 export function nombreDeCookie(puerto: number): string {
   return `pg_sesion_${puerto}`;
 }
@@ -60,25 +60,25 @@ export function carpetaDist(): string {
   return path.join(raizPaquete(), "studio", "dist");
 }
 
-// ─── Lo que el Studio añade encima del filtro ───────────────────────────────
-// La API (L02) y los eventos (L03) se enchufan aquí: el filtro ya comprobó Host, Origin y la cookie,
-// y para un método distinto de GET, la cabecera y el cuerpo (ya leído y parseado).
+// ─── What the Studio adds on top of the filter ──────────────────────────────
+// The API and the events plug in here: the filter has already checked Host, Origin and the cookie, and, for
+// a method other than GET, the header and the body (already read and parsed).
 export type PeticionApi = {
   metodo: string;
-  ruta: string; // sin el prefijo /api, p. ej. "/proyectos"
+  ruta: string; // without the /api prefix, e.g. "/proyectos"
   consulta: URLSearchParams;
-  cuerpo: unknown; // undefined en un GET
+  cuerpo: unknown; // undefined on a GET
   req: http.IncomingMessage;
 };
 export type RespuestaApi = { estado: number; json: unknown };
-// "manejada": la respuesta ya se escribió (el SSE).
+// "manejada": the response was already written (the SSE).
 export type ManejadorApi = (peticion: PeticionApi, res: http.ServerResponse) => Promise<RespuestaApi | "manejada">;
 
 export type OpcionesStudio = {
-  puerto?: number | null; // null o 0: uno libre
-  dist?: string; // por defecto <paquete>/studio/dist
+  puerto?: number | null; // null or 0: any free one
+  dist?: string; // by default <package>/studio/dist
   api?: ManejadorApi;
-  // El contenido de /config.js: el modo en que arranca el frontend. Sin él, se sirve el de dist.
+  // The content of /config.js: the mode the frontend starts in. Without it, the one in dist is served.
   configJs?: string;
   alCerrar?: () => void | Promise<void>;
 };
@@ -86,13 +86,13 @@ export type OpcionesStudio = {
 export type Studio = {
   servidor: http.Server;
   puerto: number;
-  url: string; // con el token: la que se imprime y se abre
+  url: string; // with the token: the one that is printed and opened
   cerrar: () => Promise<void>;
 };
 
-// ─── Utilidades del filtro ──────────────────────────────────────────────────
-// Los valores de una cabecera tal como llegaron. Node descarta los duplicados de Host al armar
-// req.headers (se queda con el primero), así que contar repeticiones exige mirar rawHeaders.
+// ─── Filter utilities ───────────────────────────────────────────────────────
+// A header's values as they arrived. Node drops duplicate Host headers when building req.headers (it keeps
+// the first), so counting repetitions requires looking at rawHeaders.
 function valoresDe(req: http.IncomingMessage, nombre: string): string[] {
   const valores: string[] = [];
   for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) {
@@ -101,15 +101,15 @@ function valoresDe(req: http.IncomingMessage, nombre: string): string[] {
   return valores;
 }
 
-// El idioma de la interfaz que manda el frontend: una sola cabecera, exactamente "es" o "en". Cualquier
-// otra cosa (repetida, vacía, "fr", "EN-us") no cuenta, y la petición sigue con el idioma por defecto.
+// The interface language the frontend sends: a single header, exactly "es" or "en". Anything else
+// (repeated, empty, "fr", "EN-us") does not count, and the request goes on with the default language.
 export function idiomaDePeticion(req: http.IncomingMessage): Idioma | null {
   const valores = valoresDe(req, CABECERA_DE_IDIOMA);
   return valores.length === 1 && (valores[0] === "es" || valores[0] === "en") ? valores[0] : null;
 }
 
-// timingSafeEqual lanza si las longitudes difieren: se comparan antes. Saber la longitud no ayuda a
-// nadie (los dos secretos miden siempre 43 caracteres) y así nunca se llega a lanzar.
+// timingSafeEqual throws if the lengths differ, so they are compared first. Knowing the length helps no one
+// (both secrets are always 43 characters) and it means the call never throws.
 export function igualesEnTiempoConstante(dado: string, esperado: string): boolean {
   const a = Buffer.from(dado, "utf-8");
   const b = Buffer.from(esperado, "utf-8");
@@ -121,7 +121,7 @@ function secreto(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-// Las cookies de la petición con ese nombre. Una cookie sin "=" o repetida no es una sesión válida.
+// The request's cookies with that name. A cookie without "=" or a repeated one is not a valid session.
 function valoresDeCookie(req: http.IncomingMessage, nombre: string): string[] | null {
   const valores: string[] = [];
   for (const cabecera of valoresDe(req, "cookie")) {
@@ -167,11 +167,10 @@ function enviarJson(res: http.ServerResponse, estado: number, valor: unknown): v
   enviar(res, estado, JSON.stringify(valor), "application/json; charset=utf-8", { "Cache-Control": "no-store" });
 }
 
-// La ruta de un estático, o null si no es una ruta de dist. Cada segmento se decodifica UNA vez y se
-// valida como un nombre portable: un %2F o un %5C decodificados, un NUL, "..", ":" (los flujos
-// alternos ::$DATA de NTFS) o un nombre reservado de Windows quedan fuera; lo que empieza por punto
-// tampoco se sirve. Después, la ruta real tiene que quedar dentro de dist (un enlace o un nombre
-// corto 8.3 que lleve fuera no vale).
+// The path of a static file, or null if it is not a path in dist. Each segment is decoded ONCE and validated
+// as a portable name: a decoded %2F or %5C, a NUL, "..", ":" (NTFS's ::$DATA alternate streams) or a Windows
+// reserved name are rejected; anything starting with a dot is not served either. Then the real path must
+// fall inside dist (a link or an 8.3 short name leading outside does not count).
 export function rutaDeEstatico(dist: string, pathname: string): string | null {
   const crudos = pathname.split("/").slice(1);
   if (crudos.length === 1 && crudos[0] === "") return path.join(dist, "index.html");
@@ -200,8 +199,8 @@ export function rutaDeEstatico(dist: string, pathname: string): string | null {
   }
 }
 
-// Lee el cuerpo cortándolo mientras llega: con un Content-Length de más, sin leer nada; si no, en
-// cuanto lo recibido pasa del límite. Devuelve el texto, o el estado del rechazo.
+// Reads the body, cutting it off as it arrives: with an oversized Content-Length, without reading anything;
+// otherwise as soon as what was received passes the limit. Returns the text, or the rejection status.
 function leerCuerpo(req: http.IncomingMessage): Promise<{ texto: string } | { estado: 413 | 400 }> {
   return new Promise((resolver) => {
     const declarado = Number(req.headers["content-length"] ?? "0");
@@ -236,14 +235,14 @@ function leerCuerpo(req: http.IncomingMessage): Promise<{ texto: string } | { es
   });
 }
 
-// Tras un 413 no se sigue leyendo: se responde y se cierra la conexión.
+// After a 413 it stops reading: it responds and closes the connection.
 function rechazarCuerpo(res: http.ServerResponse, estado: 413 | 400, req: http.IncomingMessage): void {
   const texto = estado === 413 ? mensaje("STUDIO-FILTRO-CUERPO-GRANDE", { kb: CUERPO_MAXIMO / 1024 }) : mensaje("STUDIO-FILTRO-CUERPO-ILEGIBLE");
   res.writeHead(estado, { "Content-Type": "text/plain; charset=utf-8", "Content-Length": Buffer.byteLength(texto), Connection: "close" });
   res.end(texto, () => req.socket.destroy());
 }
 
-// ─── El servidor ────────────────────────────────────────────────────────────
+// ─── The server ─────────────────────────────────────────────────────────────
 export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Studio> {
   const dist = opciones.dist ?? carpetaDist();
   let token: string | null = secreto();
@@ -254,23 +253,23 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     cabecerasComunes(res);
     const permitidos = [`${HOST}:${puerto}`, `localhost:${puerto}`];
 
-    // 1. Host: exactamente uno, y exactamente uno de los dos nombres con este puerto.
+    // 1. Host: exactly one, and exactly one of the two names with this port.
     const hosts = valoresDe(req, "host");
     if (hosts.length !== 1 || !permitidos.includes(hosts[0]!)) {
       enviar(res, 421, mensaje("STUDIO-FILTRO-HOST"));
       return;
     }
 
-    // 2. Origin: si viene, exactamente uno y de este mismo Studio ("null" no lo es).
+    // 2. Origin: if present, exactly one and from this same Studio ("null" is not).
     const origenes = valoresDe(req, "origin");
     if (origenes.length > 1 || (origenes.length === 1 && !permitidos.map((h) => `http://${h}`).includes(origenes[0]!))) {
       enviar(res, 403, mensaje("STUDIO-FILTRO-ORIGEN"));
       return;
     }
 
-    // La ruta tal como llegó, sin normalizar: el analizador WHATWG de URL convierte %2e%2e en ".." y
-    // quita segmentos antes de que nadie los valide. Aquí cada segmento se decodifica una sola vez,
-    // donde se usa, y se valida después.
+    // The path as it arrived, not normalized: the WHATWG URL parser turns %2e%2e into ".." and drops segments
+    // before anyone validates them. Here each segment is decoded exactly once, where it is used, and
+    // validated afterwards.
     const crudo = req.url ?? "";
     if (!crudo.startsWith("/")) {
       enviar(res, 400, mensaje("STUDIO-FILTRO-MAL-FORMADA"));
@@ -280,7 +279,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     const url = { pathname: corte === -1 ? crudo : crudo.slice(0, corte), searchParams: new URLSearchParams(corte === -1 ? "" : crudo.slice(corte + 1)) };
     const metodo = req.method ?? "";
 
-    // 3. El canje del token por la cookie. De un solo uso: la copia del historial ya no sirve.
+    // 3. Exchanging the token for the cookie. Single use: a copy from the browser history no longer works.
     if (metodo === "GET" && url.pathname === "/" && url.searchParams.has("token")) {
       const dados = url.searchParams.getAll("token");
       if (token === null || dados.length !== 1 || !igualesEnTiempoConstante(dados[0]!, token)) {
@@ -298,7 +297,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
       return;
     }
 
-    // 4. La API exige la sesión.
+    // 4. The API requires the session.
     const esApi = url.pathname === "/api" || url.pathname.startsWith("/api/");
     if (esApi) {
       const cookies = valoresDeCookie(req, nombreDeCookie(puerto));
@@ -309,8 +308,8 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
       }
     }
 
-    // 5. Un método distinto de GET: la cabecera propia (que fuerza un preflight que nunca se concede)
-    // y un cuerpo JSON acotado.
+    // 5. A method other than GET: the custom header (which forces a preflight that is never granted) and a
+    // bounded JSON body.
     let cuerpo: unknown;
     if (metodo !== "GET") {
       const marca = valoresDe(req, "x-phase-gate");
@@ -350,7 +349,7 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
       return;
     }
 
-    // 6. Estáticos, solo con GET.
+    // 6. Static files, GET only.
     if (metodo !== "GET") {
       enviar(res, 405, mensaje("STUDIO-FILTRO-METODO"), undefined, { Allow: "GET" });
       return;
@@ -374,13 +373,13 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     enviar(res, 200, contenido, TIPOS[path.extname(ruta).toLowerCase()] ?? "application/octet-stream");
   };
 
-  // requireHostHeader: false para que una petición sin Host llegue al filtro (y dé su 421) en vez de
-  // un 400 de Node: una sola autoridad decide.
+  // requireHostHeader: false so a request without Host reaches the filter (and gets its 421) instead of
+  // Node's 400: a single authority decides.
   const servidor = http.createServer({ requireHostHeader: false }, (req, res) => {
     atender(req, res).catch(() => enviar(res, 500, mensaje("STUDIO-FILTRO-INTERNO")));
   });
-  // Un cliente lento no retiene una conexión: cabeceras en 10 s y la petición entera en 15 s. No
-  // afecta al SSE, que es una respuesta larga a una petición corta.
+  // A slow client cannot hold a connection: headers within 10 s and the whole request within 15 s. It does
+  // not affect the SSE, which is a long response to a short request.
   servidor.headersTimeout = 10_000;
   servidor.requestTimeout = 15_000;
 
@@ -402,9 +401,9 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
   return { servidor, puerto, url: `http://${HOST}:${puerto}/?token=${token}`, cerrar };
 }
 
-// ─── Abrir el navegador ─────────────────────────────────────────────────────
-// La URL solo puede llevar estos caracteres: en Windows pasa por `cmd /c start`, donde un & partiría
-// el comando (validación V10). El token es base64url, así que siempre pasa.
+// ─── Opening the browser ────────────────────────────────────────────────────
+// The URL may only contain these characters: on Windows it goes through `cmd /c start`, where an & would
+// split the command. The token is base64url, so it always passes.
 export const URL_ABRIBLE = /^[A-Za-z0-9:/?=._-]+$/;
 
 export type Lanzador = (comando: string, args: string[], opciones: { windowsHide: boolean }, alTerminar: (error: Error | null) => void) => unknown;
@@ -418,14 +417,15 @@ export function abrir(url: string, plataforma: NodeJS.Platform = process.platfor
 }
 
 // ─── `mcp-phase-gate ui` ────────────────────────────────────────────────────
-// Arranca, imprime el enlace, lo abre (salvo --no-abrir) y se queda en primer plano hasta Ctrl+C.
+// Starts, prints the link, opens it (unless --no-abrir) and stays in the foreground until Ctrl+C.
 export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNavegador: (url: string) => boolean = abrir): Promise<number> {
-  // Lo que se imprime en la terminal, y la demo: en el idioma pedido con --idioma; sin él, el de los mensajes
-  // (PHASE_GATE_LANG o el del sistema). El servidor no sabe qué idioma resolverá el navegador (§8.7).
+  // What is printed in the terminal, and the demo: in the language requested with --idioma; without it, the
+  // messages' language (PHASE_GATE_LANG or the system's). The server cannot know which language the browser
+  // will resolve.
   const idiomaDeLaTerminal = opciones.idioma ?? idiomaDeMensajes();
   let studio: Studio;
-  // Con --demo, el proceso entero trabaja sobre la demo (§7.8): sus PHASE_GATE_* sustituyen a las de quien lo
-  // lanza antes de leer nada, e init-cliente escribe en la casa de la demo.
+  // With --demo, the whole process works on the demo: its PHASE_GATE_* variables replace those of whoever
+  // launches it before anything is read, and init-cliente writes into the demo's home.
   let demo: CarpetasDeDemo | null = null;
   if (opciones.demo) {
     try {
@@ -439,8 +439,8 @@ export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNa
     activarDemo(demo);
   }
   const eventos = crearEventos();
-  // Las sesiones caducadas o con el pid muerto se borran al arrancar y cada minuto, nunca dentro de un
-  // GET: leer la API no escribe en el disco.
+  // Expired sessions, or those with a dead pid, are deleted at startup and every minute, never inside a
+  // GET: reading the API does not write to disk.
   sesionesAbiertas({ borrar: true });
   const limpieza = setInterval(() => sesionesAbiertas({ borrar: true }), INTERVALO_MS);
   limpieza.unref();
@@ -457,8 +457,8 @@ export async function lanzarStudio(opciones: OpcionesUi, salida: Salida, abrirNa
       entornoInit: () => (enDemo ? entornoInitDeDemo(enDemo) : entornoInitDelProceso(ejecutarComando)),
       eventos: (peticion, res) => eventos.manejar(peticion.req, res),
     });
-    // La banda va en los dos idiomas: PG_BANDA en español (la de siempre) y la carpeta aparte, para que el
-    // frontend la diga en el idioma de la interfaz.
+    // The banner goes out in both languages: PG_BANDA in Spanish (the original) and the folder separately, so
+    // the frontend can say it in the interface's language.
     const configJs = enDemo
       ? `window.PG_MODO = "demo";\nwindow.PG_BANDA = ${JSON.stringify(`Demo: datos de ejemplo en ${enDemo.raiz}`)};\nwindow.PG_DEMO_RAIZ = ${JSON.stringify(enDemo.raiz)};\n`
       : undefined;
