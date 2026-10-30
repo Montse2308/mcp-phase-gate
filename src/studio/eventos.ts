@@ -1,25 +1,24 @@
-// Los eventos en vivo del Studio (§7.5.1 del plan): lo que cambia en el disco llega al navegador por
-// Server-Sent Events, ya traducido a eventos de dominio, para que cada vista recargue solo lo suyo.
+// The Studio's live events: what changes on disk reaches the browser over Server-Sent Events, already
+// translated into domain events, so each view reloads only its own data.
 //
-//   documento {p, t, archivo}   un archivo de una carpeta de tarea
-//   recibo    {p, t, lote}      un archivo de la subcarpeta de recibos
-//   config    {p}               phase-gate.json o .phase-gate/** del proyecto
+//   documento {p, t, archivo}   a file in a task folder
+//   recibo    {p, t, lote}      a file in the receipts subfolder
+//   config    {p}               the project's phase-gate.json or .phase-gate/**
 //   prompts   {}                the global layer or <configDir>/presets
 //   equipo    {}                <configDir>/machine.json: this machine's paths may have changed
 //   sesiones  {}                <stateDir>/sesiones
-//   punteros  {}                el archivo de las tareas activas (switch_task, start_task)
+//   punteros  {}                the active-tasks file (switch_task, start_task)
 //
-// Se vigila con fs.watch recursivo (la Documentación, la capa global, la carpeta de configuración y la
-// de estado), y como en carpetas de OneDrive no es fiable, hay un sondeo de respaldo cada 5 s sobre los
-// archivos de las tareas activas. Si el sondeo ve un cambio que el watcher no avisó, emite el evento y
-// el estado del watcher pasa a "degradado".
+// It watches with a recursive fs.watch (the Documentation, the global layer, the configuration folder and the
+// state folder), and since that is not reliable in OneDrive folders, a backup poll every 5 s checks the files
+// of the active tasks. If the poll sees a change the watcher did not report, it emits the event and the
+// watcher's state becomes "degradado".
 //
 // The watched folders are recalculated when machine.json changes, because the Documentation may be another.
 //
-// El ruido de OneDrive (validación V8): se ignoran desktop.ini, Thumbs.db, ~$*, *.tmp (también los
-// temporales de la escritura atómica) y lo que empieza por punto dentro de una tarea, y un aviso solo
-// cuenta si la fecha o el tamaño del archivo cambiaron de verdad: OneDrive avisa al sincronizar o al
-// liberar espacio sin tocar el contenido.
+// OneDrive noise: desktop.ini, Thumbs.db, ~$*, *.tmp (atomic-write temporaries included) and anything starting
+// with a dot inside a task are ignored, and a notification only counts if the file's mtime or size really
+// changed: OneDrive notifies on sync or when freeing space without touching the content.
 
 import * as fs from "fs";
 import type * as http from "http";
@@ -43,9 +42,8 @@ export type EventoDeDominio =
   | { tipo: "sesiones"; datos: Record<string, never> }
   | { tipo: "punteros"; datos: Record<string, never> };
 
-// Quien avisa de los cambios: fs.watch recursivo, o uno simulado en los tests. `alCambiar` recibe la
-// ruta absoluta del archivo (o null si el sistema no dice cuál), y `alFallar`, el error si deja de
-// funcionar.
+// What reports the changes: a recursive fs.watch, or a fake one in the tests. `alCambiar` receives the file's
+// absolute path (or null if the system does not say which), and `alFallar` the error if it stops working.
 export type Vigilante = (raiz: string, alCambiar: (ruta: string | null) => void, alFallar: (error: Error) => void) => { cerrar: () => void };
 
 export const vigilanteDeFs: Vigilante = (raiz, alCambiar, alFallar) => {
@@ -138,13 +136,13 @@ export type OpcionesEventos = {
 export const AGRUPACION_MS = 300;
 export const SONDEO_MS = 5000;
 export const LATIDO_MS = 25_000;
-// Una pestaña abre una conexión; con varias pestañas o recargas seguidas se suman unas pocas. Más de
-// ocho a la vez no es un uso normal, y cada una es un socket abierto.
+// A tab opens one connection; several tabs or quick reloads add up to a few. More than eight at once is not
+// normal use, and each one is an open socket.
 export const MAX_CONEXIONES = 8;
-// Cada cuántos sondeos se vuelve a calcular qué tareas están activas (con 5 s, cada minuto).
+// How many polls between recomputations of which tasks are active (at 5 s, once a minute).
 const SONDEOS_POR_RECALCULO = 12;
 
-// ─── Ruido ──────────────────────────────────────────────────────────────────
+// ─── Noise ──────────────────────────────────────────────────────────────────
 export function esRuido(ruta: string): boolean {
   const nombre = path.basename(ruta);
   const minusculas = nombre.toLowerCase();
@@ -165,7 +163,7 @@ function huellaDe(ruta: string): Huella | "carpeta" {
 const iguales = (a: Huella | undefined, b: Huella): boolean =>
   a !== undefined && (a === "no-existe" || b === "no-existe" ? a === b : a.mtimeMs === b.mtimeMs && a.size === b.size);
 
-// ─── Traducción a eventos de dominio ────────────────────────────────────────
+// ─── Translation into domain events ─────────────────────────────────────────
 function segmentosDentro(base: string, ruta: string): string[] | null {
   if (!estaDentro(base, ruta)) return null;
   const relativa = path.relative(base, ruta);
@@ -173,8 +171,8 @@ function segmentosDentro(base: string, ruta: string): string[] | null {
 }
 
 export function traducir(ruta: string): EventoDeDominio | null {
-  // Lo de la máquina antes que la Documentación: el estado y la configuración pueden ser la misma
-  // carpeta (en Windows y macOS lo son por defecto).
+  // The machine's folders before the Documentation: state and configuration can be the same folder (on
+  // Windows and macOS they are by default).
   const sesiones = path.join(stateDir(), "sesiones");
   if (segmentosDentro(sesiones, ruta) !== null) return { tipo: "sesiones", datos: {} };
   if (path.resolve(ruta) === path.resolve(stateFile())) return { tipo: "punteros", datos: {} };
@@ -206,7 +204,7 @@ export function traducir(ruta: string): EventoDeDominio | null {
   const [t = "", ...archivo] = dentro;
   if (t.startsWith(".") || archivo.some((s) => s.startsWith("."))) return null;
 
-  // Con el manifiesto roto, las fases sin proyecto: un recibo sigue siendo un recibo.
+  // With a broken manifest, the phases without a project: a receipt is still a receipt.
   const subcarpeta = (proyecto: string | null): string | null => [...fasesDe(proyecto).values()].find((d) => d.recibos)?.recibos ?? null;
   let recibos: string | null = null;
   try {
@@ -225,23 +223,23 @@ export function traducir(ruta: string): EventoDeDominio | null {
   return { tipo: "documento", datos: { p, t, archivo: archivo.join("/") } };
 }
 
-// ─── Los eventos ────────────────────────────────────────────────────────────
+// ─── The events ─────────────────────────────────────────────────────────────
 export type Eventos = {
   manejar: (req: http.IncomingMessage, res: http.ServerResponse) => void;
   estado: () => EstadoDelWatcher;
   conexiones: () => number;
-  // Para los tests y para el sondeo: emitir un evento a todos.
+  // For the tests and for the poll: emit an event to everyone.
   emitir: (evento: EventoDeDominio) => void;
   cerrar: () => void;
 };
 
-// Las raíces que se vigilan, sin una dentro de otra (el estado y la configuración suelen coincidir).
+// The roots to watch, with none inside another (state and configuration often coincide).
 function raicesAVigilar(): string[] {
   const candidatas: string[] = [];
   try {
     candidatas.push(requireBasePath(DOCS));
   } catch {
-    // sin Documentación no hay nada que vigilar ahí
+    // without Documentation there is nothing to watch there
   }
   const global = carpetaPromptsGlobal();
   if (global) candidatas.push(global);
@@ -250,7 +248,7 @@ function raicesAVigilar(): string[] {
   return existentes.filter((c) => !existentes.some((otra) => otra !== c && estaDentro(otra, c)));
 }
 
-// Los archivos de las tareas activas, para el sondeo: sus documentos y sus recibos.
+// The files of the active tasks, for the poll: their documents and their receipts.
 function archivosDeTareasActivas(): string[] {
   const archivos: string[] = [];
   let proyectos: string[];
@@ -272,7 +270,7 @@ function archivosDeTareasActivas(): string[] {
         }
       }
     } catch {
-      // un proyecto que no se puede leer no se sondea; la API lo dice
+      // an unreadable project is not polled; the API reports it
     }
   }
   return archivos;
@@ -302,8 +300,8 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
     for (const res of conexiones) enviar(res, texto);
   };
 
-  // Un aviso cuenta si el archivo cambió de verdad respecto de lo último que se vio de él; uno que no se
-  // había visto, si cambió después de arrancar.
+  // A notification counts if the file really changed since the last time it was seen; for one never seen
+  // before, if it changed after startup.
   const cambioDeVerdad = (ruta: string): boolean => {
     const actual = huellaDe(ruta);
     if (actual === "carpeta") return false;
@@ -344,7 +342,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
         try {
           vigilante.cerrar();
         } catch {
-          // ya estaba cerrado
+          // already closed
         }
         vigilantes.delete(raiz);
       });
@@ -365,7 +363,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
       try {
         vigilante.cerrar();
       } catch {
-        // ya estaba cerrado
+        // already closed
       }
       vigilantes.delete(raiz);
     }
@@ -377,7 +375,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
     }
   };
 
-  // ─── El sondeo de respaldo ────────────────────────────────────────────────
+  // ─── The backup poll ──────────────────────────────────────────────────────
   let archivosSondeados: string[] = archivosDeTareasActivas();
   for (const ruta of archivosSondeados) {
     const h = huellaDe(ruta);
@@ -389,13 +387,13 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
     if (++sondeos % SONDEOS_POR_RECALCULO === 0) archivosSondeados = archivosDeTareasActivas();
     const vistos = new Map<string, EventoDeDominio>();
     for (const ruta of archivosSondeados) {
-      if (pendientes.has(ruta)) continue; // el watcher ya lo avisó y está agrupando
+      if (pendientes.has(ruta)) continue; // the watcher already reported it and is batching
       const actual = huellaDe(ruta);
       if (actual === "carpeta") continue;
       const anterior = conocidas.get(ruta);
       if (anterior !== undefined && iguales(anterior, actual)) continue;
       conocidas.set(ruta, actual);
-      if (anterior === undefined) continue; // primera vez que se ve: no hay con qué comparar
+      if (anterior === undefined) continue; // first time seen: nothing to compare against
       degradado = true;
       const evento = traducir(ruta);
       if (evento) vistos.set(`${evento.tipo}:${JSON.stringify(evento.datos)}`, evento);
@@ -440,7 +438,7 @@ export function crearEventos(opciones: OpcionesEventos = {}): Eventos {
         try {
           v.cerrar();
         } catch {
-          // ya estaba cerrado
+          // already closed
         }
       }
       vigilantes.clear();
