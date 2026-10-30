@@ -1,11 +1,11 @@
-// Mensajes del grupo «servidor» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "servidor" group (see i18n/mensajes.ts): each code with its text in Spanish and in English.
+// The Spanish is the original text, byte for byte; the English is natural wording that follows the glossary
+// in docs/glosario.md.
 
 import type { Catalogo } from "./tipos.js";
 
-// Lo que se espera de cada tipo, dicho como se le diría al modelo para que corrija la llamada (schemas.ts).
-// El único número es `phase`, de ahí el ejemplo.
+// What is expected of each type, worded as it would be told to the model so it can fix the call (schemas.ts).
+// The only number is `phase`, hence the example.
 const TIPOS_ES: Record<string, string> = {
   string: "un texto",
   number: "un número, por ejemplo 3",
@@ -24,7 +24,7 @@ const TIPOS_EN: Record<string, string> = {
   array: "a list",
 };
 
-// El origen de un preset (OrigenDelPreset de capas.ts), dicho en inglés.
+// The origin of a preset (OrigenDelPreset in capas.ts), in English.
 const ORIGEN_DEL_PRESET_EN: Record<string, string> = {
   "de la tarea": "from the task",
   "del proyecto": "from the project",
@@ -36,7 +36,7 @@ const conNota = (nota: string | null | undefined): string => (nota ? ` ${nota}` 
 const conDeducido = (deducido: string | null | undefined): string => (deducido ? `\n${deducido}` : "");
 
 export const TEXTOS_SERVIDOR = {
-  // ─── servidor.ts: respuestas y errores de las tools ─────────────────────────
+  // ─── servidor.ts: tool responses and errors ─────────────────────────────────
   "SERVIDOR-ESCRIBIR-COINCIDENCIA-DEBIL": {
     es: (p: { carpetaProyecto: string; motivo: string }) =>
       `La carpeta abierta solo contiene un repo de ${p.carpetaProyecto} (${p.motivo}): para escribir, indica \`project\`.`,
@@ -143,7 +143,7 @@ export const TEXTOS_SERVIDOR = {
       `Task '${p.taskName}' initialized. File saved at: ${p.contextoInicial}\n` +
       `Active task of ${p.carpetaProyecto}: ${p.taskName}.${p.estrenado ? `\nProject "${p.carpetaProyecto}" created.` : ""}${conDeducido(p.deducido)}`,
   },
-  // get_active_task y list_tasks
+  // get_active_task and list_tasks
   "TOOL-ACTIVA-SIN-PROYECTOS": {
     es: "No hay ningún proyecto en la Documentación Central todavía.",
     en: "There are no projects in the Central Documentation yet.",
@@ -270,7 +270,7 @@ export const TEXTOS_SERVIDOR = {
     es: (p: { ruta: string; sufijo: string; deducido: string | null }) => `Archivo escrito exitosamente en ${p.ruta}${p.sufijo}${conDeducido(p.deducido)}`,
     en: (p: { ruta: string; sufijo: string; deducido: string | null }) => `File written successfully to ${p.ruta}${p.sufijo}${conDeducido(p.deducido)}`,
   },
-  // record_batch y get_batch_status
+  // record_batch and get_batch_status
   "TOOL-LOTE-SIN-TAREA-ACTIVA": {
     es: (p: { carpetaProyecto: string }) => `No hay tarea activa guardada en ${p.carpetaProyecto}: indica \`task_name\` (o actívala con switch_task).`,
     en: (p: { carpetaProyecto: string }) => `There is no saved active task in ${p.carpetaProyecto}: pass \`task_name\` (or activate one with switch_task).`,
@@ -301,7 +301,7 @@ export const TEXTOS_SERVIDOR = {
     en: (p: { carpetaProyecto: string }) => `Repos of ${p.carpetaProyecto}:`,
   },
 
-  // ─── servidor.ts: títulos y descripciones de las tools ──────────────────────
+  // ─── servidor.ts: tool titles and descriptions ──────────────────────────────
   "DESC-TOOL-START-TASK-TITULO": { es: "Iniciar tarea", en: "Start task" },
   "DESC-TOOL-START-TASK": {
     es:
@@ -430,7 +430,7 @@ export const TEXTOS_SERVIDOR = {
       "of the active task's repos. Read-only: it takes no locks and runs no repo commands (core.fsmonitor, .gitattributes filters).",
   },
 
-  // ─── schemas.ts: mensajes de validación de los argumentos ───────────────────
+  // ─── schemas.ts: argument validation messages ───────────────────────────────
   "TOOL-ARG-FALTA": {
     es: (p: { campo: string }) => `Falta \`${p.campo}\`.`,
     en: (p: { campo: string }) => `\`${p.campo}\` is missing.`,
@@ -488,7 +488,7 @@ export const TEXTOS_SERVIDOR = {
     en: "`estado` is one of: verified, with pending items, failed, discarded (or their Spanish names: verificado, con pendientes, fallido, descartado).",
   },
 
-  // ─── schemas.ts: descripciones de los parámetros ────────────────────────────
+  // ─── schemas.ts: parameter descriptions ─────────────────────────────────────
   "DESC-ARG-PROYECTO": {
     es:
       "Proyecto: el nombre de una carpeta de proyecto de la Documentación Central. Si no existe, la " +
@@ -760,7 +760,7 @@ export const TEXTOS_SERVIDOR = {
     en: "Repeats the check of each anchor: that its commit is still on the current branch (after a rebase or a squash) and that each artifact's sha256 is unchanged.",
   },
 
-  // ─── prompts-mcp.ts: los /fN ────────────────────────────────────────────────
+  // ─── prompts-mcp.ts: the /fN prompts ────────────────────────────────────────
   "MCPPROMPT-ARG-PROJECT": {
     es: "Proyecto en el que estás trabajando.",
     en: "Project you are working on.",
