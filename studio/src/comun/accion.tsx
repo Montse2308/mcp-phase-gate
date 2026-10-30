@@ -1,4 +1,4 @@
-// El ciclo de toda escritura del Studio (§7.6): "Vista previa" pide el plan (resumen, diff y huella), y
+// El ciclo de toda escritura del Studio: "Vista previa" pide el plan (resumen, diff y huella), y
 // "Aplicar" lo manda con su huella. Si el disco cambió entre las dos cosas, el servidor responde 409 y se
 // dice, con un botón para volver a ver el cambio. En el sitio estático no hay escrituras.
 //

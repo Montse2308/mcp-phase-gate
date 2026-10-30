@@ -6,7 +6,7 @@
 //
 // Toda petición a la API lleva el idioma de la interfaz en X-Phase-Gate-Lang: el servidor responde en él
 // (describeEstado, los hallazgos, los resúmenes de las acciones, los errores). Es una cabecera propia en un
-// fetch del mismo origen: no pide preflight ni toca la seguridad del Studio (§7.3).
+// fetch del mismo origen: no pide preflight ni toca la seguridad del Studio.
 
 import { carpetaDeDatos, idiomaActual, t } from "./i18n/idioma";
 
