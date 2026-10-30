@@ -1,7 +1,7 @@
-// Markdown sin XSS (§7.3 del plan). Los documentos de las tareas los escribe un modelo que lee texto ajeno:
-// un <script> o un <img onerror> inyectado no puede ejecutarse en una página con acciones de escritura.
-// marked.parse y después DOMPurify.sanitize con USE_PROFILES html, sin style, form, input ni iframe, y sin
-// el atributo style; la CSP sin 'unsafe-inline' es la segunda barrera.
+// Markdown sin XSS. Los documentos de las tareas los escribe un modelo que lee texto ajeno: un <script> o un
+// <img onerror> inyectado no puede ejecutarse en una página con acciones de escritura. marked.parse y después
+// DOMPurify.sanitize con USE_PROFILES html, sin style, form, input ni iframe, y sin el atributo style; la CSP
+// sin 'unsafe-inline' es la segunda barrera.
 //
 // Después, sobre el fragmento ya saneado, para que el visor no haga ninguna petición fuera de 127.0.0.1 ni
 // rompa la navegación:

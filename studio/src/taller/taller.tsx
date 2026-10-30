@@ -1,7 +1,7 @@
-// El Taller de prompts (§7.7.3 del plan): de qué capa sale cada ranura de una fase, el contenido efectivo
-// frente al de fábrica (un diff por líneas), las reglas del proyecto (que se cambian en Ajustes) y "Editar",
-// que lanza un eject a la capa global o a la del proyecto. "Ver prompt completo" enseña el texto exacto que recibe el modelo (el
-// mismo de get_phase_prompt) con un botón para copiarlo.
+// El Taller de prompts: de qué capa sale cada ranura de una fase, el contenido efectivo frente al de fábrica
+// (un diff por líneas), las reglas del proyecto (que se cambian en Ajustes) y "Editar", que lanza un eject a la
+// capa global o a la del proyecto. "Ver prompt completo" enseña el texto exacto que recibe el modelo (el mismo
+// de get_phase_prompt) con un botón para copiarlo.
 //
 // En inglés, cada ranura se enseña con su alias y el id canónico entre paréntesis (`phase-3/tests
 // (fase-3/pruebas)`), y las capas y los modos de un bloque se dicen en inglés. Solo al enseñarlos: lo que

@@ -1,5 +1,5 @@
-// El idioma de la interfaz (§8.6 del plan) y la función que dice cada texto en él. Sin librerías: dos
-// diccionarios planos, Intl.PluralRules para los plurales e Intl.DateTimeFormat para las fechas.
+// El idioma de la interfaz y la función que dice cada texto en él. Sin librerías: dos diccionarios planos,
+// Intl.PluralRules para los plurales e Intl.DateTimeFormat para las fechas.
 //
 // De dónde sale, por orden:
 //   1. `#?lang=en` (o `lang=es`) en el enlace: se puede compartir, y la elección se recuerda;
@@ -173,8 +173,8 @@ export function fechaLegible(fecha: string): { texto: string; completa: string }
 }
 
 // ─── El sitio estático ──────────────────────────────────────────────────────
-// La carpeta de los datos exportados para un idioma: el export escribe datos/es/ y datos/en/ (§8.7), y el
-// cambio de idioma cambia también de datos (la demo de España en español, SHOP… en inglés).
+// La carpeta de los datos exportados para un idioma: el export escribe datos/es/ y datos/en/, y el cambio de
+// idioma cambia también de datos (la demo de España en español, SHOP… en inglés).
 export function carpetaDeDatos(idioma: IdiomaUi): string {
   return `./datos/${idioma}/`;
 }
