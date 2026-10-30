@@ -1,6 +1,6 @@
 // Messages of the "studio" group (see i18n/mensajes.ts): what the Studio API says on its own (its errors,
-// the Logbook titles, the clients assistant and the actions with a fingerprint). The Spanish is the original
-// text, byte for byte; the English is natural wording that follows the glossary in docs/glosario.md.
+// the Logbook titles, the clients assistant and the actions with a fingerprint). Each code has its text in
+// Spanish and in English; the English follows the glossary in docs/glosario.md.
 //
 // They come out in the interface language: the frontend sends it with every request (X-Phase-Gate-Lang) and
 // the server handles the request inside `enIdioma` (studio/servidor.ts). Identifiers are not translated:

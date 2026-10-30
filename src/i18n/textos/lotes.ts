@@ -1,6 +1,5 @@
-// Messages of the "lotes" group (see i18n/mensajes.ts): each code with its text in Spanish and in English.
-// The Spanish is the original text, byte for byte; the English is natural wording that follows the glossary
-// in docs/glosario.md.
+// Messages of the "lotes" group (see i18n/mensajes.ts): each code with its text in Spanish and in English;
+// the English follows the glossary in docs/glosario.md.
 
 import type { EstadoLote } from "../../recibos.js";
 import { VOCABULARIO } from "../../vocabulario.js";
