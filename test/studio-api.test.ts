@@ -185,6 +185,30 @@ describe("API del Studio: cada ruta con su shape", () => {
     assert.ok(vacia.estaciones.every((e) => e.senal === "apagado"));
   });
 
+  it("/api/tareas/:p/:t: un lote descartado cierra la Fase 4 y uno fallido la deja en ámbar, en los dos idiomas", async () => {
+    const { docs } = await instalacion();
+    const fases = ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md", "02 - Decisiones.md", "03 - Plan Técnico.md", "04 - Ejecución.md"];
+    const conRecibo = (tarea: string, frontmatter: string) => {
+      const carpeta = crearTarea(docs, "P", tarea, fases);
+      fs.mkdirSync(path.join(carpeta, "04 - Ejecución"));
+      fs.writeFileSync(path.join(carpeta, "04 - Ejecución", "L01 - x.md"), `---\n${frontmatter}\n---\n\n# L01\n`, "utf-8");
+    };
+    conRecibo("descartado-es", "estado: descartado");
+    conRecibo("descartado-en", "status: discarded");
+    conRecibo("fallido-es", "estado: fallido");
+    conRecibo("fallido-en", "status: failed");
+    const s = await studioConApi();
+    const fase4 = async (tarea: string) => {
+      const r = await s.get(`/api/tareas/P/${tarea}`);
+      const e = TareaRespuesta.parse(r.json).estaciones[4]!;
+      return `${e.senal}:${e.texto}`;
+    };
+    assert.equal(await fase4("descartado-es"), "verde:cerrada");
+    assert.equal(await fase4("descartado-en"), "verde:cerrada");
+    assert.equal(await fase4("fallido-es"), "ambar:con pendientes");
+    assert.equal(await fase4("fallido-en"), "ambar:con pendientes");
+  });
+
   it("/api/tareas/:p/:t/documento: el texto, el frontmatter y la fecha, también de un recibo", async () => {
     await instalacion();
     const s = await studioConApi();

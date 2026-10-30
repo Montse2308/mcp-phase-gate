@@ -26,6 +26,8 @@ import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requir
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
 import { etiquetaDeLote, parsearRecibo } from "../recibos.js";
+import type { EstadoLote } from "../recibos.js";
+import { estadoCanonico, normalizarClaves } from "../vocabulario.js";
 import type { SesionAbierta } from "../sesiones.js";
 import type { Recibo } from "../recibos.js";
 import { archivoDeTarea } from "../recursos.js";
@@ -267,7 +269,14 @@ function tareas(crudo: string): TareasRespuesta {
 }
 
 // ─── /api/tareas/:p/:t ──────────────────────────────────────────────────────
-const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
+// A batch with pending items or a failed one keeps its phase amber. A discarded one was closed on purpose, with its
+// note, as the batch summary already counts it. Read in both languages, like the receipts themselves.
+const ESTADOS_PENDIENTES = new Set<EstadoLote>(["con pendientes", "fallido"]);
+
+function conEstadoPendiente(texto: string): boolean {
+  const estado = estadoCanonico(normalizarClaves(separarFrontmatter(texto).meta).estado);
+  return estado !== null && ESTADOS_PENDIENTES.has(estado);
+}
 
 function recibosDe(carpetaTarea: string, subcarpeta: string): string[] {
   const carpeta = path.join(carpetaTarea, subcarpeta);
@@ -300,8 +309,8 @@ function mtimeDe(ruta: string): number | null {
 
 // The board's stations, with their signal:
 //   verde    the document exists and has no `## Validaciones pendientes` section with content;
-//   ámbar    it exists with pending items (the same section, or a receipt with pending, failed or discarded
-//            status, as avisoDePendientes), or it is the batches phase with receipts and no document
+//   ámbar    it exists with pending items (the same section, or a receipt with pending or failed status),
+//            or it is the batches phase with receipts and no document
 //            ("en curso");
 //   rojo     it is missing and a later phase is present (detectarSalto);
 //   apagado  not due yet.
@@ -337,10 +346,10 @@ export function estaciones(carpetaProyecto: string, estado: EstadoTarea, phases:
       const contenido = textoSinFallar(ruta);
       const conPendientes =
         (contenido !== null && tieneValidacionesPendientes(contenido)) ||
-        (contenido !== null && datos.recibos !== undefined && ESTADOS_PENDIENTES.has((separarFrontmatter(contenido).meta.estado ?? "").trim().toLowerCase())) ||
+        (contenido !== null && datos.recibos !== undefined && conEstadoPendiente(contenido)) ||
         recibos.some((r) => {
           const texto = textoSinFallar(path.join(estado.folderPath, datos.recibos!, r));
-          return texto !== null && ESTADOS_PENDIENTES.has((separarFrontmatter(texto).meta.estado ?? "").trim().toLowerCase());
+          return texto !== null && conEstadoPendiente(texto);
         });
       [senal, texto] = conPendientes ? ["ambar", "con pendientes"] : ["verde", "cerrada"];
     } else if (recibos.length) {
