@@ -56,11 +56,11 @@ Nothing advanced unless another agent audited it against the repository, not aga
 
 It happened at two points:
 
-- **The design, in seven rounds before the first line of code.** The first round alone returned no blocking findings, seven important and seven minor. Among them: the integration branch had no protection, and a CI job that claimed to test an old git did not use one, so "git 2.43" could not be checked.
-- **Each pull request, before it was merged.** Thirteen have been audited so far. At the first audit one was approved, nine were approved with changes and three were not approved. What the three had in common is that my own tests could not see it:
-  - The date fix was right and tested, but the macOS end-to-end job was red on the last commit, and had failed in 4 of the 5 runs of the pull request, which proposed making that check optional. The check stayed mandatory.
-  - A new test passed alone and failed in the full suite (1 failed, 115 passed), because it depended on what another spec file had left in the shared server.
-  - In the Settings pull request, the mandatory Linux job failed on three consecutive commits because the test of a conflict with the disk never saw the event on Linux. The same audit found that the "verification commands" field trimmed spaces and Enter on every keystroke, which no test noticed because the tests paste the text at once instead of typing it.
+- **The design, several times before the first line of code.** Among what came back: the integration branch had no protection, and a CI job that claimed to test an old git did not use one, so "git 2.43" could not be checked.
+- **Each pull request, before it was merged.** The ones the audit did not approve had one thing in common: my own tests could not see the problem.
+  - The date fix was right and tested, but the macOS end-to-end job was red on the last commit, and the pull request proposed making that check optional. The check stayed mandatory.
+  - A new test passed alone and failed in the full suite, because it depended on what another spec file had left in the shared server.
+  - In the Settings pull request, the mandatory Linux job kept failing because the test of a conflict with the disk never saw the event on Linux. The same audit found that the "verification commands" field trimmed spaces and Enter on every keystroke, which no test noticed because the tests paste the text at once instead of typing it.
 
 A change that only touches comments is proven, not asserted: a script takes two commits and compares the compiled output, the Studio's build and the parsed YAML and JSON, and has to say they are identical. The audits repeated that proof.
 
@@ -68,17 +68,17 @@ For the release itself, the rule is that no `v4.0.0` tag exists while a blocking
 
 ## 7. What was measured
 
-Every figure of 4.0 comes from CI or from a workflow run, not from a machine of mine. The 3.2 column was measured by hand on a Windows machine with Node 24.11.0, before 4.0 started. The test and bundle figures are from the CI run 41108788241 on commit `39a7156`, the tip of the integration branch. The landing page and media figures are from the manual run of the Pages workflow 41110638939 (it only builds, it doesn't deploy) on commit `dfc96c6`, which is that tip plus the changes of this pull request: the media pipeline is the same, and the run adds the link-preview image and its tags.
+The 3.2 column was measured by hand on a Windows machine with Node 24.11.0, before 4.0 started. In the 4.0 column, the test and bundle figures come from the CI run of this pull request's last commit, and the landing page and media figures from the manual run of the Pages workflow 41110638939 (it only builds, it doesn't deploy) on commit `dfc96c6`, this pull request with the same media pipeline. Four figures don't come from CI or a workflow but from a command anyone can run on the same commit, and the table says which: the package, the decision log, the messages and the READMEs.
 
 | Figure | 3.2 | 4.0 | Where the 4.0 figure comes from |
 |---|---|---|---|
-| Test suite | 1,004 tests: 1,002 pass, 2 skipped | 1,143 tests: 1,141 pass, 2 skipped on Windows; 1,139 pass, 4 skipped on Linux; 0 fail | `npm test`, jobs `build-and-test` of the CI run |
-| Studio end-to-end | 51 pass | 268 pass, on each of Linux, Windows and macOS | `npm run test:e2e`, jobs `e2e-studio` of the CI run |
+| Test suite | 1,004 tests: 1,002 pass, 2 skipped | 1,149 tests: 1,147 pass, 2 skipped on Windows; 1,145 pass, 4 skipped on Linux; 0 fail | `npm test`, jobs `build-and-test` of the CI run |
+| Studio end-to-end | 51 pass | 269 pass, on each of Linux, Windows and macOS | `npm run test:e2e`, jobs `e2e-studio` of the CI run |
 | Studio front-end | 125.76 kB gzip of a 200 kB budget | 161.24 kB gzip of the same budget | `npm run build`, its log in the CI run |
-| Package | 183 files, 536.0 kB packed, 1.8 MB unpacked | 137 files, 510.0 kB packed, 1.5 MB unpacked: the 51 `.d.ts` (263 kB) are left out because it is a CLI with no `types` | `npm pack --dry-run` on this pull request's branch; CI doesn't measure it |
-| Decision log | 101 entries | 107 entries | `node scripts/indice-decisiones.mjs`, which builds the index from them |
-| Server messages | 724 codes in Spanish and English, 7 catalogs | 756 codes, 8 catalogs | keys of each `TEXTOS_*` object in `build/i18n/textos/*.js` |
-| READMEs | 1,002 and 1,046 lines | 105 lines each | `wc -l`; `test/readme.test.ts` fails above 200 |
+| Package | 183 files, 536.0 kB packed, 1.8 MB unpacked | 137 files, 510.0 kB packed, 1.5 MB unpacked. Before this pull request it was 188 files: the 51 `.d.ts` (263 kB) are left out because it is a CLI with no `types` | command: `npm pack --dry-run` |
+| Decision log | 101 entries | 107 entries | command: `node scripts/indice-decisiones.mjs`, which builds the index from them |
+| Server messages | 724 codes in Spanish and English, 7 catalogs | 756 codes, 8 catalogs | command: keys of each `TEXTOS_*` object in `build/i18n/textos/*.js` |
+| READMEs | 1,002 and 1,046 lines | 105 lines each | command: `wc -l`; in CI, `test/readme.test.ts` fails above 200 |
 | Landing page, first load with its three screenshots | there was none | 245,555 bytes in English, 251,105 in Spanish, of a 300,000 budget | job `ensamblar` of the Pages run, which fails above the budget |
 | Link-preview image, 1200 × 630 | there was none | 107,111 bytes (English) and 113,449 (Spanish), PNG | job `capturas` of the Pages run; GitHub accepts up to 1 MB |
 | Video | 41.3 s and 42.4 s; MP4 of 1.52 MB each | 41.6 s (English) and 41.7 s (Spanish); MP4 of 1,102,541 and 1,224,881 bytes | `medios.json` of the Pages run |
@@ -92,4 +92,4 @@ The demo, counted by generating it in both languages and listing receipt files a
 - **Give every message a code from the start.** The bilingual catalog arrived in the last stage and holds 756 codes today. To avoid changing more than a hundred function signatures, the language now travels in a per-call context. It works; I would rather not have needed it.
 - **Let the server write phase 4 from the first version.** For three stages receipts were the model's job, guarded only by prompt lines.
 - **Cut the demo to the GIF budget.** In 3.2, at 12 fps and 960 px the 42-second GIF passed 7 MB, and it fit 5 MB only at 8 fps and 760 px. In 4.0 the GIF is a 22-second cut of the video, under 2.5 MiB. The MP4 is the sharp version.
-- **Measure from the pipeline from the start.** Half of the 3.2 table was measured by hand on my machine. In 4.0 each figure names the CI job or the workflow file it comes from, so anyone can derive it again and I don't have to remember it.
+- **Measure from the pipeline from the start.** Half of the 3.2 table was measured by hand on my machine. In 4.0 each figure names the CI job, the workflow or the command it comes from, so anyone can derive it again and I don't have to remember it.

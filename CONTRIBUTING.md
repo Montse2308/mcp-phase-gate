@@ -119,7 +119,7 @@ The site's media (the GIF, video and poster of the READMEs, the three screenshot
 - `npm run build` and `npm test` pass. If you touched the Studio, the scripts or the end-to-end tests, `npm run test:e2e` passes too. CI runs the tests on Linux, Windows and macOS, and once more against git 2.43.
 - A change that someone sees (what the project does, how to install it, a setting) goes in both READMEs and in both guides, in English and in Spanish.
 - A design decision goes in [`docs/decisiones.md`](docs/decisiones.md): what was decided, why, and what was discarded. If it reverses an earlier one, you add a new entry and mark the old one; nothing is deleted.
-- Commits and comments follow the [conventions](#conventions) above.
+- Commits and comments follow the [conventions](#conventions) below.
 - By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Conventions
@@ -143,6 +143,16 @@ A version is published by a tag, never by a merge. The order is what keeps a tag
 5. The version's Release on GitHub carries its notes: `gh release create <tag> --verify-tag --notes-file docs/notas/<tag>.md`. `--verify-tag` matters: without it, `gh` would create a missing tag, and that would publish.
 
 **A fix that only touches the site** (the landing page, the demo, the media) also ships with a new version, because Pages only publishes on tags.
+
+### A 4.0.x fix
+
+A fix to a released version goes out as a patch, from `master`:
+
+1. A branch from `origin/master` (`fix/<what>`), with the fix and its test.
+2. In the same pull request, `version` goes up by one patch (`4.0.0` → `4.0.1`) in `package.json` and `package-lock.json` (`npm version patch --no-git-tag-version` does both), and the notes go in `docs/notas/v4.0.1.md`, in both languages.
+3. The pull request goes to `master` with its CI green, and from there it is the same as any version: steps 2 to 5 above.
+
+A security fix follows the same path, but it is prepared in the private advisory of its report (see [`SECURITY.md`](SECURITY.md)), and the advisory is made public only once the version is on npm.
 
 ---
 
@@ -293,3 +303,13 @@ Una versión se publica con un tag, nunca con un merge. El orden es lo que evita
 5. El Release de la versión en GitHub lleva sus notas: `gh release create <tag> --verify-tag --notes-file docs/notas/<tag>.md`. El `--verify-tag` importa: sin él, `gh` crearía el tag si faltara, y eso publicaría.
 
 **Un arreglo que solo toca el sitio** (la portada, la demo, los medios) también sale con una versión nueva, porque Pages solo publica con tags.
+
+### Un arreglo 4.0.x
+
+Un arreglo a una versión publicada sale como parche, desde `master`:
+
+1. Una rama desde `origin/master` (`fix/<qué>`), con el arreglo y su prueba.
+2. En el mismo pull request, `version` sube un parche (`4.0.0` → `4.0.1`) en `package.json` y en `package-lock.json` (`npm version patch --no-git-tag-version` hace las dos cosas), y las notas van en `docs/notas/v4.0.1.md`, en los dos idiomas.
+3. El pull request va a `master` con su CI en verde, y de ahí es igual que cualquier versión: los pasos 2 a 5 de arriba.
+
+Un arreglo de seguridad sigue el mismo camino, pero se prepara en el aviso privado de su reporte (mira [`SECURITY.md`](SECURITY.md)), y el aviso se hace público solo cuando la versión ya está en npm.

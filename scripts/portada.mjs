@@ -29,8 +29,9 @@ const GUIAS = {
 };
 // El formato de las tres capturas de medios/. Lo mismo lo dice capturas-studio.mjs.
 export const EXTENSION_DE_LAS_CAPTURAS = "webp";
-// La imagen de la vista previa del link (Open Graph y Twitter) es también la que se sube como social preview del
-// repo: 1200×630, una por idioma. La saca capturas-studio.mjs --portada, junto a las capturas.
+// La imagen de la vista previa del link (Open Graph y Twitter): 1200×630, una por idioma. La saca
+// capturas-studio.mjs --portada, junto a las capturas. La inglesa sirve también como social preview del repo, pero
+// esa se sube a mano en los ajustes de GitHub: ningún workflow puede hacerlo.
 export const MEDIDAS_DE_LA_IMAGEN_SOCIAL = { ancho: 1200, alto: 630 };
 export const nombreDeLaImagenSocial = (idioma) => `social-preview-${idioma}.png`;
 // Las claves de textos.json que usa la imagen y no la plantilla.
