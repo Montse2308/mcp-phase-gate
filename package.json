@@ -1,6 +1,6 @@
 {
   "name": "mcp-phase-gate",
-  "version": "3.2.0",
+  "version": "4.0.0-rc.1",
   "description": "An MCP server that turns any AI coding agent into a gated, auditable, batch-by-batch engineering workflow.",
   "main": "build/index.js",
   "bin": {
