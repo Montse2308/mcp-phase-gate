@@ -7,6 +7,7 @@
 // dos idiomas, contra un `ui --demo` en vivo, porque Ajustes sobre el sitio estático saldría de solo lectura.
 // Cada una son 1280×720 de interfaz, empezando bajo la banda de la demo (que solo dice en qué carpeta temporal
 // vive, y en la portada es ruido), y se escribe en --salida (obligatoria) como captura-<vista>-<idioma>.<ext>.
+// Con ellas sale también la imagen de la vista previa del link, social-preview-<idioma>.png, de 1200×630.
 //
 // Uso, después de `npm run build` y con Chromium instalado
 // (PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium):
@@ -23,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { lanzarDemoEnVivo } from "./demo-en-vivo.mjs";
-import { EXTENSION_DE_LAS_CAPTURAS } from "./portada.mjs";
+import { EXTENSION_DE_LAS_CAPTURAS, MEDIDAS_DE_LA_IMAGEN_SOCIAL, nombreDeLaImagenSocial } from "./portada.mjs";
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= "0";
 const { chromium } = await import("@playwright/test");
@@ -68,6 +69,7 @@ async function capturarPortada() {
         ajustes: { hash: `/ajustes/proyecto/${tienda.nombre}`, listo: async (p) => { await p.locator('[data-campo="commits"] select').waitFor(); await p.waitForFunction(() => document.querySelector('[data-campo="preset"] select')?.value); } },
       };
       const demo = await lanzarDemoEnVivo({ raiz, idioma });
+      let tablero;
       try {
         const contexto = await navegador.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce", colorScheme: "light", locale: idioma === "en" ? "en-US" : "es-ES" });
         await contexto.addCookies([{ name: demo.cookie.name, value: demo.cookie.value, url: demo.origen }]);
@@ -83,17 +85,60 @@ async function capturarPortada() {
           if (banda > 0) await pagina.setViewportSize({ width: 1280, height: 720 + banda });
           await listo(pagina);
           const archivo = path.join(salidaPortada, `captura-${vista}-${idioma}.${EXTENSION_DE_LAS_CAPTURAS}`);
-          fs.writeFileSync(archivo, await fotografiar(navegador, pagina, { x: 0, y: banda, width: 1280, height: 720 }));
+          const recorte = { x: 0, y: banda, width: 1280, height: 720 };
+          fs.writeFileSync(archivo, await fotografiar(navegador, pagina, recorte));
           console.log(`${archivo}: ${fs.statSync(archivo).size} bytes`);
+          // El Tablero también va, en PNG, a la imagen de la vista previa del link.
+          if (vista === "tablero") tablero = await pagina.screenshot({ type: "png", clip: recorte });
           await pagina.close();
         }
         await contexto.close();
+        await imagenSocial(navegador, idioma, tablero, salidaPortada);
       } finally {
         await demo.detener();
       }
     }
   } finally {
     await navegador.close();
+  }
+}
+
+// La imagen de la vista previa del link, 1200×630 y en PNG (los validadores y GitHub no leen WebP): el nombre y la
+// frase del proyecto, el Tablero de la demo y las cinco fases. Se arma con HTML y las fuentes del Studio dentro de
+// la propia página, sin pedir nada fuera, y falla si pasa de 1 MB, que es lo que admite GitHub como social preview.
+async function imagenSocial(navegador, idioma, tableroPng, salida) {
+  const { ancho, alto } = MEDIDAS_DE_LA_IMAGEN_SOCIAL;
+  const textos = JSON.parse(fs.readFileSync(path.join(raiz, "sitio", "textos.json"), "utf-8"))[idioma];
+  const fuente = (nombre) => fs.readFileSync(path.join(raiz, "studio", "dist", "fuentes", nombre)).toString("base64");
+  const escapar = (texto) => texto.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const fases = [1, 2, 3, 4, 5].map((n) => `<li><span>${n}</span>${escapar(textos[`fase-${n}`])}</li>`).join("");
+  const pagina = await navegador.newPage({ viewport: { width: ancho, height: alto } });
+  try {
+    await pagina.setContent(`<!doctype html><html lang="${idioma}"><head><meta charset="utf-8"><style>
+      @font-face { font-family: "Inter"; font-weight: 100 900; src: url(data:font/woff2;base64,${fuente("inter-latin-wght-normal.woff2")}) format("woff2-variations"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 100 800; src: url(data:font/woff2;base64,${fuente("jetbrains-mono-latin-wght-normal.woff2")}) format("woff2-variations"); }
+      * { box-sizing: border-box; margin: 0; }
+      body { width: ${ancho}px; height: ${alto}px; padding: 56px; background: #f3f5f7; color: #18181b; font-family: "Inter", sans-serif; display: flex; flex-direction: column; justify-content: space-between; }
+      .arriba { display: flex; align-items: center; justify-content: space-between; gap: 48px; }
+      .texto { width: 440px; }
+      h1 { font: 700 54px/1.1 "JetBrains Mono", monospace; color: #1d4ed8; letter-spacing: -1px; overflow-wrap: anywhere; }
+      p { margin-top: 28px; font-size: 34px; font-weight: 600; line-height: 1.25; }
+      img { width: 600px; height: 337.5px; border: 1px solid #dde2e8; border-radius: 12px; box-shadow: 0 12px 32px rgba(24, 24, 27, 0.16); }
+      ol { display: flex; gap: 14px; list-style: none; padding: 0; font-size: 22px; font-weight: 600; }
+      li { display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 10px; background: #ffffff; border: 1px solid #dde2e8; border-radius: 999px; }
+      li span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dbeafe; color: #1d4ed8; font-size: 18px; }
+    </style></head><body>
+      <div class="arriba"><div class="texto"><h1>mcp-phase-gate</h1><p>${escapar(textos["social-lema"])}</p></div><img alt="" src="data:image/png;base64,${tableroPng.toString("base64")}"></div>
+      <ol>${fases}</ol>
+    </body></html>`);
+    await pagina.evaluate(() => document.fonts.ready);
+    const archivo = path.join(salida, nombreDeLaImagenSocial(idioma));
+    fs.writeFileSync(archivo, await pagina.screenshot({ type: "png" }));
+    const bytes = fs.statSync(archivo).size;
+    console.log(`${archivo}: ${bytes} bytes`);
+    if (bytes > 1_000_000) throw new Error(`${archivo} pesa ${bytes} bytes: GitHub no admite más de 1 MB como social preview.`);
+  } finally {
+    await pagina.close();
   }
 }
 
