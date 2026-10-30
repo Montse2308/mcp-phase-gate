@@ -1,6 +1,6 @@
-// El ciclo de toda escritura del Studio: "Vista previa" pide el plan (resumen, diff y huella), y
-// "Aplicar" lo manda con su huella. Si el disco cambió entre las dos cosas, el servidor responde 409 y se
-// dice, con un botón para volver a ver el cambio. En el sitio estático no hay escrituras.
+// El ciclo de toda escritura del Studio: "Vista previa" pide el plan (resumen, diff y huella), y "Aplicar" lo
+// manda con su huella. Si el disco cambió entre las dos cosas, el servidor responde 409 y se dice, con un botón
+// para volver a ver el cambio. En el sitio estático no hay escrituras.
 //
 // Al cambiar el idioma de la interfaz, una vista previa abierta se cierra: su resumen estaba en el idioma de
 // antes. La huella no depende del idioma, así que un plan visto en uno se puede aplicar en el otro. Lo mismo

@@ -1,6 +1,5 @@
-// La Bitácora de una tarea: su línea de tiempo, de lo más reciente a lo más antiguo, con
-// filtros por tipo. Cada evento abre su documento o su recibo en el visor y, si hay commit, enseña el
-// asunto y el SHA corto.
+// La Bitácora de una tarea: su línea de tiempo, de lo más reciente a lo más antiguo, con filtros por tipo. Cada
+// evento abre su documento o su recibo en el visor y, si hay commit, enseña el asunto y el SHA corto.
 
 import { useState } from "preact/hooks";
 

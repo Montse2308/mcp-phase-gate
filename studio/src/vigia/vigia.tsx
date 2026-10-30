@@ -1,5 +1,5 @@
-// El Vigía: el diagnóstico de doctor agrupado por severidad, con una línea de "cómo se
-// arregla" por código. Los clientes MCP y las variables avanzadas se mudaron a Ajustes.
+// El Vigía: el diagnóstico de doctor agrupado por severidad, con una línea de "cómo se arregla" por código. Los
+// clientes MCP y las variables avanzadas se mudaron a Ajustes.
 //
 // Cada hallazgo se enseña por su código, con el texto del servidor (que llega en el idioma de la interfaz)
 // y la línea de "cómo se arregla" del diccionario de ese idioma (arreglos.ts).
