@@ -1,26 +1,27 @@
-// Las escrituras del Studio (§7.6 del plan): solo acciones que ya existen en el CLI, y siempre en dos pasos.
+// The Studio's writes: only actions that already exist in the CLI, and always in two steps.
 //
-//   1. plan:     { accion, argumentos } → { resumen, diff, huella }. La huella es el sha256 del plan (qué
-//                archivo, qué había y qué habrá; o qué comando) más el mtimeMs de cada archivo que tocaría.
-//   2. aplicar:  { accion, argumentos, huella } → el servidor RECALCULA el plan y solo escribe si la huella
-//                coincide; si no, 409: "El disco cambió desde que viste el cambio. Revísalo otra vez."
+//   1. plan:     { accion, argumentos } → { resumen, diff, huella }. The fingerprint is the sha256 of the plan
+//                (which file, what it had and what it will have; or which command) plus the mtimeMs of each
+//                file it would touch.
+//   2. aplicar:  { accion, argumentos, huella } → the server RECOMPUTES the plan and writes only if the
+//                fingerprint matches; otherwise 409 ("the disk changed since you saw the change").
 //
 //   equipo            <configDir>/machine.json: this machine's paths, its default language and preset, and the own
 //                     path of any repo (src/ajustes/equipo.ts)
 //   proyecto          what changed in a project, in a single plan: its phase-gate.json and, in machine.json, only
 //                     the keys of its repos (src/ajustes/proyecto.ts)
-//   crear-manifiesto  init --migrate para un proyecto: crea phase-gate.json (solo crea)
-//   eject             mcp-phase-gate eject <objetivo> --a … (capa global, del proyecto o carpeta de presets)
-//   init-cliente      mcp-phase-gate init --cliente <c>: el mcp.json de Cursor o VS Code, o `claude mcp add`
+//   crear-manifiesto  init --migrate for a project: creates phase-gate.json (it only creates)
+//   eject             mcp-phase-gate eject <target> --a … (global layer, a project's, or the presets folder)
+//   init-cliente      mcp-phase-gate init --cliente <c>: Cursor's or VS Code's mcp.json, or `claude mcp add`
 //
 // `equipo` and `proyecto` have no CLI command (nor did the `preset` and `reglas` actions they replaced, which
 // `proyecto` covers); what this module protects stays: closed destinations per action, a single validation shape
 // and the fingerprint.
 //
-// Cada acción calcula su plan con la MISMA función que el CLI (planDeEject, planDeArchivo, planDeClaude,
-// manifiestoNuevo). Nunca escribe documentos de tareas, recibos ni nada de los repos: cada destino se
-// comprueba antes de escribir. Una huella sirve una sola vez, y aplicar va bajo un candado del estado
-// (`<stateDir>/.studio-acciones.lock`), así que dos Studios con la misma huella no aplican los dos.
+// Each action computes its plan with the SAME function as the CLI (planDeEject, planDeArchivo, planDeClaude,
+// manifiestoNuevo). It never writes task documents, receipts or anything in the repos: each destination is
+// checked before writing. A fingerprint works once, and applying runs under a state lock
+// (`<stateDir>/.studio-acciones.lock`), so two Studios with the same fingerprint cannot both apply it.
 //
 // On top of that, each action has its own closed list of destinations (comprobarLista): per file and, in
 // machine.json, per key.
@@ -49,13 +50,13 @@ import { sinRutasDelEquipo } from "./privacidad.js";
 export const ACCIONES = ["crear-manifiesto", "eject", "init-cliente", "equipo", "proyecto"] as const;
 export type Accion = (typeof ACCIONES)[number];
 
-// El 409 de una huella que ya no vale. Sale en el idioma de la petición; la constante es el texto en
-// español, el de siempre (los tests la comparan).
+// The 409 for a fingerprint that no longer holds. It goes out in the request's language; the constant is the
+// Spanish text, the original one (the tests compare against it).
 export const DISCO_CAMBIADO = mensaje("STUDIO-DISCO-CAMBIADO", {}, "es");
 const discoCambiado = (): string => mensaje("STUDIO-DISCO-CAMBIADO");
 const CANDADO = ".studio-acciones.lock";
 
-// ─── Lo que llega ───────────────────────────────────────────────────────────
+// ─── What comes in ──────────────────────────────────────────────────────────
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const Proyecto = z.string().min(1).max(200);
 const ARGUMENTOS = {
@@ -96,7 +97,7 @@ function proyectoDe(nombre: string): string {
   }
 }
 
-// ─── El plan ────────────────────────────────────────────────────────────────
+// ─── The plan ───────────────────────────────────────────────────────────────
 type Escritura = { ruta: string; antes: string | null; despues: string; copia: boolean; exclusiva: boolean };
 type Comando = { comando: string; args: string[]; mostrar: string };
 // `proyecto` and `cliente` are the ones the action named: its list of destinations depends on them.
@@ -120,8 +121,8 @@ const sinBom = (texto: string): string => texto.replace(/^\uFEFF/, "");
 
 function planDeCrear(a: z.infer<(typeof ARGUMENTOS)["crear-manifiesto"]>): Plan {
   const proyecto = proyectoDe(a.proyecto);
-  const preset = a.preset ?? "software-replica"; // el mismo valor por defecto que init --migrate
-  // Con el idioma de sus documentos o, si no dicen nada, el del equipo: como init --migrate (§8.3).
+  const preset = a.preset ?? "software-replica"; // the same default as init --migrate
+  // With the language of its documents or, if they say nothing, the machine's: as init --migrate does.
   const idioma = idiomaParaManifiesto(proyecto, idiomaDelEquipo().idioma);
   if (!presetsDisponibles(idioma).has(preset)) return { posible: false, motivo: mensaje("STUDIO-PRESET-NO-EXISTE", { preset, disponibles: null }) };
   const ruta = rutaManifiesto(proyecto);
@@ -132,7 +133,7 @@ function planDeCrear(a: z.infer<(typeof ARGUMENTOS)["crear-manifiesto"]>): Plan 
   };
 }
 
-// Un eject solo escribe en una capa de prompts (la global o la de un proyecto) o en la carpeta de presets.
+// An eject only writes into a prompts layer (the global one or a project's) or the presets folder.
 function destinoPermitido(ruta: string, proyecto: string | null): boolean {
   const bases = [carpetaPromptsGlobal() ?? path.join(configDir(), "prompts"), carpetaPresetsDelUsuario()];
   if (proyecto) bases.push(carpetaPromptsDeProyecto(proyecto));
@@ -176,8 +177,9 @@ function rutasEfectivas(): QuitaDelEntorno {
   return { ...(documentacion ? { documentacion } : {}), ...(carpetaDeRepos ? { carpetaDeRepos } : {}) };
 }
 
-// El registro en el cliente y, con `comandos`, los /fN que copiaría `init --comandos` (solo Claude Code y
-// Cursor los leen de archivo). Un /fN que no generó init es de la persona: no se pisa (el CLI pide --yes).
+// The registration in the client and, with `comandos`, the /fN files that `init --comandos` would copy (only
+// Claude Code and Cursor read them from a file). A /fN that init did not generate is the person's: it is not
+// overwritten (the CLI asks for --yes).
 async function planDeInit(a: z.infer<(typeof ARGUMENTOS)["init-cliente"]>, ctx: ContextoDeAcciones): Promise<Plan> {
   const entorno = ctx.entornoInit();
   const opciones = { quitarIdioma: a.quitarIdioma === true };
@@ -316,7 +318,7 @@ async function planificar(accion: Accion, crudo: unknown, ctx: ContextoDeAccione
   }
 }
 
-// ─── La huella ──────────────────────────────────────────────────────────────
+// ─── The fingerprint ────────────────────────────────────────────────────────
 function mtimeDe(ruta: string): number | "no-existe" {
   try {
     return fs.statSync(ruta).mtimeMs;
@@ -325,8 +327,8 @@ function mtimeDe(ruta: string): number | "no-existe" {
   }
 }
 
-// Sin el resumen: es texto en el idioma de la petición, y un plan visto en un idioma se puede aplicar en el
-// otro. Lo que cambia el disco (archivos, contenidos, mtime y comandos) es lo que cuenta.
+// Without the summary: it is text in the request's language, and a plan seen in one language can be applied
+// in the other. What counts is what changes on disk (files, contents, mtime and commands).
 export function huellaDe(plan: PlanInterno): string {
   const datos = {
     accion: plan.accion,
@@ -336,7 +338,7 @@ export function huellaDe(plan: PlanInterno): string {
   return crypto.createHash("sha256").update(JSON.stringify(datos)).digest("hex");
 }
 
-// ─── Lo que se enseña ───────────────────────────────────────────────────────
+// ─── What is shown ──────────────────────────────────────────────────────────
 function mostrar(ruta: string, ctx: ContextoDeAcciones): string {
   const home = ctx.entornoInit().home;
   const relativa = path.relative(home, ruta);
@@ -361,9 +363,9 @@ export type RespuestaDePlan =
 
 export type RespuestaDeAplicar = { hecho: true; mensaje: string; archivos: string[]; copias: string[] };
 
-// ─── Las dos rutas ──────────────────────────────────────────────────────────
-// Nunca se escribe en una tarea (sus documentos ni sus recibos) ni dentro de los repos: se comprueba sobre
-// la ruta real de cada destino, sea la acción que sea.
+// ─── The two paths ──────────────────────────────────────────────────────────
+// Never write into a task (its documents or its receipts) nor inside the repos: checked on the real path of
+// each destination, whatever the action.
 function comprobarDestino(ruta: string): void {
   let enTarea = false;
   try {
@@ -377,8 +379,8 @@ function comprobarDestino(ruta: string): void {
   } catch (error) {
     if (error instanceof ErrorDeAccion) throw error;
   }
-  // En la Documentación, solo el phase-gate.json de un proyecto o su capa de prompts (.phase-gate/prompts).
-  // Sobre las rutas reales: un enlace no lleva a otro sitio, y vale aunque la carpeta aún no exista.
+  // In the Documentation, only a project's phase-gate.json or its prompts layer (.phase-gate/prompts).
+  // On real paths: a link cannot lead elsewhere, and it holds even if the folder does not exist yet.
   let docs: string | null = null;
   try {
     docs = rutaReal(requireBasePath(DOCS));

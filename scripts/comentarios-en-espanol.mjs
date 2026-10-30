@@ -17,7 +17,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { comentariosDeCodigo } from "./comentarios-del-codigo.mjs";
+import { comentariosDeCodigo, esElPrincipal } from "./comentarios-del-codigo.mjs";
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -50,6 +50,24 @@ export function pareceEspanol(lineas) {
   return palabras.length >= 3 && es > en;
 }
 
+// Las líneas `//` que van una tras otra son un solo comentario para quien lo lee: juntas se juzga mejor que
+// una por una, porque una línea de continuación suelta («No cambia estructura, encabezados ni nombres.») no
+// trae palabras que delaten el idioma. Cada bloque lleva su primer renglón como `linea`.
+export function agruparLineas(comentarios) {
+  const bloques = [];
+  for (const c of comentarios) {
+    const ultimo = bloques.at(-1);
+    const sigue = ultimo && c.texto.startsWith("//") && ultimo.esDeLinea && c.linea === ultimo.ultima + 1;
+    if (sigue) {
+      ultimo.lineas.push(...c.lineas);
+      ultimo.ultima = c.linea;
+    } else {
+      bloques.push({ linea: c.linea, lineas: [...c.lineas], texto: c.texto, esDeLinea: c.texto.startsWith("//"), ultima: c.linea + c.texto.split("\n").length - 1 });
+    }
+  }
+  return bloques;
+}
+
 function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { resumen: { type: "boolean", default: false } } });
   const carpeta = (positionals[0] ?? "src").replace(/\\/g, "/").replace(/\/$/, "");
@@ -63,7 +81,7 @@ function main() {
   let total = 0;
   let comentarios = 0;
   for (const ruta of archivos) {
-    const delArchivo = comentariosDeCodigo(fs.readFileSync(path.join(raiz, ruta), "utf-8"), ruta);
+    const delArchivo = agruparLineas(comentariosDeCodigo(fs.readFileSync(path.join(raiz, ruta), "utf-8"), ruta));
     comentarios += delArchivo.length;
     for (const c of delArchivo) {
       // Un directivo de compilador o un deshabilitador de reglas no es prosa de nadie.
@@ -79,8 +97,9 @@ function main() {
     }
   }
   if (!values.resumen && total > 0) console.log("");
-  console.log(`Comentarios en ${carpeta}/: ${comentarios}. Que parecen español: ${total}.`);
+  if (archivos.length === 0) console.log(`Aviso: git no tiene archivos de código versionados en «${carpeta}»; ¿está bien escrita la carpeta?`);
+  console.log(`Comentarios en ${carpeta}/ (las líneas // seguidas cuentan como uno): ${comentarios}. Que parecen español: ${total}.`);
   for (const [dir, n] of [...porCarpeta].sort()) console.log(`  ${dir.padEnd(28)} ${String(n).padStart(5)}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (esElPrincipal(import.meta.url)) main();

@@ -1,25 +1,25 @@
-// El export estático del Studio (§7.9 del plan): `mcp-phase-gate ui --export-static <dir>` escribe un sitio
-// que funciona sin servidor (GitHub Pages, o cualquier carpeta servida tal cual), en solo lectura.
+// The Studio's static export: `mcp-phase-gate ui --export-static <dir>` writes a read-only site that works
+// without a server (GitHub Pages, or any folder served as is).
 //
-// Sin --incluir-datos-reales exporta SIEMPRE la demo: la genera en una carpeta temporal y no lee la
-// Documentación de quien lo lanza. Con la bandera exporta la Documentación, después de pedir que se escriba
-// `exportar` (o con --yes). Cumple R6.
+// Without --incluir-datos-reales it ALWAYS exports the demo: it generates it in a temporary folder and never
+// reads the Documentation of whoever runs it. With the flag it exports the Documentation, after asking the
+// person to type `exportar` (or with --yes).
 //
-// Cómo: recorre las mismas rutas GET que pide el frontend (§7.5), con los mismos manejadores de la API, y
-// escribe cada respuesta en datos/<sha256>.json (el nombre sale del contenido: no hay que codificar la ruta
-// en un nombre de archivo, y una respuesta repetida se guarda una vez); datos/indice.json dice qué archivo
-// y qué código corresponden a cada ruta. Copia studio/dist/, escribe config.js con el modo "estatico" y
-// .nojekyll. Las rutas de este equipo se sustituyen por <Documentación>, <repos>, <paquete>… y, si aun así
-// quedara alguna, no se escribe nada.
+// How: it walks the same GET routes the frontend requests, with the same API handlers, and writes each
+// response to datos/<sha256>.json (the name comes from the content: no need to encode the route into a file
+// name, and a repeated response is stored once); datos/indice.json says which file and status code belong to
+// each route. It copies studio/dist/, and writes config.js with the "estatico" mode and .nojekyll. This
+// machine's paths are replaced by <Documentación>, <repos>, <paquete>… and, if any is still left, nothing is
+// written.
 //
-// Determinista: la demo tiene fechas y SHA fijos, se lee con el mismo entorno prestado con que se genera
-// (TZ=UTC, sin las variables de quien exporta), los JSON van con las claves ordenadas y las rutas con "/".
-// La misma versión, en el mismo sistema, da los mismos bytes.
+// Deterministic: the demo has fixed dates and SHAs, it is read with the same borrowed environment it is
+// generated with (TZ=UTC, without the exporting user's variables), JSON is written with sorted keys and paths
+// with "/". The same version, on the same system, gives the same bytes.
 //
-// En los dos idiomas (§8.7): datos/es/ y datos/en/, cada uno con su índice. De la demo, cada idioma con su
-// demo (TIENDA… en español, SHOP… en inglés) y los textos del servidor en ese idioma; con datos reales, la
-// misma Documentación con los textos del servidor en cada idioma. El frontend lee el conjunto del idioma de
-// la interfaz, y al cambiar de idioma cambia también de datos.
+// In both languages: datos/es/ and datos/en/, each with its own index. For the demo, each language gets its
+// own demo (TIENDA… in Spanish, SHOP… in English) and the server texts in that language; with real data, the
+// same Documentation with the server texts in each language. The frontend reads the set for the interface's
+// language, and switching language switches data too.
 
 import { createHash, randomBytes } from "crypto";
 import * as fs from "fs";
@@ -45,10 +45,10 @@ export type Indice = { rutas: Record<string, { archivo: string; estado: number }
 export const ARCHIVO_DEL_INDICE = "indice.json";
 export const BANDA_DE_LA_DEMO = "Demo: datos de ejemplo. Todo es de solo lectura.";
 export const BANDA_DE_DATOS_REALES = "Exportación de una Documentación: solo lectura.";
-// La banda en el idioma de la interfaz la pone el frontend con esta clave; PG_BANDA queda en español.
+// The frontend sets the banner in the interface's language from this key; PG_BANDA stays in Spanish.
 export type ClaveDeBanda = "estatico-demo" | "estatico-datos";
 
-// ─── JSON con las claves ordenadas ──────────────────────────────────────────
+// ─── JSON with sorted keys ──────────────────────────────────────────────────
 function ordenado(valor: unknown): unknown {
   if (Array.isArray(valor)) return valor.map(ordenado);
   if (valor && typeof valor === "object") {
@@ -62,10 +62,10 @@ function ordenado(valor: unknown): unknown {
 }
 export const jsonOrdenado = (valor: unknown): string => `${JSON.stringify(ordenado(valor))}\n`;
 
-// ─── Las rutas de este equipo ───────────────────────────────────────────────
-// Cada raíz, en sus tres formas: tal cual, con "/" y con las barras invertidas escapadas (dentro de un JSON
-// que va como texto, como el diff de un mcp.json). Detrás de un nombre sustituido, los separadores pasan a
-// "/": "<repos>\tienda-api" en Windows y "<repos>/tienda-api" en Linux son lo mismo.
+// ─── This machine's paths ───────────────────────────────────────────────────
+// Each root in its three forms: as is, with "/", and with backslashes escaped (inside JSON carried as text,
+// like the diff of an mcp.json). After a substituted name, separators become "/": "<repos>\tienda-api" on
+// Windows and "<repos>/tienda-api" on Linux are the same thing.
 export type Raiz = { ruta: string; nombre: string };
 
 function formas(ruta: string): string[] {
@@ -80,11 +80,11 @@ export function variantes(raices: Raiz[]): Raiz[] {
     try {
       reales.push(rutaReal(ruta));
     } catch {
-      // si no existe, basta con la ruta tal cual
+      // it may not exist: the path as configured is enough
     }
     for (const r of reales) for (const forma of formas(path.resolve(r))) todas.push({ ruta: forma, nombre });
   }
-  // De la más larga a la más corta: el temporal de la demo antes que el temporal del sistema.
+  // Longest first: the demo's temp folder before the system's temp folder.
   return todas.sort((a, b) => b.ruta.length - a.ruta.length);
 }
 
@@ -99,8 +99,8 @@ export function sinRutas(texto: string, raices: Raiz[]): string {
     if (resultado !== antes) nombres.add(nombre);
   }
   for (const nombre of nombres) {
-    // La cola sigue hasta una comilla, un paréntesis o el final de la línea: los nombres de las tareas y de
-    // los documentos llevan espacios ("04 - Ejecución\L01 - …").
+    // The tail runs up to a quote, a parenthesis or the end of the line: task and document names contain
+    // spaces ("04 - Ejecución\L01 - …").
     resultado = resultado.replace(new RegExp(`${escapar(nombre)}((?:\\\\+[^\\n\\r\\t\`"'()<>|,;:*?\\\\]+)+)`, "g"), (_, cola: string) => `${nombre}${cola.replace(/\\+/g, "/")}`);
   }
   return resultado;
@@ -113,9 +113,9 @@ function sinRutasEnTodo(valor: unknown, raices: Raiz[]): unknown {
   return valor;
 }
 
-// ─── Las rutas que pide el frontend ─────────────────────────────────────────
-// Escritas como las escribe studio/src (cada segmento con encodeURIComponent, y la consulta igual): el
-// índice se busca por la ruta exacta.
+// ─── The routes the frontend requests ───────────────────────────────────────
+// Written the way studio/src writes them (each segment with encodeURIComponent, and the query likewise): the
+// index is looked up by the exact route.
 const seg = (...partes: (string | number)[]): string => partes.map((p) => encodeURIComponent(String(p))).join("/");
 
 export type Respuestas = Map<string, { estado: number; json: unknown }>;
@@ -162,7 +162,7 @@ async function recorrer(api: ManejadorApi, conAjustes: boolean): Promise<Respues
   return respuestas;
 }
 
-// ─── Escribir el sitio ──────────────────────────────────────────────────────
+// ─── Writing the site ───────────────────────────────────────────────────────
 function copiar(de: string, a: string): void {
   fs.mkdirSync(a, { recursive: true });
   for (const e of fs.readdirSync(de, { withFileTypes: true }).sort((x, y) => (x.name < y.name ? -1 : 1))) {
@@ -171,8 +171,8 @@ function copiar(de: string, a: string): void {
   }
 }
 
-// Borra un árbol que acaba de escribir este proceso (unlinkSync: en Node 24.11 para Windows, rmSync no borra
-// un nombre con acentos y no lanza).
+// Deletes a tree this process just wrote (unlinkSync: on Node 24.11 for Windows, rmSync does not delete a
+// name with accents and does not throw).
 function borrarArbol(ruta: string): void {
   const info = fs.lstatSync(ruta, { throwIfNoEntry: false });
   if (!info) return;
@@ -182,7 +182,7 @@ function borrarArbol(ruta: string): void {
   } else fs.unlinkSync(ruta);
 }
 
-// `normalizar` solo se cambia en los tests, para comprobar que la barrera final funciona por sí sola.
+// `normalizar` is only replaced in the tests, to check that the final barrier works on its own.
 export function escribirSitio(
   destino: string,
   porIdioma: RespuestasPorIdioma,
@@ -192,7 +192,6 @@ export function escribirSitio(
   normalizar: (valor: unknown, raices: Raiz[]) => unknown = sinRutasEnTodo
 ): { rutas: number; archivos: number } {
   if (!fs.existsSync(path.join(dist, "index.html"))) throw fallo("STUDIO-EXPORT-SIN-FRONTEND", { dist });
-  // Por idioma: datos/<idioma>/indice.json y los archivos de sus respuestas.
   const conjuntos = IDIOMAS.map((idioma) => {
     const indice: Indice = { rutas: {} };
     const archivos = new Map<string, string>();
@@ -207,7 +206,7 @@ export function escribirSitio(
   const textoDeBanda = banda === "estatico-demo" ? BANDA_DE_LA_DEMO : BANDA_DE_DATOS_REALES;
   const configJs = `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(textoDeBanda)};\nwindow.PG_BANDA_CLAVE = ${JSON.stringify(banda)};\n`;
 
-  // La última barrera: si quedara una ruta de este equipo en algo que se va a publicar, no se escribe nada.
+  // The last barrier: if a path of this machine is left in anything about to be published, nothing is written.
   const minusculas = process.platform === "win32";
   const todo = [configJs, ...conjuntos.flatMap((c) => [c.textoDelIndice, ...c.archivos.values()])].join("\n");
   const buscado = minusculas ? todo.toLowerCase() : todo;
@@ -215,7 +214,7 @@ export function escribirSitio(
     if (buscado.includes(minusculas ? ruta.toLowerCase() : ruta)) throw fallo("STUDIO-EXPORT-CON-RUTAS");
   }
 
-  // Al lado y con otro nombre; se renombra al terminar: un export cortado no deja un sitio a medias.
+  // Written alongside under another name and renamed when done: an interrupted export leaves no half-built site.
   const temporal = `${destino}.${process.pid}-${randomBytes(4).toString("hex")}`;
   try {
     copiar(dist, temporal);
@@ -227,7 +226,7 @@ export function escribirSitio(
       fs.writeFileSync(path.join(carpeta, ARCHIVO_DEL_INDICE), textoDelIndice, "utf-8");
       for (const [archivo, texto] of [...archivos].sort(([a], [b]) => (a < b ? -1 : 1))) fs.writeFileSync(path.join(carpeta, archivo), texto, "utf-8");
     }
-    if (fs.existsSync(destino)) fs.rmdirSync(destino); // vacía: se comprobó antes
+    if (fs.existsSync(destino)) fs.rmdirSync(destino); // empty: checked beforehand
     fs.renameSync(temporal, destino);
   } catch (error) {
     borrarArbol(temporal);
@@ -236,9 +235,9 @@ export function escribirSitio(
   return { rutas: conjuntos.reduce((n, c) => n + c.rutas, 0), archivos: conjuntos.reduce((n, c) => n + c.archivos.size, 0) };
 }
 
-// ─── El comando ─────────────────────────────────────────────────────────────
-// Las raíces que se sustituyen: las de la demo (o las configuradas, con datos reales), el paquete, la carpeta
-// del usuario y el temporal del sistema.
+// ─── The command ────────────────────────────────────────────────────────────
+// The roots that get replaced: the demo's (or the configured ones, with real data), the package, the user's
+// folder and the system temp directory.
 function raicesDe(demos: CarpetasDeDemo[], casaFalsa: string): Raiz[] {
   const comunes: Raiz[] = [
     { ruta: raizPaquete(), nombre: "<paquete>" },
@@ -264,7 +263,7 @@ function raicesDe(demos: CarpetasDeDemo[], casaFalsa: string): Raiz[] {
     try {
       configuradas.push({ ruta: obtener(), nombre });
     } catch {
-      // sin esa ruta configurada no hay nada que quitar
+      // not configured: nothing to mask
     }
   };
   anotar(() => requireBasePath(DOCS), "<Documentación>");
@@ -274,8 +273,8 @@ function raicesDe(demos: CarpetasDeDemo[], casaFalsa: string): Raiz[] {
   return variantes([...configuradas, ...comunes]);
 }
 
-// /api/clientes, en el export, sobre una casa vacía: nunca la configuración real de los clientes, y sin
-// ejecutar `claude`.
+// /api/clientes, in the export, over an empty home: never the clients' real configuration, and without
+// running `claude`.
 function entornoInitVacio(casa: string): EntornoInit {
   return {
     home: casa,
@@ -315,7 +314,7 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
         salida.err(mensaje("STUDIO-EXPORT-SIN-CONFIRMAR", { aviso }));
         return 1;
       }
-      // La palabra en cualquiera de los dos idiomas: "exportar" o "export".
+      // The word in either language: "exportar" or "export".
       const respuesta = (await entorno.preguntar(mensaje("STUDIO-EXPORT-PREGUNTA", { aviso }))).trim();
       if (respuesta !== "exportar" && respuesta !== "export") {
         salida.err(mensaje("STUDIO-EXPORT-NADA"));
@@ -331,12 +330,12 @@ export async function exportarEstatico(opciones: OpcionesExport, entorno: Entorn
   try {
     const porIdioma = {} as RespuestasPorIdioma;
     for (const idioma of IDIOMAS) {
-      // Los textos del servidor (estados, avisos, el prompt ensamblado…), en el idioma del conjunto.
+      // The server's texts (statuses, warnings, the assembled prompt…), in the language of the data set.
       if (opciones.datosReales) {
         porIdioma[idioma] = await enIdioma(idioma, () => recorrer(crearApi({ modo: "estatico", watcher: () => "apagado", sesiones: () => [], entornoInit: () => entornoInitVacio(casa) }), false));
       } else {
-        // La demo de ese idioma, nunca la Documentación de quien exporta: se genera aquí y se lee con su
-        // entorno prestado.
+        // That language's demo, never the exporting user's Documentation: it is generated here and read with
+        // its borrowed environment.
         const c = await generarDemo(path.join(trabajo, `demo-${idioma}`), idioma);
         demos.push(c);
         porIdioma[idioma] = await enIdioma(idioma, () =>
