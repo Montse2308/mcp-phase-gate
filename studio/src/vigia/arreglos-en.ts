@@ -1,4 +1,4 @@
-// Cómo se arregla cada hallazgo del diagnóstico, por su código (§7.7.4 del plan), en inglés. Se tipa
+// Cómo se arregla cada hallazgo del diagnóstico, por su código, en inglés. Se tipa
 // contra la tabla española: un código que falta, o uno que sobra, rompe el build; y el test
 // (test/vigia-arreglos.test.ts) exige que las dos tengan exactamente los códigos que el servidor emite.
 

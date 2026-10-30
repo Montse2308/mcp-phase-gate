@@ -1,4 +1,4 @@
-// Cómo se arregla cada hallazgo del diagnóstico, por su código (§7.7.4 del plan), en español. Un test
+// Cómo se arregla cada hallazgo del diagnóstico, por su código, en español. Un test
 // (test/vigia-arreglos.test.ts) exige que esta tabla y la inglesa (arreglos-en.ts) tengan exactamente los
 // códigos que el servidor puede emitir.
 
