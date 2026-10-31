@@ -277,7 +277,7 @@ try {
   });
   // Dos precauciones para el build de Vite, que escribe su configuración compilada en node_modules/.vite-temp
   // a través del enlace: la carpeta tiene que existir (si no, mkdir falla a través del enlace cuando el temporal
-  // viene en forma 8.3), y el temporal va con su ruta larga (C:\Users\USUARI~1 → C:\Users\Usuario general).
+  // viene en forma 8.3), y el temporal va con su ruta larga (C:\Users\USUARI~1 → C:\Users\Usuario Largo).
   fs.mkdirSync(path.join(raiz, "node_modules", ".vite-temp"), { recursive: true });
   temporal = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "comparar-comentarios-"));
 

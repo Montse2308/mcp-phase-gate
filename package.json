@@ -48,7 +48,7 @@
   },
   "homepage": "https://montse2308.github.io/mcp-phase-gate/",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
