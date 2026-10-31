@@ -39,13 +39,18 @@ jobs:
 
       - run: npm ci
 
+      # Ni los comentarios ni los nombres de los tests pueden citar documentos de trabajo que no viajan
+      # con el repo (secciones numeradas, etapas, hallazgos, códigos). Va dentro de este job, y no en otro
+      # aparte, para no cambiar la lista de checks obligatorios.
+      - run: node scripts/referencias-al-plan.mjs
+
       # El build va aparte del test para que un fallo de compilación del servidor se distinga
       # de un test en rojo: son dos problemas distintos y el log lo tiene que decir solo.
       - run: npm run build
 
       - run: npm test
 
-  # Los E2E del Studio en Chromium (§7.10): cada vista, la demo y el sitio estático, con axe y en un
+  # Los E2E del Studio en Chromium: cada vista, la demo y el sitio estático, con axe y en un
   # teléfono. Aparte de build-and-test porque necesitan el navegador. En los tres sistemas: hay fallos de
   # maquetación que dependen de las rutas del equipo, y las de Windows son otras. Node 22, la última 22.x
   # (Vite 8 pide al menos la 22.12 para compilar).
