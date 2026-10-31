@@ -9,6 +9,9 @@
 // fetch del mismo origen: no pide preflight ni toca la seguridad del Studio.
 
 import { carpetaDeDatos, idiomaActual, t } from "./i18n/idioma";
+import type { IdiomaUi } from "./i18n/idioma";
+import { conReferencia, hashDe, referenciaDe } from "./rutas";
+import type { Ruta } from "./rutas";
 
 declare global {
   interface Window {
@@ -75,8 +78,8 @@ export async function get<T>(ruta: string): Promise<T> {
 type Indice = { rutas: Record<string, { archivo: string; estado: number }> };
 const indices = new Map<string, Promise<Indice["rutas"]>>();
 
-async function getEstatico<T>(ruta: string): Promise<T> {
-  const carpeta = carpetaDeDatos(idiomaActual());
+async function getEstatico<T>(ruta: string, idioma: IdiomaUi = idiomaActual()): Promise<T> {
+  const carpeta = carpetaDeDatos(idioma);
   let indice = indices.get(carpeta);
   if (!indice) {
     indice = fetch(`${carpeta}indice.json`).then(async (r) => {
@@ -101,6 +104,39 @@ async function getEstatico<T>(ruta: string): Promise<T> {
     throw new ErrorDeApi(entrada.estado, cuerpo && typeof cuerpo === "object" && "error" in cuerpo ? String((cuerpo as { error: unknown }).error) : t("error.estado", { estado: entrada.estado }));
   }
   return cuerpo as T;
+}
+
+// En la demo estática, los nombres de los proyectos y de las tareas cambian con el idioma (TIENDA ↔ SHOP,
+// envio-gratis ↔ free-shipping): son dos demos con la misma historia, y el índice de cada una lista sus proyectos
+// y sus tareas en el mismo orden. Un nombre que ya está en el otro conjunto (el export de una Documentación, igual
+// en los dos idiomas) se queda como está.
+function equivalente(nombre: string, aqui: string[], alli: string[]): string | null {
+  if (alli.includes(nombre)) return nombre;
+  const i = aqui.indexOf(nombre);
+  return i !== -1 && aqui.length === alli.length ? alli[i]! : null;
+}
+
+// El hash de la ruta `r` al pasar del idioma `de` al idioma `a`: la misma ruta con el proyecto y la tarea en su
+// nombre equivalente, o la Red si alguno no lo tiene. Una ruta sin proyecto ni tarea queda como está.
+export async function hashEnElIdioma(r: Ruta, de: IdiomaUi, a: IdiomaUi): Promise<string> {
+  const ref = referenciaDe(r);
+  if (ref.proyecto === null) return hashDe(r);
+  const consulta = new URLSearchParams();
+  if (r.consulta.has("lang")) consulta.set("lang", a);
+  const aLaRed = hashDe({ vista: "red", partes: [], consulta });
+  const proyectos = async (idioma: IdiomaUi) => (await getEstatico<{ proyectos: { nombre: string }[] }>("/api/proyectos", idioma)).proyectos.map((p) => p.nombre);
+  const tareas = async (idioma: IdiomaUi, proyecto: string) => (await getEstatico<{ tareas: { tarea: string }[] }>(`/api/proyectos/${ruta(proyecto)}/tareas`, idioma)).tareas.map((x) => x.tarea);
+
+  const proyecto = equivalente(ref.proyecto, await proyectos(de), await proyectos(a));
+  if (proyecto === null) return aLaRed;
+  let tarea = ref.tarea;
+  if (tarea !== null) {
+    tarea = equivalente(tarea, await tareas(de, ref.proyecto), await tareas(a, proyecto));
+    if (tarea === null) return aLaRed;
+  }
+  const nueva = conReferencia(r, { proyecto, tarea });
+  if (nueva.consulta.has("lang")) nueva.consulta.set("lang", a);
+  return hashDe(nueva);
 }
 
 // Toda escritura lleva X-Phase-Gate: 1. El servidor la exige, y obliga a un preflight que nunca concede. Y,
