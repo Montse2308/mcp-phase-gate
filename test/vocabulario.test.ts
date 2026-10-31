@@ -1,4 +1,4 @@
-// El vocabulario de contratos (§8.2 del plan maestro v3): se escribe en el idioma del proyecto y se lee
+// El vocabulario de contratos: se escribe en el idioma del proyecto y se lee
 // en los dos. Y el test de contrato: cada juego de prompts de fábrica (`prompts/<idioma>/`) usa
 // exactamente los encabezados, las claves y los nombres de documento de su idioma, y tiene las mismas
 // ranuras con los mismos ids.
@@ -251,7 +251,7 @@ describe("vocabulario: marcadores, alias y prompts", () => {
 });
 
 // ─── Test de contrato sobre los prompts de fábrica ──────────────────────────
-// Corre sobre cada idioma que tenga carpeta en prompts/: desde que exista prompts/en (L04), también la suya.
+// Corre sobre cada idioma que tenga carpeta en prompts/, también prompts/en.
 const PROMPTS = path.join(process.cwd(), "prompts");
 const idiomasPublicados = IDIOMAS.filter((idioma) => fs.existsSync(path.join(PROMPTS, idioma)));
 

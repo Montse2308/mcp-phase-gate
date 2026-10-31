@@ -1,5 +1,5 @@
 // El manifiesto de cada proyecto, el machine.json de cada equipo, los presets disponibles y los JSON
-// Schema publicados (§5.2 del plan maestro v3).
+// Schema publicados.
 
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
@@ -54,7 +54,7 @@ describe("leerManifiesto", () => {
     assert.equal(manifiestoDe("PROYECTO-A"), null);
   });
 
-  it("el ejemplo del plan es válido y rellena los valores por defecto", () => {
+  it("el ejemplo de referencia es válido y rellena los valores por defecto", () => {
     proyectoCon({
       $schema: "https://unpkg.com/mcp-phase-gate@3/schema/project.json",
       version: 1,
@@ -68,7 +68,7 @@ describe("leerManifiesto", () => {
 
     const manifiesto = manifiestoDe("PROYECTO-A");
     assert.equal(manifiesto?.preset, "software");
-    // Antes: "es" por defecto. Desde la Etapa 6, sin `idioma` el del proyecto se deduce (§8.3).
+    // Sin `idioma`, el del proyecto se deduce: no hay un "es" por defecto.
     assert.equal(manifiesto?.idioma, undefined);
     assert.deepEqual(manifiesto?.repos.map((r) => r.id), ["api", "web"]);
     assert.equal(manifiesto?.reglas.lotes, undefined, "si falta, decide el preset");

@@ -112,7 +112,7 @@ describe("diagnosticar", () => {
     assert.match(hallazgo?.texto ?? "", /UTF-8/);
   });
 
-  // Riesgo E1-R1: un global-rules.md propio sustituye al de fábrica y las fases citan sus secciones.
+  // Un global-rules.md propio sustituye al de fábrica y las fases citan sus secciones.
   it("GLOBAL-SIN-BASE avisa de las secciones que le faltan a un global-rules.md propio", () => {
     instalacionCorrecta();
     promptsTemporales({ "global-rules.md": "## REGLA GLOBAL INQUEBRANTABLE (CERO RUPTURAS)\n\n## EVIDENCIA\n" });
@@ -125,7 +125,7 @@ describe("diagnosticar", () => {
     assert.deepEqual(d.reglasGlobales.faltan, ["BASE DE CADA DECISIÓN", "PENDIENTES HEREDADOS"]);
   });
 
-  // Etapa 3, L02: BASE y PENDIENTES son esqueleto y se reinyectan desde la fábrica; EVIDENCIA no.
+  // BASE y PENDIENTES son esqueleto y se reinyectan desde la fábrica; EVIDENCIA no.
   it("GLOBAL-REINYECTADO sustituye a GLOBAL-SIN-BASE cuando la fábrica tiene las secciones que faltan", () => {
     instalacionCorrecta();
     fijarRaizDelPaquete(path.resolve(PROMPTS_DEL_REPO, "..", ".."));
@@ -329,7 +329,7 @@ describe("formatearDiagnostico", () => {
   });
 });
 
-// Ajustes de la auditoría de la Etapa 2: el diagnóstico no puede lanzar ante una instalación rota.
+// El diagnóstico no puede lanzar ante una instalación rota.
 describe("diagnosticar ante instalaciones rotas", () => {
   it("PROMPTS_PATH apuntando a un archivo no lanza y lo avisa como CAPA-NO-ES-CARPETA", () => {
     instalacionCorrecta();
@@ -369,7 +369,7 @@ describe("diagnosticar ante instalaciones rotas", () => {
   });
 });
 
-// L09 de la Etapa 4: doctor revisa los recibos, las anclas y los índices de la Fase 4, y las rutas largas.
+// doctor revisa los recibos, las anclas y los índices de la Fase 4, y las rutas largas.
 describe("diagnosticar: los recibos de la Fase 4", () => {
   const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   afterEach(() => fijarRaizDelPaquete(null));
@@ -427,7 +427,6 @@ describe("diagnosticar: los recibos de la Fase 4", () => {
     assert.match(h!.texto, /^P\/t: `04 - Ejecución\.md` no coincide con lo que el servidor ensamblaría hoy/);
   });
 
-  // Hallazgo 12 de la auditoría de la Etapa 4: el código existía y no tenía test.
   it("un recibo que no se puede leer (binario) es RECIBO-ILEGIBLE", () => {
     const { tarea } = enFase4(2);
     fs.mkdirSync(path.join(tarea, "04 - Ejecución"));

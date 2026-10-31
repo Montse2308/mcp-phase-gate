@@ -131,7 +131,7 @@ async function debeRechazar(
   await conServidor(e.env, async (llamar) => {
     const antes = arbol(e.raiz);
     respuesta = await llamar(tool, args(e));
-    // Recortado: si un caso de S9 falla, la respuesta es el megabyte entero.
+    // Recortado: si un caso de lectura acotada falla, la respuesta es el megabyte entero.
     assert.equal(respuesta.isError, true, `debía fallar y respondió: ${respuesta.texto.slice(0, 200)}`);
     assert.match(respuesta.texto, motivo);
     assert.deepEqual(arbol(e.raiz), antes, "el ataque cambió el disco");
@@ -140,8 +140,8 @@ async function debeRechazar(
   return respuesta;
 }
 
-describe("e2e: ataques de rutas (S1–S4)", () => {
-  it("1 · start_task con task_name \"../../fuera\" (S1)", async () => {
+describe("e2e: ataques de rutas", () => {
+  it("1 · start_task con task_name \"../../fuera\"", async () => {
     await debeRechazar(
       "start_task",
       () => ({ project: "PROYECTO-A", task_name: "../../fuera", initial_context: "x" }),
@@ -149,7 +149,7 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
     );
   });
 
-  it("2 · start_task con project \"../fuera\" y crear_proyecto (S2)", async () => {
+  it("2 · start_task con project \"../fuera\" y crear_proyecto", async () => {
     await debeRechazar(
       "start_task",
       () => ({ project: "../fuera", task_name: "tarea-x", initial_context: "x", crear_proyecto: true }),
@@ -157,7 +157,7 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
     );
   });
 
-  it("3 · write_central_doc con file_name \"../otra-tarea/x.md\": sale de la tarea sin salir de DOCS (S3)", async () => {
+  it("3 · write_central_doc con file_name \"../otra-tarea/x.md\": sale de la tarea sin salir de DOCS", async () => {
     await debeRechazar(
       "write_central_doc",
       () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: "../otra-tarea/x.md", content: "x" }),
@@ -165,7 +165,7 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
     );
   });
 
-  it("4 · write_central_doc con file_name absoluto (S3)", async () => {
+  it("4 · write_central_doc con file_name absoluto", async () => {
     await debeRechazar(
       "write_central_doc",
       (e) => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: path.join(e.fuera, "absoluto.md"), content: "x" }),
@@ -173,7 +173,7 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
     );
   });
 
-  it("5 · write_central_doc a través de una junction que apunta fuera de DOCS (S4)", async () => {
+  it("5 · write_central_doc a través de una junction que apunta fuera de DOCS", async () => {
     await debeRechazar(
       "write_central_doc",
       () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: "enlace/robado.md", content: "x" }),
@@ -182,11 +182,11 @@ describe("e2e: ataques de rutas (S1–S4)", () => {
   });
 
   // No sale de DOCS, pero creaba dentro un "CON" que el Explorador y OneDrive no pueden manejar.
-  it("write_central_doc con un file_path que Windows no puede guardar (auditoría, hallazgo 1)", async () => {
+  it("write_central_doc con un file_path que Windows no puede guardar", async () => {
     await debeRechazar("write_central_doc", () => ({ file_path: "PROYECTO-A/CON", content: "x" }), /file_path/);
   });
 
-  it("6 · read_central_doc a través de la misma junction (S4)", async () => {
+  it("6 · read_central_doc a través de la misma junction", async () => {
     const respuesta = await debeRechazar(
       "read_central_doc",
       () => ({ project: "PROYECTO-A", task_name: "tarea-a", file_name: "enlace/secreto.env" }),
@@ -238,7 +238,7 @@ describe("e2e: write_central_doc solo escribe dentro de una tarea (SEG-M)", () =
   });
 
   // Lo crearía una carpeta que list_tasks no ve y en la que write_central_doc no escribe.
-  it("start_task rechaza un task_name que empieza por punto (E1-D1)", async () => {
+  it("start_task rechaza un task_name que empieza por punto", async () => {
     await debeRechazar(
       "start_task",
       () => ({ project: "PROYECTO-A", task_name: ".oculta", initial_context: "x" }),
@@ -246,7 +246,7 @@ describe("e2e: write_central_doc solo escribe dentro de una tarea (SEG-M)", () =
     );
   });
 
-  it("start_task rechaza estrenar un project que empieza por punto (E1-D1)", async () => {
+  it("start_task rechaza estrenar un project que empieza por punto", async () => {
     await debeRechazar(
       "start_task",
       () => ({ project: ".oculto", task_name: "tarea-x", initial_context: "x", crear_proyecto: true }),
@@ -269,8 +269,8 @@ describe("e2e: write_central_doc solo escribe dentro de una tarea (SEG-M)", () =
   });
 });
 
-// R4: las fases se declaran como en los prompts publicados y, en la 4, con la subcarpeta de
-// recibos que llega en L07. Sin prompts al lado del servidor de build-test no habría fases.
+// Las fases se declaran como en los prompts publicados y, en la 4, con la subcarpeta de
+// recibos. Sin prompts al lado del servidor de build-test no habría fases.
 function conFases(e: Escenario, documentos: string[]): void {
   const prompts = carpetaTemporal("prompts");
   const cabeceras: Array<[string, string]> = [
@@ -294,7 +294,7 @@ const D01 = "01 - Análisis Técnico.md";
 const D02 = "02 - Decisiones.md";
 const D03 = "03 - Plan Técnico.md";
 
-describe("e2e: documentos congelados (R4)", () => {
+describe("e2e: documentos congelados", () => {
   it("rechaza reescribir 01 cuando existe 02 y lo acepta con force: true", async () => {
     const e = escenario();
     conFases(e, [D01, D02]);
@@ -322,7 +322,7 @@ describe("e2e: documentos congelados (R4)", () => {
     );
   });
 
-  // Cuestionamiento B de la auditoría de la Etapa 1: al retomar, el modelo no tenía cómo
+  // Al retomar, el modelo no tenía cómo
   // descubrir los recibos; ahora los nombra el servidor.
   it("get_phase_prompt nombra los recibos que ya existen en la tarea", async () => {
     const e = escenario();
@@ -340,7 +340,7 @@ describe("e2e: documentos congelados (R4)", () => {
     });
   });
 
-  // Hallazgo 13 de la auditoría de la Etapa 1: force también crea el contexto cuando falta.
+  // force también crea el contexto cuando falta.
   it("crear el contexto con force responde 'creado', no 'sobrescrito'", async () => {
     const e = escenario();
     conFases(e, []);
@@ -358,7 +358,7 @@ describe("e2e: documentos congelados (R4)", () => {
     });
   });
 
-  // Desde la Etapa 4 (§6.5, H4) los recibos los escribe record_batch: write_central_doc los rechaza, y
+  // Los recibos los escribe record_batch: write_central_doc los rechaza, y
   // la escotilla (force, sin elicitation) queda para reparar a mano. El recibo escrito así congela el plan
   // igual que antes.
   it("rechaza escribir un recibo sin force; con force lo escribe a mano, y el recibo congela el plan", async () => {
@@ -392,7 +392,7 @@ describe("e2e: documentos congelados (R4)", () => {
     );
   });
 
-  // En Windows y macOS otro uso de mayúsculas abre el mismo archivo: no puede esquivar R4.
+  // En Windows y macOS otro uso de mayúsculas abre el mismo archivo: no puede esquivar el congelamiento.
   it(
     "cambiar las mayúsculas del nombre no esquiva el congelamiento",
     { skip: process.platform === "linux" },
@@ -407,7 +407,7 @@ describe("e2e: documentos congelados (R4)", () => {
   );
 });
 
-// Las dos tools de lectura comparten los límites: cada caso de S9 se prueba en ambas.
+// Las dos tools de lectura comparten los límites: cada caso de límite se prueba en ambas.
 type Lector = {
   tool: string;
   ruta: (e: Escenario, nombre: string) => string;
@@ -429,8 +429,8 @@ const LECTORES: Lector[] = [
 
 const UN_MB = 1_048_576;
 
-describe("e2e: lecturas acotadas a su repo y a su tamaño (S5, S9)", () => {
-  it("read_cross_repo con repo_name \"repoA\" y file_path \"../repoB/.env\" (S5)", async () => {
+describe("e2e: lecturas acotadas a su repo y a su tamaño", () => {
+  it("read_cross_repo con repo_name \"repoA\" y file_path \"../repoB/.env\"", async () => {
     const respuesta = await debeRechazar(
       "read_cross_repo",
       () => ({ repo_name: "repoA", file_path: "../repoB/.env" }),
@@ -440,13 +440,13 @@ describe("e2e: lecturas acotadas a su repo y a su tamaño (S5, S9)", () => {
   });
 
   for (const lector of LECTORES) {
-    it(`${lector.tool} rechaza un archivo de más de 1 MB (S9)`, async () => {
+    it(`${lector.tool} rechaza un archivo de más de 1 MB`, async () => {
       await debeRechazar(lector.tool, () => lector.args("grande.md"), /límite/, (e) =>
         fs.writeFileSync(lector.ruta(e, "grande.md"), Buffer.alloc(UN_MB + 1, "a"))
       );
     });
 
-    it(`${lector.tool} rechaza un archivo con byte NUL (S9)`, async () => {
+    it(`${lector.tool} rechaza un archivo con byte NUL`, async () => {
       const respuesta = await debeRechazar(lector.tool, () => lector.args("binario.md"), /parece binario/, (e) =>
         fs.writeFileSync(lector.ruta(e, "binario.md"), Buffer.from("cabecera\u0000contenido-binario", "utf-8"))
       );
@@ -456,9 +456,9 @@ describe("e2e: lecturas acotadas a su repo y a su tamaño (S5, S9)", () => {
 });
 
 // Los mensajes se comprueban por subcadena —el campo entre comillas invertidas— y no enteros:
-// en la Etapa 2 el SDK antepone su propio prefijo. Sin las comillas, "phase" casaría con el
+// el SDK antepone su propio prefijo. Sin las comillas, "phase" casaría con el
 // nombre de la tool, que ya va en el prefijo de todo error.
-describe("e2e: argumentos validados antes de usarlos (S6)", () => {
+describe("e2e: argumentos validados antes de usarlos", () => {
   it("start_task sin task_name nombra el campo y no crea la tarea \"undefined\"", async () => {
     let docs = "";
     await debeRechazar(
@@ -485,7 +485,7 @@ describe("e2e: argumentos validados antes de usarlos (S6)", () => {
   });
 
   // Se rechaza en vez de convertirlo: es raro, el modelo lo corrige al primer intento, y
-  // convertirlo complicaría el JSON Schema que la Etapa 2 genera desde los shapes.
+  // convertirlo complicaría el JSON Schema que se genera desde los shapes.
   it("get_phase_prompt rechaza un número en texto (phase: \"3\") diciendo qué espera", async () => {
     await debeRechazar("get_phase_prompt", () => ({ phase: "3" }), /`phase` debe ser un número, por ejemplo 3/);
   });
@@ -524,8 +524,8 @@ describe("e2e: usos legítimos que siguen funcionando", () => {
     });
   });
 
-  // §3.8 pedía comprobarlo por el servidor y no solo con loadPhasePrompt (hallazgo 11 de la
-  // auditoría de la Etapa 1): es lo que de verdad le llega al modelo.
+  // Se comprueba por el servidor y no solo con loadPhasePrompt:
+  // es lo que de verdad le llega al modelo.
   it("get_phase_prompt entrega las cinco fases sin marcadores, en LF y con las reglas globales", async () => {
     const e = escenario();
     await conServidor({ ...e.env, ORQUESTADOR_PROMPTS_PATH: PROMPTS_DEL_REPO }, async (llamar) => {

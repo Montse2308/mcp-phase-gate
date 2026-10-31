@@ -1,5 +1,5 @@
-// Cada código que el diagnóstico puede emitir tiene su "cómo se arregla" en el Vigía (§7.7.4 del plan), en
-// los dos idiomas de la interfaz (§8.6): una tabla por idioma, las dos con exactamente los mismos códigos.
+// Cada código que el diagnóstico puede emitir tiene su "cómo se arregla" en el Vigía, en
+// los dos idiomas de la interfaz: una tabla por idioma, las dos con exactamente los mismos códigos.
 // Se leen los fuentes como texto: los códigos son cadenas literales en los archivos que arman hallazgos, y
 // las tablas del frontend no se compilan con estos tests.
 
@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-// Desde la Etapa 6 los textos también tienen código (`mensaje("RUTA-FUERA")`, `fallo("LOTE-…")`, y `t("…")`, el
+// Los textos también tienen código (`mensaje("RUTA-FUERA")`, `fallo("LOTE-…")`, y `t("…")`, el
 // atajo de diagnostico.ts): esos no
 // son hallazgos y no cuentan. El texto de un hallazgo usa su mismo código, que sigue apareciendo donde se
 // arma el hallazgo (`codigo: "X"`, `hallar("aviso", "X", …)`).

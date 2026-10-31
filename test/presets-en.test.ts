@@ -1,4 +1,4 @@
-// Los presets en inglés (§8.4 del plan maestro v3): cada uno tiene los mismos bloques que su gemelo en
+// Los presets en inglés: cada uno tiene los mismos bloques que su gemelo en
 // español (los mismos ids canónicos, en el mismo orden y con los mismos modos), la misma cabecera, y un
 // proyecto en inglés los ensambla sin huérfanos ni avisos.
 

@@ -1,4 +1,4 @@
-// El ensamblado por capas (§5.3.4 y §5.3.5 del plan maestro v3): qué cuerpo gana, en qué orden se
+// El ensamblado por capas: qué cuerpo gana, en qué orden se
 // aplican los bloques, qué se avisa y qué nunca llega al modelo.
 
 import { strict as assert } from "node:assert";
@@ -103,7 +103,7 @@ describe("ensamblarConCapas", () => {
     assert.match(verificacion?.modos[0] ?? "", /^despues \(.*bloques\.md:1\)$/);
   });
 
-  it("un bloque de una capa por debajo del cuerpo también aplica (R1)", () => {
+  it("un bloque de una capa por debajo del cuerpo también aplica", () => {
     const cuerpoPropio = FASE_1.replace("documento: 01 - Análisis.md", "documento: 01 - Propio.md").replace("Eres analista.", "Eres otro.");
     const capas = [fabrica(), preset(bloque("fase-1/rol", "Rol del preset.")), proyecto({ "fase-1-mia.md": cuerpoPropio })];
 

@@ -1,6 +1,6 @@
-// Los mensajes del servidor en los dos idiomas (§8.5 del plan maestro v3): todo código tiene su texto en
+// Los mensajes del servidor en los dos idiomas: todo código tiene su texto en
 // español y en inglés, ningún código se repite, todo código que usa el código fuente existe, y el idioma
-// sale de donde dice el plan (el proyecto de la llamada, PHASE_GATE_LANG, el sistema).
+// sale de donde toca (el proyecto de la llamada, PHASE_GATE_LANG, el sistema).
 
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
