@@ -11,6 +11,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    # El entorno donde se configura la aprobación manual antes de publicar.
+    environment: npm
+
     permissions:
       contents: read
       id-token: write # lo exige --provenance para firmar el paquete
