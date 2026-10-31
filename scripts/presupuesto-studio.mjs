@@ -1,4 +1,4 @@
-// El presupuesto del frontend del Studio (§7.2 del plan): JS, CSS y fuentes de studio/dist/**, sumados
+// El presupuesto del frontend del Studio: JS, CSS y fuentes de studio/dist/**, sumados
 // en gzip, no pasan de 200 kB (200 000 bytes, como cuenta Vite). Las fuentes woff2 ya van comprimidas: su
 // tamaño en gzip es casi el mismo. Sale con 1 si se pasa, para que `npm run build` falle.
 //
