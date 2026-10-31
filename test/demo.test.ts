@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { fijarRaizDelPaquete } from "../src/config.js";
 import { MARCA_DE_DEMO, gitEnLaDemo } from "../src/git.js";
-import { activarDemo, borrarDemo, carpetaDeTextos, carpetasDeDemo, entornoDeDemo, entornoInitDeDemo, generarDemo, prepararDemo, textoDeLaMarca } from "../src/studio/demo.js";
+import { activarDemo, borrarDemo, carpetaDeLaDemo, carpetaDeTextos, carpetasDeDemo, entornoDeDemo, entornoInitDeDemo, generarDemo, prepararDemo, textoDeLaMarca } from "../src/studio/demo.js";
 import { carpetaTemporal, crearProyecto, crearSymlink, limpiarEntorno } from "./helpers.js";
 import { git, huellaDelArbol, pedir } from "./studio-ayudas.js";
 
@@ -399,6 +399,27 @@ describe("demo: borrar, preparar y activar", () => {
     const antes = huellaDelArbol(path.dirname(ajena));
     await assert.rejects(prepararDemo("es", ajena), /no es una carpeta de demo/);
     assert.deepEqual(huellaDelArbol(path.dirname(ajena)), antes);
+  });
+
+  it("carpetaDeLaDemo: cuelga de la ruta larga de la carpeta temporal, no de la forma 8.3 ni de un enlace, y sigue el idioma", () => {
+    const real = carpetaTemporal("temporal");
+    const enlace = path.join(carpetaTemporal("enlaces"), "tmp");
+    crearSymlink(real, enlace);
+    // Otra forma del mismo directorio: lo que daría la variable del sistema con un nombre corto.
+    const antes = { TMP: process.env.TMP, TEMP: process.env.TEMP, TMPDIR: process.env.TMPDIR };
+    cerrables.push(() => {
+      for (const [clave, valor] of Object.entries(antes)) {
+        if (valor === undefined) delete process.env[clave];
+        else process.env[clave] = valor;
+      }
+    });
+    process.env.TMP = process.env.TEMP = process.env.TMPDIR = enlace;
+    assert.equal(path.dirname(carpetaDeLaDemo("es")), fs.realpathSync.native(enlace));
+    assert.equal(path.dirname(carpetaDeLaDemo("en")), fs.realpathSync.native(enlace));
+    assert.notEqual(carpetaDeLaDemo("es"), carpetaDeLaDemo("en"));
+    // Una carpeta temporal que no existe no rompe el cálculo.
+    process.env.TMP = process.env.TEMP = process.env.TMPDIR = path.join(real, "no-existe");
+    assert.equal(path.dirname(carpetaDeLaDemo("es")), path.join(real, "no-existe"));
   });
 
   it("activarDemo: fuera las PHASE_GATE_* (salvo PHASE_GATE_LANG), ORQUESTADOR_* y GIT_* de quien lanza, dentro las de la demo; init en la casa de la demo, sin ejecutar nada", async () => {
