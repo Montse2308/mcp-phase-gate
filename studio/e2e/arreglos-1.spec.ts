@@ -220,9 +220,10 @@ vivo("la Red con la Documentación vacía dice el siguiente paso y enlaza a Ajus
 });
 
 // ─── La banda de `ui --demo` y la ruta de la carpeta temporal ───────────────────────────────────────────────
-// La carpeta temporal llega por un enlace (en Windows puede llegar como un nombre corto 8.3): la banda tiene que
-// decir la ruta real, no la que dio el sistema.
-vivo("ui --demo con la carpeta temporal por un enlace: la banda dice la ruta larga, y a 390 px no desborda", async ({ browser }) => {
+// La carpeta temporal llega por un enlace (en Windows puede llegar como un nombre corto 8.3): el título de la
+// banda tiene que decir la ruta real, no la que dio el sistema, y el texto de la banda es corto: a 390 px cabe en
+// dos líneas.
+vivo("ui --demo con la carpeta temporal por un enlace: el título de la banda dice la ruta larga, el texto es corto y a 390 px no desborda", async ({ browser }) => {
   vivo.setTimeout(180_000);
   const raiz = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "pg-e2e-demo-larga-"));
   const real = path.join(raiz, "temporal-real");
@@ -238,8 +239,12 @@ vivo("ui --demo con la carpeta temporal por un enlace: la banda dice la ruta lar
   const page = await contexto.newPage();
   try {
     await page.goto(`${servidor.origen}/`);
-    await expect(page.locator(".banda-demo")).toContainText(`Demo: datos de ejemplo en ${demo}`);
-    await expect(page.locator(".banda-demo")).not.toContainText(enlace);
+    const banda = page.locator(".banda-demo");
+    await expect(banda).toHaveText("Demo: datos de ejemplo. Qué es mcp-phase-gate");
+    await expect(banda).toHaveAttribute("title", `Demo: datos de ejemplo en ${demo}`);
+    expect(await banda.getAttribute("title")).not.toContain(enlace);
+    const { alto, linea } = await banda.evaluate((e) => ({ alto: e.getBoundingClientRect().height, linea: parseFloat(getComputedStyle(e).lineHeight) }));
+    expect(alto, "la banda no ocupa más de dos líneas").toBeLessThanOrEqual(linea * 2 + 24);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   } finally {
     await contexto.close();

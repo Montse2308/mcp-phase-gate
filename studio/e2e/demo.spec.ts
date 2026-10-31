@@ -61,7 +61,9 @@ const banda = (page: import("@playwright/test").Page) => page.locator(".banda-de
 
 test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documentación de quien la lanza, y la banda fija", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/`);
-  await expect(banda(page)).toHaveText(`Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)} Qué es mcp-phase-gate`);
+  // La carpeta de la demo va en el título de la banda, no en su texto: a 390 px lo llenaba todo.
+  await expect(banda(page)).toHaveText("Demo: datos de ejemplo. Qué es mcp-phase-gate");
+  await expect(banda(page)).toHaveAttribute("title", `Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
   await expect(banda(page).getByRole("link", { name: "Qué es mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/es/");
   // Un landmark con nombre: fuera de toda región, axe la marca.
   await expect(page.getByRole("complementary", { name: "Aviso sobre los datos" })).toHaveClass("banda-demo");
@@ -162,7 +164,8 @@ test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
   await ponerTema(page, "oscuro");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)} What is mcp-phase-gate`);
+  await expect(banda(page)).toHaveText("Demo: sample data. What is mcp-phase-gate");
+  await expect(banda(page)).toHaveAttribute("title", `Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
   await expect(banda(page).getByRole("link", { name: "What is mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/");
   const lista = lotesDeLaFase(page, "Batches of Phase 4");
   await expect(lista).toHaveCount(4);
@@ -178,7 +181,7 @@ test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos
   for (const i of [0, 1]) await expect(sellados.nth(i).locator(".estado-sellado")).toHaveText("sealed");
 });
 
-test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en los dos temas", async ({ page, servidor }) => {
+test("en un teléfono (390×844), con la banda, nada desborda en los dos temas", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/`);
   await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
