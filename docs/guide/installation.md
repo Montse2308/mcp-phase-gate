@@ -37,7 +37,7 @@ Nothing to install: `npx` fetches the package the first time and caches it. Ever
 **The key you give it is what identifies the server and prefixes its tools and commands**, so you can name it whatever you like. The examples use `mcp-phase-gate`, the same as the npm package and the name the server reports for itself. If you're registering it for the first time, a short key such as `pg` keeps the commands short (`/pg:f1` in Claude Code). **If it's already registered, keep your key**: changing it renames every tool and command, and you'd have to grant their permissions again.
 
 <details open>
-<summary><b>Cursor</b> — <code>~/.cursor/mcp.json</code> (create it if missing)</summary>
+<summary><b>Cursor</b> — <code>~/.cursor/mcp.json</code>, on Windows <code>C:\Users\&lt;YOUR_USER&gt;\.cursor\mcp.json</code> (create it if missing)</summary>
 
 ```json
 {
@@ -97,6 +97,8 @@ The language of the tool descriptions and of the messages that don't belong to a
 
 Only needed if you're going to edit the repo's prompts directly, or contribute. You do *not* need it to add prompts of your own: that's done by layering folders, [see the Prompts guide](prompts.md#the-phase-prompts-live-in-promptslanguage).
 
+Building from source needs **Node 22.12 or newer**, because of Vite; the npm package works on any Node 22.
+
 **1. Clone and build.** `build/` is **not** committed, so it has to be generated on every machine:
 
 ```bash
@@ -108,11 +110,11 @@ npm run build
 
 **2. Tell the server where your folders are**, with THIS machine's paths (never committed). Don't use `init` here: it registers the npm package with `npx`, not your clone. Open the Studio from the clone, `node build/index.js ui`, and fill in **Settings › This machine**, or write `machine.json` yourself ([its format](configuration.md#machinejson-what-belongs-to-each-machine)). If you prefer a file next to the code, a `.env` also works, and it **wins** over `machine.json`:
 
-```bash
-cp .env.example .env
+```bat
+copy .env.example .env
 ```
 
-Single backslashes on Windows, no quotes:
+On macOS and Linux, use `cp .env.example .env`. Find your real path by opening the folder in the file explorer and copying the path from the address bar. Single backslashes on Windows, no quotes:
 
 ```ini
 PHASE_GATE_DOCS_PATH=C:\Users\YOUR_USER\OneDrive - YOUR ORGANISATION\Documents\DOCUMENTATION
@@ -182,7 +184,7 @@ DOCUMENTATION/
         └── <task_name>/
 ```
 
-The `Proyectos` level is the tasks subfolder, and its name is configurable (`Projects`, or empty): `rutas.subcarpetaTareas` in `machine.json`, or `PHASE_GATE_TASKS_SUBDIR` ([see Configuration](configuration.md#environment-variables)). The document names come from the phase prompts of the project's language: a project in Spanish has `00 - Contexto Inicial.md`, `01 - Análisis Técnico.md`… `04 - Ejecución/` and `05 - Auditoría.md` ([see the table](configuration.md#languages)). A project never mixes the two.
+`PROJECT-A`, `PROJECT-B` and `PROJECT-C` are examples: your projects are whatever folders you have there, with whatever names you give them. The `Proyectos` level is the tasks subfolder, and its name is configurable (`Projects`, or empty): `rutas.subcarpetaTareas` in `machine.json`, or `PHASE_GATE_TASKS_SUBDIR` ([see Configuration](configuration.md#environment-variables)). The document names come from the phase prompts of the project's language: a project in Spanish has `00 - Contexto Inicial.md`, `01 - Análisis Técnico.md`… `04 - Ejecución/` and `05 - Auditoría.md` ([see the table](configuration.md#languages)). A project never mixes the two.
 
 **Batches and receipts.** The phase 3 plan splits the work into batches (`L01`, `L02`…): each one is a change that can be reverted on its own and leaves the application working. Phase 4 runs them one at a time, and each batch leaves a short **receipt** (what was done, what was verified, what is waiting for you) in `04 - Execution/`, written by the server with `record_batch`, and a commit. When the last batch closes, the server generates `04 - Execution.md`: with several batches it's the index of the receipts; with a single one, the receipt itself, moved there. Until then the phase doesn't show as finished ([how it works](tools.md#phase-4-with-the-server-record_batch)). When you ask for phase 4 or 5, the server appends the list of existing receipts to the prompt, so a new chat can pick up without guessing their names.
 
@@ -214,4 +216,4 @@ How they look in each client:
 | Cursor | To be verified (per its docs: in the MCP prompts menu) | To be verified | To be verified | To be verified | On Windows, `PHASE_GATE_ELICITATION=off` while the form bug stays open ([see the Tools guide](tools.md#protected-documents)) |
 | VS Code | To be verified (its docs contradict themselves between `/<key>.f1` and `mcp.<key>.f1`) | To be verified | To be verified | To be verified | |
 
-**If your client doesn't show them comfortably**, use the files: in this repo, Claude Code already reads them from [`.claude/commands/`](../../.claude/commands) (identical to `prompts/es/comandos/`); to use them in your other projects, `npx mcp-phase-gate init --comandos` copies them, in your machine's language, to `~/.claude/commands/` or `~/.cursor/commands/`, without overwriting any you wrote yourself. More detail in [`docs/phase-commands.md`](../phase-commands.md).
+**If your client doesn't show them comfortably**, use the files: in this repo, Claude Code already reads them from [`.claude/commands/`](../../.claude/commands) (identical to `prompts/es/comandos/`); to use them in your other projects, `npx mcp-phase-gate init --comandos` copies them, in your machine's language, to `~/.claude/commands/` or `~/.cursor/commands/` (on Windows, `C:\Users\<YOUR_USER>\.claude\commands\` or `C:\Users\<YOUR_USER>\.cursor\commands\`), without overwriting any you wrote yourself. More detail in [`docs/phase-commands.md`](../phase-commands.md).

@@ -38,6 +38,8 @@ Every design choice is recorded with its reason and the alternative it discarded
 
 > **Note:** this applies to **code** changes only. If all you edited was a prompt under `prompts/<language>/*.md` or a preset, there is **nothing to build and nothing to restart** — they're read on every call.
 
+Building from source needs **Node 22.12 or newer**, because of Vite; the npm package works on any Node 22.
+
 The source lives in `src/`, split by responsibility:
 
 | File | What it handles |
@@ -107,7 +109,7 @@ The site's media (the GIF, video and poster of the READMEs, the three screenshot
 | The `/f1`–`/f5` commands | Their text in [`prompts/en/commands/`](prompts/en/commands) and [`prompts/es/comandos/`](prompts/es/comandos); how they reach each client in [`docs/phase-commands.md`](docs/phase-commands.md) |
 | The presets and the schemas | [`presets/en/`](presets/en), [`presets/es/`](presets/es) and [`schema/`](schema). The schemas are generated from the zod shapes: `npm run build && node scripts/generar-esquemas.mjs` |
 | What changed in each version | The [Releases](https://github.com/Montse2308/mcp-phase-gate/releases) on GitHub; their drafts are in [`docs/notas/`](docs/notas) |
-| The version 3 plan | [`docs/plan-maestro-v3.md`](docs/plan-maestro-v3.md) (Spanish) |
+| The version 3 plan | [`docs/plan-maestro-v3.md`](docs/plan-maestro-v3.md) (Spanish). Historical: it describes 3.x, and 4.0 removed its cockpit design |
 | That a change broke nothing | [`test/`](test), via `npm test`. CI runs them on every PR |
 | A security problem | [`SECURITY.md`](SECURITY.md): report it privately, not in an issue |
 | What's still missing | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — grouped under the `v1-uso-propio` and `v2-publico` labels |
@@ -198,6 +200,8 @@ Cada decisión de diseño está registrada, con su porqué y la alternativa que 
 > un prompt de `prompts/<idioma>/*.md` o un preset, **no hace falta compilar ni reiniciar nada** — se leen
 > en cada llamada.
 
+Compilar desde el código pide **Node 22.12 o superior**, por Vite; el paquete de npm funciona con cualquier Node 22.
+
 El código fuente está en `src/`, repartido por responsabilidad:
 
 | Archivo | De qué se encarga |
@@ -267,7 +271,7 @@ Los medios del sitio (el GIF, el video y el póster de los README, las tres capt
 | Los comandos `/f1`–`/f5` | Su texto en [`prompts/es/comandos/`](prompts/es/comandos) y [`prompts/en/commands/`](prompts/en/commands); cómo llegan a cada cliente en [`docs/comandos-de-fase.md`](docs/comandos-de-fase.md) |
 | Los presets y los esquemas | [`presets/es/`](presets/es), [`presets/en/`](presets/en) y [`schema/`](schema). Los esquemas se generan de los shapes zod: `npm run build && node scripts/generar-esquemas.mjs` |
 | Qué cambió en cada versión | Los [Releases](https://github.com/Montse2308/mcp-phase-gate/releases) de GitHub; sus borradores están en [`docs/notas/`](docs/notas) |
-| El plan de la versión 3 | [`docs/plan-maestro-v3.md`](docs/plan-maestro-v3.md) |
+| El plan de la versión 3 | [`docs/plan-maestro-v3.md`](docs/plan-maestro-v3.md). Histórico: describe la 3.x, y la 4.0 quitó su diseño de cabina |
 | Que un cambio no rompió nada | [`test/`](test), con `npm test`. El CI los corre en cada PR |
 | Un problema de seguridad | [`SECURITY.md`](SECURITY.md): se reporta en privado, no en un issue |
 | Lo que falta por hacer | [Issues](https://github.com/Montse2308/mcp-phase-gate/issues) — agrupados con las labels `v1-uso-propio` y `v2-publico` |

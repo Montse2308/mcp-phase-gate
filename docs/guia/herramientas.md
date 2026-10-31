@@ -34,7 +34,7 @@ Tres cosas que **no** hace, a propósito:
 
 Desde la 3.0 la IA ya no redacta los recibos ni el documento de la Fase 4: le pasa al servidor los datos de cada lote, y el servidor escribe el recibo, comprueba el commit contra git y cierra la fase al anclar el último lote.
 
-**Cada lote, en dos tiempos** (con la política por defecto):
+**Cada lote, antes y después del commit** (con la política por defecto):
 
 1. `get_batch_status` dice qué lote toca y si alguno espera su commit.
 2. La IA implementa el lote y lo verifica ejecutando.
