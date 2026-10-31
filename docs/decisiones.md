@@ -560,7 +560,9 @@ mismos tokens y se revisó con capturas. El GIF de la demo, que se graba con el 
   sellado». El estado de un lote se dice en minúscula, con un solo conjunto de palabras (verificado, sellado,
   con pendientes, commit pendiente, no vigente, rechazado, descartado, manual, nota, sin recibo), en las claves
   `estado.*` y en las clases `estado-*`; las fases, en `fase.*` y `fase-*`. Los nombres `Estacion`,
-  `estaciones` y `Senal` del contrato del Studio quedan como identificadores internos, y la interfaz no los usa.
+  `estaciones` y `Senal` siguen como identificadores internos del contrato del Studio: renombrarlos durante el
+  congelamiento cambiaría la API y obligaría a regenerar los datos de la demo y el dorado de la exportación, sin
+  que nada se viera distinto. No se ven en pantalla.
 - **Lo que deja de usarse se borra**: la vía, los vagones, los semáforos y los sellos SVG (`studio/public/sellos/`;
   el sitio exportado ya no los lleva), con su CSS y sus variables.
 - **Una prueba comprueba que el tema no toca la estructura**: compara el árbol del DOM y el de accesibilidad
