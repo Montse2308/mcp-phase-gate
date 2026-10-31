@@ -9,8 +9,6 @@ import { z } from "zod";
 
 import { diagnosticoShape } from "../schemas.js";
 
-export const ErrorApi = z.object({ error: z.string() });
-
 // ─── /api/estado ────────────────────────────────────────────────────────────
 export const Modo = z.enum(["vivo", "demo", "estatico"]);
 // activo: the watcher reports; degradado: polling saw a change the watcher did not report; apagado: there is none.

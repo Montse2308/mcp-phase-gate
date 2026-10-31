@@ -153,8 +153,6 @@ function unicoDe(porLote: Map<number, ReciboEnDisco[]>, lote: number, fase: Fase
   return deEste[0] ?? null;
 }
 
-export const esSellado = (ancla: Ancla): boolean => ancla.tipo === "commit" || ancla.tipo === "sha256";
-
 // Closed: with a receipt and an anchor other than pending. A failed one is closed for the order, but does not
 // close the phase.
 const cerrado = (recibo: Recibo | undefined): boolean => recibo !== undefined && recibo.ancla.tipo !== "pendiente";
