@@ -9,6 +9,11 @@ on:
     branches: [master, v4/integracion]
   pull_request:
 
+# Los jobs solo leen el repo: ninguno escribe en él ni publica nada. Se declara aquí, como en los otros dos
+# workflows, para que no dependa del ajuste del repositorio, que se puede cambiar sin tocar este archivo.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
@@ -38,6 +43,12 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Las dependencias de producción, sin una vulnerabilidad alta o crítica abierta. Solo en una de las
+      # combinaciones: el árbol de dependencias es el mismo en las seis y repetirlo no agrega nada.
+      - name: Auditar las dependencias de producción
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 22
+        run: npm audit --omit=dev --audit-level=high
 
       # Ni los comentarios ni los nombres de los tests pueden citar documentos de trabajo que no viajan
       # con el repo (secciones numeradas, etapas, hallazgos, códigos). Va dentro de este job, y no en otro
