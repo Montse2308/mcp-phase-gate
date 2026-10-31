@@ -97,7 +97,7 @@ export const ProyectosRespuesta = z.object({
 });
 
 // ─── One task ───────────────────────────────────────────────────────────────
-// The signal of each station on the board: shape, text and colour all come from here.
+// The state of each of the task's phases on the Board: the indicator's shape, text and colour all come from here.
 export const Senal = z.enum(["verde", "ambar", "rojo", "apagado"]);
 export const TextoDeSenal = z.enum(["cerrada", "con pendientes", "en curso", "hueco", "pendiente"]);
 

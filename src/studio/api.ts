@@ -306,7 +306,7 @@ function mtimeDe(ruta: string): number | null {
   }
 }
 
-// The board's stations, with their signal:
+// The state of each of the task's phases on the Board:
 //   verde    the document exists and has no `## Validaciones pendientes` section with content;
 //   ámbar    it exists with pending items (the same section, or a receipt with pending or failed status),
 //            or it is the batches phase with receipts and no document
