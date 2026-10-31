@@ -1,5 +1,5 @@
 {
-  "$comentario": "The script of the Studio demo (§7.8 of the plan): projects, repos with their starting files, tasks with their documents (in this same folder, <PROJECT>/<task>/) and the batches recorded with record_batch. Everything here is an invented example.",
+  "$comentario": "The script of the Studio demo: projects, repos with their starting files, tasks with their documents (in this same folder, <PROJECT>/<task>/) and the batches recorded with record_batch. Everything here is an invented example.",
   "inicio": "2026-03-02T10:00:00Z",
   "autor": { "nombre": "Demo", "correo": "demo@example.invalid" },
   "proyectos": [
