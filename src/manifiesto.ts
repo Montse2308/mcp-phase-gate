@@ -1,15 +1,15 @@
-// La configuración que no es una variable de entorno: el manifiesto de cada proyecto
-// (`<DOCS>/<PROYECTO>/phase-gate.json`), la de cada equipo (`<configDir>/machine.json`) y los
-// presets disponibles.
+// The configuration that is not an environment variable: the manifest of each project
+// (`<DOCS>/<PROJECT>/phase-gate.json`), the one of each machine (`<configDir>/machine.json`) and the
+// available presets.
 //
-// Los dos archivos son opcionales. Un proyecto sin manifiesto usa los valores por defecto; un equipo
-// sin machine.json, también. Pero un archivo que existe y está mal escrito es un error explícito,
-// con la ruta exacta del problema: ignorarlo en silencio y caer a los valores por defecto es el
-// fallo silencioso que este diseño quiere evitar (decisión F2 del plan).
+// Both files are optional. A project without a manifest uses the default values; a machine without
+// machine.json, too. But a file that exists and is badly written is an explicit error, with the exact path
+// of the problem: ignoring it silently and falling back to the default values is the silent failure this
+// design wants to avoid.
 //
-// Una sola fuente: los shapes zod de aquí validan los archivos, y schema/project.json y
-// schema/machine.json —los que un editor usa para autocompletar— se generan de ellos
-// (scripts/generar-esquemas.mjs). Un test exige que los publicados coincidan con lo que se genera.
+// A single source: the zod shapes here validate the files, and schema/project.json and schema/machine.json
+// —the ones an editor uses for autocompletion— are generated from them (scripts/generar-esquemas.mjs). A
+// test requires the published ones to match what is generated.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "fs";
@@ -33,9 +33,9 @@ const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 export const RepoManifiesto = z
   .object({
-    // El mensaje es una función: se redacta al validar, en el idioma de la llamada.
+    // The message is a function: it is worded when validating, in the language of the call.
     id: z.string().regex(ID, { error: () => mensaje("MANIFIESTO-TXT-ID-DE-REPO") }),
-    dir: z.string().min(1), // relativo a PHASE_GATE_REPOS_PATH; ver leerManifiesto
+    dir: z.string().min(1), // relative to PHASE_GATE_REPOS_PATH; see leerManifiesto
     rol: z.string().max(60).optional(),
   })
   .strict();
@@ -45,12 +45,12 @@ export const Manifiesto = z
     $schema: z.string().optional(),
     version: z.literal(1),
     preset: z.string().regex(ID).default("software"),
-    // Sin `idioma`, el del proyecto se deduce: primero de sus documentos, después del equipo (§8.3).
+    // Without `idioma`, the project's is deduced: first from its documents, then the machine's.
     idioma: z.enum(["es", "en"]).optional(),
     repos: z.array(RepoManifiesto).default([]),
     reglas: z
       .object({
-        lotes: z.boolean().optional(), // si falta, decide el preset
+        lotes: z.boolean().optional(), // if missing, the preset decides
         commits: z.enum(POLITICAS_COMMIT).optional(),
         verificacion: z.array(z.string().min(1)).max(20).optional(),
       })
@@ -68,26 +68,25 @@ export { ARCHIVO_MAQUINA, MaquinaConfig, URL_ESQUEMA_MAQUINA, rutaDeError };
 export const ARCHIVO_MANIFIESTO = "phase-gate.json";
 export const URL_ESQUEMA_PROYECTO = "https://unpkg.com/mcp-phase-gate@3/schema/project.json";
 
-// ─── Errores legibles ───────────────────────────────────────────────────────
-// Un JSON con BOM (el Bloc de notas lo pone) se lee igual.
+// ─── Readable errors ────────────────────────────────────────────────────────
+// A JSON with a BOM (Notepad adds it) is read the same.
 function leerJson(ruta: string): unknown {
   return JSON.parse(fs.readFileSync(ruta, "utf-8").replace(/^\uFEFF/, ""));
 }
 
 // ─── Presets ────────────────────────────────────────────────────────────────
-// Un preset es un solo archivo de bloques con una cabecera plana. Los del paquete viven en
-// presets/<idioma>/ y los del usuario en <configDir>/presets/; con el mismo nombre gana el del
-// usuario. `software` es el preset por defecto: son los prompts de fábrica tal cual, así que existe
-// aunque no haya archivo.
+// A preset is a single file of blocks with a flat header. The package's live in presets/<language>/ and the
+// user's in <configDir>/presets/; with the same name the user's wins. `software` is the default preset: it
+// is the factory prompts as they are, so it exists even without a file.
 export const PRESET_POR_DEFECTO = "software";
 
 export type OrigenPreset = "paquete" | "usuario" | "integrado";
 export type Preset = {
   nombre: string;
   descripcion: string | null;
-  lotes: boolean | null; // valores por defecto del preset; `reglas` del manifiesto los sobrescribe
+  lotes: boolean | null; // default values of the preset; the manifest's `reglas` override them
   commits: PoliticaCommit | null;
-  ruta: string | null; // null: el integrado `software`
+  ruta: string | null; // null: the built-in `software`
   origen: OrigenPreset;
 };
 
@@ -104,9 +103,9 @@ function leerPreset(ruta: string, nombre: string, origen: OrigenPreset): Preset 
   try {
     meta = separarFrontmatter(leerPromptNormalizado(ruta)).meta;
   } catch {
-    // Un preset ilegible sigue existiendo: el error real sale al leer sus bloques.
+    // An unreadable preset still exists: the real error comes out when reading its blocks.
   }
-  // Las claves en el idioma del preset: `lotes` o `batches`, `descripcion` o `description` (§8.2).
+  // The keys in the preset's language: `lotes` or `batches`, `descripcion` or `description`.
   const delPreset = valorDePreset(meta, "lotes");
   const lotes = delPreset === "true" ? true : delPreset === "false" ? false : null;
   const commits = (POLITICAS_COMMIT as readonly string[]).includes(meta.commits ?? "") ? (meta.commits as PoliticaCommit) : null;
@@ -127,7 +126,7 @@ function presetsDe(carpeta: string, origen: OrigenPreset): Preset[] {
     .map((archivo) => leerPreset(path.join(carpeta, archivo), archivo.slice(0, -3), origen));
 }
 
-// Sin idioma, el del equipo (§8.3): los presets del paquete existen en los dos idiomas con los mismos nombres.
+// Without a language, the machine's: the package's presets exist in both languages with the same names.
 export function presetsDisponibles(idioma: string = idiomaSinProyecto()): Map<string, Preset> {
   const presets = new Map<string, Preset>();
   presets.set(PRESET_POR_DEFECTO, {
@@ -157,9 +156,9 @@ export function rutaManifiesto(carpetaProyecto: string): string {
   return path.join(requireBasePath(DOCS), carpetaProyecto, ARCHIVO_MANIFIESTO);
 }
 
-// Un dir de repo es relativo a PHASE_GATE_REPOS_PATH y no sale de ahí: ni absoluto (en ningún
-// sistema, porque el manifiesto viaja entre equipos) ni con "..". Para un repo que vive en otro
-// sitio está machine.json, que es de cada equipo.
+// A repo's dir is relative to PHASE_GATE_REPOS_PATH and does not leave it: not absolute (on any system,
+// because the manifest travels between machines) nor with "..". For a repo that lives elsewhere there is
+// machine.json, which belongs to each machine.
 function errorDeDir(dir: string): string | null {
   if (path.win32.isAbsolute(dir) || path.posix.isAbsolute(dir)) {
     return mensaje("MANIFIESTO-TXT-DIR-ABSOLUTO");
@@ -218,16 +217,16 @@ export function leerManifiesto(carpetaProyecto: string): LecturaManifiesto {
   return { estado: "valido", ruta, manifiesto };
 }
 
-// Para quien necesita el manifiesto para trabajar: null si no hay, y un error con la ruta del
-// problema si está mal escrito.
+// For whoever needs the manifest to work: null if there is none, and an error with the path of the problem
+// if it is badly written.
 export function manifiestoDe(carpetaProyecto: string): Manifiesto | null {
   const lectura = leerManifiesto(carpetaProyecto);
   if (lectura.estado === "invalido") throw new ErrorConCodigo("MANIFIESTO-TXT-INVALIDO", lectura.error);
   return lectura.estado === "valido" ? lectura.manifiesto : null;
 }
 
-// Las copias que no se llaman exactamente phase-gate.json: la que deja OneDrive al editar el mismo
-// archivo en dos equipos ("phase-gate-PC.json"), o un "phase-gate (1).json". Ninguna se lee.
+// The copies not called exactly phase-gate.json: the one OneDrive leaves when the same file is edited on two
+// machines ("phase-gate-PC.json"), or a "phase-gate (1).json". None is read.
 export function copiasEnConflicto(carpetaProyecto: string): string[] {
   try {
     return fs
@@ -239,57 +238,58 @@ export function copiasEnConflicto(carpetaProyecto: string): string[] {
   }
 }
 
-// ─── Idioma del proyecto (§8.3) ─────────────────────────────────────────────
-// El idioma ESTRUCTURAL de un proyecto: la capa de fábrica (prompts/<idioma>/, presets/<idioma>/), los
-// nombres de los documentos y el vocabulario con que escribe el servidor. Es del proyecto, porque la
-// deducción de fase depende de los nombres de documento. En este orden:
-//   1. `idioma` del manifiesto;
-//   2. lo que ya hay en disco: el idioma de los documentos de sus tareas ("el disco es la verdad": un
-//      proyecto sin manifiesto, con tareas en español, no se ve de golpe sin fases hechas porque el
-//      sistema esté en inglés); con documentos de los dos, el que más tenga, y doctor da IDIOMA-MIXTO;
+// ─── Language of the project ────────────────────────────────────────────────
+// The STRUCTURAL language of a project: the factory layer (prompts/<language>/, presets/<language>/), the
+// names of the documents and the vocabulary the server writes with. It belongs to the project, because the
+// phase deduction depends on the document names. In this order:
+//   1. `idioma` of the manifest;
+//   2. what is already on disk: the language of the documents of its tasks ("the disk is the truth": a
+//      project without a manifest, with tasks in Spanish, must not suddenly look like it has no phases done
+//      just because the system is in English); with documents of both, the one with the most, and doctor
+//      gives IDIOMA-MIXTO;
 //   3. PHASE_GATE_LANG: what belongs to the run wins over what is stored, as in the paths;
 //   4. `idiomaPorDefecto` of machine.json;
-//   5. el idioma del sistema (es si su locale empieza por "es"; si no, en). Salvo para un proyecto con un
-//      manifiesto sin `idioma`: ese manifiesto es de la 3.0 o la 3.1, cuyo esquema daba "es" por defecto, y
-//      sigue en español aunque el sistema esté en inglés, como en un Linux sin LANG (hallazgo 2 de la
-//      auditoría de la Etapa 6). machine.json y PHASE_GATE_LANG, que alguien fijó a propósito, sí cuentan.
+//   5. the system language (es if its locale starts with "es"; otherwise en). Except for a project with a
+//      manifest without `idioma`: that manifest is from 3.0 or 3.1, whose schema defaulted to "es", and it
+//      stays in Spanish even if the system is in English, as on a Linux without LANG. machine.json and
+//      PHASE_GATE_LANG, which someone set on purpose, do count.
 export type OrigenDelIdioma = "del proyecto" | "de sus documentos" | "de machine.json" | "de PHASE_GATE_LANG" | "del manifiesto sin idioma" | "del sistema";
 export type DocumentosPorIdioma = Record<Idioma, { documentos: number; tareas: string[] }>;
-// `sinIdiomaDeclarado`: tiene un manifiesto válido que no dice su idioma (doctor da MANIFIESTO-SIN-IDIOMA
-// si tampoco lo dicen sus documentos).
+// `sinIdiomaDeclarado`: it has a valid manifest that does not state its language (doctor gives
+// MANIFIESTO-SIN-IDIOMA if its documents do not state it either).
 export type IdiomaResuelto = { idioma: Idioma; origen: OrigenDelIdioma; enDisco: DocumentosPorIdioma; sinIdiomaDeclarado: boolean };
 
 function sinDocumentos(): DocumentosPorIdioma {
   return { es: { documentos: 0, tareas: [] }, en: { documentos: 0, tareas: [] } };
 }
 
-// Los nombres se comparan en NFC y sin mayúsculas, igual en todos los sistemas: en Windows y macOS el disco
-// no distingue mayúsculas y en Linux sí, y un nombre que llega en NFD (macOS, OneDrive) es el mismo documento
-// (hallazgo 12 de la auditoría de la Etapa 6).
+// The names are compared in NFC and case-insensitively, the same on every system: on Windows and macOS the
+// disk does not distinguish capitals and on Linux it does, and a name that arrives in NFD (macOS, OneDrive)
+// is the same document.
 const comparable = (nombre: string): string => nombre.normalize("NFC").toLowerCase();
 const NOMBRES_POR_IDIOMA: ReadonlyArray<[Idioma, ReadonlySet<string>]> = IDIOMAS.map((idioma) => {
   const { contextoInicial, deFase } = VOCABULARIO[idioma].documentos;
   return [idioma, new Set([contextoInicial, ...deFase].map(comparable))];
 });
 
-// El recuento de una llamada (una tool, una petición de lectura del Studio, un doctor): el idioma de un
-// proyecto se pregunta muchas veces en la misma llamada (el idioma de los mensajes, el de los presets al leer
-// el manifiesto, el de las capas, el del prompt…), y cada recuento lee todas sus carpetas de tarea. Con esto,
-// una vez por proyecto y por llamada (hallazgo 3 de la auditoría de la Etapa 6). Fuera de una llamada no hay
-// caché: cada pregunta mira el disco. The same call also reads machine.json once (conMaquinaDeLaLlamada).
+// The count of a call (a tool, a read request of the Studio, a doctor): a project's language is asked many
+// times in the same call (the messages' language, the presets' when reading the manifest, the layers', the
+// prompt's…), and each count reads all its task folders. With this, once per project and per call. Outside
+// a call there is no cache: each question looks at the disk. The same call also reads machine.json once
+// (conMaquinaDeLaLlamada).
 const recuentosDeLaLlamada = new AsyncLocalStorage<Map<string, DocumentosPorIdioma>>();
 
 export function conCacheDelIdioma<T>(funcion: () => T): T {
   return conMaquinaDeLaLlamada(() => (recuentosDeLaLlamada.getStore() ? funcion() : recuentosDeLaLlamada.run(new Map(), funcion)));
 }
 
-// Cuántos documentos de fase con nombre de cada idioma tienen las tareas del proyecto, y en qué tareas.
+// How many phase documents named in each language the tasks of the project have, and in which tasks.
 export function documentosPorIdioma(carpetaProyecto: string): DocumentosPorIdioma {
   let raiz: string;
   try {
     raiz = tasksRootPath(carpetaProyecto);
   } catch {
-    return sinDocumentos(); // sin Documentación no hay nada que contar
+    return sinDocumentos(); // without Documentation there is nothing to count
   }
   const cache = recuentosDeLaLlamada.getStore();
   const guardado = cache?.get(raiz);
@@ -309,14 +309,14 @@ function contarDocumentos(raiz: string): DocumentosPorIdioma {
       .map((e) => e.name)
       .sort();
   } catch {
-    return cuenta; // sin carpeta de tareas no hay nada que contar
+    return cuenta; // without a tasks folder there is nothing to count
   }
   for (const tarea of tareas) {
     let nombres: string[];
     try {
       nombres = fs.readdirSync(path.join(raiz, tarea)).map(comparable);
     } catch {
-      continue; // una carpeta que desaparece o no se puede leer no cuenta
+      continue; // a folder that disappears or cannot be read does not count
     }
     for (const [idioma, suyos] of NOMBRES_POR_IDIOMA) {
       const hay = new Set(nombres.filter((nombre) => suyos.has(nombre))).size;
@@ -329,8 +329,8 @@ function contarDocumentos(raiz: string): DocumentosPorIdioma {
   return cuenta;
 }
 
-// Los pasos 3 a 5: el idioma de este equipo, sin proyecto. Un machine.json inválido no tumba nada aquí:
-// lo dice doctor, y quien lo necesite para trabajar lo lee con maquinaDe.
+// Steps 3 to 5: the language of this machine, without a project. An invalid machine.json does not bring
+// anything down here: doctor says so, and whoever needs it to work reads it with maquinaDe.
 export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelIdioma, "del proyecto" | "de sus documentos"> } {
   const delEntorno = idiomaDelEntorno();
   if (delEntorno) return { idioma: delEntorno, origen: "de PHASE_GATE_LANG" };
@@ -339,8 +339,8 @@ export function idiomaDelEquipo(): { idioma: Idioma; origen: Exclude<OrigenDelId
   return { idioma: idiomaDelSistema(), origen: "del sistema" };
 }
 
-// `manifiesto` es para quien ya lo leyó (undefined: leerlo aquí; null: no tiene). Un manifiesto inválido
-// no impide saber el idioma: se sigue con el disco.
+// `manifiesto` is for whoever already read it (undefined: read it here; null: it has none). An invalid
+// manifest does not prevent knowing the language: it goes on with the disk.
 export function idiomaDelProyecto(carpetaProyecto: string | null, manifiesto?: Manifiesto | null): IdiomaResuelto {
   const enDisco = carpetaProyecto ? documentosPorIdioma(carpetaProyecto) : sinDocumentos();
   let delManifiesto: Manifiesto | null = null;
@@ -353,7 +353,7 @@ export function idiomaDelProyecto(carpetaProyecto: string | null, manifiesto?: M
   const sinIdiomaDeclarado = delManifiesto !== null && !delManifiesto.idioma;
   if (delManifiesto?.idioma) return { idioma: delManifiesto.idioma, origen: "del proyecto", enDisco, sinIdiomaDeclarado };
   if (enDisco.es.documentos || enDisco.en.documentos) {
-    // Con los dos, el que más documentos tenga; a la par, el español (el de todos los proyectos de la 2.x).
+    // With both, the one with the most documents; on a tie, Spanish (that of every 2.x project).
     return { idioma: enDisco.en.documentos > enDisco.es.documentos ? "en" : "es", origen: "de sus documentos", enDisco, sinIdiomaDeclarado };
   }
   const delEquipo = idiomaDelEquipo();
@@ -361,12 +361,14 @@ export function idiomaDelProyecto(carpetaProyecto: string | null, manifiesto?: M
   return { ...delEquipo, enDisco, sinIdiomaDeclarado };
 }
 
-// Lo que no cuadra con el idioma del proyecto (doctor, y get_phase_prompt para IDIOMA-CON-TAREAS):
-//   IDIOMA-MIXTO           sin idioma declarado, hay documentos con nombres de los dos idiomas;
-//   IDIOMA-CON-TAREAS      el manifiesto declara un idioma y hay tareas con documentos del otro: la deducción
-//                          las daría por "sin documentos". Cambiar el idioma no renombra nada (P7);
-//   MANIFIESTO-SIN-IDIOMA  (aviso) el manifiesto no dice su idioma ni lo dicen sus documentos: el idioma
-//                          sale de este equipo, o es el español de la 3.x, y el manifiesto viaja entre equipos.
+// What does not fit the project's language (doctor, and get_phase_prompt for IDIOMA-CON-TAREAS):
+//   IDIOMA-MIXTO           no language declared, and there are documents with names of both languages;
+//   IDIOMA-CON-TAREAS      the manifest declares a language and there are tasks with documents of the
+//                          other one: the deduction would take them as "without documents". Changing the
+//                          language renames nothing;
+//   MANIFIESTO-SIN-IDIOMA  (warning) the manifest does not state its language, and neither do its
+//                          documents: the language comes from this machine, or is the Spanish of 3.x,
+//                          and the manifest travels between machines.
 export function conflictoDeIdioma(carpetaProyecto: string, resuelto: IdiomaResuelto = idiomaDelProyecto(carpetaProyecto)): Hallazgo | null {
   const otro: Idioma = resuelto.idioma === "es" ? "en" : "es";
   const delOtro = resuelto.enDisco[otro];
@@ -406,7 +408,7 @@ export type LecturaMaquina = {
   estado: "ausente" | "valido" | "invalido";
   ruta: string;
   config: MaquinaConfig | null;
-  // Overrides de repos con la clave normalizada: el proyecto en minúsculas, como en los punteros.
+  // Repo overrides with the normalized key: the project in lowercase, as in the pointers.
   repos: Map<string, string>;
   error: string | null;
   avisos: Hallazgo[];
@@ -433,7 +435,7 @@ export function leerMaquina(): LecturaMaquina {
   if (archivo.estado === "invalido") return { estado: "invalido", ruta, error: archivo.error, ...vacia };
   const config = archivo.config!;
 
-  // "proyecto-a/api" y "PROYECTO-A/api" son la misma clave. Si hay dos, vale la primera.
+  // "proyecto-a/api" and "PROYECTO-A/api" are the same key. If there are two, the first one counts.
   const repos = new Map<string, string>();
   const avisos: Hallazgo[] = [];
   for (const [clave, destino] of Object.entries(config.repos)) {
@@ -452,30 +454,29 @@ export function leerMaquina(): LecturaMaquina {
   return { estado: "valido", ruta, config, repos, error: null, avisos };
 }
 
-// Para quien necesita machine.json para trabajar: un archivo inválido es un error, no un "no hay".
+// For whoever needs machine.json to work: an invalid file is an error, not a "there is none".
 export function maquinaDe(): LecturaMaquina {
   const lectura = leerMaquina();
   if (lectura.estado === "invalido") throw new ErrorConCodigo("MAQUINA-TXT-INVALIDA", lectura.error!);
   return lectura;
 }
 
-// ─── Repos de un proyecto ───────────────────────────────────────────────────
+// ─── Repos of a project ─────────────────────────────────────────────────────
 export type RepoManifiesto = z.output<typeof RepoManifiesto>;
 
 export type RepoResuelto = {
   id: string;
   dir: string;
   rol: string | null;
-  ruta: string | null; // null si no se pudo resolver (falta PHASE_GATE_REPOS_PATH)
+  ruta: string | null; // null if it could not be resolved (PHASE_GATE_REPOS_PATH is missing)
   origenRuta: "machine.json" | "PHASE_GATE_REPOS_PATH" | null;
   existe: boolean;
   error: string | null;
 };
 
-// Dónde está cada repo en ESTE equipo: el override de machine.json ("<PROYECTO>/<id>") si lo hay, y
-// si no, <PHASE_GATE_REPOS_PATH>/<dir>.
-// machine.json solo se lee si hay repos que resolver: un machine.json roto no debe tumbar los proyectos
-// que no lo necesitan (hallazgo 7 de la auditoría de la Etapa 3).
+// Where each repo is on THIS machine: the machine.json override ("<PROJECT>/<id>") if there is one, and
+// otherwise <PHASE_GATE_REPOS_PATH>/<dir>. machine.json is only read if there are repos to resolve: a
+// broken machine.json must not bring down the projects that do not need it.
 export function resolverRepos(carpetaProyecto: string, repos: readonly RepoManifiesto[], maquinaDada?: LecturaMaquina): RepoResuelto[] {
   if (repos.length === 0) return [];
   const maquina = maquinaDada ?? maquinaDe();
@@ -514,9 +515,9 @@ export function resolverRepos(carpetaProyecto: string, repos: readonly RepoManif
   });
 }
 
-// ─── JSON Schema publicados ─────────────────────────────────────────────────
-// Lo que va en schema/*.json, generado de los shapes de arriba. Lo usan el script que los escribe y
-// el test que comprueba que lo publicado coincide.
+// ─── Published JSON Schemas ─────────────────────────────────────────────────
+// What goes in schema/*.json, generated from the shapes above. It is used by the script that writes them and
+// by the test that checks that what is published matches.
 export function esquemasPublicados(): Record<"project.json" | "machine.json", Record<string, unknown>> {
   const con = (esquema: z.ZodType, id: string, titulo: string, descripcion: string): Record<string, unknown> => {
     const { $schema, ...resto } = z.toJSONSchema(esquema, { io: "input" }) as Record<string, unknown>;

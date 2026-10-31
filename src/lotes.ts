@@ -1,13 +1,12 @@
-// El motor de lotes de la Fase 4 (§6.4 y §6.6 del plan maestro v3): record_batch registra cada lote en
-// un recibo que escribe el servidor, con su ancla verificada, y al cerrar el último genera el documento
-// de la fase.
+// The batch engine of Phase 4: record_batch records each batch in a receipt that the server writes, with its
+// verified anchor, and when it closes the last one it generates the phase's document.
 //
-// Dos tiempos para toda política con git (decisión H1): primero el recibo con el commit pendiente,
-// ANTES del commit, para que sobreviva a un corte del chat; después, con el hash, el ancla. Si el
-// commit ya existe al registrar el lote, va todo en una llamada.
+// Two steps for every policy with git: first the receipt with the pending commit, BEFORE the commit, so that
+// it survives a chat cut-off; then, with the hash, the anchor. If the commit already exists when the batch
+// is recorded, everything goes in one call.
 //
-// El servidor solo escribe dentro de la carpeta de la tarea (sus recibos y el documento de la fase),
-// con escritura atómica, y nunca en git: el commit lo hace el agente, aquí solo se lee para verificarlo.
+// The server only writes inside the task's folder (its receipts and the phase's document), with atomic
+// writes, and never in git: the commit is made by the agent, here it is only read to verify it.
 
 import * as crypto from "crypto";
 import * as fs from "fs";
@@ -29,17 +28,17 @@ import { resolverRepo } from "./repos.js";
 import { VOCABULARIO, lotesDelFrontmatter, vocabulario } from "./vocabulario.js";
 import type { Idioma } from "./vocabulario.js";
 
-// ─── La tarea y su plan ─────────────────────────────────────────────────────
+// ─── The task and its plan ──────────────────────────────────────────────────
 export type FaseDeLotes = {
   taskName: string;
   carpetaTarea: string;
   phases: Map<number, PhaseFile>;
-  numero: number; // la fase que declara los recibos (la 4)
-  titulo: string; // su título ("Ejecución")
-  recibos: string; // su subcarpeta
-  documento: string | null; // su documento, el que la cierra
-  plan: string; // el documento de la fase anterior (el plan técnico)
-  idioma: Idioma; // el del proyecto: en él se escriben los recibos y el índice (§8.2)
+  numero: number; // the phase that declares the receipts (the 4th)
+  titulo: string; // its title ("Ejecución")
+  recibos: string; // its subfolder
+  documento: string | null; // its document, the one that closes it
+  plan: string; // the document of the previous phase (the technical plan)
+  idioma: Idioma; // the project's: the receipts and the index are written in it
 };
 
 export function faseEnCarpeta(carpetaTarea: string, phases: Map<number, PhaseFile>, nombreDelProyecto = "", idioma: Idioma = "es"): FaseDeLotes {
@@ -66,12 +65,12 @@ function textoDelPlan(fase: FaseDeLotes): string {
   return leerTextoAcotado(ruta);
 }
 
-// H3: el número de lotes sale SOLO del frontmatter del plan, nunca de su tabla.
+// The number of batches comes ONLY from the plan's frontmatter, never from its table.
 export function lotesDelPlan(fase: FaseDeLotes): number {
   const texto = textoDelPlan(fase);
   const valor = lotesDelFrontmatter(separarFrontmatter(texto).meta);
   if (valor === undefined || valor.trim() === "") {
-    // La tabla no decide el número (H3), pero sí sirve para proponérselo a la persona.
+    // The table does not decide the number, but it does serve to propose it to the person.
     throw fallo("LOTE-PLAN-SIN-LOTES", { plan: fase.plan, filas: leerTablaDeLotes(texto)?.size ?? 0 });
   }
   const n = Number(valor.trim());
@@ -81,9 +80,9 @@ export function lotesDelPlan(fase: FaseDeLotes): number {
   return n;
 }
 
-// La tabla de lotes del plan (§3.5.1): la que empieza por `| Lote | Repo |` (o `| Batch | Repo |`), y sus
-// filas `L\d\d`. Solo informa (el objetivo de un lote que se descarta, las columnas de get_batch_status):
-// el número de lotes nunca sale de aquí. null si no hay tabla o no se entiende.
+// The plan's table of batches: the one that starts with `| Lote | Repo |` (or `| Batch | Repo |`), and its
+// `L\d\d` rows. It only informs (the goal of a batch that is discarded, the columns of get_batch_status):
+// the number of batches never comes from here. null if there is no table or it is not understood.
 export type FilaDelPlan = { repo: string; objetivo: string; commitPropuesto: string };
 
 export function leerTablaDeLotes(texto: string): Map<number, FilaDelPlan> | null {
@@ -94,7 +93,7 @@ export function leerTablaDeLotes(texto: string): Map<number, FilaDelPlan> | null
   const inicio = lineas.findIndex((linea) => /^\|\s*(?:Lote|Batch)\s*\|\s*Repo\s*\|/i.test(linea.trim()));
   if (inicio === -1) return null;
   const cabecera = partir(lineas[inicio]!).map((c) => c.normalize("NFC").toLowerCase());
-  // La columna en el idioma de la tabla, o en el otro.
+  // The column in the table's language, or in the other one.
   const columna = (de: "columnaObjetivo" | "columnaCommit" | null): number =>
     de === null ? cabecera.indexOf("repo") : Math.max(cabecera.indexOf(VOCABULARIO.es.plan[de]), cabecera.indexOf(VOCABULARIO.en.plan[de]));
   const [cRepo, cObjetivo, cCommit] = [columna(null), columna("columnaObjetivo"), columna("columnaCommit")];
@@ -115,15 +114,15 @@ export function leerTablaDeLotes(texto: string): Map<number, FilaDelPlan> | null
   return filas.size ? filas : null;
 }
 
-// ─── Los recibos que hay ────────────────────────────────────────────────────
+// ─── The receipts that exist ────────────────────────────────────────────────
 export type ReciboEnDisco = { recibo: Recibo; nombre: string; ruta: string; mtimeMs: number };
 
 export function carpetaDeRecibos(fase: FaseDeLotes): string {
   return path.join(fase.carpetaTarea, fase.recibos);
 }
 
-// Los recibos de la subcarpeta por lote. Un archivo que no se puede leer (binario, o de más de 1 MB) es
-// un error con su nombre: no se pisa ni se salta sin decirlo.
+// The receipts of the per-batch subfolder. A file that cannot be read (binary, or over 1 MB) is an error with
+// its name: it is neither overwritten nor skipped without saying so.
 export function recibosDeLaTarea(fase: FaseDeLotes): Map<number, ReciboEnDisco[]> {
   const carpeta = carpetaDeRecibos(fase);
   const porLote = new Map<number, ReciboEnDisco[]>();
@@ -156,12 +155,12 @@ function unicoDe(porLote: Map<number, ReciboEnDisco[]>, lote: number, fase: Fase
 
 export const esSellado = (ancla: Ancla): boolean => ancla.tipo === "commit" || ancla.tipo === "sha256";
 
-// Cerrado: con recibo y un ancla distinta de pendiente. Un fallido está cerrado para el orden, pero no
-// cierra la fase.
+// Closed: with a receipt and an anchor other than pending. A failed one is closed for the order, but does not
+// close the phase.
 const cerrado = (recibo: Recibo | undefined): boolean => recibo !== undefined && recibo.ancla.tipo !== "pendiente";
 const cierraLaFase = (recibo: Recibo | undefined): boolean => cerrado(recibo) && recibo!.estado !== "fallido";
 
-// ─── El documento de la fase (§6.6) ─────────────────────────────────────────
+// ─── The phase's document ───────────────────────────────────────────────────
 function anclaEnIndice(recibo: Recibo, idioma: Idioma): string {
   if (recibo.estado === "descartado") return "—";
   const ancla = recibo.ancla;
@@ -174,11 +173,11 @@ function primeraLinea(texto: string): string {
   return (texto.split("\n").find((linea) => linea.trim()) ?? "").trim().replace(/\.+$/, "");
 }
 
-// Determinista: los mismos recibos dan los mismos bytes. La fecha de cierre es la del recibo escrito
-// más tarde, no la hora del ensamblado.
+// Deterministic: the same receipts give the same bytes. The closing date is that of the receipt written
+// last, not the time of the assembly.
 export type ReciboConNombre = { recibo: Recibo; nombre: string };
 
-// En el idioma del proyecto (§8.2): claves del frontmatter, encabezados, tablas y valores.
+// In the project's language: frontmatter keys, headings, tables and values.
 export function textoDelIndice(fase: FaseDeLotes, total: number, conNombre: Map<number, ReciboConNombre>, idioma: Idioma = fase.idioma): string {
   const v = vocabulario(idioma);
   const i = v.indice;
@@ -229,7 +228,7 @@ export function textoDelIndice(fase: FaseDeLotes, total: number, conNombre: Map<
   return `${partes.join("\n\n")}\n`;
 }
 
-// El índice de una tarea tal como lo escribiría hoy el servidor, leyendo sus recibos.
+// The index of a task as the server would write it today, reading its receipts.
 export function ensamblarIndice(carpetaTarea: string, fases: Map<number, PhaseFile>, idioma: Idioma = "es"): string {
   const fase = faseEnCarpeta(carpetaTarea, fases, "", idioma);
   const total = lotesDelPlan(fase);
@@ -238,13 +237,13 @@ export function ensamblarIndice(carpetaTarea: string, fases: Map<number, PhaseFi
   return textoDelIndice(fase, total, recibos, idioma);
 }
 
-// Un documento de fase que generó el servidor (el índice, o el recibo de un solo lote): `generado_por` o
+// A phase document that the server generated (the index, or the receipt of a single batch): `generado_por` or
 // `generated_by`.
 export function generadoPorElServidor(texto: string): boolean {
   return frontmatterDeRecibo(texto).meta.generado_por === GENERADO_POR;
 }
 
-// ─── Registrar un lote ──────────────────────────────────────────────────────
+// ─── Recording a batch ──────────────────────────────────────────────────────
 export type EntradaDeLote = {
   lote: number;
   titulo?: string | undefined;
@@ -268,9 +267,9 @@ export type EntradaDeLote = {
 
 export type ContextoDeLote = {
   ahora?: () => Date;
-  // Justo antes de escribir: el servidor comprueba aquí que el cliente no haya cancelado la llamada.
+  // Right before writing: the server checks here that the client has not cancelled the call.
   antesDeEscribir?: () => void;
-  // La confirmación de la persona (elicitation); sin ella, decide `force`.
+  // The person's confirmation (elicitation); without it, `force` decides.
   confirmar?: (pregunta: { mensaje: string; etiqueta: string }) => Promise<ResultadoConfirmacion>;
 };
 
@@ -292,12 +291,12 @@ const CAMPOS_DE_CONTENIDO = ["titulo", "estado", "que_se_hizo", "archivos", "ver
 const OBLIGATORIOS = ["titulo", "estado", "que_se_hizo", "verificacion"] as const;
 const ANCLAS = ["commit", "artifact_path", "verification_note"] as const;
 
-// AAAA-MM-DD del día de quien registra, no del de UTC.
+// YYYY-MM-DD of the day of whoever records, not UTC's.
 export function fechaLocal(fecha: Date): string {
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
 }
 
-// En el idioma de la llamada: va en las respuestas de record_batch y get_batch_status.
+// In the call's language: it goes in the responses of record_batch and get_batch_status.
 export function resumenDeAncla(ancla: Ancla, repo: string | null): string {
   switch (ancla.tipo) {
     case "commit":
@@ -313,11 +312,11 @@ export function resumenDeAncla(ancla: Ancla, repo: string | null): string {
   }
 }
 
-// Un ancla sellada, para los mensajes que la nombran.
+// A sealed anchor, for the messages that name it.
 const sellada = (ancla: Extract<Ancla, { tipo: "commit" | "sha256" }>): { tipo: "commit" | "sha256"; valor: string } =>
   ancla.tipo === "commit" ? { tipo: "commit", valor: ancla.corto } : { tipo: "sha256", valor: ancla.sha256.slice(0, 12) };
 
-// El modo de la tabla de §6.4: crear, reemplazar o anclar, según lo que hay y lo que llega.
+// The mode: create, replace or anchor, depending on what is there and what arrives.
 function modoDe(entrada: EntradaDeLote, existente: ReciboEnDisco | null, anclas: string[]): "crear" | "reemplazar" | "anclar" {
   const etiqueta = etiquetaDeLote(entrada.lote);
   const traeContenido = CAMPOS_DE_CONTENIDO.some((campo) => entrada[campo] !== undefined);
@@ -331,15 +330,15 @@ function modoDe(entrada: EntradaDeLote, existente: ReciboEnDisco | null, anclas:
   const { ancla } = existente.recibo;
   if (ancla.tipo === "commit" || ancla.tipo === "sha256") throw fallo("LOTE-RECIBO-SELLADO", { lote: etiqueta, ancla: sellada(ancla) });
   if (ancla.tipo === "pendiente") {
-    // Un lote cuyo commit no va a llegar (el usuario no lo hace, o el lote se descarta) se cierra con solo
-    // su estado nuevo y, si se quiere, una nota: el contenido que ya tiene se conserva.
+    // A batch whose commit is not going to arrive (the user does not make it, or the batch is discarded) is
+    // closed with just its new state and, if wanted, a note: the content it already has is kept.
     const soloEstado = CAMPOS_DE_CONTENIDO.every((campo) => campo === "estado" || entrada[campo] === undefined);
     if (soloEstado && (entrada.estado === "descartado" || entrada.estado === "fallido")) return "anclar";
     if (traeContenido) return exigirContenido("reemplazar");
     if (anclas.length === 1) return "anclar";
     throw fallo("LOTE-PENDIENTE-SIN-ANCLA", { lote: etiqueta });
   }
-  // fallido, o anclado a una nota: no está sellado, y lo que llega es un nuevo intento del lote.
+  // failed, or anchored to a note: it is not sealed, and what arrives is a new attempt at the batch.
   if (!traeContenido) {
     throw fallo("LOTE-NO-SELLADO-SIN-CONTENIDO", { lote: etiqueta, estado: existente.recibo.estado, resumen: resumenDeAncla(ancla, null) });
   }
@@ -352,8 +351,8 @@ function repoDelLote(entrada: EntradaDeLote, existente: ReciboEnDisco | null, mo
     if (entrada.repo && delRecibo && entrada.repo !== delRecibo) {
       throw fallo("LOTE-REPO-DISTINTO", { lote: etiquetaDeLote(entrada.lote), delRecibo, repo: entrada.repo });
     }
-    // Un recibo de la 2.x puede no decir su repo: entonces vale la regla de siempre (el indicado, o el
-    // único de la tarea), en vez de tomarlo por un lote sin repositorio.
+    // A 2.x receipt may not say its repo: then the usual rule applies (the one indicated, or the task's only
+    // one), instead of taking it for a batch without a repository.
     if (delRecibo) return delRecibo;
   }
   if (entrada.repo) {
@@ -368,8 +367,8 @@ function repoDelLote(entrada: EntradaDeLote, existente: ReciboEnDisco | null, mo
   return ids[0] ?? null;
 }
 
-// Escritura atómica: un temporal en la misma carpeta y un renombrado. El temporal empieza por punto y
-// no acaba en .md, así que nadie lo toma por un recibo ni por un documento.
+// Atomic write: a temporary in the same folder and a rename. The temporary starts with a dot and does not end
+// in .md, so nobody takes it for a receipt or a document.
 export function escribirAtomico(ruta: string, contenido: string): void {
   const temporal = path.join(path.dirname(ruta), `.${path.basename(ruta)}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`);
   try {
@@ -401,7 +400,7 @@ export function renombrarConReintentos(origen: string, destino: string, renombra
   }
 }
 
-// Un fallo de escritura dicho para una persona: el archivo y qué hacer, sin la ruta del temporal.
+// A write failure put for a person: the file and what to do, without the temporary's path.
 export function traducirEscritura(error: unknown, nombre: string): Error {
   const codigo = (error as { code?: string })?.code;
   if (codigo === "EPERM" || codigo === "EACCES" || codigo === "EBUSY") {
@@ -411,8 +410,8 @@ export function traducirEscritura(error: unknown, nombre: string): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-// unlinkSync y no rmSync: en Node 24.11 para Windows, rmSync no borra un archivo con un nombre que no
-// es ASCII ("L01 - corregir cálculo.md") y tampoco lanza (medido). unlink sí.
+// unlinkSync and not rmSync: on Node 24.11 for Windows, rmSync does not delete a file with a non-ASCII name
+// ("L01 - corregir cálculo.md") and does not throw either (measured). unlink does.
 export function borrarArchivo(ruta: string): void {
   try {
     fs.unlinkSync(ruta);
@@ -421,16 +420,16 @@ export function borrarArchivo(ruta: string): void {
   }
 }
 
-// ─── El candado de la tarea ─────────────────────────────────────────────────
-// Un archivo creado en exclusiva (`wx`: falla si ya existe, también en Windows) en la carpeta de la tarea.
-// Empieza por punto y no acaba en .md, así que no es documento, recibo ni algo que write_central_doc pueda
-// escribir. Si un proceso murió con el candado puesto, a los 30 s se da por abandonado.
+// ─── The task lock ──────────────────────────────────────────────────────────
+// A file created exclusively (`wx`: fails if it already exists, also on Windows) in the task's folder. It
+// starts with a dot and does not end in .md, so it is not a document, a receipt or something that
+// write_central_doc can write. If a process died with the lock held, after 30 s it is taken as abandoned.
 export const CANDADO = ".record_batch.lock";
 export const ESPERA_DEL_CANDADO_MS = 3000;
 export const CANDADO_ABANDONADO_MS = 30_000;
 
-// `opciones` es para otro candado con el mismo mecanismo (el de las acciones del Studio): su nombre y el
-// mensaje si sigue ocupado.
+// `opciones` is for another lock with the same mechanism (the Studio actions'): its name and the message if
+// it is still busy.
 export async function conCandado<T>(carpetaTarea: string, seccion: () => T | Promise<T>, opciones: { nombre?: string; ocupado?: string } = {}): Promise<T> {
   const ruta = path.join(carpetaTarea, opciones.nombre ?? CANDADO);
   const limite = Date.now() + ESPERA_DEL_CANDADO_MS;
@@ -439,8 +438,8 @@ export async function conCandado<T>(carpetaTarea: string, seccion: () => T | Pro
       fs.closeSync(fs.openSync(ruta, "wx"));
       break;
     } catch (error: any) {
-      // En Windows, abrir un archivo que otro proceso está borrando da EPERM y no EEXIST (medido): también
-      // es "ocupado".
+      // On Windows, opening a file that another process is deleting gives EPERM and not EEXIST (measured): it also
+      // means "busy".
       if (!["EEXIST", "EPERM", "EACCES", "EBUSY"].includes(error?.code)) throw error;
       const edad = Date.now() - (fs.statSync(ruta, { throwIfNoEntry: false })?.mtimeMs ?? Date.now());
       if (edad > CANDADO_ABANDONADO_MS) {
@@ -451,7 +450,7 @@ export async function conCandado<T>(carpetaTarea: string, seccion: () => T | Pro
       await new Promise((resolver) => setTimeout(resolver, 20 + Math.floor(Math.random() * 30)));
     }
   }
-  // await: si la sección es asíncrona, el candado se suelta cuando termina, no cuando empieza.
+  // await: if the section is asynchronous, the lock is released when it ends, not when it starts.
   try {
     return await seccion();
   } finally {
@@ -459,16 +458,16 @@ export async function conCandado<T>(carpetaTarea: string, seccion: () => T | Pro
   }
 }
 
-// En bigint: el identificador de un archivo en NTFS es de 64 bits y como number pierde los últimos
-// dígitos, así que dos archivos vecinos parecerían el mismo (medido).
+// As bigint: the identifier of a file on NTFS is 64 bits and as a number it loses the last digits, so two
+// neighboring files would look like the same one (measured).
 function mismoArchivo(a: string, b: string): boolean {
   const ia = fs.statSync(a, { throwIfNoEntry: false, bigint: true });
   const ib = fs.statSync(b, { throwIfNoEntry: false, bigint: true });
   return Boolean(ia && ib && ia.ino === ib.ino && ia.dev === ib.dev);
 }
 
-// Todo lo que escribe record_batch cae dentro de la Documentación y de la carpeta de la tarea, sobre
-// rutas reales: una subcarpeta de recibos que sea un enlace hacia fuera no se usa.
+// Everything that record_batch writes falls inside the Documentation and the task's folder, on real paths: a
+// receipts subfolder that is a link pointing outside is not used.
 function comprobarDentro(fase: FaseDeLotes, ruta: string): void {
   if (!estaDentroReal(requireBasePath(DOCS), ruta) || !estaDentroReal(fase.carpetaTarea, ruta)) {
     throw fallo("LOTE-FUERA-DE-LA-TAREA", { ruta: path.relative(fase.carpetaTarea, ruta) });
@@ -477,8 +476,8 @@ function comprobarDentro(fase: FaseDeLotes, ruta: string): void {
 
 type Preparado = { recibo: Recibo; nombre: string; existente: ReciboEnDisco | null; avisos: string[] };
 
-// Todo lo que decide el registro de un lote, sin escribir nada: el modo, el repo, el ancla verificada y
-// el recibo que quedaría.
+// Everything that the recording of a batch decides, without writing anything: the mode, the repo, the
+// verified anchor and the receipt that would remain.
 async function prepararLote(
   carpetaProyecto: string,
   fase: FaseDeLotes,
@@ -488,7 +487,7 @@ async function prepararLote(
   ahora: () => Date
 ): Promise<Preparado> {
   const etiqueta = etiquetaDeLote(entrada.lote);
-  // Orden: todos los anteriores tienen recibo con ancla (un fallido o un descartado cuenta como cerrado).
+  // Order: all the previous ones have a receipt with an anchor (a failed or discarded one counts as closed).
   for (let anterior = 1; anterior < entrada.lote; anterior++) {
     const suyo = unicoDe(porLote, anterior, fase);
     if (!suyo) throw fallo("LOTE-ANTERIOR-SIN-RECIBO", { lote: etiqueta, anterior: etiquetaDeLote(anterior) });
@@ -510,17 +509,17 @@ async function prepararLote(
 
   const estado: EstadoLote = entrada.estado ?? existente!.recibo.estado;
   const declarados = (modo === "anclar" ? existente!.recibo.archivos : (entrada.archivos ?? [])).map((fila) => fila.archivo);
-  // Los commits que ya anclan otros lotes de la tarea: un commit, un lote.
+  // The commits that already anchor other batches of the task: one commit, one batch.
   const otrosLotes = [...porLote.entries()].flatMap(([lote, recibos]) =>
     lote === entrada.lote ? [] : recibos.flatMap((r) => (r.recibo.ancla.tipo === "commit" ? [{ lote, sha: r.recibo.ancla.sha }] : []))
   );
 
-  // ─── El ancla, según el estado del lote y la política (tabla de §6.4) ───
+  // ─── The anchor, depending on the batch's state and the policy ───
   let ancla: Ancla;
   let verificacionDelCommit: string | null = null;
   const avisos: string[] = [];
   const conCommit = async (): Promise<Ancla> => {
-    // La comparación de archivos se escribe en el recibo: en el idioma del proyecto.
+    // The file comparison is written in the receipt: in the project's language.
     const anclado = await anclarCommit(carpetaProyecto, repo!, entrada.commit!, declarados, otrosLotes, ahora, fase.idioma);
     verificacionDelCommit = anclado.verificacionDelCommit;
     if (!anclado.coinciden) avisos.push(anclado.verificacionDelCommit);
@@ -540,7 +539,7 @@ async function prepararLote(
     if (!repoConGit) {
       throw fallo("LOTE-SIN-GIT-PARA-COMMIT", { repo });
     }
-    ancla = await conCommit(); // política ninguno, pero el repo tiene git: se verifica igual
+    ancla = await conCommit(); // policy ninguno, but the repo has git: it is verified anyway
   } else if (entrada.artifact_path !== undefined) {
     ancla = await anclarArtefacto(carpetaProyecto, repo, entrada.artifact_path, ahora);
   } else if (entrada.verification_note !== undefined) {
@@ -549,14 +548,14 @@ async function prepararLote(
     throw fallo("LOTE-SIN-ANCLA");
   }
 
-  // ─── El recibo ───
+  // ─── The receipt ───
   const momento = ahora();
   let rama: string | null = ancla.tipo === "commit" ? ancla.rama || null : null;
   if (ancla.tipo === "pendiente" && dirDelRepo) {
     try {
       rama = await ramaActual(dirDelRepo);
     } catch {
-      rama = null; // la rama es informativa; el ancla la vuelve a leer
+      rama = null; // the branch is informative; the anchor reads it again
     }
   }
 
@@ -599,7 +598,7 @@ async function prepararLote(
   return { recibo, nombre: nombreDeRecibo(entrada.lote, recibo.titulo), existente, avisos };
 }
 
-// El recibo de un lote que se cierra sin hacerse (cerrar_fase), con el objetivo que le dio el plan.
+// The receipt of a batch that is closed without being done (cerrar_fase), with the goal the plan gave it.
 function reciboDescartado(lote: number, total: number, motivo: string, fila: FilaDelPlan | undefined, ids: string[], momento: Date, idioma: Idioma): Recibo {
   const repo = fila && ids.includes(fila.repo) ? fila.repo : null;
   return {
@@ -635,7 +634,7 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   if (entrada.motivo_descarte !== undefined && entrada.cerrar_fase !== true) throw fallo("LOTE-MOTIVO-SIN-CERRAR");
   if (entrada.reanclar === true) return reanclarLote(carpetaProyecto, fase, entrada, contexto, ahora);
 
-  // Con el documento de la fase escrito, la fase está cerrada; con una fase posterior, también.
+  // With the phase's document written, the phase is closed; with a later phase, also.
   for (const [numero, datos] of [...fase.phases.entries()].sort((a, b) => a[0] - b[0])) {
     if (numero >= fase.numero && datos.documento && fs.existsSync(path.join(fase.carpetaTarea, datos.documento))) {
       throw fallo("LOTE-FASE-CERRADA", { numero: fase.numero, documento: datos.documento });
@@ -648,10 +647,10 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   }
 
   const porLote = recibosDeLaTarea(fase);
-  // Con cerrar_fase, una llamada sin contenido ni ancla solo cierra: no registra el lote.
+  // With cerrar_fase, a call without content or anchor only closes: it does not record the batch.
   const preparado = entrada.cerrar_fase === true && !traeAlgo(entrada) ? null : await prepararLote(carpetaProyecto, fase, total, porLote, entrada, ahora);
 
-  // Cómo quedan los lotes después de esta llamada, con el nombre de su archivo.
+  // How the batches stand after this call, with the name of their file.
   const finales = new Map<number, Recibo>();
   const nombres = new Map<number, string>();
   for (let lote = 1; lote <= total; lote++) {
@@ -663,11 +662,11 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
       if (suyos.length === 1) {
         finales.set(lote, suyos[0]!.recibo);
         nombres.set(lote, suyos[0]!.nombre);
-      } else if (suyos.length > 1 && entrada.cerrar_fase) unicoDe(porLote, lote, fase); // lanza con los nombres
+      } else if (suyos.length > 1 && entrada.cerrar_fase) unicoDe(porLote, lote, fase); // throws with the names
     }
   }
 
-  // ─── cerrar_fase: descartar lo que falta, con la confirmación de la persona ───
+  // ─── cerrar_fase: discard what is missing, with the person's confirmation ───
   const descartes: Recibo[] = [];
   if (entrada.cerrar_fase === true) {
     const conPendiente = [...finales.values()].filter((r) => r.ancla.tipo === "pendiente").map((r) => etiquetaDeLote(r.lote));
@@ -702,7 +701,7 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
     }
   }
 
-  // ─── Escritura ───
+  // ─── Writing ───
   const carpeta = carpetaDeRecibos(fase);
   const tipoDeCarpeta = fs.lstatSync(carpeta, { throwIfNoEntry: false });
   if (tipoDeCarpeta && !fs.statSync(carpeta).isDirectory()) throw fallo("LOTE-CARPETA-NO-ES-CARPETA", { carpeta: fase.recibos });
@@ -712,12 +711,12 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
 
   contexto.antesDeEscribir?.();
 
-  // Con el candado de la tarea: comprobar y escribir es una sola sección, sin esperas en medio, y solo un
-  // proceso la recorre a la vez. Sin él, dos procesos que llegaban juntos pasaban los dos la comprobación.
+  // With the task lock: checking and writing is a single section, without waits in between, and only one
+  // process goes through it at a time. Without it, two processes that arrived together both passed the check.
   const lotes = [...Array(total).keys()].map((i) => i + 1);
   const cierra = fase.documento !== null && (entrada.cerrar_fase === true ? lotes.every((n) => cerrado(finales.get(n))) : lotes.every((n) => cierraLaFase(finales.get(n))));
   const { archivoNuevo, documentoDeFase } = await conCandado(fase.carpetaTarea, () => {
-  // Otro proceso pudo escribir mientras se verificaba el ancla (dos ventanas registrando el mismo lote).
+  // Another process may have written while the anchor was being verified (two windows recording the same batch).
   const ahoraEnDisco = recibosDeLaTarea(fase);
   if (preparado?.existente) {
     if (fs.statSync(preparado.existente.ruta, { throwIfNoEntry: false })?.mtimeMs !== preparado.existente.mtimeMs) throw fallo("LOTE-OTRO-PROCESO");
@@ -732,27 +731,27 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   if (preparado) {
     const ruta = path.join(carpeta, preparado.nombre);
     escribirAtomico(ruta, escribirRecibo(preparado.recibo, { idioma: fase.idioma }));
-    // Si cambió el título, el archivo cambia de nombre. En Windows y macOS un cambio solo de mayúsculas es
-    // el mismo archivo, que el renombrado ya reemplazó: borrarlo borraría el nuevo.
+    // If the title changed, the file changes its name. On Windows and macOS a change only in capitals is the same
+    // file, which the rename already replaced: deleting it would delete the new one.
     const viejo = preparado.existente;
     if (viejo && viejo.nombre !== preparado.nombre && fs.existsSync(viejo.ruta) && !mismoArchivo(viejo.ruta, ruta)) borrarArchivo(viejo.ruta);
     archivoNuevo ||= !viejo || viejo.nombre !== preparado.nombre;
   }
   for (const recibo of descartes) escribirAtomico(rutaDe(recibo.lote, recibo.titulo), escribirRecibo(recibo, { idioma: fase.idioma }));
 
-  // ─── Cierre: todos los lotes con ancla, y ninguno fallido; o cerrar_fase ───
+  // ─── Closing: every batch with an anchor, and none failed; or cerrar_fase ───
   let documentoDeFase: string | null = null;
   if (cierra) {
     const destino = path.join(fase.carpetaTarea, fase.documento!);
     comprobarDentro(fase, destino);
     if (total === 1) {
-      // H2: con un solo lote, su recibo se mueve y pasa a ser el documento de la fase.
+      // With a single batch, its receipt moves and becomes the phase's document.
       escribirAtomico(destino, escribirRecibo(finales.get(1)!, { comoDocumento: true, idioma: fase.idioma }));
       borrarArchivo(path.join(carpeta, nombres.get(1)!));
       try {
-        fs.rmdirSync(carpeta); // solo si quedó vacía
+        fs.rmdirSync(carpeta); // only if it ended up empty
       } catch {
-        // con otros archivos dentro, la subcarpeta se queda
+        // with other files inside, the subfolder stays
       }
     } else {
       escribirAtomico(destino, textoDelIndice(fase, total, new Map(lotes.map((n) => [n, { recibo: finales.get(n)!, nombre: nombres.get(n)! }]))));
@@ -763,7 +762,7 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   return { archivoNuevo, documentoDeFase };
   });
 
-  // ─── Respuesta ───
+  // ─── Response ───
   const registrado = preparado?.recibo ?? null;
   const reciboRelativo = documentoDeFase && total === 1 ? documentoDeFase : registrado ? `${fase.recibos}/${preparado!.nombre}` : "";
   const siguiente = cierra ? null : siguienteLote(finales, total);
@@ -807,11 +806,11 @@ export async function registrarLote(carpetaProyecto: string, taskName: string, e
   };
 }
 
-// ─── Reanclar un recibo sellado (§6.5) ──────────────────────────────────────
-// El caso típico: un rebase o un squash cambió el SHA y el recibo apunta a un commit que ya no está en la
-// rama. Solo cambia el ancla; el contenido del lote no se toca. Con la fase ya cerrada también vale: con
-// un solo lote el recibo es el documento de la fase, y con varios se rehace el índice que generó el
-// servidor.
+// ─── Re-anchoring a sealed receipt ──────────────────────────────────────────
+// The typical case: a rebase or a squash changed the SHA and the receipt points at a commit that is no
+// longer on the branch. Only the anchor changes; the content of the batch is not touched. It also works with
+// the phase already closed: with a single batch the receipt is the phase's document, and with several the
+// index that the server generated is redone.
 const etiquetaDeAncla = (ancla: Ancla): string =>
   ancla.tipo === "commit" ? ancla.corto : ancla.tipo === "sha256" ? `sha256 ${ancla.sha256.slice(0, 12)}…` : ancla.tipo;
 
@@ -828,7 +827,7 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
   const total = lotesDelPlan(fase);
   if (entrada.lote > total) throw fallo("LOTE-NO-EXISTE-EN-PLAN-CORTO", { total, lote: etiqueta });
 
-  // El recibo está en la subcarpeta, o (con un solo lote y la fase cerrada) es el documento de la fase.
+  // The receipt is in the subfolder, or (with a single batch and the phase closed) it is the phase's document.
   const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
   const hayDocumento = documento !== null && fs.existsSync(documento);
   const porLote = recibosDeLaTarea(fase);
@@ -868,7 +867,7 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
     (viejo.tipo === "sha256" && nueva.tipo === "sha256" && viejo.sha256 === nueva.sha256 && viejo.ruta === nueva.ruta);
   if (igual) throw fallo("LOTE-REANCLAR-IGUAL", { lote: etiqueta, ancla: etiquetaDeAncla(nueva) });
 
-  // La persona confirma; sin elicitation, decide force (Etapa 1).
+  // The person confirms; without elicitation, force decides.
   const pregunta = mensaje("LOTE-REANCLAR-PREGUNTA", { lote: etiqueta, era: sellada(viejo), queda: sellada(nueva as Extract<Ancla, { tipo: "commit" | "sha256" }>) });
   const confirmacion = contexto.confirmar
     ? await contexto.confirmar({ mensaje: pregunta, etiqueta: mensaje("LOTE-REANCLAR-ETIQUETA", { lote: etiqueta }) })
@@ -877,8 +876,8 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
   if (confirmacion.estado === "rechazada") throw fallo("LOTE-REANCLAR-RECHAZADO", { lote: etiqueta, nota });
   if (confirmacion.estado === "no-disponible" && entrada.force !== true) throw fallo("LOTE-REANCLAR-SIN-CONFIRMACION", { nota });
 
-  // Solo el ancla cambia; "Verificación del commit" dice la comparación del commit nuevo y guarda el
-  // historial de reanclajes, con una línea más.
+  // Only the anchor changes; "Verificación del commit" says the comparison of the new commit and keeps the
+  // history of re-anchorings, with one more line.
   const momento = ahora();
   const linea = `${vocabulario(fase.idioma).recibo.reanclado}${fechaLocal(momento)}: \`${etiquetaDeAncla(viejo)}\` → \`${etiquetaDeAncla(nueva)}\``;
   const historial = (existente.recibo.verificacionDelCommit ?? "").split("\n").filter((l) => l.startsWith(VOCABULARIO.es.recibo.reanclado) || l.startsWith(VOCABULARIO.en.recibo.reanclado));
@@ -899,8 +898,8 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
     if (fs.statSync(existente.ruta, { throwIfNoEntry: false })?.mtimeMs !== existente.mtimeMs) throw fallo("LOTE-OTRO-PROCESO");
     escribirAtomico(existente.ruta, escribirRecibo(recibo, { comoDocumento: esElDocumento, idioma: fase.idioma }));
 
-    // Con la fase cerrada y varios lotes, el índice que generó el servidor se rehace con el ancla nueva. Uno
-    // escrito a mano (una tarea de la 2.x) no se toca: doctor lo marcará como desincronizado.
+    // With the phase closed and several batches, the index that the server generated is redone with the new
+    // anchor. One written by hand (a 2.x task) is not touched: doctor will flag it as out of sync.
     if (!esElDocumento && hayDocumento && total > 1 && generadoPorElServidor(leerTextoAcotado(documento))) {
       const conNombre = new Map<number, ReciboConNombre>();
       for (const [lote, recibos] of recibosDeLaTarea(fase)) if (lote <= total && recibos.length === 1) conNombre.set(lote, recibos[0]!);
@@ -934,8 +933,8 @@ async function reanclarLote(carpetaProyecto: string, fase: FaseDeLotes, entrada:
   };
 }
 
-// Hasta `limite` tareas a la vez, conservando el orden de los resultados. Cada consulta de git lanza dos
-// procesos (la de los filtros y la de verdad): sin tope, 99 lotes serían cientos de procesos juntos.
+// Up to `limite` tasks at a time, keeping the order of the results. Each git query launches two processes
+// (the filters' and the real one): without a cap, 99 batches would be hundreds of processes at once.
 export const VERIFICACIONES_A_LA_VEZ = 6;
 
 export async function enParalelo<T, R>(elementos: readonly T[], limite: number, tarea: (elemento: T) => Promise<R>): Promise<R[]> {
@@ -951,19 +950,19 @@ export async function enParalelo<T, R>(elementos: readonly T[], limite: number, 
   return resultados;
 }
 
-// ─── get_batch_status (§6.8) ────────────────────────────────────────────────
-// Solo lee: cruza el plan (su frontmatter y su tabla) con los recibos y dice qué toca. Con `reverificar`,
-// repite la verificación de cada ancla contra git y el disco.
+// ─── get_batch_status ───────────────────────────────────────────────────────
+// It only reads: it crosses the plan (its frontmatter and its table) with the receipts and says what is
+// next. With `reverificar`, it repeats the verification of each anchor against git and the disk.
 export type FilaDeEstado = {
   lote: string;
-  repo: string | null; // del plan
-  objetivo: string | null; // del plan
-  commitPropuesto: string | null; // del plan
+  repo: string | null; // from the plan
+  objetivo: string | null; // from the plan
+  commitPropuesto: string | null; // from the plan
   recibo: string | null;
   estado: string | null;
   ancla: { tipo: string; resumen: string } | null;
   origen: "servidor" | "manual" | null;
-  vigente: boolean | null; // solo con reverificar
+  vigente: boolean | null; // only with reverificar
   problema: string | null;
 };
 
@@ -993,7 +992,7 @@ export async function estadoDeLotes(carpetaProyecto: string, taskName: string, o
   }
   if (!tabla) avisos.push(mensaje("LOTE-TABLA-ILEGIBLE"));
 
-  // Con un solo lote y la fase cerrada, el recibo es el documento de la fase.
+  // With a single batch and the phase closed, the receipt is the phase's document.
   const porLote = recibosDeLaTarea(fase);
   const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
   const faseCerrada = documento !== null && fs.existsSync(documento);
@@ -1032,7 +1031,7 @@ export async function estadoDeLotes(carpetaProyecto: string, taskName: string, o
     });
   }
 
-  // Un recibo de un lote que el plan no declara (§6.8): se dice, no se usa.
+  // A receipt of a batch that the plan does not declare: it is said, it is not used.
   const fueraDePlan = [...porLote.entries()]
     .filter(([lote]) => lote > total)
     .sort((a, b) => a[0] - b[0])
@@ -1066,8 +1065,8 @@ export async function estadoDeLotes(carpetaProyecto: string, taskName: string, o
   return { texto: textoDeEstado(salida, comprobar), salida };
 }
 
-// En el idioma de la llamada. El estado y el origen de cada lote, que la salida estructurada da con su
-// valor canónico, se muestran en ese idioma.
+// In the call's language. The state and the origin of each batch, which the structured output gives with
+// their canonical value, are shown in that language.
 function textoDeEstado(e: EstadoDeLotes, comprobar: boolean): string {
   const v = vocabulario(idiomaDeMensajes()).recibo;
   const cabecera = mensaje("LOTE-ESTADO-COLUMNAS").split("|").slice(0, comprobar ? 9 : 8);
@@ -1104,12 +1103,12 @@ function textoDeEstado(e: EstadoDeLotes, comprobar: boolean): string {
   return lineas.join("\n");
 }
 
-// ─── Los commits de la Fase 4, para el auditor de la Fase 5 (§6.8) ──────────
-// Al entregar el prompt de la fase siguiente a la de los lotes, el servidor verifica cada ancla y le da
-// al auditor los commits por repo, si son consecutivos y el rango exacto para auditarlos. El auditor ya
-// no los reconstruye de los recibos.
+// ─── The commits of Phase 4, for the Phase 5 auditor ────────────────────────
+// When delivering the prompt of the phase after the batches one, the server verifies each anchor and gives
+// the auditor the commits per repo, whether they are consecutive and the exact range to audit them. The
+// auditor no longer rebuilds them from the receipts.
 //
-// Es prosa del prompt: va en el idioma del proyecto (`fase.idioma`), con los encabezados del vocabulario.
+// It is prompt prose: it goes in the project's language (`fase.idioma`), with the vocabulary's headings.
 export const PLAZO_DE_COMMITS_MS = 15_000;
 
 export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: string, phases: Map<number, PhaseFile>): Promise<string | null> {
@@ -1119,13 +1118,13 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
     fase = faseEnCarpeta(carpetaTarea, phases, carpetaProyecto, idiomaDelProyecto(carpetaProyecto).idioma);
     total = lotesDelPlan(fase);
   } catch {
-    return null; // sin fase de lotes o sin plan con lotes no hay nada que listar
+    return null; // without a batches phase or without a plan with batches there is nothing to list
   }
   let porLote: Map<number, ReciboEnDisco[]>;
   try {
     porLote = recibosDeLaTarea(fase);
   } catch (error) {
-    // Sin el bloque, la regla 1 de la Fase 5 manda a preguntar: que se sepa por qué.
+    // Without the block, rule 1 of Phase 5 sends to ask: let it be known why.
     const motivo = mensaje("LOTE-COMMITS-RECIBOS-ILEGIBLES", { error: error instanceof Error ? error.message : String(error) }, fase.idioma);
     return `## ${vocabulario(fase.idioma).encabezados.commitsDeLaFase(fase.numero)}\n\n${motivo}`;
   }
@@ -1164,15 +1163,15 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
     } catch {
       dir = null;
     }
-    // Varios a la vez, con tope: con 40 lotes, uno detrás de otro se comía casi todo el plazo (hallazgo 7
-    // de la auditoría de la Etapa 4). reverificar ya devuelve el SHA completo: no se resuelve dos veces.
+    // Several at a time, with a cap: with 40 batches, one after another took almost the whole deadline.
+    // reverificar already returns the full SHA: it is not resolved twice.
     const resultados = await enParalelo(recibos, VERIFICACIONES_A_LA_VEZ, async (recibo) => {
       const ancla = recibo.ancla as Extract<Ancla, { tipo: "commit" }>;
       const comprobacion = await reverificar(carpetaProyecto, recibo, idioma);
       let asunto = ancla.asunto;
       if (!asunto && dir && comprobacion.vigente) {
         try {
-          asunto = (await datosDeCommit(dir, comprobacion.sha ?? ancla.sha)).asunto; // un recibo manual de la 2.x no lo guarda
+          asunto = (await datosDeCommit(dir, comprobacion.sha ?? ancla.sha)).asunto; // a manual 2.x receipt does not store it
         } catch {
           asunto = "";
         }
@@ -1226,24 +1225,24 @@ export async function bloqueDeCommits(carpetaProyecto: string, carpetaTarea: str
   return [`## ${vocabulario(idioma).encabezados.commitsVerificados(fase.numero)}`, ...secciones].join("\n\n");
 }
 
-// La celda "Vigente" del bloque: sí, o no con el motivo.
+// The "Vigente" cell of the block: yes, or no with the reason.
 function vigenteEn(comprobacion: { vigente: boolean; texto: string }, idioma: Idioma): string {
   return comprobacion.vigente ? mensaje("LOTE-VIGENTE-SI", {}, idioma) : mensaje("LOTE-VIGENTE-NO", { problema: celda(comprobacion.texto) }, idioma);
 }
 
-// El bloque con un plazo: si git no responde, el prompt se entrega igual y lo dice, con el mismo encabezado.
+// The block with a deadline: if git does not answer, the prompt is delivered anyway and says so, with the same heading.
 export async function bloqueDeCommitsConPlazo(carpetaProyecto: string, carpetaTarea: string, phases: Map<number, PhaseFile>, plazoMs = PLAZO_DE_COMMITS_MS): Promise<string | null> {
   let numero: number | null = null;
   try {
     numero = faseEnCarpeta(carpetaTarea, phases).numero;
   } catch {
-    // sin fase de lotes, bloqueDeCommits devuelve null enseguida
+    // without a batches phase, bloqueDeCommits returns null right away
   }
   let idioma: Idioma = "es";
   try {
     idioma = idiomaDelProyecto(carpetaProyecto).idioma;
   } catch {
-    // con un manifiesto que no se lee, bloqueDeCommits también devuelve null enseguida
+    // with a manifest that cannot be read, bloqueDeCommits also returns null right away
   }
   const encabezado = numero === null ? mensaje("LOTE-COMMITS-FASE-ANTERIOR", {}, idioma) : vocabulario(idioma).encabezados.commitsDeLaFase(numero);
   let temporizador: NodeJS.Timeout | undefined;
@@ -1258,7 +1257,7 @@ export async function bloqueDeCommitsConPlazo(carpetaProyecto: string, carpetaTa
   }
 }
 
-// El primer lote sin recibo cerrado (ancla distinta de pendiente), o null si no queda ninguno.
+// The first batch without a closed receipt (anchor other than pending), or null if none is left.
 export function siguienteLote(recibos: Map<number, Recibo | ReciboEnDisco[]>, total: number): number | null {
   for (let lote = 1; lote <= total; lote++) {
     const valor = recibos.get(lote);

@@ -171,7 +171,6 @@ export function planDeProyecto(proyecto: string, a: Omit<ArgumentosDeProyecto, "
     return { posible: false, motivo: mensaje("STUDIO-PRESET-NO-EXISTE", { preset: manifiesto.preset, disponibles: [...presets.keys()].sort() }) };
   }
 
-  // machine.json: the own paths of the repos of this project.
   const propias = Object.entries(a.rutasPropias ?? {});
   let escrituraDeMaquina: EscrituraDePlan | null = null;
   const cambiosDeMaquina: string[] = [];

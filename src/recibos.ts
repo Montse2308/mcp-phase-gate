@@ -1,14 +1,14 @@
-// Los recibos de lote como datos: el único lugar que los lee y los escribe.
+// Batch receipts as data: the only place that reads and writes them.
 //
-// Hasta la 2.x el recibo lo redactaba el modelo con write_central_doc, siguiendo una plantilla del
-// prompt. Desde la 3.0 lo escribe el servidor (record_batch) a partir de campos, y este módulo fija su
-// formato: la plantilla de la Etapa 1 con más claves en el frontmatter. Las claves de la 2.x se
-// conservan en su sitio, así que un recibo de la 3.0 sigue siendo legible con las reglas de entonces.
+// Up to 2.x the receipt was drafted by the model with write_central_doc, following a template from the
+// prompt. Since 3.0 the server writes it (record_batch) from fields, and this module fixes its format: the
+// original template with more keys in the frontmatter. The 2.x keys are kept in place, so a 3.0 receipt is
+// still readable with the rules of then.
 //
-// Dos garantías:
-//   - escribir es determinista: el mismo Recibo da siempre los mismos bytes, en LF y con un salto
-//     final, y escribir lo que se leyó de un recibo escrito aquí da los mismos bytes otra vez;
-//   - leer es tolerante: un recibo escrito a mano con la 2.x se lee sin lanzar, con lo que tenga.
+// Two guarantees:
+//   - writing is deterministic: the same Recibo always gives the same bytes, in LF and with a final line
+//     break, and writing what was read from a receipt written here gives the same bytes again;
+//   - reading is tolerant: a receipt written by hand with 2.x is read without throwing, with whatever it has.
 
 import * as path from "path";
 
@@ -48,9 +48,9 @@ export type Recibo = {
   rama: string | null;
   estado: EstadoLote;
   ancla: Ancla;
-  fecha: string; // AAAA-MM-DD
-  registrado: string; // ISO, fecha de la última escritura por el servidor
-  origen: "servidor" | "manual"; // manual = recibo escrito a mano con la 2.x
+  fecha: string; // YYYY-MM-DD
+  registrado: string; // ISO, date of the last write by the server
+  origen: "servidor" | "manual"; // manual = receipt written by hand with 2.x
   queSeHizo: string;
   archivos: { archivo: string; cambio: string }[];
   verificacion: string;
@@ -58,20 +58,20 @@ export type Recibo = {
   desvios: string;
   decisiones: string;
   condicionales: { titulo: TituloCondicional; texto: string }[];
-  verificacionDelCommit: string | null; // diferencias entre el commit y la tabla Archivos
+  verificacionDelCommit: string | null; // differences between the commit and the Archivos table
 };
 
-// Lo que el servidor pone en el frontmatter de los documentos que genera él (el índice, o el recibo
-// que pasa a ser el documento de la fase con un solo lote).
+// What the server puts in the frontmatter of the documents it generates itself (the index, or the receipt
+// that becomes the phase's document with a single batch).
 export const GENERADO_POR = "mcp-phase-gate";
 
-// ─── Nombre del recibo ──────────────────────────────────────────────────────
-// "L02 - filtro por categoría.md". El slug lo hace el servidor, no el modelo: antes el prompt pedía
-// "sin : / \ < > ..." y bastaba un "fix(rutas): …" copiado del commit para crear un archivo que
-// Windows no guarda (ajuste A3 de la Etapa 1).
+// ─── Name of the receipt ────────────────────────────────────────────────────
+// "L02 - filtro por categoría.md". The slug is made by the server, not by the model: the prompt used to ask
+// for "no : / \ < > ..." and a "fix(rutas): …" copied from the commit was enough to create a file that
+// Windows does not store.
 //
-// 40 caracteres como mucho (validación V7): con una Documentación en una carpeta sincronizada de ruta
-// larga, un slug de 60 dejaba la ruta del recibo cerca del límite de 255.
+// 40 characters at most: with a Documentation in a synchronized folder with a long path, a slug of 60 left
+// the receipt's path close to the limit of 255.
 export const LARGO_MAXIMO_DEL_SLUG = 40;
 
 export function dosDigitos(lote: number): string {
@@ -89,11 +89,11 @@ export function slugDe(titulo: string): string {
     .replace(/ {2,}/g, " ")
     .trim();
 
-  // Por puntos de código, no por unidades de UTF-16: así un corte nunca parte un carácter.
+  // By code points, not by UTF-16 units: so that a cut never splits a character.
   let caracteres = Array.from(limpio);
   if (caracteres.length > LARGO_MAXIMO_DEL_SLUG) {
-    // Sin partir palabras: se corta en el último espacio de los primeros 41 caracteres (si el 41 es un
-    // espacio, la palabra 40 entra entera). Una sola palabra más larga que el tope se corta a lo bruto.
+    // Without splitting words: it is cut at the last space of the first 41 characters (if the 41st is a space,
+    // word 40 fits whole). A single word longer than the cap is cut bluntly.
     const ultimoEspacio = caracteres.slice(0, LARGO_MAXIMO_DEL_SLUG + 1).lastIndexOf(" ");
     caracteres = caracteres.slice(0, ultimoEspacio > 0 ? ultimoEspacio : LARGO_MAXIMO_DEL_SLUG);
   }
@@ -109,23 +109,23 @@ export function nombreDeRecibo(lote: number, titulo: string): string {
   return validarSegmento(`${etiquetaDeLote(lote)} - ${slugDe(titulo)}.md`, mensaje("RECIBOS-CAMPO-NOMBRE"));
 }
 
-// El lote de un nombre de recibo ("L02 - x.md" -> 2), o null si no lo es.
+// The batch of a receipt name ("L02 - x.md" -> 2), or null if it is not one.
 export function loteDelNombre(nombre: string): number | null {
   const encontrado = nombre.match(/^L(\d{2}) - .*\.md$/i);
   const lote = encontrado ? Number(encontrado[1]) : NaN;
   return lote >= 1 && lote <= 99 ? lote : null;
 }
 
-// ─── Escritura ──────────────────────────────────────────────────────────────
-// En el idioma del proyecto (§8.2 del plan maestro v3): claves, valores, secciones y lo que se escribe en
-// una sección vacía, para que nunca quede un encabezado sin texto. Al leer, cuenta como vacía cualquier
-// forma habitual de decir "nada" en los dos idiomas.
+// ─── Writing ────────────────────────────────────────────────────────────────
+// In the project's language: keys, values, sections and what is written in an empty section, so that a
+// heading never stays without text. When reading, any usual way of saying "nothing" in both languages
+// counts as empty.
 function sinCR(texto: string): string {
   return texto.replace(/\r\n?/g, "\n");
 }
 
-// Un valor del frontmatter es una sola línea. Los saltos y las barras se escapan, para que una nota de
-// varias líneas vuelva igual al leerla.
+// A frontmatter value is a single line. Line breaks and backslashes are escaped, so that a multi-line note
+// comes back the same when read.
 function enUnaLinea(valor: string): string {
   return sinCR(valor.trim()).replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
 }
@@ -134,7 +134,7 @@ function deUnaLinea(valor: string): string {
   return valor.replace(/\\(\\|n)/g, (_, c: string) => (c === "n" ? "\n" : "\\"));
 }
 
-// Una celda de tabla: `|` como `\|` y los saltos de línea como <br>. La usa también el índice.
+// A table cell: `|` as `\|` and line breaks as <br>. The index uses it too.
 export function celda(texto: string): string {
   return sinCR(texto).trim().replace(/\|/g, "\\|").replace(/\n/g, "<br>");
 }
@@ -144,8 +144,8 @@ function tabla(cabecera: [string, string], filas: [string, string][], vacia: str
   return [`| ${cabecera[0]} | ${cabecera[1]} |`, "|---|---|", ...filas.map(([a, b]) => `| ${celda(a)} | ${celda(b)} |`)].join("\n");
 }
 
-// Una línea que empieza como un encabezado se sangra un espacio: dentro de una sección es texto, y al
-// leer cortaría la sección en dos.
+// A line that starts like a heading is indented one space: inside a section it is text, and when reading it
+// would cut the section in two.
 function texto(contenido: string, vacia: string): string {
   const limpio = sinCR(contenido).trim();
   if (!limpio) return vacia;
@@ -166,7 +166,7 @@ export function escribirRecibo(r: Recibo, opciones: { comoDocumento?: boolean; i
   const v = vocabulario(idioma).recibo;
   const k = v.claves;
   const fm: [string, string][] = [];
-  // Con un solo lote, el recibo pasa a ser el documento de la fase y lo dice su frontmatter.
+  // With a single batch, the receipt becomes the phase's document and its frontmatter says so.
   if (opciones.comoDocumento) fm.push([k.lotes, String(r.de)], [k.generado_por, GENERADO_POR]);
   fm.push(
     [k.lote, etiquetaDeLote(r.lote)],
@@ -193,7 +193,7 @@ export function escribirRecibo(r: Recibo, opciones: { comoDocumento?: boolean; i
     [s.decisiones, texto(r.decisiones, v.vacias.decisiones)],
   ];
 
-  // Las condicionales solo si traen texto, siempre en el orden de la plantilla.
+  // The conditionals only if they carry text, always in the template's order.
   const condicionales = [...r.condicionales]
     .filter((c) => sinCR(c.texto).trim())
     .sort((a, b) => TITULOS_CONDICIONALES.indexOf(a.titulo) - TITULOS_CONDICIONALES.indexOf(b.titulo));
@@ -216,16 +216,16 @@ export function escribirRecibo(r: Recibo, opciones: { comoDocumento?: boolean; i
   ].join("\n");
 }
 
-// ─── Lectura ────────────────────────────────────────────────────────────────
+// ─── Reading ────────────────────────────────────────────────────────────────
 const FRONTMATTER = /^---\n([\s\S]*?)\n---(?:\n|$)/;
 
-// El frontmatter "clave: valor" de un recibo, sin tocar comillas: un asunto de commit puede empezar
-// por una. Normaliza el BOM y los finales de línea antes (§1.3).
+// The "key: value" frontmatter of a receipt, without touching quotes: a commit subject can start with one.
+// It normalizes the BOM and the line endings first.
 export function frontmatterDeRecibo(contenido: string): { meta: Record<string, string>; cuerpo: string } {
   const crudo = sinCR(contenido.replace(/^\uFEFF/, ""));
   const encontrado = crudo.match(FRONTMATTER);
   if (!encontrado) return { meta: {}, cuerpo: crudo };
-  // Con las claves canónicas: un recibo en inglés (`batch`, `status`…) se lee igual (§8.2).
+  // With the canonical keys: a receipt in English (`batch`, `status`…) is read the same.
   return { meta: normalizarClaves(frontmatterCrudo(encontrado[1] ?? "")), cuerpo: crudo.slice(encontrado[0].length) };
 }
 
@@ -239,14 +239,14 @@ function frontmatterCrudo(lineas: string): Record<string, string> {
   return meta;
 }
 
-// Una sección "## X" del recibo, en cualquiera de los dos idiomas: la sección canónica de la plantilla o
-// el título canónico de una condicional.
+// A "## X" section of the receipt, in either language: the template's canonical section or the canonical
+// title of a conditional.
 function seccionConocida(titulo: string): SeccionDeRecibo | TituloCondicional | null {
   return seccionCanonica(titulo) ?? condicionalCanonica(titulo);
 }
 
-// Las secciones "## X" conocidas, con su texto. Un "## " que no es de la plantilla se queda dentro de la
-// sección en la que aparece: nunca se pierde ni hace fallar la lectura.
+// The known "## X" sections, with their text. A "## " that is not from the template stays inside the
+// section where it appears: it is never lost and does not make the reading fail.
 function secciones(cuerpo: string): { h1: string | null; mapa: Map<string, string> } {
   const mapa = new Map<string, string>();
   let h1: string | null = null;
@@ -283,7 +283,7 @@ function textoDe(mapa: Map<string, string>, titulo: string): string {
   return esVacia(contenido) ? "" : contenido;
 }
 
-// Las celdas de una fila de tabla, partiendo por los `|` que no van escapados.
+// The cells of a table row, splitting at the `|` that are not escaped.
 function celdas(linea: string): string[] {
   const interior = linea.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
   return interior.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|").replace(/<br\s*\/?>/gi, "\n"));
@@ -292,7 +292,7 @@ function celdas(linea: string): string[] {
 function filasDeTabla(contenido: string): [string, string][] {
   const filas = contenido.split("\n").filter((linea) => linea.trim().startsWith("|"));
   return filas
-    .slice(1) // la cabecera
+    .slice(1) // the header
     .filter((linea) => !/^\|?\s*:?-{3,}/.test(linea.trim()))
     .map((linea) => {
       const [a = "", b = ""] = celdas(linea);
@@ -302,7 +302,7 @@ function filasDeTabla(contenido: string): [string, string][] {
 
 const ES_HASH = /^[0-9a-f]{7,40}$/i;
 
-// En cualquiera de los dos idiomas. Un estado que no se reconoce no se da por bueno: queda con pendientes.
+// In either language. A state that is not recognized is not taken as good: it stays with pending items.
 function estadoDe(valor: string | undefined): EstadoLote {
   return estadoCanonico(valor) ?? "con pendientes";
 }
@@ -333,28 +333,28 @@ function anclaDe(meta: Record<string, string>, repo: string | null, rama: string
       return { tipo: "pendiente" };
   }
 
-  // Un recibo de la 2.x no tiene `ancla`: se deduce de `commit`. Un hash queda como commit sin
-  // verificar (verificado vacío); `no aplica`, como nota.
+  // A 2.x receipt has no `ancla`: it is deduced from `commit`. A hash stays as an unverified commit
+  // (empty verificado); `no aplica`, as a note.
   if (ES_HASH.test(commit)) return { tipo: "commit", repo: repo ?? "", sha: commit, corto: commit.slice(0, 7), asunto: "", rama: rama ?? "", verificado: "" };
   if (esCommitNoAplica(commit)) return { tipo: "nota", texto: commit.toLowerCase() };
   return { tipo: "pendiente" };
 }
 
-// Lo que entra a mano por la escotilla de write_central_doc (un recibo o el documento de la Fase 4) nunca
-// puede pasar por algo que escribió el servidor: su frontmatter queda con `origen: manual` y sin
-// `generado_por`, diga lo que diga el texto (hallazgo 2 de la auditoría de la Etapa 4).
+// What comes in by hand through the write_central_doc escape hatch (a receipt or the Phase 4 document) can
+// never pass for something the server wrote: its frontmatter is left with `origen: manual` and without
+// `generado_por`, whatever the text says.
 export function comoManual(contenido: string): string {
   const crudo = sinCR(contenido.replace(/^\uFEFF/, ""));
   const encontrado = crudo.match(FRONTMATTER);
   if (!encontrado) return crudo;
-  // En el idioma en que viene el frontmatter, y sin esas claves en ninguno de los dos.
+  // In the language the frontmatter comes in, and without those keys in either.
   const origen = vocabulario(idiomaDeFrontmatter(frontmatterCrudo(encontrado[1] ?? ""))).recibo.claves.origen;
   const lineas = (encontrado[1] ?? "").split("\n").filter((linea) => !/^\s*(origen|origin|generado_por|generated_by)\s*:/i.test(linea));
   return `---\n${[...lineas, `${origen}: manual`].join("\n")}\n---\n${crudo.slice(encontrado[0].length)}`;
 }
 
-// Lo que hace falta para saber cómo va un lote, leyendo solo el frontmatter: para el progreso de una
-// tarea (tasks.ts), que se calcula en cada listado.
+// What is needed to know how a batch is doing, reading only the frontmatter: for the progress of a task
+// (tasks.ts), which is computed on every listing.
 export function cabeceraDeRecibo(contenido: string, nombre: string = ""): { lote: number; estado: EstadoLote; ancla: Ancla["tipo"] } {
   const { meta } = frontmatterDeRecibo(contenido);
   const deMeta = Number((meta.lote ?? "").replace(/^L/i, ""));
@@ -362,8 +362,8 @@ export function cabeceraDeRecibo(contenido: string, nombre: string = ""): { lote
   return { lote, estado: estadoDe(meta.estado), ancla: anclaDe(meta, nulo(meta.repo), nulo(meta.rama), "").tipo };
 }
 
-// Un recibo a partir de su texto. `nombre` es el del archivo: da el lote y el título cuando el
-// frontmatter o el encabezado no los traen.
+// A receipt from its text. `nombre` is the file's: it gives the batch and the title when the frontmatter or
+// the heading do not carry them.
 export function parsearRecibo(contenido: string, nombre: string = ""): Recibo {
   const { meta, cuerpo } = frontmatterDeRecibo(contenido);
   const { h1, mapa } = secciones(cuerpo);
@@ -391,7 +391,7 @@ export function parsearRecibo(contenido: string, nombre: string = ""): Recibo {
     repo,
     rama,
     estado: estadoDe(meta.estado),
-    // Lo que verificó el servidor, lo verificó al escribirlo; un recibo manual no se verificó nunca.
+    // What the server verified, it verified when writing it; a manual receipt was never verified.
     ancla: anclaDe(meta, repo, rama, origen === "servidor" ? registrado : ""),
     fecha: (meta.fecha ?? "").trim(),
     registrado,

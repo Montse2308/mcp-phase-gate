@@ -1,18 +1,19 @@
-// El registro de sesiones MCP abiertas (§7.4 del plan): para que el Studio, que es otro proceso y no ve
-// las raíces de ninguna sesión, pueda decir "Claude Code tiene abierto PROYECTO-A".
+// The registry of open MCP sessions: so that the Studio, which is another process and does not see the roots
+// of any session, can say "Claude Code has PROYECTO-A open".
 //
-// Cada servidor MCP por stdio deja `<stateDir>/sesiones/<pid>.json`:
+// Each MCP server over stdio leaves `<stateDir>/sesiones/<pid>.json`:
 //   { "pid": 1234, "cliente": "claude-code 2.1.0", "raices": [...], "proyecto": "PROYECTO-A",
 //     "rutas": { "documentacion": "...", ... }, "desde": "<ISO>", "actualizado": "<ISO>" }
-// Se escribe al conocer las raíces (al terminar el initialize y tras cada roots/list_changed) y se
-// refresca como mucho una vez por minuto; se borra al salir (exit, SIGINT, SIGTERM y cuando el cliente
-// cierra stdin). Es estado efímero y solo informativo: no guarda nada de la conversación, y escribirlo
-// nunca tumba el servidor ni retrasa una respuesta (va en segundo plano, y un fallo solo se anota).
+// It is written when the roots are known (when initialize ends and after each roots/list_changed) and
+// refreshed at most once a minute; it is deleted on exit (exit, SIGINT, SIGTERM and when the client closes
+// stdin). It is ephemeral state and only informational: it stores nothing of the conversation, and writing
+// it never brings the server down or delays a response (it goes in the background, and a failure is only
+// logged).
 //
-// Quien lo lee (el Studio) lo trata como entrada no confiable, porque lo escriben otros procesos: el
-// nombre tiene que ser un entero positivo, el contenido cuadrar con un shape zod y medir poco, el pid
-// seguir vivo y `actualizado` ser de hace menos de 10 minutos. Lo demás se ignora y, si se pide, se borra
-// sin seguir enlaces.
+// Whoever reads it (the Studio) treats it as untrusted input, because other processes write it: the name has
+// to be a positive integer, the content has to match a zod shape and be small, the pid has to be alive and
+// `actualizado` less than 10 minutes old. Anything else is ignored and, if asked, deleted without following
+// links.
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as crypto from "crypto";
@@ -63,7 +64,7 @@ export const SesionArchivo = z
   .strict();
 export type SesionArchivo = z.infer<typeof SesionArchivo>;
 
-// ─── Escribir (el servidor MCP) ─────────────────────────────────────────────
+// ─── Writing (the MCP server) ───────────────────────────────────────────────
 // What this process received from its environment (the client's "env" block or the .env) for its three paths.
 // It is what does not change while the process lives, and what Ajustes compares with machine.json. A path
 // longer than the cap is not recorded.
@@ -79,7 +80,7 @@ export function rutasDelEntorno(): RutasDeSesion | undefined {
 
 export type Escritor = (ruta: string, contenido: string) => Promise<void>;
 
-// Escritura atómica: un temporal que empieza por punto (el lector no lo toma por una sesión) y un rename.
+// Atomic write: a temporary whose name starts with a dot (the reader does not take it for a session) and a rename.
 export const escribirAtomico: Escritor = async (ruta, contenido) => {
   await fs.promises.mkdir(path.dirname(ruta), { recursive: true });
   const temporal = path.join(path.dirname(ruta), `.${path.basename(ruta)}.${crypto.randomBytes(4).toString("hex")}.tmp`);
@@ -99,7 +100,7 @@ export type OpcionesDeRegistro = {
   escribir?: Escritor;
   // The paths from the server's environment; without them, the process's.
   rutas?: RutasDeSesion | undefined;
-  // El proceso al que se enganchan la salida y las señales; los tests pasan uno falso.
+  // The process the exit and the signals are hooked to; the tests pass a fake one.
   proceso?: Pick<NodeJS.Process, "on" | "once" | "exit"> & { stdin?: { on: (evento: string, oyente: () => void) => unknown } };
 };
 
@@ -113,7 +114,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
   const proceso = opciones.proceso ?? process;
   // Read at start: what came from the environment does not change while the process lives.
   const rutas = "rutas" in opciones ? opciones.rutas : rutasDelEntorno();
-  // La ruta se fija al arrancar: si el estado cambiara de sitio, el archivo que se borra es el escrito.
+  // The path is fixed at startup: if the state moved, the file that gets deleted is the one that was written.
   let ruta: string | null = null;
   let datos: SesionArchivo | null = null;
   let ultima = 0;
@@ -131,7 +132,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
     pendiente = null;
     if (cerrado || !datos) return;
     ultima = Date.now();
-    // El cliente, al escribir: si las raíces llegaron antes de conocerlo, el siguiente refresco lo pone.
+    // The client, at write time: if the roots arrived before it was known, the next refresh sets it.
     datos = { ...datos, cliente: nombreDelCliente(), actualizado: ahora().toISOString() };
     escrituras++;
     try {
@@ -142,13 +143,13 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
       return;
     }
     escribir(ruta, `${JSON.stringify(datos, null, 2)}\n`).catch((error: unknown) => {
-      // Una vez: el servidor sigue igual, y el Studio solo dejará de ver esta sesión.
+      // Once: the server carries on as before, and the Studio will just stop seeing this session.
       if (!avisado) log("warning", mensaje("SESION-NO-REGISTRADA", { detalle: error instanceof Error ? error.message : String(error) }));
       avisado = true;
     });
   };
 
-  // Como mucho una escritura por intervalo; un cambio dentro del intervalo se escribe al acabarlo.
+  // At most one write per interval; a change inside the interval is written when it ends.
   const programar = (): void => {
     if (cerrado || pendiente) return;
     const espera = ultima + intervalo - Date.now();
@@ -166,7 +167,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
       const resolucion = resolverPorRaices(raices);
       proyecto = resolucion.tipo === "unico" ? resolucion.carpetaProyecto : null;
     } catch {
-      proyecto = null; // sin Documentación configurada no hay proyecto que deducir
+      proyecto = null; // no Documentation configured, so there is no project to deduce
     }
     const cliente = nombreDelCliente();
     const momento = ahora().toISOString();
@@ -182,7 +183,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
     programar();
   });
 
-  // Refresco: sin él, una sesión larga parecería caducada a los 10 minutos.
+  // Refresh: without it, a long session would look expired after 10 minutes.
   const refresco = setInterval(() => {
     if (datos) programar();
   }, intervalo);
@@ -193,7 +194,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
     try {
       fs.unlinkSync(ruta);
     } catch {
-      // ya no estaba, o no se puede: el Studio lo limpiará por pid
+      // it was already gone, or it cannot be: the Studio will clean it up by pid
     }
   };
   const cerrar = (): void => {
@@ -204,7 +205,7 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
   };
 
   proceso.on("exit", cerrar);
-  // Con un oyente de SIGINT o SIGTERM, Node ya no sale solo: se sale con el código de la señal.
+  // With a SIGINT or SIGTERM listener, Node no longer exits by itself: it exits with the signal's code.
   proceso.once("SIGINT", () => {
     cerrar();
     proceso.exit(130);
@@ -218,10 +219,10 @@ export function registrarSesion(mcp: McpServer, opciones: OpcionesDeRegistro = {
   return { escrituras: () => escrituras, borrar, cerrar };
 }
 
-// ─── Leer (el Studio) ───────────────────────────────────────────────────────
-// ¿Sigue vivo el proceso? kill(pid, 0) no manda ninguna señal: solo comprueba. EPERM es que existe y es
-// de otro usuario: vivo. Un pid reutilizado por otro programa también da "vivo"; para eso está la
-// caducidad de 10 minutos.
+// ─── Reading (the Studio) ───────────────────────────────────────────────────
+// Is the process still alive? kill(pid, 0) sends no signal: it only checks. EPERM means it exists and
+// belongs to another user: alive. A pid reused by another program also gives "alive"; that is what the
+// 10-minute expiry is for.
 export function pidVivo(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -235,8 +236,8 @@ export type SesionAbierta = { pid: number; cliente: string; proyecto: string | n
 
 export type OpcionesDeLectura = { ahora?: () => number; vivo?: (pid: number) => boolean; borrar?: boolean };
 
-// Borra una entrada sin seguir enlaces: unlink quita el enlace o el archivo; una junction de Windows se
-// quita con rmdir (no recursivo: nunca toca su destino). Una carpeta de verdad no se borra.
+// Deletes an entry without following links: unlink removes the link or the file; a Windows junction is
+// removed with rmdir (not recursive: it never touches its target). A real folder is not deleted.
 function borrarEntrada(ruta: string): void {
   try {
     const info = fs.lstatSync(ruta);
@@ -248,7 +249,7 @@ function borrarEntrada(ruta: string): void {
       else throw error;
     }
   } catch {
-    // otro proceso ya la quitó, o no se puede: se intentará la próxima vez
+    // another process already removed it, or it cannot be: it will be tried next time
   }
 }
 
@@ -275,8 +276,8 @@ function leerSesion(ruta: string, pid: number): SesionArchivo | null {
   }
 }
 
-// Un temporal de una escritura en curso no se toca; uno de hace más de un minuto es de un proceso que
-// murió escribiendo.
+// A temporary of a write in progress is not touched; one older than a minute belongs to a process that
+// died while writing.
 const TEMPORAL = /^\.[1-9]\d{0,9}\.json\.[0-9a-f]+\.tmp$/;
 
 export function sesionesAbiertas(opciones: OpcionesDeLectura = {}): SesionAbierta[] {
@@ -315,7 +316,7 @@ export function sesionesAbiertas(opciones: OpcionesDeLectura = {}): SesionAbiert
     const pid = Number(nombre[1]);
     const sesion = leerSesion(ruta, pid);
     const edad = sesion ? ahora() - Date.parse(sesion.actualizado) : Infinity;
-    // Una fecha en el futuro (más de un minuto) tampoco vale: no se puede saber cuándo caduca.
+    // A date in the future (by more than a minute) is not valid either: there is no way to know when it expires.
     if (!sesion || edad > CADUCIDAD_MS || edad < -INTERVALO_MS || !vivo(pid)) {
       descartar();
       continue;

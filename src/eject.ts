@@ -1,16 +1,16 @@
-// `npx mcp-phase-gate eject <objetivo> --a global|proyecto:<NOMBRE>`: copia un prompt, una ranura, un
-// comando o un preset a una capa propia, para editarlo ahí.
+// `npx mcp-phase-gate eject <objetivo> --a global|proyecto:<NOMBRE>`: copies a prompt, a slot, a command or
+// a preset to a layer of one's own, to edit it there.
 //
-// El motor de bloques vuelve menos obvio qué texto recibe el modelo (riesgo E3-R6): eject es la
-// salida. Copia exactamente lo que hoy está en vigor —para una ranura, su contenido EFECTIVO, con el
-// preset y las reglas ya aplicados— al sitio donde editarlo gana, y dice cómo comprobarlo.
+// The block engine makes it less obvious what text the model receives: eject is the way out. It copies
+// exactly what is in force today —for a slot, its EFFECTIVE content, with the preset and the rules already
+// applied— to the place where editing it wins, and says how to check it.
 //
-//   fase-3            el cuerpo de fábrica de la fase, CON sus marcadores de ranura (para que los
-//                     bloques sigan aplicando)                       → <capa>/fase-3-plan-tecnico.md
-//   fase-3/pruebas    el contenido efectivo de la ranura, como bloque  → <capa>/bloques.md
-//   global/evidencia  igual                                            → <capa>/bloques.md
-//   comando-f4        el texto efectivo de comandos/f4.md              → <capa>/comandos/f4.md
-//   preset:<nombre>   el archivo completo del preset                   → <configDir>/presets/<nombre>.md
+//   fase-3            the factory body of the phase, WITH its slot markers (so that the
+//                     blocks keep applying)                           → <capa>/fase-3-plan-tecnico.md
+//   fase-3/pruebas    the effective content of the slot, as a block    → <capa>/bloques.md
+//   global/evidencia  same                                             → <capa>/bloques.md
+//   comando-f4        the effective text of comandos/f4.md             → <capa>/comandos/f4.md
+//   preset:<nombre>   the whole file of the preset                     → <configDir>/presets/<nombre>.md
 
 import * as fs from "fs";
 import * as path from "path";
@@ -37,12 +37,12 @@ export type Objetivo =
   | { tipo: "comando"; numero: number }
   | { tipo: "preset"; nombre: string };
 
-// Lo que se pidió, o el error que se le dice a la persona.
+// What was asked for, or the error that is told to the person.
 export function parsearObjetivo(texto: string): Objetivo | string {
   if (/^global-rules(\.md)?$/i.test(texto)) {
     return mensaje("EJECT-GLOBAL-RULES");
   }
-  // `phase-3` y `phase-3/tests` valen igual que `fase-3` y `fase-3/pruebas` (§8.2): se resuelven al id canónico.
+  // `phase-3` and `phase-3/tests` are worth the same as `fase-3` and `fase-3/pruebas`: they resolve to the canonical id.
   let m = texto.match(/^(?:fase|phase)-(\d+)$/);
   if (m) return { tipo: "fase", numero: Number(m[1]) };
   m = texto.match(/^(global|(?:fase|phase)-\d+)\/([\w-]+)$/);
@@ -60,7 +60,7 @@ export function parsearObjetivo(texto: string): Objetivo | string {
 
 type Destino = { carpeta: string; proyecto: string | null; etiqueta: string };
 
-// El idioma de la capa a la que se copia: el del proyecto, o el del equipo para la capa global.
+// The language of the layer being copied to: the project's, or the machine's for the global layer.
 function idiomaDelDestino(destino: Destino): Idioma {
   return destino.proyecto ? idiomaDelProyecto(destino.proyecto).idioma : idiomaDelEquipo().idioma;
 }
@@ -87,19 +87,19 @@ export class ErrorDeEject extends Error {
   }
 }
 
-// Lo que haría un eject, sin escribir nada: el archivo, su texto nuevo y si sustituye a uno que ya existe.
-// Lo calcula una sola función, que usan el CLI (que lo escribe o, con --dry-run, lo enseña) y el Studio
-// (que lo enseña y lo aplica con su huella).
+// What an eject would do, without writing anything: the file, its new text and whether it replaces one that
+// exists. A single function computes it, used by the CLI (which writes it or, with --dry-run, shows it) and
+// the Studio (which shows it and applies it with its fingerprint).
 export type PlanDeEject = {
   objetivo: Objetivo;
   archivo: string;
   texto: string;
-  reemplaza: boolean; // hay algo que sustituir: se deja copia
-  etiqueta: string | null; // "la capa global", "la capa del proyecto X"; null para un preset
+  reemplaza: boolean; // there is something to replace: a copy is left
+  etiqueta: string | null; // "la capa global", "la capa del proyecto X"; null for a preset
   proyecto: string | null;
 };
 
-// Escribe el plan. Si sustituye algo, lo que había queda antes en <archivo>.bak-<fecha>, que se devuelve.
+// Writes the plan. If it replaces something, what was there is left first in <file>.bak-<date>, which is returned.
 export function escribirEject(plan: PlanDeEject, ahora: Date = new Date()): string | null {
   let copia: string | null = null;
   if (plan.reemplaza && fs.existsSync(plan.archivo)) {
@@ -117,7 +117,7 @@ function siExisteSinFuerza(existe: boolean, que: string, fuerza: boolean): void 
 
 type Plan = { archivo: string; texto: string; reemplaza: boolean };
 
-// ─── Cada objetivo ──────────────────────────────────────────────────────────
+// ─── Each target ────────────────────────────────────────────────────────────
 function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
   const [fabrica] = capasDeCuerpos(destino.proyecto);
   const entrada = discoverPhases([fabrica!.ruta]).get(numero);
@@ -125,8 +125,8 @@ function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
 
   const nombre = path.basename(entrada.file);
   const archivo = path.join(destino.carpeta, nombre);
-  // Dentro de una capa gana el primer archivo de la fase por orden alfabético: uno con otro nombre
-  // le ganaría o le perdería sin que se note.
+  // Inside a layer the first file of the phase in alphabetical order wins: one with another name would beat
+  // it or lose to it without it showing.
   const otros = fs.existsSync(destino.carpeta)
     ? fs.readdirSync(destino.carpeta).filter((n) => n !== nombre && n.toLowerCase().endsWith(".md") && Number(n.match(PHASE_FILE_PATTERN)?.[1]) === numero)
     : [];
@@ -136,10 +136,10 @@ function planDeFase(numero: number, destino: Destino, fuerza: boolean): Plan {
   return { archivo, texto: leerPromptNormalizado(entrada.file), reemplaza: fs.existsSync(archivo) };
 }
 
-// Sustituye el bloque con ese id en un archivo de bloques, o lo añade al final.
+// Replaces the block with that id in a blocks file, or adds it at the end.
 function conBloque(actual: string, id: string, bloque: string): string {
   const lineas = actual.split("\n");
-  // El marcador puede estar en español o en inglés, con el id o con su alias.
+  // The marker may be in Spanish or in English, with the id or with its alias.
   const abre = lineas.findIndex((l) => idDeAperturaDeBloque(l) === id);
   if (abre !== -1) {
     const cierra = lineas.findIndex((l, i) => i > abre && esCierreDeBloque(l));
@@ -170,8 +170,8 @@ function planDeRanura(objetivo: Extract<Objetivo, { tipo: "ranura" }>, destino: 
   const yaEsta = actual.split("\n").some((l) => idDeAperturaDeBloque(l) === objetivo.id);
   siExisteSinFuerza(yaEsta, mensaje("EJECT-BLOQUE-DE", { id: objetivo.id, archivo }), fuerza);
 
-  // En el idioma del destino (§8.2): `<!-- block: phase-3/tests -->` para un proyecto en inglés. El parser
-  // lee los dos, así que un archivo de bloques puede mezclarlos.
+  // In the language of the destination: `<!-- block: phase-3/tests -->` for a project in English. The parser
+  // reads both, so a blocks file can mix them.
   const idioma = idiomaDelDestino(destino);
   const v = VOCABULARIO[idioma].marcadores;
   const id = idioma === "en" ? idInglesDeRanura(objetivo.id) : objetivo.id;
@@ -203,7 +203,7 @@ function planDePreset(nombre: string, fuerza: boolean): Plan {
   return { archivo, texto: leerPromptNormalizado(preset.ruta), reemplaza: fs.existsSync(archivo) };
 }
 
-// El plan de un eject. Lanza ErrorDeEject (con el código de salida del CLI) si no se puede.
+// The plan of an eject. Throws ErrorDeEject (with the exit code of the CLI) if it cannot be done.
 export function planDeEject(textoObjetivo: string, opciones: { destino: string | null; fuerza: boolean }): PlanDeEject {
   const objetivo = parsearObjetivo(textoObjetivo);
   if (typeof objetivo === "string") throw new ErrorDeEject(objetivo, 2);

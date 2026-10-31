@@ -1,15 +1,16 @@
-// Tareas: cuáles existen, en qué fase va cada una, y cuál es la activa de cada proyecto.
+// Tasks: which exist, which phase each one is in, and which is each project's active one.
 //
-// La idea central: **la carpeta es el registro**. Las tareas son las carpetas que existen y la
-// fase de cada una se deduce de los documentos que hay dentro, porque cada fase declara en su
-// cabecera cómo se llama el suyo. No hay un archivo que liste tareas ni que apunte fases.
+// The central idea: **the folder is the register**. Tasks are the folders that exist and the phase of each
+// one is deduced from the documents inside, because each phase declares in its header what its own is
+// called. There is no file that lists tasks or points to phases.
 //
-// Guardar esa información sería tener dos copias de la misma verdad, y la copia guardada
-// dependería de que el modelo se acordara de reportar cada avance. Deducirla del disco la
-// vuelve un hecho: si borras un documento a mano porque quedó mal, la fase baja sola.
+// Storing that information would mean having two copies of the same truth, and the stored copy would depend
+// on the model remembering to report each advance. Deducing it from the disk makes it a fact: if you delete
+// a document by hand because it came out wrong, the phase goes down by itself.
 //
-// Lo único que sí se guarda es un puntero por proyecto —cuál es la tarea activa—, porque eso
-// el disco no lo puede saber. Antes era un solo puntero global y dos ventanas abiertas a la
+// The only thing that is stored is a pointer per project —which task is the active one—, because the disk
+// cannot know that. A single global pointer would let two windows open at once overwrite each other's:
+// window A would ask where it was and be answered with B's task.
 // vez se lo pisaban: la ventana A preguntaba dónde estaba y le contestaban la tarea de B.
 
 import * as fs from "fs";
@@ -25,9 +26,9 @@ import { cabeceraDeRecibo, frontmatterDeRecibo, loteDelNombre } from "./recibos.
 import { ENCABEZADOS_DE_PENDIENTES, FORMAS_DE_VACIO, IDIOMAS, estadoCanonico, lotesDelFrontmatter, vocabulario } from "./vocabulario.js";
 import type { Idioma } from "./vocabulario.js";
 
-// ─── Puntero de tarea activa, por proyecto ──────────────────────────────────
-// Forma del archivo: { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" }
-// La clave es el nombre del proyecto en minúsculas; el valor, el nombre de la carpeta de tarea.
+// ─── Active-task pointer, per project ───────────────────────────────────────
+// Shape of the file: { "proyecto-a": "login-sso", "proyecto-b": "reporte-comisiones" }
+// The key is the project name in lowercase; the value, the name of the task folder.
 export type Punteros = Record<string, string>;
 
 export function leerPunteros(): Punteros {
@@ -38,34 +39,33 @@ export function leerPunteros(): Punteros {
     const crudo = JSON.parse(fs.readFileSync(archivo, "utf-8"));
     if (!crudo || typeof crudo !== "object" || Array.isArray(crudo)) return {};
 
-    // Se filtra en vez de confiar: el archivo lo puede haber tocado cualquiera, y una entrada
-    // con forma rara no debe tumbar las demás.
+    // It is filtered instead of trusted: anyone may have touched the file, and an entry with an odd shape must
+    // not bring down the others.
     const punteros: Punteros = {};
     for (const [proyecto, tarea] of Object.entries(crudo)) {
       if (typeof tarea === "string" && tarea.trim()) punteros[proyecto.toLowerCase()] = tarea;
     }
     return punteros;
   } catch {
-    // Un archivo ilegible no debe dejar al usuario sin servicio: se ignora y el sistema cae
-    // en la deducción, que da una respuesta razonable sin necesitar estado guardado.
+    // An unreadable file must not leave the user without service: it is ignored and the system falls back to
+    // deduction, which gives a reasonable answer without needing stored state.
     return {};
   }
 }
 
 export function guardarPuntero(project: string, taskName: string): void {
-  const punteros = leerPunteros(); // se relee justo antes de escribir: otra ventana pudo cambiarlo
+  const punteros = leerPunteros(); // re-read right before writing: another window may have changed it
   punteros[project.toLowerCase()] = taskName;
   escribirPunteros(punteros);
 }
 
-// Escribe a un temporal y renombra. El renombrado es atómico dentro del mismo sistema de
-// archivos, así que un corte a media escritura no deja el archivo a medias: o está el de
-// antes, o está el nuevo. Importa porque ahora son varias ventanas escribiendo el mismo
-// archivo, y antes cada escritura era un objeto suelto que se sobrescribía entero.
+// Writes to a temporary file and renames. The rename is atomic within the same file system, so a cut halfway
+// through a write does not leave the file half-written: either the old one is there, or the new one. It
+// matters because several windows write the same file.
 //
-// Queda una ventana mínima entre leer y escribir en la que dos procesos simultáneos podrían
-// perder el puntero del otro. No se bloquea el archivo a propósito: el costo de perder un
-// puntero es un `switch_task`, y un lock mal soltado deja el servidor inservible.
+// A minimal window remains between reading and writing in which two simultaneous processes could lose each
+// other's pointer. The file is not locked on purpose: the cost of losing a pointer is a `switch_task`, and
+// a badly released lock leaves the server unusable.
 function escribirPunteros(punteros: Punteros): void {
   const archivo = stateFile();
   const temporal = `${archivo}.tmp`;
@@ -75,9 +75,9 @@ function escribirPunteros(punteros: Punteros): void {
   fs.renameSync(temporal, archivo);
 }
 
-// El formato anterior guardaba una sola tarea activa global en `active_task.json`. Ya no se
-// puede leer —cambió de forma— y conservarlo solo deja basura en la carpeta de datos, así
-// que se borra la primera vez que arranca esta versión.
+// The previous format stored a single global active task in `active_task.json`. It can no longer be read
+// —its shape changed— and keeping it only leaves garbage in the data folder, so it is deleted the first time
+// this version starts.
 export function limpiarEstadoViejo(): void {
   const viejos = [path.join(stateDir(), "active_task.json"), path.join(MODULE_DIR, "active_task.json")];
 
@@ -88,37 +88,37 @@ export function limpiarEstadoViejo(): void {
         log("info", mensaje("TAREA-ESTADO-VIEJO-ELIMINADO", { ruta: viejo }));
       }
     } catch {
-      // Que no se pueda borrar no impide trabajar: el archivo viejo ya no se lee.
+      // Not being able to delete it does not prevent working: the old file is no longer read.
     }
   }
 }
 
-// ─── Estado deducido de una tarea ───────────────────────────────────────────
-// El progreso dentro de la fase que ejecuta por lotes (la 4), deducido de archivos que escribe el
-// servidor: el frontmatter del plan y el de cada recibo.
+// ─── Deduced state of a task ────────────────────────────────────────────────
+// The progress inside the phase that runs by batches (the 4th), deduced from files that the server writes:
+// the frontmatter of the plan and the one of each receipt.
 export type ProgresoDeLotes = {
-  total: number | null;            // del frontmatter del plan; null si el plan no lo declara
-  cerrados: number;                // recibos con ancla distinta de pendiente (un fallido no cuenta)
-  actual: number | null;           // primer lote sin recibo cerrado
-  pendienteDeCommit: number | null; // lote con recibo y commit pendiente
+  total: number | null;            // from the plan's frontmatter; null if the plan does not declare it
+  cerrados: number;                // receipts with an anchor other than pending (a failed one does not count)
+  actual: number | null;           // first batch without a closed receipt
+  pendienteDeCommit: number | null; // batch with a receipt and a pending commit
 };
 
 export type EstadoTarea = {
   taskName: string;
   folderPath: string;
   fasesHechas: number[];
-  siguienteFase: number | null;  // null = ya no queda ninguna fase con documento pendiente
-  fasesConDocumento: number;     // 0 = no hay nada que deducir (ningún prompt declara documento)
-  ultimoCambio: number | null;   // mtime del documento o recibo más reciente, para ordenar por actividad
-  lotes: ProgresoDeLotes | null; // solo cuando la fase siguiente es la que declara recibos
+  siguienteFase: number | null;  // null = no phase with a pending document is left
+  fasesConDocumento: number;     // 0 = there is nothing to deduce (no prompt declares a document)
+  ultimoCambio: number | null;   // mtime of the most recent document or receipt, to sort by activity
+  lotes: ProgresoDeLotes | null; // only when the next phase is the one that declares receipts
 };
 
 function esLoteCerrado(cabecera: { estado: string; ancla: string }): boolean {
   return cabecera.ancla !== "pendiente" && cabecera.estado !== "fallido";
 }
 
-// Lee solo frontmatter: el `lotes` del plan y la cabecera de cada recibo. Un archivo ilegible no
-// cuenta; el progreso es una ayuda para el chat, no una condición.
+// Reads only frontmatter: the plan's `lotes` and the header of each receipt. An unreadable file does not
+// count; the progress is a help for the chat, not a condition.
 export function progresoDeLotes(folderPath: string, plan: string | null, recibos: string): ProgresoDeLotes {
   let total: number | null = null;
   if (plan) {
@@ -139,12 +139,12 @@ export function progresoDeLotes(folderPath: string, plan: string | null, recibos
       const cabecera = cabeceraDeRecibo(leerTextoAcotado(path.join(subcarpeta, nombre)), nombre);
       porLote.set(lote, [...(porLote.get(lote) ?? []), cabecera]);
     } catch {
-      // un recibo que no se puede leer no suma; doctor lo dice
+      // a receipt that cannot be read adds nothing; doctor reports it
     }
   }
 
   const cerradoEl = (lote: number) => (porLote.get(lote) ?? []).some(esLoteCerrado);
-  // Un recibo de un lote que el plan no declara no es el lote "actual" (doctor lo marca fuera de plan).
+  // A receipt of a batch the plan does not declare is not the "current" batch (doctor flags it as out of plan).
   const pendiente = [...porLote.entries()]
     .sort((a, b) => a[0] - b[0])
     .find(([lote, cabeceras]) => (total === null || lote <= total) && cabeceras.some((c) => c.ancla === "pendiente"));
@@ -166,7 +166,7 @@ export function progresoDeLotes(folderPath: string, plan: string | null, recibos
   };
 }
 
-// La fase que declara recibos y el documento de la anterior (su plan).
+// The phase that declares receipts and the previous one's document (its plan).
 function faseDeRecibos(phases: Map<number, PhaseFile>): { numero: number; recibos: string; plan: string | null } | null {
   const ordenadas = [...phases.entries()].sort((a, b) => a[0] - b[0]);
   const conRecibos = ordenadas.find(([, datos]) => datos.recibos);
@@ -175,9 +175,9 @@ function faseDeRecibos(phases: Map<number, PhaseFile>): { numero: number; recibo
   return { numero: conRecibos[0], recibos: conRecibos[1].recibos!, plan: plan ? plan[1].documento! : null };
 }
 
-// Mira qué documentos existen en la carpeta y traduce eso a fases hechas y fase siguiente.
-// Solo cuentan las fases que declaran documento: una fase sin documento no puede completarse
-// y, si contara, dejaría la deducción atascada en ella para siempre.
+// Looks at which documents exist in the folder and translates that into phases done and next phase. Only
+// the phases that declare a document count: a phase without a document cannot be completed and, if it
+// counted, it would leave the deduction stuck on it forever.
 export function estadoDeTarea(
   taskName: string,
   folderPath: string,
@@ -205,12 +205,12 @@ export function estadoDeTarea(
       const mtime = fs.statSync(documento).mtimeMs;
       if (ultimoCambio === null || mtime > ultimoCambio) ultimoCambio = mtime;
     } catch {
-      // Si no se puede leer la fecha, la tarea sigue contando como avanzada; solo pierde
-      // precisión al ordenarla por actividad.
+      // If the date cannot be read, the task still counts as advanced; it only loses precision when sorting by
+      // activity.
     }
   }
 
-  // Los recibos también son actividad: durante la Fase 4 son lo único que cambia en días.
+  // The receipts are also activity: during Phase 4 they are the only thing that changes in days.
   for (const datos of phases.values()) {
     if (!datos.recibos) continue;
     const subcarpeta = path.join(folderPath, datos.recibos);
@@ -221,11 +221,11 @@ export function estadoDeTarea(
         if (ultimoCambio === null || mtime > ultimoCambio) ultimoCambio = mtime;
       }
     } catch {
-      // sin subcarpeta de recibos no hay nada que mirar
+      // without a receipts subfolder there is nothing to look at
     }
   }
 
-  // Sin ningún documento todavía, la carpeta recién creada por start_task marca la actividad.
+  // With no document yet, the folder just created by start_task marks the activity.
   if (ultimoCambio === null) {
     try {
       ultimoCambio = fs.statSync(folderPath).mtimeMs;
@@ -249,13 +249,13 @@ export function estadoDeTarea(
   };
 }
 
-// ─── Documentos congelados ──────────────────────────────────────────────────
-// Un documento de fase se congela en cuanto una fase posterior está presente: reescribirlo
-// después cambiaría la base sobre la que esa fase ya trabajó, sin que nada lo avise. Se puede
-// reescribir con force, que el modelo solo usa con la confirmación explícita del usuario.
+// ─── Frozen documents ───────────────────────────────────────────────────────
+// A phase document is frozen as soon as a later phase is present: rewriting it afterwards would change the
+// basis that phase already worked on, without anything warning. It can be rewritten with force, which the
+// model only uses with the user's explicit confirmation.
 //
-// Una fase está presente si existe su documento, o si declara recibos y su subcarpeta tiene al
-// menos un .md: con varios lotes, la Fase 4 está en curso mucho antes de escribir su documento.
+// A phase is present if its document exists, or if it declares receipts and its subfolder has at least one
+// .md: with several batches, Phase 4 is under way long before its document is written.
 function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null {
   if (datos.documento && fs.existsSync(path.join(carpetaTarea, datos.documento))) {
     return mensaje("TAREA-PRESENCIA-DOCUMENTO", { documento: datos.documento });
@@ -272,30 +272,30 @@ function presenciaDeFase(carpetaTarea: string, datos: PhaseFile): string | null 
   return null;
 }
 
-// Los nombres protegidos se comparan por su clave (claveDeNombre) y no como texto exacto. Sin
-// ella un archivo nuevo esquivaba la protección: `00 - contexto inicial.md` o
-// `04 - ejecución/L01 - x.md` en Windows y macOS, donde abren lo mismo que el nombre protegido, y
-// en cualquier sistema un nombre en Unicode NFD, que se ve igual que el documento. En Linux, un
-// nombre que solo difiere en mayúsculas de un documento protegido también pide force; no hace
-// falta nunca.
+// The protected names are compared by their key (claveDeNombre) and not as exact text. Without it a new file
+// would dodge the protection: `00 - contexto inicial.md` or `04 - ejecución/L01 - x.md` on Windows and
+// macOS, where they open the same as the protected name, and on any system a Unicode NFD name, which looks
+// the same as the document. On Linux, a name that only differs in capitals from a protected document also
+// asks for force; it is never needed.
 const clave = claveDeNombre;
 
-// Desde la Etapa 4, los recibos y el documento de la fase que los declara los escribe el servidor
-// (record_batch). write_central_doc los rechaza siempre, también para crearlos; la escotilla de
-// confirmación (elicitation o force) queda para reparar a mano un archivo dañado (decisión H4).
-// Son los códigos de los dos motivos: su texto sale en el idioma de la llamada.
+// The receipts and the document of the phase that declares them are written by the server (record_batch).
+// write_central_doc always rejects them, also for creating them; the confirmation hatch (elicitation or
+// force) is left for repairing a damaged file by hand. These are the codes of the two reasons: their text
+// comes out in the language of the call.
 export const MOTIVO_RECIBO = "TAREA-MOTIVO-RECIBO";
 export const MOTIVO_DOCUMENTO_DE_LOTES = "TAREA-MOTIVO-DOCUMENTO-DE-LOTES";
 
-// Si el motivo es uno de los dos de lotes: se compara con su texto en los dos idiomas, porque quien
-// pregunta recibió el texto, no el código, y el idioma de la llamada pudo cambiar entre medias.
+// Whether the reason is one of the two about batches: it is compared with its text in both languages,
+// because whoever asks received the text, not the code, and the language of the call may have changed in
+// between.
 export function esMotivoDeLotes(motivo: string | null): boolean {
   if (motivo === null) return false;
   return IDIOMAS.some((idioma) => [MOTIVO_RECIBO, MOTIVO_DOCUMENTO_DE_LOTES].some((codigo) => motivo === mensaje(codigo, {}, idioma)));
 }
 
-// Devuelve el motivo del rechazo, o null si se puede escribir sin force. `relativo` es la ruta
-// dentro de la tarea, con "/" como separador (la de ubicarEnTarea).
+// Returns the reason for the rejection, or null if it can be written without force. `relativo` is the path
+// inside the task, with "/" as separator (the one from ubicarEnTarea).
 export function motivoDeProteccion(
   carpetaTarea: string,
   relativo: string,
@@ -304,7 +304,7 @@ export function motivoDeProteccion(
 ): string | null {
   const buscado = clave(relativo);
 
-  // Ni siquiera para crearlo: solo start_task lo escribe.
+  // Not even to create it: only start_task writes it.
   if (buscado === clave(contextoInicial)) {
     return mensaje("TAREA-MOTIVO-CONTEXTO-INICIAL");
   }
@@ -315,16 +315,16 @@ export function motivoDeProteccion(
       (datos.documento && clave(datos.documento) === buscado) ||
       (datos.recibos && buscado.startsWith(`${clave(datos.recibos)}/`))
   );
-  if (!propia) return null; // no es un archivo de fase
+  if (!propia) return null; // not a phase file
 
-  // Las dos reglas de la Etapa 4 van antes que el congelamiento: en la fase de los recibos, ni sus
-  // recibos ni su documento se escriben con esta tool, existan o no.
+  // The two batch rules go before freezing: in the receipts phase, neither its receipts nor its document are
+  // written with this tool, whether they exist or not.
   const [numero, datos] = propia;
   const esDocumento = datos.documento !== undefined && clave(datos.documento) === buscado;
   if (datos.recibos) return mensaje(esDocumento ? MOTIVO_DOCUMENTO_DE_LOTES : MOTIVO_RECIBO);
 
-  // Crear un documento nunca pisa nada, ni siquiera cuando rellena un hueco. Se mira el nombre
-  // declarado y no el que llegó, que puede venir en otras mayúsculas.
+  // Creating a document never overwrites anything, not even when it fills a gap. The declared name is looked
+  // at and not the one that arrived, which may come in other capitals.
   if (esDocumento && !fs.existsSync(path.join(carpetaTarea, datos.documento!))) return null;
 
   for (const [posterior, datosPosterior] of fases) {
@@ -338,8 +338,8 @@ export function motivoDeProteccion(
   return null;
 }
 
-// Frase corta para el chat. Se le pasa el mapa de fases para poder nombrar la fase siguiente
-// con su título real en vez de un número suelto. Es texto de respuesta: en el idioma de la llamada.
+// A short phrase for the chat. The map of phases is passed in so that the next phase can be named with its
+// real title instead of a bare number. It is response text: in the language of the call.
 export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFile>): string {
   if (estado.fasesConDocumento === 0) {
     return mensaje("TAREA-ESTADO-DESCONOCIDO");
@@ -350,7 +350,7 @@ export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFil
   }
 
   const titulo = phases.get(estado.siguienteFase)?.title;
-  // En la fase de los lotes, también por dónde va dentro de ella.
+  // In the batches phase, also where it is within it.
   const lotes = estado.lotes;
   let progreso = "";
   if (lotes) {
@@ -366,11 +366,10 @@ export function describeEstado(estado: EstadoTarea, phases: Map<number, PhaseFil
     : mensaje("TAREA-SIN-DOCUMENTOS", { siguiente });
 }
 
-// ─── Listado ────────────────────────────────────────────────────────────────
-// Las tareas son las carpetas que hay bajo la subcarpeta de tareas del proyecto. Se listan
-// del disco, así que también aparecen las que alguien creó a mano sin pasar por start_task.
-// Las carpetas con punto no son tareas: con la subcarpeta vacía, .phase-gate/ o .git/ del
-// proyecto cuelgan del mismo sitio que ellas.
+// ─── Listing ────────────────────────────────────────────────────────────────
+// Tasks are the folders under the project's tasks subfolder. They are listed from the disk, so the ones
+// someone created by hand without going through start_task also show up. Folders with a dot are not tasks:
+// with an empty subfolder, the project's .phase-gate/ or .git/ hang from the same place as they do.
 export function listarTareas(
   carpetaProyecto: string,
   phases: Map<number, PhaseFile>
@@ -389,16 +388,15 @@ export function listarTareas(
 // ─── Tarea activa ───────────────────────────────────────────────────────────
 export type TareaActiva = {
   estado: EstadoTarea;
-  // "puntero" es lo que el usuario eligió; "deducida" es la más reciente, cuando no hay puntero.
-  // La distinción se le dice al usuario: una deducción presentada como certeza es justo el
-  // error que este rediseño vino a quitar.
+  // "puntero" is what the user chose; "deducida" is the most recent one, when there is no pointer. The
+  // distinction is told to the user: a deduction presented as certainty is exactly the error to avoid.
   origen: "puntero" | "deducida";
 };
 
-// Con puntero guardado se devuelve esa. Sin puntero —estado borrado, equipo nuevo, archivo
-// corrupto— se deduce la tarea con actividad más reciente, marcada como deducción. Así perder
-// el archivo de estado deja de ser un callejón sin salida.
-// `tareas` es para quien ya listó las tareas del proyecto (el Studio): así no se recorren dos veces.
+// With a stored pointer, that one is returned. Without a pointer —state deleted, new machine, corrupt file—
+// the task with the most recent activity is deduced, marked as a deduction. That way losing the state file
+// is no longer a dead end.
+// `tareas` is for whoever already listed the project's tasks (the Studio): so they are not walked twice.
 export function tareaActiva(
   carpetaProyecto: string,
   phases: Map<number, PhaseFile>,
@@ -410,23 +408,18 @@ export function tareaActiva(
 
   if (apuntada) {
     const encontrada = tareas.find((tarea) => tarea.taskName === apuntada);
-    // Un puntero a una carpeta que ya no existe (renombrada o borrada) no debe dejar sin
-    // respuesta: se ignora y se deduce, igual que si no hubiera puntero.
+    // A pointer to a folder that no longer exists (renamed or deleted) must not leave without an answer: it is
+    // ignored and deduced, as if there were no pointer.
     if (encontrada) return { estado: encontrada, origen: "puntero" };
   }
 
   return { estado: tareas[0] as EstadoTarea, origen: "deducida" };
 }
 
-// ─── Compuerta de fase ──────────────────────────────────────────────────────
-// El repo se llama `phase-gate` pero durante mucho tiempo la compuerta no existió en el
-// código: se podía pedir el prompt de la Fase 4 sin ningún documento previo, y lo único que
-// pasaba era que la lectura del plan fallaba con un ENOENT. A partir de ahí el comportamiento
-// dependía del modelo: uno se detenía a avisar, otro se inventaba el plan que debía leer.
-//
-// La comprobación es una sola comparación contra la fase deducida, porque `siguienteFase` ya
-// es "la primera fase cuyo documento falta". De ahí sale gratis el caso delicado: volver a una
-// fase anterior para corregirla no es saltarse nada, y no se estorba.
+// ─── Phase gate ─────────────────────────────────────────────────────────────
+// The check is a single comparison against the deduced phase, because `siguienteFase` already is "the first
+// phase whose document is missing". The delicate case comes out for free: going back to an earlier phase to
+// fix it is not skipping anything, and it is not hindered.
 export type Salto = {
   fasePedida: number;
   siguienteFase: number;
@@ -438,11 +431,11 @@ export function detectarSalto(
   estado: EstadoTarea,
   phases: Map<number, PhaseFile>
 ): Salto | null {
-  // Sin fases con documento no hay nada contra lo que comparar; y una tarea terminada no
-  // tiene huecos, así que ninguna fase que se pida puede ser un salto.
+  // Without phases with a document there is nothing to compare against; and a finished task has no gaps, so
+  // no phase that is requested can be a skip.
   if (estado.siguienteFase === null) return null;
 
-  // Pedir la fase que toca, o una anterior, es legítimo. Solo se mira hacia adelante.
+  // Asking for the phase that is due, or an earlier one, is legitimate. Only forward is looked at.
   if (fasePedida <= estado.siguienteFase) return null;
 
   const faltan = [...phases.entries()]
@@ -453,25 +446,24 @@ export function detectarSalto(
   return { fasePedida, siguienteFase: estado.siguienteFase, faltan };
 }
 
-// El aviso va al principio del prompt, no en un campo aparte, porque lo tiene que leer el
-// modelo como parte de sus instrucciones. Avisa y entrega igual: bloquear estorbaría el día
-// que haga falta saltarse una fase a propósito, y hoy no hay dato de cuántas veces pasa.
-// Resuelve de qué tarea se está hablando y devuelve el aviso, o null si no hay nada que decir.
+// The warning goes at the start of the prompt, not in a separate field, because the model has to read it as
+// part of its instructions. It warns and delivers anyway: blocking would get in the way the day a phase has
+// to be skipped on purpose, and there is no data today on how often that happens. It resolves which task is
+// being talked about and returns the warning, or null if there is nothing to say.
 //
-// Quién hace este trabajo es la decisión de diseño de la compuerta: lo hace el servidor, no el
-// modelo. El puntero por proyecto ya está guardado aquí, así que pedírselo al modelo sería
-// trabajo de más y una vía de fricción — si no lograra deducirlo acabaría preguntándoselo al
-// usuario en cada fase, y escribir "/f4" para que te contesten "¿en qué tarea estamos?" es peor
-// que no tener compuerta.
+// Who does this work is the gate's design decision: the server does it, not the model. The per-project
+// pointer is already stored here, so asking the model for it would be extra work and a source of friction —
+// if it could not deduce it, it would end up asking the user in every phase, and typing "/f4" to be answered
+// "which task are we on?" is worse than having no gate.
 //
-// `project` y `taskName` son solo anulación manual, para comprobar contra una tarea distinta de
-// la activa. Sin ellos se usa el puntero; y cuando de verdad no se puede saber se dice en voz
-// alta, en vez de callar como si todo estuviera en orden.
+// `project` and `taskName` are only a manual override, to check against a task other than the active one.
+// Without them the pointer is used; and when it truly cannot be known, it is said out loud, instead of
+// staying silent as if everything were in order.
 export type OpcionesDeTarea = { project?: string; taskName?: string };
 
-// Las fases con las que se deduce una tarea dependen de su proyecto (un proyecto puede sustituir
-// una fase con otro documento). Quien llama pasa un mapa fijo o la función que da las de cada
-// proyecto, porque aquí el proyecto se resuelve dentro.
+// The phases a task is deduced with depend on its project (a project can replace a phase with another
+// document). The caller passes a fixed map or the function that gives those of each project, because here
+// the project is resolved inside.
 export type FasesPorProyecto = Map<number, PhaseFile> | ((carpetaProyecto: string) => Map<number, PhaseFile>);
 
 function fasesPara(phases: FasesPorProyecto, carpetaProyecto: string): Map<number, PhaseFile> {
@@ -480,9 +472,9 @@ function fasesPara(phases: FasesPorProyecto, carpetaProyecto: string): Map<numbe
 
 export type TareaResuelta = { estado: EstadoTarea; carpetaProyecto: string; phases: Map<number, PhaseFile> };
 
-// La tarea de la que habla una llamada a get_phase_prompt: la indicada, o la activa del proyecto.
-// Sin proyecto solo se puede resolver si hay exactamente un candidato con tarea activa; con
-// varios, se devuelve "ambigua" para que quien llama lo diga en vez de callar.
+// The task a get_phase_prompt call talks about: the one indicated, or the project's active one. Without a
+// project it can only be resolved if there is exactly one candidate with an active task; with several,
+// "ambigua" is returned so that the caller says so instead of staying silent.
 export function tareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): EstadoTarea | "ambigua" | null {
   const resuelta = resolverTareaDelPrompt(phases, opciones);
   return resuelta === "ambigua" || resuelta === null ? resuelta : resuelta.estado;
@@ -496,11 +488,11 @@ export function resolverTareaDelPrompt(phases: FasesPorProyecto, opciones: Opcio
   } else {
     const conPuntero = Object.keys(leerPunteros());
 
-    if (conPuntero.length === 0) return null; // Nada empezado: no hay nada que comprobar.
+    if (conPuntero.length === 0) return null; // Nothing started: there is nothing to check.
     if (conPuntero.length > 1) return "ambigua";
 
     const encontrada = findProjectFolder(conPuntero[0] as string);
-    if (!encontrada) return null; // Puntero de un proyecto que ya no existe: se ignora.
+    if (!encontrada) return null; // Pointer of a project that no longer exists: it is ignored.
     carpetaProyecto = encontrada;
   }
 
@@ -509,29 +501,29 @@ export function resolverTareaDelPrompt(phases: FasesPorProyecto, opciones: Opcio
     ? listarTareas(carpetaProyecto, deEste).find((tarea) => tarea.taskName === opciones.taskName)
     : tareaActiva(carpetaProyecto, deEste)?.estado;
 
-  // null: proyecto sin tareas, o un nombre de tarea que no existe.
+  // null: a project without tasks, or a task name that does not exist.
   return estado ? { estado, carpetaProyecto, phases: deEste } : null;
 }
 
 export function avisoDeCompuerta(fasePedida: number, phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): string | null {
   const resuelta = resolverTareaDelPrompt(phases, opciones);
 
-  // Sin un proyecto no hay idioma de proyecto: la nota sale en el de la llamada.
+  // Without a project there is no project language: the note comes out in the call's.
   if (resuelta === "ambigua") return mensaje("COMPUERTA-AMBIGUA");
   if (!resuelta) return null;
 
   const salto = detectarSalto(fasePedida, resuelta.estado, resuelta.phases);
   if (!salto) return null;
-  // El aviso va dentro del prompt: en el idioma del proyecto.
+  // The warning goes inside the prompt: in the project's language.
   const idioma = idiomaDelProyecto(resuelta.carpetaProyecto).idioma;
   return avisoDeSalto(salto, resuelta.estado.taskName, resuelta.phases, idioma);
 }
 
-// ─── Recibos que ya existen ─────────────────────────────────────────────────
-// Ninguna tool lista una carpeta, así que al retomar la Fase 4 en otro chat, o al auditar en la
-// Fase 5 sin índice, el modelo no tenía cómo saber qué recibos hay ni cómo se llaman sus slugs.
-// Se los da el servidor al final del prompt de la fase que los declara y de las posteriores, en el
-// idioma del proyecto.
+// ─── Receipts that already exist ────────────────────────────────────────────
+// No tool lists a folder, so when resuming Phase 4 in another chat, or when auditing in Phase 5 without an
+// index, the model had no way to know which receipts there are or what their slugs are. The server gives
+// them at the end of the prompt of the phase that declares them and of the later ones, in the project's
+// language.
 export function bloqueDeRecibos(
   fasePedida: number,
   estado: EstadoTarea,
@@ -565,24 +557,25 @@ export function bloqueDeRecibos(
   ].join("\n");
 }
 
-// ─── Pendientes heredados ───────────────────────────────────────────────────
-// Refuerzo del servidor para la regla global PENDIENTES HEREDADOS (#39): si la fase anterior dejó
-// algo sin comprobar, el prompt de la siguiente llega con un aviso que lo nombra. Lee encabezados
-// y frontmatter de documentos que el prompt ya obliga a escribir; no guarda estado ni cambia la
-// deducción de fase. Si el modelo no escribió la sección, el aviso no sale y todo sigue igual.
+// ─── Inherited pending items ────────────────────────────────────────────────
+// A server reinforcement of the global rule PENDIENTES HEREDADOS: if the previous phase left something
+// unchecked, the next one's prompt arrives with a warning that names it. It reads headings and frontmatter
+// of documents that the prompt already requires writing; it stores no state and does not change the phase
+// deduction. If the model did not write the section, the warning does not come out and everything goes on
+// as before.
 //
-// No contradice el rechazo de la #39 a un campo `Estado:`: aquello era hacer depender la
-// compuerta de algo escrito por el modelo. Esto no bloquea ni cambia la fase: solo señala.
+// It does not rely on a stored `Estado:` field, which would make the gate depend on something the model
+// wrote: this neither blocks nor changes the phase, it only points.
 
-// Lo que se escribe por costumbre en una sección que no tiene nada, en los dos idiomas: no es un pendiente.
+// What is written out of habit in a section that has nothing, in both languages: it is not a pending item.
 const SECCION_VACIA = FORMAS_DE_VACIO;
 
-// "## Validaciones pendientes" o "## Pending validations", sin distinguir mayúsculas (§8.2).
+// "## Validaciones pendientes" or "## Pending validations", case-insensitive.
 const ENCABEZADOS_BUSCADOS = new Set(ENCABEZADOS_DE_PENDIENTES.map((titulo) => `## ${titulo}`.normalize("NFC").toLowerCase()));
 
-// La sección reducida a su texto: sin viñetas ni numeración, sin énfasis de Markdown (_ * `),
-// sin puntos suspensivos ni punto final, en una línea y en minúsculas. Así "- Ninguna.",
-// "_Ninguna._" o "Ninguna..." cuentan igual que "Ninguna".
+// The section reduced to its text: without bullets or numbering, without Markdown emphasis (_ * `), without
+// ellipsis or final period, on one line and in lowercase. So "- Ninguna.", "_Ninguna._" or "Ninguna..."
+// count the same as "Ninguna".
 function textoDeSeccion(seccion: string): string {
   return seccion
     .split("\n")
@@ -598,12 +591,12 @@ function textoDeSeccion(seccion: string): string {
 
 const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
 
-// La sección es el texto entre su encabezado y el siguiente "## " (o el final). Devuelve true si
-// existe y tiene algo que no sea una forma de decir "ninguna".
+// The section is the text between its heading and the next "## " (or the end). Returns true if it exists and
+// has something other than a way of saying "none".
 export function tieneValidacionesPendientes(texto: string): boolean {
   const lineas = separarFrontmatter(texto).cuerpo.split("\n");
-  // El encabezado se compara sin distinguir mayúsculas: "## Validaciones Pendientes" también vale, y en
-  // inglés, "## Pending validations".
+  // The heading is compared case-insensitively: "## Validaciones Pendientes" also works, and in English,
+  // "## Pending validations".
   const inicio = lineas.findIndex((linea) => ENCABEZADOS_BUSCADOS.has(linea.trimEnd().normalize("NFC").toLowerCase()));
   if (inicio === -1) return false;
 
@@ -618,11 +611,11 @@ function leerSinFallar(ruta: string): string | null {
   try {
     return leerTextoAcotado(ruta);
   } catch {
-    return null; // un documento ilegible no es un pendiente: el aviso es una ayuda, no un control
+    return null; // an unreadable document is not a pending item: the warning is a help, not a control
   }
 }
 
-// En el idioma del proyecto (`idioma`): el aviso va dentro del prompt.
+// In the project's language (`idioma`): the warning goes inside the prompt.
 export function avisoDePendientes(
   fasePedida: number,
   estado: EstadoTarea,
@@ -633,7 +626,7 @@ export function avisoDePendientes(
   const ordenadas = [...phases.entries()].sort((a, b) => a[0] - b[0]);
   const lineas: string[] = [];
 
-  // La fase anterior es la de mayor número, por debajo de la pedida, cuyo documento existe.
+  // The previous phase is the one with the highest number, below the requested one, whose document exists.
   const anterior = ordenadas
     .filter(([numero, datos]) => numero < fasePedida && datos.documento)
     .reverse()
@@ -647,8 +640,8 @@ export function avisoDePendientes(
     }
   }
 
-  // Los recibos de lote de las fases anteriores que quedaron con pendientes, fallidos o
-  // descartados. Con un solo lote, el recibo es el documento de la fase y se mira también.
+  // The batch receipts of the previous phases that were left with pending items, failed or discarded. With a
+  // single batch, the receipt is the phase's document and it is looked at too.
   for (const [numero, datos] of ordenadas) {
     if (numero >= fasePedida || !datos.recibos) continue;
 
@@ -682,7 +675,7 @@ export function avisoDePendientes(
   ].join("\n");
 }
 
-// En el idioma del proyecto (`idioma`): el aviso va al principio del prompt.
+// In the project's language (`idioma`): the warning goes at the start of the prompt.
 export function avisoDeSalto(
   salto: Salto,
   taskName: string,
