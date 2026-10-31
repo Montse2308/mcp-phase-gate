@@ -1,5 +1,6 @@
 // Cargar un recurso de la API y recargarlo con los eventos que le importan, y también al cambiar el idioma
-// de la interfaz: lo que dice el servidor llega en el idioma de la petición.
+// de la interfaz: lo que dice el servidor llega en el idioma de la petición. Con la ruta en null no hay nada
+// que pedir: no carga, no tiene datos y no tiene error.
 
 import { useCallback, useEffect, useState } from "preact/hooks";
 
@@ -13,10 +14,14 @@ export type Carga<T> = { datos: T | null; error: string | null; cargando: boolea
 export function useRecurso<T>(ruta: string | null, eventos: TipoDeEvento[] = [], filtro?: (tipo: TipoDeEvento, datos: Record<string, string>) => boolean): Carga<T> {
   const [datos, setDatos] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(ruta !== null);
   const idioma = useIdioma();
   const recargar = useCallback(() => {
-    if (!ruta) return;
+    if (!ruta) {
+      setError(null);
+      setCargando(false);
+      return;
+    }
     setCargando(true);
     get<T>(ruta).then(
       (d) => {
@@ -40,7 +45,7 @@ export function useRecurso<T>(ruta: string | null, eventos: TipoDeEvento[] = [],
   useEventos(eventos, (tipo, d) => {
     if (tipo === "reconexion" || !filtro || filtro(tipo, d)) recargar();
   });
-  return { datos, error, cargando, recargar };
+  return { datos, error, cargando: ruta !== null && cargando, recargar };
 }
 
 export function Aviso({ error }: { error: string }) {
