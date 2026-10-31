@@ -11,7 +11,6 @@
 // The only thing that is stored is a pointer per project —which task is the active one—, because the disk
 // cannot know that. A single global pointer would let two windows open at once overwrite each other's:
 // window A would ask where it was and be answered with B's task.
-// vez se lo pisaban: la ventana A preguntaba dónde estaba y le contestaban la tarea de B.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -417,6 +416,9 @@ export function tareaActiva(
 }
 
 // ─── Phase gate ─────────────────────────────────────────────────────────────
+// Without it, the Phase 4 prompt could be requested with no earlier document: reading the plan failed with
+// ENOENT, and what happened next depended on the model (one stopped to warn, another invented the plan).
+//
 // The check is a single comparison against the deduced phase, because `siguienteFase` already is "the first
 // phase whose document is missing". The delicate case comes out for free: going back to an earlier phase to
 // fix it is not skipping anything, and it is not hindered.
@@ -564,8 +566,8 @@ export function bloqueDeRecibos(
 // deduction. If the model did not write the section, the warning does not come out and everything goes on
 // as before.
 //
-// It does not rely on a stored `Estado:` field, which would make the gate depend on something the model
-// wrote: this neither blocks nor changes the phase, it only points.
+// A stored `Estado:` field was rejected on purpose (#39): it would make the gate depend on something the
+// model wrote. This neither blocks nor changes the phase: it only points.
 
 // What is written out of habit in a section that has nothing, in both languages: it is not a pending item.
 const SECCION_VACIA = FORMAS_DE_VACIO;

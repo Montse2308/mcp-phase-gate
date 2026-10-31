@@ -1,4 +1,4 @@
-// El diagnóstico ampliado de la Etapa 3 (§5.9 del plan maestro v3): configuración local, manifiestos,
+// El diagnóstico ampliado: configuración local, manifiestos,
 // presets, bloques, repos y raíces. Cada código nuevo tiene aquí su caso y, cuando importa, su
 // contrario.
 
@@ -118,7 +118,7 @@ describe("diagnosticar: manifiestos y presets de cada proyecto", () => {
     assert.match(hallazgo(d, "MANIFIESTO-INVALIDO")[0]?.texto ?? "", /phase-gate\.json de PROYECTO-A no es válido .*version: debe ser 1/);
     const p = d.proyectos.find((x) => x.nombre === "PROYECTO-A")!;
     assert.equal(p.tareas, 1);
-    // El estado es canónico y el error va aparte (hallazgo 20 de la auditoría de la Etapa 6).
+    // El estado es canónico y el error va aparte.
     assert.equal(p.manifiesto, "inválido");
     assert.match(p.errorDelManifiesto ?? "", /phase-gate\.json de PROYECTO-A no es válido .*version: debe ser 1/);
     assert.equal(p.preset, null);
@@ -223,7 +223,7 @@ describe("diagnosticar: bloques, repos, git y raíces", () => {
   });
 });
 
-// Hallazgo 2 de la auditoría de la Etapa 3: el servidor no puede llamar a git de forma síncrona.
+// El servidor no puede llamar a git de forma síncrona.
 describe("diagnóstico sin bloquear", () => {
   it("estadosConPlazo deja en null lo que no responde a tiempo, sin esperar a git", async () => {
     const { repos } = instalacion();

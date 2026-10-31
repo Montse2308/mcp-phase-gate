@@ -98,7 +98,7 @@ describe("ejecutarCli", () => {
   });
 
   it("un subcomando, una bandera o un argumento de más desconocidos salen con 2 y la ayuda en stderr", () => {
-    // `init` existe desde la Etapa 3: el subcomando desconocido es otro.
+    // `init` es un subcomando válido: el desconocido es otro.
     for (const argv of [["inventado"], ["--json"], ["doctor", "extra"], ["doctor", "--verbose"], ["doctor", "--yes"], ["init", "--json"]]) {
       const salida = salidaDePrueba();
 
@@ -155,7 +155,7 @@ describe("el binario", () => {
   });
 });
 
-// Ajuste de la auditoría de la Etapa 2: antes del initialize no sale nada por stdout.
+// Antes del initialize no sale nada por stdout.
 describe("el servidor al arrancar", () => {
   it("sin cliente que envíe initialize, no escribe nada en stdout", () => {
     const resultado = lanzar([], entornoCorrecto());

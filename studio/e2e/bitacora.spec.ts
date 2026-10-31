@@ -1,4 +1,4 @@
-// La Bitácora (§7.7.5 del plan) en Chromium real.
+// La Bitácora en Chromium real.
 
 import { expect, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test } from "./ayudas";
 

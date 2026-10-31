@@ -1,4 +1,4 @@
-// El Taller (§7.7.3 del plan) y las escrituras con huella (§7.6) en Chromium real.
+// El Taller y las escrituras con huella en Chromium real.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
