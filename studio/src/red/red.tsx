@@ -276,7 +276,14 @@ export function Red() {
         </>
       ) : null}
       {cargando && !datos ? <Cargando /> : null}
-      {datos && datos.proyectos.length === 0 && !datos.error ? <p>{t("red.vacia")}</p> : null}
+      {datos && datos.proyectos.length === 0 && !datos.error ? (
+        <>
+          <p>{t("red.vacia")}</p>
+          <p>
+            {t("red.vaciaPaso")} <a href={enlace("ajustes", "equipo")}>{t("red.abrirAjustes")}</a>
+          </p>
+        </>
+      ) : null}
       {datos && datos.proyectos.length ? (
         <ul class="proyectos" aria-label={t("red.lista")}>
           {datos.proyectos.map((p) => (
