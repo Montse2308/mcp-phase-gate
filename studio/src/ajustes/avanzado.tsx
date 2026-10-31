@@ -7,6 +7,25 @@ import { Tabla } from "../comun/tabla";
 import { t } from "../i18n/idioma";
 import { NoDisponible, SIN_DATOS_REALES, fuenteVisible } from "./comunes";
 
+// El nombre de una variable solo puede partirse después de un guion bajo, nunca a media palabra.
+function conCortes(nombre: string) {
+  return nombre.split("_").map((parte, i, partes) => (
+    <>
+      {parte}
+      {i < partes.length - 1 ? (
+        <>
+          _<wbr />
+        </>
+      ) : null}
+    </>
+  ));
+}
+
+// Un texto que nombra variables (PHASE_GATE_…): cada nombre se puede partir solo tras un guion bajo.
+function conNombresCortables(texto: string) {
+  return texto.split(/(PHASE_GATE_[A-Z0-9_]*[A-Z0-9])/).map((parte, i) => (i % 2 === 1 ? conCortes(parte) : parte));
+}
+
 export function PaginaAvanzado() {
   const ajustes = useRecurso<AjustesRespuesta>(SIN_DATOS_REALES ? null : "/api/ajustes", ["equipo", "config"]);
   const sin = t("ajustes.avanzado.sinValor");
@@ -25,14 +44,14 @@ export function PaginaAvanzado() {
             clave: v.logica,
             celdas: [
               <>
-                <code>{v.variable}</code>
+                <code>{conCortes(v.variable)}</code>
                 <br />
                 <span class="secundaria">{v.descripcion}</span>
               </>,
-              v.usada ?? "—",
+              v.usada ? conCortes(v.usada) : "—",
               v.valor ?? sin,
               fuenteVisible(v.fuente),
-              v.comoCambiarla,
+              conNombresCortables(v.comoCambiarla),
             ],
           }))}
         />
