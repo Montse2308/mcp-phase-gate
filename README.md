@@ -5,7 +5,7 @@ An MCP server that turns any AI coding agent into a gated, auditable, batch-by-b
 *This is the main README, in English · Read it in [Spanish](https://github.com/Montse2308/mcp-phase-gate/blob/master/README.es.md).*
 
 <p align="center">
-  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.gif" alt="The demo, about 40 seconds: doctor in a terminal; then the Studio: the project network, a finished task's board with its seals, a pending batch that turns VERIFIED live when its commit is recorded, a project's commit policy changed in Settings with its diff, the Workshop, and the published site on a phone" width="760"></a>
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.gif" alt="The demo, a GIF of about 22 seconds: doctor in a terminal; then the Studio: the project network, a pending batch that turns VERIFIED live when its commit is recorded, and a project's commit policy changed in Settings with its diff. Click for the full video, about 40 seconds, which adds a finished task's board with its seals, the Workshop, and the published site on a phone" width="760"></a>
 </p>
 
 [![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)

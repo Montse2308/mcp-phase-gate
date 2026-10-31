@@ -5,7 +5,7 @@ Un servidor MCP que convierte a cualquier agente de IA que programa en un flujo 
 *Este es el README en español · El principal, en inglés: [README.md](https://github.com/Montse2308/mcp-phase-gate/blob/master/README.md).*
 
 <p align="center">
-  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, de unos 40 segundos: doctor en una terminal; después el Studio: la red de proyectos, el tablero de una tarea terminada con sus sellos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, la política de commits de un proyecto que cambia en Ajustes con su diff, el Taller y el sitio publicado en un teléfono" width="760"></a>
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, un GIF de unos 22 segundos: doctor en una terminal; después el Studio: la red de proyectos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, y la política de commits de un proyecto que cambia en Ajustes con su diff. Con un clic, el vídeo completo, de unos 40 segundos, que añade el tablero de una tarea terminada con sus sellos, el Taller y el sitio publicado en un teléfono" width="760"></a>
 </p>
 
 [![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)
