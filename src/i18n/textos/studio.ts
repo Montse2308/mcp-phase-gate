@@ -43,7 +43,7 @@ export const TEXTOS_STUDIO = {
   },
   "STUDIO-FILTRO-SIN-CABECERA": { es: "Falta la cabecera X-Phase-Gate.", en: "The X-Phase-Gate header is missing." },
   "STUDIO-FILTRO-METODO": { es: "Método no permitido.", en: "Method not allowed." },
-  "STUDIO-FILTRO-NO-EXISTE": { es: "No existe.", en: "Not found." },
+  "STUDIO-ESTATICO-NO-EXISTE": { es: "No existe.", en: "Not found." },
   "STUDIO-FILTRO-INTERNO": { es: "Error interno del Studio.", en: "Internal Studio error." },
   "STUDIO-EVENTOS-LLENO": {
     es: (p: { maximo: number }) => `Hay ${p.maximo} conexiones de eventos abiertas: cierra alguna pestaña del Studio.`,
