@@ -1,4 +1,4 @@
-// El frontend del Studio (§7.2 del plan): Vite + Preact, compilado a studio/dist, que viaja en el paquete.
+// El frontend del Studio: Vite + Preact, compilado a studio/dist, que viaja en el paquete.
 //
 // base "./": todas las rutas son relativas, así que el mismo build funciona en 127.0.0.1:<puerto>/ y
 // bajo un subdirectorio (GitHub Pages sirve el sitio en /mcp-phase-gate/). assetsInlineLimit 0: nada se

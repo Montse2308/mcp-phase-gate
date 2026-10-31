@@ -45,7 +45,7 @@ jobs:
 
       - run: npm test
 
-  # Los E2E del Studio en Chromium (§7.10): cada vista, la demo y el sitio estático, con axe y en un
+  # Los E2E del Studio en Chromium: cada vista, la demo y el sitio estático, con axe y en un
   # teléfono. Aparte de build-and-test porque necesitan el navegador. En los tres sistemas: hay fallos de
   # maquetación que dependen de las rutas del equipo, y las de Windows son otras. Node 22, la última 22.x
   # (Vite 8 pide al menos la 22.12 para compilar).
