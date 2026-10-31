@@ -1,4 +1,4 @@
-// record_batch (§6.4 del plan maestro v3): cada fila de sus tablas, los dos tiempos, las tres anclas y
+// record_batch: cada fila de sus tablas, los dos tiempos, las tres anclas y
 // la carrera entre dos ventanas, con tareas y repos de git reales en carpetas temporales.
 
 import { strict as assert } from "node:assert";
@@ -107,7 +107,7 @@ const registrar = (entrada: EntradaDeLote) => registrarLote("P", "t", entrada, {
 const recibosEn = (carpeta: string) => (fs.existsSync(carpeta) ? fs.readdirSync(carpeta).sort() : []);
 
 describe("record_batch: número de lotes y orden", () => {
-  it("un plan sin `lotes` es un error (H3)", async () => {
+  it("un plan sin `lotes` es un error", async () => {
     instalacion({ lotes: null });
     await assert.rejects(registrar(contenido(1)), /El plan no declara `lotes: N` en su frontmatter\. Añádelo a `03 - Plan Técnico\.md` antes del primer recibo\./);
   });
@@ -330,7 +330,7 @@ describe("record_batch: el ancla según la política", () => {
   });
 });
 
-// Hallazgo 1 de la auditoría de la Etapa 4: dos procesos (dos ventanas del cliente, dos servidores) que
+// Dos procesos (dos ventanas del cliente, dos servidores) que
 // registran el mismo lote a la vez. Sin el candado de la tarea, los dos pasaban la comprobación y
 // quedaban dos recibos del lote. Dos node de verdad, que arrancan a la vez en cada ronda.
 describe("record_batch: dos procesos a la vez", () => {
@@ -577,7 +577,7 @@ describe("ensamblarIndice", () => {
     assert.ok(primero.endsWith("\n") && !primero.endsWith("\n\n") && !primero.includes("\r"));
   });
 
-  it("la tabla de lotes del plan: repo, objetivo y commit propuesto; null si no la hay", () => {
+  it("la tabla de lotes en el plan: repo, objetivo y commit propuesto; null si no la hay", () => {
     const plan = [
       "---", "lotes: 2", "---", "", "# Plan", "",
       "| Lote | Repo | Objetivo | Pasos | Criterio de salida | Commit propuesto | Revierte solo |",
@@ -617,7 +617,7 @@ describe("record_batch: cierre de la fase", () => {
     assert.equal(fs.existsSync(path.join(tarea, "04 - Ejecución.md")), false);
   });
 
-  it("con lotes: 1, el recibo vive en la subcarpeta mientras está abierto y al anclarlo pasa a ser el documento (H2)", async () => {
+  it("con lotes: 1, el recibo vive en la subcarpeta mientras está abierto y al anclarlo pasa a ser el documento", async () => {
     const { tarea, recibos, dirs } = instalacion({ lotes: "1" });
     await registrar(contenido(1, { titulo: "único cálculo" }));
     assert.equal(fs.existsSync(path.join(tarea, "04 - Ejecución.md")), false, "con el commit pendiente la fase no está cerrada");
@@ -817,7 +817,7 @@ describe("record_batch: reanclar", () => {
   });
 });
 
-// Hallazgo 2 de la auditoría de la Etapa 4: sin elicitation, `force` lo pone el modelo, así que lo que
+// Sin elicitation, `force` lo pone el modelo, así que lo que
 // entra por la escotilla de write_central_doc no puede quedar como un recibo del servidor.
 describe("la escotilla de write_central_doc no fabrica recibos del servidor", () => {
   it("un recibo forjado con origen: servidor y ancla commit queda como manual", async () => {
@@ -924,7 +924,7 @@ describe("get_batch_status", () => {
     "",
   ].join("\n");
 
-  it("cruza el plan con los recibos: columnas del plan, recibo, estado, ancla, origen y la siguiente acción", async () => {
+  it("cruza el plan con los recibos: columnas que trae el plan, recibo, estado, ancla, origen y la siguiente acción", async () => {
     const { tarea, dirs } = instalacion();
     fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), PLAN_CON_TABLA, "utf-8");
     await registrar(contenido(1, { titulo: "corregir cálculo", commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
@@ -972,7 +972,7 @@ describe("get_batch_status", () => {
     assert.match(texto, /- RECIBO-FUERA-DE-PLAN: `04 - Ejecución\/L05 - sobrante\.md` \(el plan declara 2 lotes\)\./);
   });
 
-  it("si la tabla del plan no se puede leer, las columnas del plan quedan vacías y lo avisa; el número sale del frontmatter", async () => {
+  it("si la tabla en el plan no se puede leer, sus columnas quedan vacías y lo avisa; el número sale del frontmatter", async () => {
     const { tarea } = instalacion({ lotes: "2" });
     fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "---\nlotes: 2\n---\n\n| Paso | Qué |\n|---|---|\n| L01 | x |\n", "utf-8");
     const { salida } = await estadoDeLotes("P", "t");
@@ -1001,7 +1001,7 @@ describe("get_batch_status", () => {
     assert.deepEqual([salida.lotes[0]!.recibo, salida.lotes[0]!.vigente, salida.faseCerrada], ["04 - Ejecución.md", true, true]);
   });
 
-  it("por MCP: solo lectura, con structuredContent; sin plan con lotes, el error de H3", async () => {
+  it("por MCP: solo lectura, con structuredContent; sin plan con lotes, el error de un plan sin `lotes`", async () => {
     instalacion({ lotes: null });
     const { cliente, cerrar } = await conectar();
     try {
@@ -1126,9 +1126,9 @@ describe("bloqueDeCommits (COMMITS DE LA FASE 4)", () => {
   });
 });
 
-// ─── Ajustes de la auditoría de la Etapa 4 (pulido) ─────────────────────────
+// ─── Pulido ─────────────────────────
 describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () => {
-  it("al anclar un recibo de la 2.x sin repo, vale el único repo de la tarea (hallazgo 5)", async () => {
+  it("al anclar un recibo de la 2.x sin repo, vale el único repo de la tarea", async () => {
     const { recibos, dirs } = instalacion({ lotes: "2" });
     fs.mkdirSync(recibos, { recursive: true });
     fs.writeFileSync(path.join(recibos, "L01 - a mano.md"), "---\nlote: L01\nestado: verificado\ncommit: pendiente\n---\n# L01 — a mano\n", "utf-8");
@@ -1137,7 +1137,7 @@ describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () =
     assert.match(r.salida.ancla.resumen, / en `api` \(main\)$/);
   });
 
-  it("un lote con el commit pendiente se descarta con su estado y una nota, sin repetir el contenido (cuestionamiento de H1)", async () => {
+  it("un lote con el commit pendiente se descarta con su estado y una nota, sin repetir el contenido", async () => {
     const { recibos } = instalacion({ lotes: "2" });
     await registrar(contenido(1, { que_se_hizo: "lo que se hizo" }));
     const r = await registrar({ lote: 1, estado: "descartado", verification_note: "el usuario no hará el commit" });
@@ -1147,19 +1147,19 @@ describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () =
     assert.equal((await registrar(contenido(2))).salida.lote, "L02", "el siguiente ya no está bloqueado");
   });
 
-  it("un plan sin `lotes` propone el número de filas de su tabla (cuestionamiento de H3)", async () => {
+  it("un plan sin `lotes` propone el número de filas de su tabla", async () => {
     const { tarea } = instalacion({ lotes: null });
     fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "# Plan\n\n| Lote | Repo | Objetivo |\n|---|---|---|\n| L01 | api | a |\n| L02 | api | b |\n| L03 | api | c |\n", "utf-8");
     await assert.rejects(registrar(contenido(1)), /Su tabla de lotes tiene 3 filas: ¿es `lotes: 3`\?/);
   });
 
-  it("un error de escritura sale legible y sin el temporal (hallazgo 9)", () => {
+  it("un error de escritura sale legible y sin el temporal", () => {
     const error = traducirEscritura(Object.assign(new Error("EPERM: operation not permitted, rename 'x.tmp' -> 'y'"), { code: "EPERM" }), "L01 - lote 1.md");
     assert.equal(error.message, "No se pudo escribir `L01 - lote 1.md`: es de solo lectura o lo tiene abierto otro programa (EPERM). Quita la protección o ciérralo, y vuelve a llamar.");
     assert.doesNotMatch(error.message, /\.tmp/);
   });
 
-  it("si no se pueden leer los recibos, el bloque de la Fase 5 lo dice en vez de desaparecer (hallazgo 11)", async () => {
+  it("si no se pueden leer los recibos, el bloque de la Fase 5 lo dice en vez de desaparecer", async () => {
     const { tarea, recibos } = instalacion({ lotes: "1" });
     fs.mkdirSync(recibos, { recursive: true });
     fs.writeFileSync(path.join(recibos, "L01 - binario.md"), Buffer.from([0, 1, 2, 0, 3]));
@@ -1167,14 +1167,14 @@ describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () =
     assert.match(texto, /^## COMMITS DE LA FASE 4\n\nNo se pudieron leer los recibos: No se pudo leer el recibo `04 - Ejecución\/L01 - binario\.md`/);
   });
 
-  it("si vence el plazo, el bloque de la Fase 5 lleva el mismo encabezado y lo dice (hallazgo 7)", async () => {
+  it("si vence el plazo, el bloque de la Fase 5 lleva el mismo encabezado y lo dice", async () => {
     const { tarea, dirs } = instalacion({ lotes: "1" });
     await registrar(contenido(1, { commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
     const texto = await bloqueDeCommitsConPlazo("P", tarea, fasesDe("P"), 1);
     assert.match(texto!, /^## COMMITS DE LA FASE 4\n\nNo se pudieron verificar a tiempo/);
   });
 
-  it("un artefacto que no existe se nombra por su ruta relativa, no por la del equipo (hallazgo 9)", async () => {
+  it("un artefacto que no existe se nombra por su ruta relativa, no por la del equipo", async () => {
     instalacion({ sinGit: ["api"] });
     await assert.rejects(registrar(contenido(1, { artifact_path: "no-esta.md" })), (e: Error) => e.message === "El artefacto `repo:api/no-esta.md` no existe.");
   });

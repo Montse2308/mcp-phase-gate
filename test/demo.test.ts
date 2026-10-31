@@ -1,4 +1,4 @@
-// La demo del Studio (§7.8 del plan): determinista entre procesos, carpetas y zonas horarias; inmune al
+// La demo del Studio: determinista entre procesos, carpetas y zonas horarias; inmune al
 // entorno de quien la genera (sus PHASE_GATE_*, su GIT_DIR, su configuración de git); sin datos del equipo
 // en lo que escribe; y con sus guardas: gitEnLaDemo solo escribe dentro de una carpeta marcada, borrarDemo
 // solo borra una, prepararDemo reutiliza solo la de esta versión, y `ui --demo` no lee la Documentación de
@@ -30,7 +30,7 @@ const INDEX_JS = pathToFileURL(path.join(AQUI, "..", "src", "index.js")).href;
 // cualquier cosa del equipo que se cuele en un commit (la zona horaria, una configuración de git, el autor).
 const HEAD_DE_ORO = { "tienda-api": "debffa2c5f0b55eb2c337d03c75f877a2328a15e", "tienda-web": "cacff76178c5fa43ad7ed46a0587232bc45b1270" };
 const COMMITS = { "tienda-api": "4", "tienda-web": "2" };
-// La demo en inglés (§8.7): la misma historia, otros textos, otros SHA; también fijos.
+// La demo en inglés: la misma historia, otros textos, otros SHA; también fijos.
 const HEAD_DE_ORO_EN = { "shop-api": "46b45c1bc9351ff7db8d6e58607dd1da77eb077f", "shop-web": "8706b5ac3c2aac64f2640193eadad97977b95101" };
 
 const cerrables: (() => void)[] = [];

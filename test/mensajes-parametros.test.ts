@@ -1,5 +1,5 @@
 // Cada llamada a mensaje() o fallo() con un código fijo pasa los parámetros que pide su plantilla, ni más ni
-// menos (hallazgo 19 de la auditoría de la Etapa 6). Las plantillas reciben `any` en tiempo de compilación
+// menos. Las plantillas reciben `any` en tiempo de compilación
 // (i18n/textos/tipos.ts), así que un parámetro mal escrito compilaba y salía como "undefined" en el texto.
 // Se comprueba leyendo el código fuente con el compilador de TypeScript: el tipo que declara el primer
 // parámetro de la plantilla frente a las claves del objeto que se le pasa. Una llamada puede salir en

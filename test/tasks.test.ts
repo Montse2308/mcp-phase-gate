@@ -162,8 +162,8 @@ describe("estadoDeTarea", () => {
   });
 });
 
-// R4: un documento de fase se congela en cuanto una fase posterior está presente. La tabla es la
-// del plan maestro v3 (§3.7.3), con la Fase 4 escribiendo sus recibos en una subcarpeta.
+// Un documento de fase se congela en cuanto una fase posterior está presente. La tabla recorre cada caso,
+// con la Fase 4 escribiendo sus recibos en una subcarpeta.
 describe("motivoDeProteccion", () => {
   const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
   CON_RECIBOS.set(4, { ...(FASES.get(4) as PhaseFile), recibos: "04 - Ejecución" });
@@ -174,7 +174,7 @@ describe("motivoDeProteccion", () => {
   const RECIBO_L02 = "04 - Ejecución/L02 - x.md";
 
   // [existen, se escribe, motivo esperado (null = permitido)]
-  // Desde la Etapa 4 (§6.5), los recibos y el documento de la Fase 4 los escribe record_batch: con
+  // Los recibos y el documento de la Fase 4 los escribe record_batch: con
   // write_central_doc se rechazan siempre, antes que cualquier otra regla. Las filas que cambiaron con
   // eso lo dicen al final.
   const RECORD_RECIBO = /Los recibos los escribe `record_batch`/;
@@ -190,12 +190,12 @@ describe("motivoDeProteccion", () => {
     [[C00, D01, D02, D03, RECIBO_L01], D04, RECORD_DOCUMENTO], // antes: permitido (el cierre)
     [[C00, D01, D02, D03, RECIBO_L01], RECIBO_L02, RECORD_RECIBO], // antes: permitido
     [[...TODOS, RECIBO_L01], RECIBO_L02, RECORD_RECIBO], // antes: congelado por la Fase 5
-    [[C00, D01, D02, D03], D04, RECORD_DOCUMENTO], // nueva (§6.5)
+    [[C00, D01, D02, D03], D04, RECORD_DOCUMENTO], // nueva
     [[C00, D01, D02, D03], RECIBO_L01, RECORD_RECIBO],
     [[C00, D01, D03], D02, null],
     [[C00, D01, D03], D01, /congelado: la Fase 3/],
     [TODOS, "notas.md", null],
-    // Hallazgo 1 de la auditoría de la Etapa 1: un nombre en otras mayúsculas o en NFD no esquiva
+    // Un nombre en otras mayúsculas o en NFD no esquiva
     // la protección, exista o no el archivo con ese nombre.
     [[D01], "00 - contexto inicial.md", /contexto inicial está siempre protegido/],
     [[C00, D01, D02], "01 - análisis técnico.md", /congelado: la Fase 2/],
@@ -224,7 +224,7 @@ describe("motivoDeProteccion", () => {
     });
   }
 
-  // Solo start_task lo crea sin force (decisión C2 del plan).
+  // Solo start_task lo crea sin force.
   it("el contexto inicial también se protege cuando todavía no existe", () => {
     const docs = docsTemporales();
     crearProyecto(docs, "PROYECTO-A");
@@ -247,7 +247,7 @@ describe("motivoDeProteccion", () => {
   });
 });
 
-// Cuestionamiento B de la auditoría de la Etapa 1: ninguna tool lista una carpeta, así que el
+// Ninguna tool lista una carpeta, así que el
 // servidor nombra los recibos que existen al final del prompt.
 describe("bloqueDeRecibos", () => {
   const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
@@ -730,7 +730,7 @@ describe("avisoDePendientes", () => {
   });
 });
 
-// Ajustes de la auditoría de la Etapa 2: la heurística de "sección vacía".
+// La heurística de "sección vacía".
 describe("tieneValidacionesPendientes", () => {
   const conSeccion = (cuerpo: string, encabezado = "## Validaciones pendientes") =>
     `# Plan\n\n${encabezado}\n\n${cuerpo}\n\n## Lotes\n`;
@@ -750,8 +750,8 @@ describe("tieneValidacionesPendientes", () => {
   });
 });
 
-// §6.7 del plan maestro v3: dentro de la Fase 4, la deducción sabe por qué lote va, leyendo solo el
-// frontmatter del plan y de los recibos. La fase sigue saliendo de qué documentos existen.
+// Dentro de la Fase 4, la deducción sabe por qué lote va, leyendo solo el
+// frontmatter de plan y de recibos. La fase sigue saliendo de qué documentos existen.
 describe("progreso por lote en la Fase 4", () => {
   const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
   CON_RECIBOS.set(4, { ...(FASES.get(4) as PhaseFile), recibos: "04 - Ejecución" });
@@ -813,7 +813,7 @@ describe("progreso por lote en la Fase 4", () => {
     assert.ok(despues > antes, `${despues} > ${antes}`);
   });
 
-  // Hallazgo 4 de la auditoría de la Etapa 4: un recibo de un lote que el plan no declara, con el commit
+  // Un recibo de un lote que el plan no declara, con el commit
   // pendiente, hacía decir "lote 5 de 2".
   it("un recibo fuera de plan no es el lote actual", () => {
     const carpeta = enFase4("---\nlotes: 2\n---\n", { "L05 - fuera.md": recibo("L05", "pendiente") });

@@ -1,4 +1,4 @@
-// Los eventos en vivo del Studio (§7.5.1 del plan): la agrupación de 300 ms, los tipos de evento, el
+// Los eventos en vivo del Studio: la agrupación de 300 ms, los tipos de evento, el
 // ruido de OneDrive y el sondeo de respaldo, con un vigilante simulado; el SSE, por HTTP de verdad; y una
 // prueba con fs.watch real. Cada test cierra sus eventos y sus servidores: un temporizador o un watcher
 // abierto colgaría node --test.

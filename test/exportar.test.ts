@@ -1,4 +1,4 @@
-// El export estático (§7.9 del plan): sin --incluir-datos-reales exporta la demo y nunca lee la
+// El export estático: sin --incluir-datos-reales exporta la demo y nunca lee la
 // Documentación de quien exporta; dos exports dan los mismos bytes, y una parte de ellos se compara con un
 // export de oro (test/oro/export/, ORO_REGENERAR=1 lo reescribe); nada del equipo llega al sitio; los datos
 // reales solo con la confirmación escrita (o --yes); una carpeta que no está vacía no se toca; y la barrera
@@ -70,7 +70,7 @@ function bytesDelSitio(raiz: string): string[] {
     .sort();
 }
 
-// Desde la Etapa 6 (§8.7), un conjunto por idioma: datos/es/ y datos/en/.
+// Un conjunto por idioma: datos/es/ y datos/en/.
 const leerIndice = (sitio: string, idioma = "es"): Indice => JSON.parse(fs.readFileSync(path.join(sitio, "datos", idioma, ARCHIVO_DEL_INDICE), "utf-8")) as Indice;
 const datosDe = (sitio: string, ruta: string, idioma = "es"): string => fs.readFileSync(path.join(sitio, "datos", idioma, leerIndice(sitio, idioma).rutas[ruta]!.archivo), "utf-8");
 
@@ -132,7 +132,7 @@ describe("export estático de la demo", () => {
     assert.match(datosDe(a, "/api/prompts/SHOP/4?tarea=discount-coupons", "en"), /## FILES OF THIS TASK \(exact names\)/);
     assert.match(datosDe(a, "/api/prompts/SHOP/4?tarea=discount-coupons", "en"), /<repos>\/shop-api`/);
 
-    // Contra el export de oro reducido. El de español es el de la Etapa 5, sin tocar: la demo en español no
+    // Contra el export de oro reducido. El de español es el de siempre, sin tocar: la demo en español no
     // cambió. El de inglés es nuevo (test/oro/export/en/), con la lista de rutas y los proyectos.
     const rutas = `${Object.keys(indice.rutas).join("\n")}\n`;
     const rutasEn = `${Object.keys(leerIndice(a, "en").rutas).join("\n")}\n`;

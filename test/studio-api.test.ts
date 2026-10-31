@@ -1,4 +1,4 @@
-// La API de lectura del Studio (§7.5 del plan) contra un árbol de fixtures: cada ruta, validada con su
+// La API de lectura del Studio contra un árbol de fixtures: cada ruta, validada con su
 // shape de src/studio/contrato.ts; los parámetros inválidos rechazados; un proyecto o una tarea que no
 // existen, 404; ningún GET escribe en el disco, y los errores no llevan las rutas del equipo.
 

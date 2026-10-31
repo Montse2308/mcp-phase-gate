@@ -1,4 +1,4 @@
-// El vocabulario de contratos (§8.2 del plan maestro v3): se escribe en el idioma del proyecto y se lee
+// El vocabulario de contratos: se escribe en el idioma del proyecto y se lee
 // en los dos. Y el test de contrato: cada juego de prompts de fábrica (`prompts/<idioma>/`) usa
 // exactamente los encabezados, las claves y los nombres de documento de su idioma, y tiene las mismas
 // ranuras con los mismos ids.
@@ -165,7 +165,7 @@ describe("vocabulario: índice, plan y pendientes", () => {
     assert.ok(tieneValidacionesPendientes(es));
   });
 
-  it("la tabla de lotes del plan se lee en los dos idiomas", () => {
+  it("la tabla de lotes en el plan se lee en los dos idiomas", () => {
     const en = leerTablaDeLotes(
       "---\nbatches: 2\n---\n# Plan\n\n| Batch | Repo | Goal | Steps | Exit criterion | Proposed commit | Reverts alone |\n|---|---|---|---|---|---|---|\n| L01 | `api` | add the coupon | … | … | `feat(api): coupon` | yes |\n| **L02** | web | show it | … | … | `feat(web): coupon` | yes |\n"
     );
@@ -175,7 +175,7 @@ describe("vocabulario: índice, plan y pendientes", () => {
     assert.deepEqual(es?.get(1), { repo: "api", objetivo: "x", commitPropuesto: "a" });
   });
 
-  it("`batches: N` en el frontmatter del plan cuenta igual que `lotes: N`", () => {
+  it("`batches: N` en el frontmatter cuenta igual que `lotes: N`", () => {
     const carpeta = carpetaTemporal("plan-en");
     fs.writeFileSync(path.join(carpeta, "03 - Technical Plan.md"), "---\nbatches: 3\n---\n# Plan\n");
     assert.equal(lotesDelPlan({ ...fase("en"), carpetaTarea: carpeta }), 3);
@@ -251,7 +251,7 @@ describe("vocabulario: marcadores, alias y prompts", () => {
 });
 
 // ─── Test de contrato sobre los prompts de fábrica ──────────────────────────
-// Corre sobre cada idioma que tenga carpeta en prompts/: desde que exista prompts/en (L04), también la suya.
+// Corre sobre cada idioma que tenga carpeta en prompts/, también prompts/en.
 const PROMPTS = path.join(process.cwd(), "prompts");
 const idiomasPublicados = IDIOMAS.filter((idioma) => fs.existsSync(path.join(PROMPTS, idioma)));
 

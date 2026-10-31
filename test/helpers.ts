@@ -156,7 +156,7 @@ export function aislarCarpetasDelUsuario(): void {
   process.env.XDG_CONFIG_HOME = carpeta("config");
 }
 
-// Desde la Etapa 6, un proyecto sin manifiesto ni documentos toma el idioma del equipo, y en último lugar
+// Un proyecto sin manifiesto ni documentos toma el idioma del equipo, y en último lugar
 // el del sistema: en Windows con la región en español da "es", en un Linux de CI sin LANG da "en". La
 // suite se escribió en español, así que fija PHASE_GATE_LANG=es. Los hijos que reciben process.env la
 // heredan; el de test/e2e.test.ts arma un env propio y tiene que repetirla, porque StdioClientTransport
