@@ -1,3 +1,5 @@
+// Punto de entrada del Studio: aplica el tema y el idioma y monta la aplicación.
+
 import { render } from "preact";
 
 import { App } from "./app";
