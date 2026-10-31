@@ -7,7 +7,8 @@
 //
 // Qué busca, en español y en inglés:
 //   - sin distinguir mayúsculas: el signo de sección; las palabras etapa, stage, hallazgo y finding seguidas de
-//     un número; y las dos frases que nombran el documento de trabajo (ver SIN_MAYUSCULAS);
+//     un número; y la frase que nombra el documento de trabajo (ver SIN_MAYUSCULAS). «del plan» a secas no se
+//     busca: el plan de cada tarea (el documento de la Fase 3) es parte del producto y se nombra así;
 //   - distinguiendo mayúsculas: los códigos sueltos, una letra de H, R, S, F o A seguida de un número, para no
 //     chocar con h2 y parecidos; y las otras familias de códigos de planeación que ya se vieron en el repo: una E con
 //     su número y una letra de riesgo o de deuda con el suyo, unidas por un guion; la palabra validación seguida
@@ -34,7 +35,6 @@ const SIN_MAYUSCULAS = [
   ["Stage N", /\bstage\s+\d+/gi],
   ["hallazgo N", /\bhallazgos?\s+\d+/gi],
   ["finding N", /\bfindings?\s+\d+/gi],
-  ["del plan", /\bdel plan\b/gi],
   ["plan maestro", /\bplan maestro\b/gi],
 ];
 const CON_MAYUSCULAS = [
