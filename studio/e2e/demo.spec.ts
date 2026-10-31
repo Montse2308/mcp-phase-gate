@@ -1,7 +1,7 @@
-// La demo (§7.8 del plan) en Chromium real, contra un `ui --demo` de verdad: el temporal del sistema del
+// La demo en Chromium real, contra un `ui --demo` de verdad: el temporal del sistema del
 // proceso es una carpeta propia (ahí genera la demo) y sus cuatro PHASE_GATE_* apuntan a una Documentación
 // de quien lo lanza, con un proyecto marcador que no puede aparecer y que al terminar sigue intacta. Los E2E
-// de las vistas (L05 a L09) siguen sobre el árbol mínimo de arbol.ts: el documento malicioso, los
+// de las vistas siguen sobre el árbol mínimo de arbol.ts: el documento malicioso, los
 // manifiestos rotos o las tareas con hueco no caben en una demo que se publica.
 
 import * as fs from "node:fs";
