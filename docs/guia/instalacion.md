@@ -95,6 +95,8 @@ El idioma de las descripciones de las tools y de los mensajes que no son de un p
 
 ## Camino B — desde el código
 
+Compilar desde el código pide **Node 22.12 o superior**, por Vite; el paquete de npm funciona con cualquier Node 22.
+
 Necesario solo si vas a editar los prompts del repo directamente o a contribuir. Para *añadir* prompts propios no hace falta: eso se hace superponiendo carpetas, [ver la guía de Prompts](prompts.md#los-prompts-de-las-fases-viven-en-promptsidioma).
 
 **1. Clona y compila.** La carpeta `build/` NO se sube al repo, así que hay que generarla en cada dispositivo:
@@ -112,7 +114,7 @@ npm run build
 copy .env.example .env
 ```
 
-Averigua tu ruta real abriendo la carpeta en el explorador y copiando la ruta de la barra de direcciones. Aquí las barras invertidas van **simples**, sin comillas:
+En macOS y Linux, usa `cp .env.example .env`. Averigua tu ruta real abriendo la carpeta en el explorador y copiando la ruta de la barra de direcciones. Aquí las barras invertidas van **simples**, sin comillas:
 
 ```ini
 PHASE_GATE_DOCS_PATH=C:\Users\TU_USUARIO\OneDrive - TU ORGANIZACIÓN\Documentos\DOCUMENTACIÓN

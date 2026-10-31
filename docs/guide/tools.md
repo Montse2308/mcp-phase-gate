@@ -34,7 +34,7 @@ Three things it deliberately does **not** do:
 
 Since 3.0 the AI no longer drafts the receipts or the phase 4 document: it hands the server the data of each batch, and the server writes the receipt, checks the commit against git and closes the phase when the last batch is anchored.
 
-**Each batch, in two steps** (with the default policy):
+**Each batch, before and after the commit** (with the default policy):
 
 1. `get_batch_status` says which batch is next and whether one is waiting for its commit.
 2. The AI implements the batch and verifies it by running things.
@@ -93,7 +93,7 @@ On top of that, `write_central_doc` only writes **inside the folder of a task th
 | `write_central_doc` | Writes/overwrites a file inside a task folder. Same parameters as `read_central_doc` plus `content`, and `force` for [protected documents](#protected-documents) when your client doesn't support direct confirmations. |
 | `read_repo_file` | Reads a file from one of the project's repos **by its id** (`api`, `web`…), wherever it lives on this machine. Never reads anything under `.git` ([see below](#several-repositories-read_repo_file-and-repo_status)). |
 | `repo_status` | Branch, commit, ahead/behind its upstream and whether the tree is clean, for one repo or all the task's repos. Read-only: takes no locks and runs no commands the repo brings along (`core.fsmonitor`, `.gitattributes` filters). |
-| `read_cross_repo` | Reads a file from any folder in your repositories folder, by name, so you can check how another codebase solved something without switching windows. It doesn't read anything under `.git` either. If the project declares its repos, use `read_repo_file`. |
+| `read_cross_repo` | Reads a file from any folder in your repositories folder, by name (e.g. from `repo-a`, check how `repo-b` handles an endpoint), so you can check how another codebase solved something without switching windows. It doesn't read anything under `.git` either. If the project declares its repos, use `read_repo_file`. |
 | `record_batch` | Records a phase 4 batch in its receipt, written by the server: before the commit, with the content (left with the commit pending), and after, with the `commit`, which it checks against git. Without git, with `artifact_path` (sha256) or `verification_note`. With `reanclar` it changes the anchor of a sealed receipt, and with `cerrar_fase` it closes the phase without the missing batches, both with your confirmation. `estado` takes the Spanish or the English values. When the last batch is anchored it generates the phase 4 document ([see above](#phase-4-with-the-server-record_batch)). |
 | `get_batch_status` | Crosses the plan with the receipts: which batch is next, which one is waiting for its commit, the anchor and origin of each receipt (server or by hand). With `reverificar`, it checks that each commit is still on the branch and each sealed artifact hasn't changed. Read-only. |
 | `get_orchestrator_status` | The installation X-ray, same as [`doctor`](installation.md#check-your-setup-doctor): package version and path, variables and where each came from, configuration, which prompt wins per phase, projects with their active task, language, preset, rules and repos, and findings. Plus the connected client, its capabilities and which project the open folder matches. Use it when something doesn't behave as you expect. |

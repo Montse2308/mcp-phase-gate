@@ -43,7 +43,7 @@ The theme follows your system, light or dark, until you choose: the button in th
 
 ## Security
 
-It listens only on `127.0.0.1`, on a random port. The link it prints carries a one-time token, exchanged for an `HttpOnly`, `SameSite=Strict` cookie; every request checks `Host` and `Origin`, writes need an extra header, and the page has a strict CSP. The documents' Markdown is sanitized before being shown. The MCP server never loads any of it.
+It listens only on `127.0.0.1`, on a random port. The link it prints carries a one-time token, exchanged for an `HttpOnly`, `SameSite=Strict` cookie; every request checks `Host` and `Origin`, writes need an extra header, and the page has a strict CSP. The documents' Markdown is sanitised before being shown. The MCP server never loads any of it.
 
 ## Options
 
