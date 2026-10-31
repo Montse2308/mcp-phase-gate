@@ -5,7 +5,7 @@ An MCP server that turns any AI coding agent into a gated, auditable, batch-by-b
 *This is the main README, in English · Read it in [Spanish](https://github.com/Montse2308/mcp-phase-gate/blob/master/README.es.md).*
 
 <p align="center">
-  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.gif" alt="The demo, about 42 seconds: doctor in a terminal; then the Studio: the project network, a finished task's board with its seals, a pending batch that turns VERIFIED live when its commit is recorded, a project's commit policy changed in Settings with its diff, the Workshop, and the published site on a phone" width="760"></a>
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-en.gif" alt="The demo, about 40 seconds: doctor in a terminal; then the Studio: the project network, a finished task's board with its seals, a pending batch that turns VERIFIED live when its commit is recorded, a project's commit policy changed in Settings with its diff, the Workshop, and the published site on a phone" width="760"></a>
 </p>
 
 [![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)
@@ -36,21 +36,13 @@ Ask an AI assistant to implement a requirement and it starts writing code. It br
 
 Here the assistant doesn't touch code until phase 4. By then it has diagnosed the problem by reading the repository, asked you what it couldn't decide alone, and written a plan checked against the real code. Every phase leaves a document in a central folder, so the thinking outlives both the chat and the device.
 
-```mermaid
-flowchart TD
-    R([An email, a ticket, a requirement]) --> F1
-    F1["<b>1 · Discovery</b><br/>reads the code and diagnoses"]
-    F2["<b>2 · Decisions</b><br/>asks, validates, and stops"]
-    F3["<b>3 · Technical Plan</b><br/>turns decisions into exact code"]
-    F4["<b>4 · Execution</b><br/>implements and verifies by running"]
-    F5["<b>5 · Audit</b><br/>reviews as an outside reviewer"]
+It starts from a requirement (an email, a ticket) and goes through five phases, in this order, each leaving its document:
 
-    F1 -- "01 · Technical Analysis" --> F2
-    F2 -- "02 · Decisions" --> F3
-    F3 -- "03 · Technical Plan" --> F4
-    F4 -- "04 · Execution" --> F5
-    F5 -- "05 · Audit" --> PR([PR description, also in the chat])
-```
+1. **Discovery** reads the code and diagnoses. It leaves `01 · Technical Analysis`.
+2. **Decisions** asks, validates, and stops. It leaves `02 · Decisions`.
+3. **Technical Plan** turns decisions into exact code. It leaves `03 · Technical Plan`.
+4. **Execution** implements and verifies by running. It leaves `04 · Execution`.
+5. **Audit** reviews as an outside reviewer. It leaves `05 · Audit`, and its output is the PR description, also in the chat.
 
 **The mandatory stop is phase 2**: it halts there and will not move on until you answer, and whatever you decide gets written down with its rationale. Between one phase and the next there is a **gate**, which is what gives the server its name: ask for a phase while skipping the previous one and the server notices and warns you ([more](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guide/tools.md#the-gate-skipping-a-phase-stops-being-invisible)).
 

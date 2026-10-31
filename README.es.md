@@ -5,7 +5,7 @@ Un servidor MCP que convierte a cualquier agente de IA que programa en un flujo 
 *Este es el README en español · El principal, en inglés: [README.md](https://github.com/Montse2308/mcp-phase-gate/blob/master/README.md).*
 
 <p align="center">
-  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, de unos 42 segundos: doctor en una terminal; después el Studio: la red de proyectos, el tablero de una tarea terminada con sus sellos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, la política de commits de un proyecto que cambia en Ajustes con su diff, el Taller y el sitio publicado en un teléfono" width="760"></a>
+  <a href="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.mp4"><img src="https://montse2308.github.io/mcp-phase-gate/medios/demo-es.gif" alt="La demo, de unos 40 segundos: doctor en una terminal; después el Studio: la red de proyectos, el tablero de una tarea terminada con sus sellos, un lote pendiente que pasa a VERIFICADO en vivo al registrar su commit, la política de commits de un proyecto que cambia en Ajustes con su diff, el Taller y el sitio publicado en un teléfono" width="760"></a>
 </p>
 
 [![CI](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/Montse2308/mcp-phase-gate/actions/workflows/ci.yml)
@@ -34,25 +34,17 @@ Un servidor MCP (Model Context Protocol) que parte cada requerimiento en **cinco
 
 Le pides a un asistente de IA que implemente un requerimiento y se lanza a escribir código. Rompe algo que no había leído, toma en silencio decisiones que nunca te consultó, y cuando cambias de chat, o te sientas en la otra computadora, el razonamiento entero se perdió: vivía en la conversación, y **la conversación no viaja**.
 
-Aquí el asistente no toca código hasta la fase 4. Para entonces ya diagnosticó leyendo el repositorio, te preguntó lo que no podía decidir solo, y escribió un plan contrastado contra el código real. Cada fase deja un documento en una carpeta central, así que lo que se pensó sobrevive al chat y al dispositivo.
+Aquí el asistente no toca código hasta la Fase 4. Para entonces ya diagnosticó leyendo el repositorio, te preguntó lo que no podía decidir solo, y escribió un plan contrastado contra el código real. Cada fase deja un documento en una carpeta central, así que lo que se pensó sobrevive al chat y al dispositivo.
 
-```mermaid
-flowchart TD
-    R([Un correo, un ticket, un requerimiento]) --> F1
-    F1["<b>1 · Descubrimiento</b><br/>lee el código y diagnostica"]
-    F2["<b>2 · Decisiones</b><br/>pregunta, valida, y se detiene"]
-    F3["<b>3 · Plan Técnico</b><br/>baja lo decidido a código exacto"]
-    F4["<b>4 · Ejecución</b><br/>implementa y verifica ejecutando"]
-    F5["<b>5 · Auditoría</b><br/>revisa como un revisor externo"]
+Se parte de un requerimiento (un correo, un ticket) y se pasa por cinco fases, en este orden, y cada una deja su documento:
 
-    F1 -- "01 · Análisis Técnico" --> F2
-    F2 -- "02 · Decisiones" --> F3
-    F3 -- "03 · Plan Técnico" --> F4
-    F4 -- "04 · Ejecución" --> F5
-    F5 -- "05 · Auditoría" --> PR([descripción del PR, también en el chat])
-```
+1. **Descubrimiento** lee el código y diagnostica. Deja `01 · Análisis Técnico`.
+2. **Decisiones** pregunta, valida, y se detiene. Deja `02 · Decisiones`.
+3. **Plan Técnico** baja lo decidido a código exacto. Deja `03 · Plan Técnico`.
+4. **Ejecución** implementa y verifica ejecutando. Deja `04 · Ejecución`.
+5. **Auditoría** revisa como un revisor externo. Deja `05 · Auditoría`, y su salida es la descripción del PR, también en el chat.
 
-**La parada obligatoria está en la fase 2**: ahí se detiene y no avanza hasta que respondas, y lo que decidas queda escrito con su fundamento. Entre una fase y otra hay una **compuerta**, que es lo que le da el nombre al servidor: si pides una fase saltándote la anterior, el servidor lo detecta y avisa ([más](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guia/herramientas.md#la-compuerta-saltarse-una-fase-deja-de-ser-invisible)).
+**La parada obligatoria está en la Fase 2**: ahí se detiene y no avanza hasta que respondas, y lo que decidas queda escrito con su fundamento. Entre una fase y otra hay una **compuerta**, que es lo que le da el nombre al servidor: si pides una fase saltándote la anterior, el servidor lo detecta y avisa ([más](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guia/herramientas.md#la-compuerta-saltarse-una-fase-deja-de-ser-invisible)).
 
 En la Fase 4 la IA hace el commit de cada lote solo con tu OK (la política por defecto; un proyecto puede elegir otra) y nunca hace push ni abre el PR, en ninguna política. El recibo de cada lote lo escribe el servidor, que comprueba contra git que su commit existe y está en la rama ([cómo](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guia/herramientas.md#la-fase-4-con-el-servidor-record_batch)). En la Fase 5 solo lee. El flujo se adapta al tipo de trabajo con **presets** (código con o sin pruebas, varios repositorios, el mantenimiento de un agente de IA, una investigación), y todo funciona en **español y en inglés**.
 
