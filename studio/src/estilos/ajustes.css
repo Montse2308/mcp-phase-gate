@@ -161,6 +161,37 @@ fieldset.campo-ajuste legend {
   white-space: nowrap;
   overflow-wrap: normal;
 }
+/* Avanzado: la tabla reparte el ancho de la página en vez de pedir el de sus textos más largos (rutas y
+   nombres de variables). Los nombres de variables se parten solo tras un guion bajo (avanzado.tsx pone el
+   corte); las rutas del valor, donde haga falta. En un teléfono, la ficha ocupa todo el ancho y no necesita
+   nada de esto. */
+@media (min-width: 641px) {
+  .pagina-avanzado .tabla {
+    table-layout: fixed;
+  }
+  .pagina-avanzado .tabla thead th:nth-child(1) {
+    width: 24%;
+  }
+  .pagina-avanzado .tabla thead th:nth-child(2) {
+    width: 21%;
+  }
+  .pagina-avanzado .tabla thead th:nth-child(3) {
+    width: 17%;
+  }
+  .pagina-avanzado .tabla thead th:nth-child(4) {
+    width: 14%;
+  }
+  .pagina-avanzado .tabla thead th:nth-child(5) {
+    width: 24%;
+  }
+  .pagina-avanzado .tabla td,
+  .pagina-avanzado .tabla tbody th {
+    overflow-wrap: break-word;
+  }
+  .pagina-avanzado .tabla td:nth-child(3) {
+    overflow-wrap: anywhere;
+  }
+}
 .en-ajustes {
   margin-top: 1.5rem;
 }
