@@ -1,15 +1,14 @@
-// Radiografía de la instalación: qué versión corre y desde dónde, de dónde salió cada variable,
-// qué archivo de prompt gana en cada fase, qué proyectos hay y en qué va su tarea activa, y los
-// avisos que se deducen de todo eso.
+// X-ray of the installation: which version runs and from where, where each variable came from, which prompt
+// file wins in each phase, which projects there are and what their active task is at, and the warnings that
+// are deduced from all that.
 //
-// Es una sola fuente para tres salidas: `npx mcp-phase-gate doctor`, la tool
-// `get_orchestrator_status` y el recurso `phase-gate://estado`. Si cada una armara su propio
-// diagnóstico, dirían cosas distintas justo el día en que alguien las compare para entender por
-// qué algo no funciona.
+// It is a single source for three outputs: `npx mcp-phase-gate doctor`, the tool `get_orchestrator_status`
+// and the resource `phase-gate://estado`. If each one built its own diagnosis, they would say different
+// things exactly the day someone compares them to understand why something does not work.
 //
-// Solo lee. No escribe nada ni lanza por configuración incompleta: diagnosticar una instalación
-// rota es precisamente para lo que existe, así que cada parte captura su propio error y lo
-// convierte en un hallazgo.
+// It only reads. It writes nothing and does not throw on incomplete configuration: diagnosing a broken
+// installation is precisely what it exists for, so each part catches its own error and turns it into a
+// finding.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -83,15 +82,13 @@ export type Diagnostico = {
     nombre: string;
     tareas: number;
     activa: { tarea: string; origen: "puntero" | "deducida"; fase: string } | null;
-    // Desde la Etapa 3: su configuración.
-    // Un valor canónico, sin texto dentro; el error, aparte y en el idioma de la llamada (hallazgo 20 de la
-    // auditoría de la Etapa 6: antes era "inválido: <error>").
+    // A canonical value, with no text inside; the error, apart and in the call's language.
     manifiesto: "válido" | "ausente" | "inválido";
     errorDelManifiesto: string | null;
-    preset: { nombre: string; origen: string } | null; // null si no se pudo resolver
+    preset: { nombre: string; origen: string } | null; // null if it could not be resolved
     reglas: { lotes: boolean; commits: string } | null;
     repos: { id: string; ruta: string | null; origen: string | null; existe: boolean; esGit: boolean; rama: string | null }[];
-    roots: { fuerza: "fuerte" | "debil" | null } | null; // null si no se conocen las raíces de la sesión
+    roots: { fuerza: "fuerte" | "debil" | null } | null; // null if the roots of the session are not known
   }[];
   configuracion: {
     configDir: string;
@@ -102,20 +99,19 @@ export type Diagnostico = {
   hallazgos: Hallazgo[];
 };
 
-// Las secciones de las reglas globales que las fases citan por su nombre. Un global-rules.md
-// propio sustituye al de fábrica (no se suma), así que si le falta una, las fases citan una regla
-// que no existe. Es el riesgo E1-R1, y el aviso que pedía la Etapa 1 para cuando hubiera doctor.
-// Vienen del vocabulario (§8.2).
+// The sections of the global rules that the phases cite by name. A global-rules.md of one's own replaces the
+// factory one (it is not added), so if it lacks one, the phases cite a rule that does not exist: doctor
+// warns about it. They come from the vocabulary.
 export const SECCIONES_GLOBALES: readonly string[] = VOCABULARIO.es.seccionesGlobales;
-// Las mismas, en un global-rules.md en inglés: una sección está si está en cualquiera de los dos.
+// The same ones, in an English global-rules.md: a section is there if it is in either.
 export const SECCIONES_GLOBALES_EN: readonly string[] = VOCABULARIO.en.seccionesGlobales;
 
 const ORDEN_SEVERIDAD: Record<Severidad, number> = { error: 0, aviso: 1, info: 2 };
 
-// ─── Cómo se ejecuta el paquete ─────────────────────────────────────────────
-// Solo como información, nunca como decisión: la deducción puede equivocarse (riesgo E2-R7) y
-// nada depende de ella. Sirve para que quien lea el diagnóstico sepa qué copia está corriendo,
-// que es la primera pregunta cuando "cambié el prompt y no se nota".
+// ─── How the package runs ───────────────────────────────────────────────────
+// Only as information, never as a decision: the deduction can be wrong and nothing depends on it. It lets
+// whoever reads the diagnosis know which copy is running, which is the first question when "I changed the
+// prompt and it does not show".
 export function deducirVia(ruta: string, entorno: NodeJS.ProcessEnv = process.env): Via {
   if (/[\\/]_npx[\\/]/.test(ruta)) return "npx";
 
@@ -178,8 +174,8 @@ function estadoRuta(requerida: RutaRequerida): EstadoRuta {
   }
 }
 
-// ─── Capas y fases ──────────────────────────────────────────────────────────
-// También las usa el recurso phase-gate://fases, que enseña lo mismo sin el resto del diagnóstico.
+// ─── Layers and phases ──────────────────────────────────────────────────────
+// The resource phase-gate://fases also uses them: it shows the same without the rest of the diagnosis.
 export function capasDePrompts(): Diagnostico["capas"] {
   return promptsLayers().map((ruta, i) => ({
     ruta,
@@ -188,7 +184,7 @@ export function capasDePrompts(): Diagnostico["capas"] {
   }));
 }
 
-// La capa de un archivo es la más alta que lo contiene.
+// The layer of a file is the highest one that contains it.
 export function capaDeArchivo(archivo: string, capas: Diagnostico["capas"]): EtiquetaCapa | null {
   let encontrada: EtiquetaCapa | null = null;
   for (const capa of capas) if (estaDentro(capa.ruta, archivo)) encontrada = capa.etiqueta;
@@ -213,8 +209,8 @@ export function fasesConCapa(
     }));
 }
 
-// Las fases con las que se deducen las tareas de un proyecto. Si su manifiesto no se puede leer,
-// las de sin proyecto: el hallazgo ya lo dice.
+// The phases the tasks of a project are deduced with. If its manifest cannot be read, those of no project:
+// the finding already says so.
 function fasesDelProyecto(carpetaProyecto: string, sinProyecto: Map<number, PhaseFile>): Map<number, PhaseFile> {
   try {
     return fasesDe(carpetaProyecto);
@@ -223,18 +219,18 @@ function fasesDelProyecto(carpetaProyecto: string, sinProyecto: Map<number, Phas
   }
 }
 
-// ─── La configuración de un proyecto ────────────────────────────────────────
+// ─── The configuration of a project ─────────────────────────────────────────
 type ContextoDeConfiguracion = {
   maquina: LecturaMaquina;
   presets: Map<string, Preset>;
   presetPorDefecto: string | null;
   fuerzas: Map<string, "fuerte" | "debil"> | null;
   estado: { gitAusente: boolean; gitLento: boolean };
-  // Calculados antes, sin bloquear (el servidor); sin esto, git síncrono (doctor en la terminal).
+  // Computed beforehand, without blocking (the server); without this, synchronous git (doctor in the terminal).
   estados: EstadosDeRepos | null;
 };
 
-// El estado de git de cada repo, por "<PROYECTO>/<id>". null: no respondió dentro del plazo.
+// The git state of each repo, by "<PROJECT>/<id>". null: it did not answer within the deadline.
 export type EstadosDeRepos = Map<string, EstadoDeRepo | null>;
 
 type ConfiguracionDiagnosticada = Pick<Diagnostico["proyectos"][number], "manifiesto" | "errorDelManifiesto" | "preset" | "reglas" | "repos" | "roots">;
@@ -257,12 +253,12 @@ function configuracionDelProyecto(
     );
   }
 
-  // Las tareas que declaran un preset que no existe fallarían al pedir su prompt.
+  // The tasks that declare a preset that does not exist would fail when their prompt is requested.
   let contexto: string | null = null;
   try {
     contexto = contextoInicialDe(nombre);
   } catch {
-    contexto = null; // manifiesto inválido: ya avisado
+    contexto = null; // invalid manifest: already warned
   }
   const sinPresetPropio = tareas.filter((tarea) => {
     const declarado = contexto ? frontmatterDeTarea(tarea.folderPath, contexto).preset : null;
@@ -284,14 +280,14 @@ function configuracionDelProyecto(
   try {
     config = configuracionDe(nombre);
   } catch {
-    config = null; // manifiesto inválido o preset que no existe: ya avisado
+    config = null; // invalid manifest or a preset that does not exist: already warned
   }
 
   if (config) {
     try {
       for (const h of revisarBloques(capasDe(nombre))) hallar(h.severidad, h.codigo, h.texto);
     } catch {
-      // Lo que impida armar las capas ya está avisado arriba.
+      // Whatever prevents building the layers is already warned above.
     }
   }
 
@@ -313,7 +309,7 @@ function configuracionDelProyecto(
           repos.push({ id: repo.id, ruta: repo.ruta, origen: repo.origenRuta, existe: repo.existe, esGit: false, rama: null });
           continue;
         }
-        // El texto viene de git.ts, en el idioma de la llamada: se reconoce en los dos.
+        // The text comes from git.ts, in the call's language: it is recognized in both.
         if (estado.error && /no está instalado|not installed/i.test(estado.error)) {
           ctx.estado.gitAusente = true;
           hallar("aviso", "GIT-NO-INSTALADO", mensaje("GIT-NO-INSTALADO", { error: estado.error }));
@@ -335,8 +331,8 @@ function configuracionDelProyecto(
   };
 }
 
-// Los repos de todos los proyectos, resueltos como los resuelve el diagnóstico. Un manifiesto o un
-// machine.json roto no impide listar los demás: ya lo avisa el diagnóstico.
+// The repos of all the projects, resolved as the diagnosis resolves them. A broken manifest or machine.json
+// does not prevent listing the others: the diagnosis already warns about it.
 function reposDeTodos(): { clave: string; repo: RepoResuelto }[] {
   let maquina: LecturaMaquina | null = null;
   try {
@@ -353,27 +349,27 @@ function reposDeTodos(): { clave: string; repo: RepoResuelto }[] {
         if (!manifiesto || !maquina) continue;
         for (const repo of resolverRepos(proyecto, manifiesto.repos, maquina)) lista.push({ clave: `${proyecto}/${repo.id}`, repo });
       } catch {
-        // manifiesto inválido: ya avisado
+        // invalid manifest: already warned
       }
     }
   } catch {
-    // sin Documentación no hay repos
+    // without Documentation there are no repos
   }
   return lista;
 }
 
-// El diagnóstico para el servidor: el estado de git de los repos se pide antes, en paralelo y con plazo,
-// para no bloquear el resto de mensajes del protocolo (hallazgo 2 de la auditoría de la Etapa 3). doctor,
-// en la terminal, sigue usando diagnosticar(), síncrono.
+// The diagnosis for the server: the git state of the repos is requested beforehand, in parallel and with a
+// deadline, so as not to block the rest of the protocol's messages. doctor, in the terminal, keeps using
+// diagnosticar(), which is synchronous.
 export async function diagnosticarSinBloquear(opciones: Omit<OpcionesDeDiagnostico, "estadosDeRepos"> = {}): Promise<Diagnostico> {
   const repos = reposDeTodos();
   const estados = await estadosConPlazo(repos.map((r) => r.repo));
   return diagnosticar({ ...opciones, estadosDeRepos: new Map(repos.map((r, i) => [r.clave, estados[i] ?? null])) });
 }
 
-// ─── Los recibos de la Fase 4 (Etapa 4) ─────────────────────────────────────
-// Lo que se puede revisar sin git: recibos de lotes que el plan no declara, recibos escritos a mano y un
-// índice que ya no es el que el servidor ensamblaría con los recibos de hoy.
+// ─── The receipts of Phase 4 ────────────────────────────────────────────────
+// What can be checked without git: receipts of batches the plan does not declare, receipts written by hand
+// and an index that is no longer the one the server would assemble with today's receipts.
 type Hallar = (severidad: Severidad, codigo: string, texto: string) => void;
 
 function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<number, PhaseFile>, hallar: Hallar): void {
@@ -383,7 +379,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
     try {
       fase = faseEnCarpeta(tarea.folderPath, phases, nombre, idioma);
     } catch {
-      return; // ninguna fase del proyecto declara recibos
+      return; // no phase of the project declares receipts
     }
     const quien = `${nombre}/${tarea.taskName}`;
 
@@ -398,7 +394,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
     try {
       total = lotesDelPlan(fase);
     } catch {
-      total = null; // sin plan, o sin `lotes`: no hay contra qué comparar
+      total = null; // without a plan, or without `lotes`: there is nothing to compare against
     }
 
     if (total !== null) {
@@ -422,7 +418,7 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
       );
     }
 
-    // Solo un índice que generó el servidor: uno escrito a mano con la 2.x nunca va a coincidir.
+    // Only an index that the server generated: one written by hand with 2.x will never match.
     if (fase.documento && total !== null && total > 1) {
       const documento = path.join(tarea.folderPath, fase.documento);
       try {
@@ -435,15 +431,15 @@ function revisarRecibos(nombre: string, tareas: EstadoTarea[], phases: Map<numbe
           );
         }
       } catch {
-        // sin documento todavía, o ilegible: no hay índice que comparar
+        // no document yet, or unreadable: there is no index to compare
       }
     }
   }
 }
 
-// ─── Rutas largas (validación V7) ───────────────────────────────────────────
-// Con una Documentación en una carpeta sincronizada de ruta larga, cerca de 255 o 260 caracteres
-// OneDrive y muchas herramientas de Windows dejan de poder abrir un archivo. Se avisa antes.
+// ─── Long paths ─────────────────────────────────────────────────────────────
+// With a Documentation in a synchronized folder with a long path, near 255 or 260 characters OneDrive and
+// many Windows tools can no longer open a file. It is warned about beforehand.
 export const LARGO_DE_RUTA = 240;
 const TOPE_DE_ENTRADAS = 50_000;
 
@@ -467,29 +463,30 @@ export function rutasLargas(base: string, largo: number = LARGO_DE_RUTA): { cuen
         cuenta++;
         if (!masLarga || ruta.length > masLarga.length) masLarga = ruta;
       }
-      // Sin seguir enlaces ni entrar en .git: lo que importa son los documentos.
+      // Without following links or entering .git: what matters are the documents.
       if (entrada.isDirectory() && !entrada.isSymbolicLink() && entrada.name.toLowerCase() !== ".git") pendientes.push(ruta);
     }
   }
   return { cuenta, mas_larga: masLarga, recortado: false };
 }
 
-// ─── Anclas que ya no valen (doctor --reverificar) ──────────────────────────
-// Necesita git, que es asíncrono: se calcula antes y llega al diagnóstico como hallazgos hechos.
+// ─── Anchors that are no longer valid (doctor --reverificar) ────────────────
+// It needs git, which is asynchronous: it is computed beforehand and reaches the diagnosis as findings
+// already made.
 export async function anclasNoVigentes(): Promise<Hallazgo[]> {
   const hallazgos: Hallazgo[] = [];
   let proyectos: string[];
   try {
     proyectos = [...discoverProjects().values()].sort();
   } catch {
-    return hallazgos; // sin Documentación ya hay un VAR-FALTA
+    return hallazgos; // without Documentation there is already a VAR-FALTA
   }
   for (const nombre of proyectos) {
     let phases: Map<number, PhaseFile>;
     try {
       phases = fasesDe(nombre);
     } catch {
-      continue; // el manifiesto inválido ya sale como hallazgo
+      continue; // the invalid manifest already comes out as a finding
     }
     for (const tarea of listarTareas(nombre, phases)) {
       let porLote: Map<number, ReciboEnDisco[]>;
@@ -510,12 +507,12 @@ export async function anclasNoVigentes(): Promise<Hallazgo[]> {
   return hallazgos;
 }
 
-// ─── El diagnóstico ─────────────────────────────────────────────────────────
-// `raices`: las de la sesión MCP (la tool las conoce; doctor, en la terminal, no). `hallazgosExtra`: los
-// que se calcularon antes porque necesitan git asíncrono (doctor --reverificar).
+// ─── The diagnosis ──────────────────────────────────────────────────────────
+// `raices`: those of the MCP session (the tool knows them; doctor, in the terminal, does not).
+// `hallazgosExtra`: those computed beforehand because they need asynchronous git (doctor --reverificar).
 export type OpcionesDeDiagnostico = { cliente?: Diagnostico["cliente"]; raices?: string[]; estadosDeRepos?: EstadosDeRepos; hallazgosExtra?: Hallazgo[] };
 
-// Con su caché del recuento de documentos por idioma: cada proyecto se cuenta una vez (manifiesto.ts).
+// With its cache of the per-language document count: each project is counted once (manifiesto.ts).
 export function diagnosticar(opciones: OpcionesDeDiagnostico = {}): Diagnostico {
   return conCacheDelIdioma(() => diagnosticarSinCache(opciones));
 }
@@ -528,16 +525,16 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
 
   const rutaPaquete = path.resolve(MODULE_DIR, "..");
 
-  // Variables y rutas obligatorias.
+  // Variables and required paths.
   const variables = NOMBRES_LOGICOS.map((logica) => leerVariable(logica));
   for (const { discrepancia } of variables) {
     if (discrepancia) hallar("aviso", "VAR-DISCREPA", discrepancia);
   }
   for (const hallazgo of pisadasDeMaquina(variables)) hallazgos.push(hallazgo);
 
-  // Un PHASE_GATE_LANG que no dice es ni en no cuenta: se ignora y el idioma sale del sistema. Se avisa,
-  // porque quien lo puso esperaba otra cosa (hallazgo 10 de la auditoría de la Etapa 6). Vacío es como no
-  // tenerlo, y no se avisa.
+  // A PHASE_GATE_LANG that says neither es nor en does not count: it is ignored and the language comes from
+  // the system. It is warned about, because whoever set it expected something else. Empty is like not having
+  // it, and is not warned about.
   const lang = process.env.PHASE_GATE_LANG ?? "";
   if (lang.trim() && !idiomaDeEtiqueta(lang)) {
     hallar("aviso", "LANG-INVALIDO", mensaje("LANG-INVALIDO", { valor: lang.length > 40 ? `${lang.slice(0, 40)}…` : lang, sistema: idiomaDelSistema() }));
@@ -551,18 +548,18 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
     if (!estado.existe) hallar("error", "VAR-FALTA", estado.error ?? mensaje("VAR-FALTA"));
   }
 
-  // Estado local.
+  // Local state.
   const archivoEstado = stateFile();
   let punteros: Record<string, string> = {};
   try {
     punteros = leerPunteros();
   } catch {
-    // leerPunteros ya tolera un archivo ilegible; esto solo cubre una carpeta inaccesible.
+    // leerPunteros already tolerates an unreadable file; this only covers an inaccessible folder.
   }
   const estado = { archivo: archivoEstado, existe: fs.existsSync(archivoEstado), punteros: Object.keys(punteros).length };
 
-  // leerPunteros calla un archivo corrupto (para no dejar sin servicio), y doctor lo contaba como
-  // "0 punteros". Aquí se dice: la tarea activa de cada proyecto se está deduciendo.
+  // leerPunteros silences a corrupt file (so as not to leave without service), and doctor counted it as "0
+  // pointers". Here it is said: the active task of each project is being deduced.
   if (estado.existe && !estadoLegible(archivoEstado)) {
     hallar(
       "aviso",
@@ -571,7 +568,7 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
     );
   }
 
-  // Capas de prompts.
+  // Prompt layers.
   const capas = capasDePrompts();
   const rutasCapas = capas.map((capa) => capa.ruta);
 
@@ -596,10 +593,10 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
 
   const capaDe = (archivo: string): EtiquetaCapa | null => capaDeArchivo(archivo, capas);
 
-  // Reglas globales.
+  // Global rules.
   const archivoGlobales = resolveGlobalRules(rutasCapas);
   const capaGlobales = archivoGlobales ? capaDe(archivoGlobales) : null;
-  // Las que faltan, con el nombre del idioma de la capa de fábrica (prompts/es/ o prompts/en/).
+  // The missing ones, with the name in the language of the factory layer (prompts/es/ or prompts/en/).
   const nombres = path.basename(capas[0]?.ruta ?? "") === "en" ? SECCIONES_GLOBALES_EN : SECCIONES_GLOBALES;
   let faltanIndices: number[] = [];
   if (archivoGlobales) {
@@ -611,12 +608,12 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
     }
   }
   const faltan = faltanIndices.map((i) => nombres[i]!);
-  // BASE y PENDIENTES son esqueleto: si un global-rules.md propio no las tiene, el ensamblado añade
-  // las de fábrica (GLOBAL-REINYECTADO). EVIDENCIA es una ranura y no se reinyecta: si falta, las
-  // fases citan una sección que no existe (GLOBAL-SIN-BASE).
+  // BASE and PENDIENTES are skeleton: if a global-rules.md of one's own lacks them, the assembly adds the
+  // factory ones (GLOBAL-REINYECTADO). EVIDENCIA is a slot and is not re-injected: if it is missing, the
+  // phases cite a section that does not exist (GLOBAL-SIN-BASE).
   if (archivoGlobales && capaGlobales !== "fábrica" && faltan.length) {
     const fabrica = path.join(capas[0]?.ruta ?? "", GLOBAL_RULES_FILE);
-    // BASE y PENDIENTES son las esqueleto, en el idioma que sea.
+    // BASE and PENDIENTES are the skeleton ones, in whichever language.
     const reinyectadas = fs.existsSync(fabrica) ? faltanIndices.filter((i) => SECCIONES_ESQUELETO.includes(SECCIONES_GLOBALES[i]!)).map((i) => nombres[i]!) : [];
     const sinReinyectar = faltan.filter((seccion) => !reinyectadas.includes(seccion));
 
@@ -630,9 +627,9 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
     }
   }
 
-  // Fases.
-  // discoverPhases ya salta las capas que no son carpeta; esto cubre lo que quede (una carpeta
-  // sin permiso de lectura, por ejemplo). El diagnóstico no lanza nunca: lo convierte en hallazgo.
+  // Phases.
+  // discoverPhases already skips the layers that are not a folder; this covers what remains (a folder without
+  // read permission, for example). The diagnosis never throws: it turns it into a finding.
   let phases = new Map<number, PhaseFile>();
   try {
     phases = discoverPhases(rutasCapas);
@@ -658,7 +655,7 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
     }
   }
 
-  // Configuración local: machine.json y los presets disponibles.
+  // Local configuration: machine.json and the available presets.
   const maquina = leerMaquina();
   if (maquina.estado === "invalido") hallar("error", "MAQUINA-INVALIDA", mensaje("MAQUINA-INVALIDA", { error: maquina.error }));
   for (const aviso of maquina.avisos) hallar(aviso.severidad, aviso.codigo, aviso.texto);
@@ -689,14 +686,14 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
     presets: [...presets.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ nombre: p.nombre, origen: p.origen, ruta: p.ruta })),
   };
 
-  // Los bloques que se aplican sin proyecto: la capa global y el preset de machine.json.
+  // The blocks that apply without a project: the global layer and the machine.json preset.
   try {
     for (const h of revisarBloques(capasDe(null))) hallar(h.severidad, h.codigo, h.texto);
   } catch {
-    // Un preset de machine.json que no existe ya es un PRESET-NO-EXISTE.
+    // A machine.json preset that does not exist is already a PRESET-NO-EXISTE.
   }
 
-  // Proyectos y punteros. Sin DOCS_PATH no hay nada que listar, y eso ya es un VAR-FALTA.
+  // Projects and pointers. Without DOCS_PATH there is nothing to list, and that is already a VAR-FALTA.
   const proyectos: Diagnostico["proyectos"] = [];
   if (rutas.docs.existe) {
     try {
@@ -715,8 +712,8 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
 
       const estado = { gitAusente: false, gitLento: false };
       for (const nombre of [...discoverProjects().values()].sort()) {
-        // Con las fases de SU proyecto. Un manifiesto inválido no tumba el listado: se avisa, y sus
-        // tareas se cuentan con las fases sin proyecto.
+        // With the phases of ITS project. An invalid manifest does not bring the listing down: it is warned about,
+        // and its tasks are counted with the phases of no project.
         const delProyecto = fasesDelProyecto(nombre, phases);
         const tareas = listarTareas(nombre, delProyecto);
         const activa = tareaActiva(nombre, delProyecto);
@@ -729,7 +726,7 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
           ...configuracionDelProyecto(nombre, tareas, { maquina, presets, presetPorDefecto, fuerzas, estado, estados: opciones.estadosDeRepos ?? null }, hallar),
         });
         revisarRecibos(nombre, tareas, delProyecto, hallar);
-        // §8.3: documentos de los dos idiomas sin idioma declarado, o tareas del otro idioma que el declarado.
+        // Documents of both languages without a declared language, or tasks of another language than the declared one.
         const conflicto = conflictoDeIdioma(nombre);
         if (conflicto) hallar(conflicto.severidad, conflicto.codigo, conflicto.texto);
       }
@@ -762,7 +759,7 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
 
   for (const h of opciones.hallazgosExtra ?? []) hallazgos.push(h);
 
-  // El mismo aviso puede salir de varios proyectos (un bloques.md global mal formado, por ejemplo).
+  // The same warning can come out of several projects (a malformed global bloques.md, for example).
   const unicos =hallazgos.filter((h, i) => hallazgos.findIndex((otro) => otro.codigo === h.codigo && otro.texto === h.texto) === i);
   unicos.sort((a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad]);
   hallazgos.splice(0, hallazgos.length, ...unicos);
@@ -783,10 +780,10 @@ function diagnosticarSinCache(opciones: OpcionesDeDiagnostico): Diagnostico {
   };
 }
 
-// ─── Formato ────────────────────────────────────────────────────────────────
-// Texto para la terminal (doctor) y Markdown para el chat (la tool y el recurso). Las dos salen
-// del mismo objeto y tienen las mismas secciones, en el mismo orden. En el idioma de la llamada; los
-// valores de los enums (severidad, capa, origen…) siguen canónicos en el objeto y se traducen aquí.
+// ─── Format ─────────────────────────────────────────────────────────────────
+// Text for the terminal (doctor) and Markdown for the chat (the tool and the resource). Both come out of the
+// same object and have the same sections, in the same order. In the call's language; the values of the enums
+// (severity, layer, origin…) stay canonical in the object and are translated here.
 
 type Textos = {
   t: (codigo: string, parametros?: Record<string, unknown>) => string;
@@ -799,7 +796,7 @@ function textos(idioma: Idioma = idiomaDeMensajes()): Textos {
   return { t, valor: (valor) => t("DOCTOR-VALOR", { valor }), columnas: (codigo) => t(codigo).split("|") };
 }
 
-// El ancho de la columna de severidad: la más larga más dos (7 en español, como siempre).
+// The width of the severity column: the longest one plus two (7 in Spanish).
 function anchoDeSeveridad(x: Textos): number {
   return Math.max(...(["error", "aviso", "info"] as Severidad[]).map((s) => x.valor(s).length)) + 2;
 }
@@ -945,7 +942,7 @@ function formatearTexto(d: Diagnostico, x: Textos): string {
   return lineas.join("\n");
 }
 
-// Una celda de tabla Markdown: sin saltos de línea y con las barras escapadas.
+// A Markdown table cell: without line breaks and with the bars escaped.
 function celda(texto: string): string {
   return texto.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
 }
@@ -1054,9 +1051,9 @@ export function formatearDiagnostico(d: Diagnostico, formato: "texto" | "markdow
   return formato === "texto" ? formatearTexto(d, x) : formatearMarkdown(d, x);
 }
 
-// ─── Procedencia de una fase (doctor --fase N --proyecto P) ─────────────────
-// Qué capa y qué archivo:línea gana en cada ranura del prompt que recibe el modelo, y qué modos se le
-// sumaron. Con proyecto, para su tarea activa (que puede declarar su propio preset).
+// ─── Origin of a phase (doctor --fase N --proyecto P) ───────────────────────
+// Which layer and which file:line wins in each slot of the prompt the model receives, and which modes were
+// added to it. With a project, for its active task (which can declare its own preset).
 export type InformeDeProcedencia = {
   fase: number;
   proyecto: string | null;
@@ -1095,8 +1092,8 @@ export function formatearProcedencia(informe: InformeDeProcedencia): string {
     }),
     "",
   ];
-  // En inglés, cada ranura con su alias y el id canónico entre paréntesis (§8.2), y "fábrica" y los modos
-  // traducidos. En español, como siempre.
+  // In English, each slot with its alias and the canonical id in parentheses, and "fábrica" and the modes
+  // translated.
   const enIngles = idiomaDeMensajes() === "en";
   const MODOS_EN: Record<string, string> = { reemplazar: "replace", antes: "before", despues: "after" };
   const nombreDe = (id: string): string => (enIngles && idInglesDeRanura(id) !== id ? `${idInglesDeRanura(id)} (${id})` : id);
@@ -1116,16 +1113,16 @@ export function formatearProcedencia(informe: InformeDeProcedencia): string {
   return lineas.join("\n");
 }
 
-// ─── El informe de configuración de un proyecto (phase-gate://configuracion/{proyecto}) ───
-// El manifiesto efectivo, de dónde sale cada valor y el estado de sus repos en este equipo. El estado
-// de git se pide antes, sin bloquear, con el mismo plazo que el diagnóstico.
+// ─── The configuration report of a project (phase-gate://configuracion/{proyecto}) ───
+// The effective manifest, where each value comes from and the state of its repos on this machine. The git
+// state is requested beforehand, without blocking, with the same deadline as the diagnosis.
 export async function informeDeConfiguracion(carpetaProyecto: string): Promise<string> {
   let repos: RepoResuelto[] = [];
   try {
     const m = manifiestoDe(carpetaProyecto);
     if (m?.repos.length) repos = resolverRepos(carpetaProyecto, m.repos);
   } catch {
-    repos = []; // el error lo enseña el propio informe
+    repos = []; // the report itself shows the error
   }
   const estados = await estadosConPlazo(repos);
   return textoDeConfiguracion(carpetaProyecto, new Map(repos.map((repo, i) => [repo.id, estados[i] ?? null])));
