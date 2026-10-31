@@ -165,7 +165,7 @@ describe("vocabulario: índice, plan y pendientes", () => {
     assert.ok(tieneValidacionesPendientes(es));
   });
 
-  it("la tabla de lotes en el plan se lee en los dos idiomas", () => {
+  it("la tabla de lotes del plan se lee en los dos idiomas", () => {
     const en = leerTablaDeLotes(
       "---\nbatches: 2\n---\n# Plan\n\n| Batch | Repo | Goal | Steps | Exit criterion | Proposed commit | Reverts alone |\n|---|---|---|---|---|---|---|\n| L01 | `api` | add the coupon | … | … | `feat(api): coupon` | yes |\n| **L02** | web | show it | … | … | `feat(web): coupon` | yes |\n"
     );
@@ -175,7 +175,7 @@ describe("vocabulario: índice, plan y pendientes", () => {
     assert.deepEqual(es?.get(1), { repo: "api", objetivo: "x", commitPropuesto: "a" });
   });
 
-  it("`batches: N` en el frontmatter cuenta igual que `lotes: N`", () => {
+  it("`batches: N` en el frontmatter del plan cuenta igual que `lotes: N`", () => {
     const carpeta = carpetaTemporal("plan-en");
     fs.writeFileSync(path.join(carpeta, "03 - Technical Plan.md"), "---\nbatches: 3\n---\n# Plan\n");
     assert.equal(lotesDelPlan({ ...fase("en"), carpetaTarea: carpeta }), 3);

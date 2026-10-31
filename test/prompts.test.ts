@@ -189,7 +189,7 @@ describe("prompts publicados", () => {
     }
   });
 
-  // Mientras los prompts no tengan ranuras (llegan en L04 a L08), pasa con cero.
+  // Mientras los prompts no tengan ranuras, pasa con cero.
   for (const archivo of archivos) {
     it(`las ranuras de ${archivo} están bien formadas`, () => {
       const permitidas = CATALOGO[identificador(archivo) ?? ""] ?? [];
@@ -220,7 +220,7 @@ describe("prompts publicados", () => {
     });
   }
 
-  // L05 (#39 y #40 en las Fases 1 y 2): cada fase ancla Base y Pendientes con frases cortas, y
+  // #39 y #40 en las Fases 1 y 2: cada fase ancla Base y Pendientes con frases cortas, y
   // marca como ranura su rol, su verificación y sus ejemplos.
   const leer = (archivo: string): string => fs.readFileSync(path.join(PROMPTS, archivo), "utf-8");
 
@@ -257,7 +257,7 @@ describe("prompts publicados", () => {
     }
   });
 
-  // L06: en la Fase 3 los lotes son estructurales. La sección condicional "Etapas con commits
+  // En la Fase 3 los lotes son estructurales. La sección condicional "Etapas con commits
   // separados" desaparece y la política de pruebas se junta en una sola ranura.
   it("la Fase 3 planea por lotes y junta las pruebas en PRUEBAS Y PARIDAD", () => {
     const texto = leer("fase-3-plan-tecnico.md");
@@ -354,7 +354,7 @@ describe("prompts publicados", () => {
     assert.ok(prompt.indexOf("### PROHIBIDO (auditoría)") < prompt.indexOf("## SALIDA 2"));
   });
 
-  // L04 (#39 y #40): se escriben una vez en las reglas globales, que se anteponen a cada fase.
+  // #39 y #40: se escriben una vez en las reglas globales, que se anteponen a cada fase.
   for (const fase of [1, 2, 3, 4, 5]) {
     it(`get_phase_prompt(${fase}) trae la base de cada decisión y los pendientes heredados`, () => {
       const prompt = loadPhasePrompt(fase, [PROMPTS]);

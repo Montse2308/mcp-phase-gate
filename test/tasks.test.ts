@@ -751,7 +751,7 @@ describe("tieneValidacionesPendientes", () => {
 });
 
 // Dentro de la Fase 4, la deducción sabe por qué lote va, leyendo solo el
-// frontmatter de plan y de recibos. La fase sigue saliendo de qué documentos existen.
+// frontmatter del plan y de los recibos. La fase sigue saliendo de qué documentos existen.
 describe("progreso por lote en la Fase 4", () => {
   const CON_RECIBOS = new Map<number, PhaseFile>(FASES);
   CON_RECIBOS.set(4, { ...(FASES.get(4) as PhaseFile), recibos: "04 - Ejecución" });

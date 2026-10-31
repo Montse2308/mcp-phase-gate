@@ -476,7 +476,7 @@ describe("record_batch por MCP", () => {
   });
 });
 
-// ─── L04: el documento de la fase ───────────────────────────────────────────
+// ─── El documento de la fase ────────────────────────────────────────────────
 // Los índices de oro (test/oro/indice-*.md) se escribieron con ensamblarIndice sobre estos escenarios y
 // se revisaron a mano. Si un cambio toca a propósito el formato, se regeneran con ORO_REGENERAR=1 y se
 // vuelven a revisar antes del commit.
@@ -577,7 +577,7 @@ describe("ensamblarIndice", () => {
     assert.ok(primero.endsWith("\n") && !primero.endsWith("\n\n") && !primero.includes("\r"));
   });
 
-  it("la tabla de lotes en el plan: repo, objetivo y commit propuesto; null si no la hay", () => {
+  it("la tabla de lotes del plan: repo, objetivo y commit propuesto; null si no la hay", () => {
     const plan = [
       "---", "lotes: 2", "---", "", "# Plan", "",
       "| Lote | Repo | Objetivo | Pasos | Criterio de salida | Commit propuesto | Revierte solo |",
@@ -709,7 +709,7 @@ describe("record_batch: cerrar_fase", () => {
   });
 });
 
-// ─── L05: el sellado y reanclar ─────────────────────────────────────────────
+// ─── El sellado y reanclar ──────────────────────────────────────────────────
 describe("record_batch: reanclar", () => {
   const con = (estado: ResultadoConfirmacion["estado"], preguntas: string[] = []) => ({
     ahora: AHORA,
@@ -912,7 +912,7 @@ describe("record_batch por MCP: reanclar con y sin elicitation", () => {
   });
 });
 
-// ─── L06: get_batch_status ──────────────────────────────────────────────────
+// ─── get_batch_status ───────────────────────────────────────────────────────
 describe("get_batch_status", () => {
   const PLAN_CON_TABLA = [
     "---", "lotes: 3", "---", "", "# Plan", "",
@@ -924,7 +924,7 @@ describe("get_batch_status", () => {
     "",
   ].join("\n");
 
-  it("cruza el plan con los recibos: columnas que trae el plan, recibo, estado, ancla, origen y la siguiente acción", async () => {
+  it("cruza el plan con los recibos: columnas del plan, recibo, estado, ancla, origen y la siguiente acción", async () => {
     const { tarea, dirs } = instalacion();
     fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), PLAN_CON_TABLA, "utf-8");
     await registrar(contenido(1, { titulo: "corregir cálculo", commit: commitEn(dirs.api!, ["src/l1.ts"]) }));
@@ -972,7 +972,7 @@ describe("get_batch_status", () => {
     assert.match(texto, /- RECIBO-FUERA-DE-PLAN: `04 - Ejecución\/L05 - sobrante\.md` \(el plan declara 2 lotes\)\./);
   });
 
-  it("si la tabla en el plan no se puede leer, sus columnas quedan vacías y lo avisa; el número sale del frontmatter", async () => {
+  it("si la tabla del plan no se puede leer, las columnas del plan quedan vacías y lo avisa; el número sale del frontmatter", async () => {
     const { tarea } = instalacion({ lotes: "2" });
     fs.writeFileSync(path.join(tarea, "03 - Plan Técnico.md"), "---\nlotes: 2\n---\n\n| Paso | Qué |\n|---|---|\n| L01 | x |\n", "utf-8");
     const { salida } = await estadoDeLotes("P", "t");
@@ -1024,7 +1024,7 @@ describe("get_batch_status", () => {
   });
 });
 
-// ─── L07: los commits verificados para la Fase 5 ────────────────────────────
+// ─── Los commits verificados para la Fase 5 ─────────────────────────────────
 describe("bloqueDeCommits (COMMITS DE LA FASE 4)", () => {
   const corto = (sha: string) => sha.slice(0, 7);
   const bloque = (tarea: string) => bloqueDeCommits("P", tarea, fasesDe("P"));
@@ -1126,8 +1126,8 @@ describe("bloqueDeCommits (COMMITS DE LA FASE 4)", () => {
   });
 });
 
-// ─── Pulido ─────────────────────────
-describe("ajustes de la auditoría: record_batch y el bloque de la Fase 5", () => {
+// ─── Pulido ─────────────────────────────────────────────────────────────────
+describe("pulido: record_batch y el bloque de la Fase 5", () => {
   it("al anclar un recibo de la 2.x sin repo, vale el único repo de la tarea", async () => {
     const { recibos, dirs } = instalacion({ lotes: "2" });
     fs.mkdirSync(recibos, { recursive: true });
