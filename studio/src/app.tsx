@@ -5,7 +5,7 @@
 import { Ajustes } from "./ajustes/ajustes";
 import { guardarSalida } from "./ajustes/borrador";
 import { Bitacora } from "./bitacora/bitacora";
-import { MODO, enlaceDeLaPortada, get, hashEnElIdioma, textoDeLaBanda } from "./datos";
+import { MODO, ayudaDeLaBanda, enlaceDeLaPortada, get, hashEnElIdioma, textoDeLaBanda } from "./datos";
 import { IDIOMAS_UI, NOMBRE_DEL_IDIOMA, cambiarIdioma, idiomaActual, t, useIdioma } from "./i18n/idioma";
 import type { IdiomaUi } from "./i18n/idioma";
 import { cambiarTema, useTemaOscuro } from "./preferencias";
@@ -116,7 +116,7 @@ export function App() {
         {t("app.saltar")}
       </a>
       {MODO !== "vivo" ? (
-        <aside class="banda-demo" aria-label={t("banda.etiqueta")}>
+        <aside class="banda-demo" aria-label={t("banda.etiqueta")} title={ayudaDeLaBanda()}>
           {textoDeLaBanda()}
           {enlaceDeLaPortada() ? (
             <>

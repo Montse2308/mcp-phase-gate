@@ -28,12 +28,18 @@ declare global {
 export type ModoApp = "vivo" | "demo" | "estatico";
 export const MODO: ModoApp = window.PG_MODO ?? "vivo";
 // El texto de la banda de la demo, en el idioma de la interfaz: con la carpeta de `ui --demo` o la clave del
-// export, el del diccionario; si no, el que mandó quien sirve la página; si no, uno genérico.
+// export, el del diccionario; si no, el que mandó quien sirve la página; si no, uno genérico. La carpeta de
+// `ui --demo` no va en el texto (a 390 px ocupaba la banda entera): va en el título de la banda.
 export function textoDeLaBanda(): string {
-  if (window.PG_DEMO_RAIZ) return t("banda.demoEn", { raiz: window.PG_DEMO_RAIZ });
+  if (window.PG_DEMO_RAIZ) return t("banda.demo");
   if (window.PG_BANDA_CLAVE === "estatico-demo") return t("banda.estaticoDemo");
   if (window.PG_BANDA_CLAVE === "estatico-datos") return t("banda.estaticoDatos");
   return window.PG_BANDA ?? t("banda.demo");
+}
+
+// Lo que dice la banda al pasar el puntero: en `ui --demo`, dónde está la demo.
+export function ayudaDeLaBanda(): string | undefined {
+  return window.PG_DEMO_RAIZ ? t("banda.demoEn", { raiz: window.PG_DEMO_RAIZ }) : undefined;
 }
 
 // La portada del sitio, con su URL absoluta: cualquier `ui --export-static` sin datos reales muestra la misma banda,
