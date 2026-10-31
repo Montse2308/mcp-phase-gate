@@ -1,5 +1,5 @@
 // `npx mcp-phase-gate init`: registers the server in the MCP clients of this machine, and optionally copies
-// the /fN commands and migrates the projects to 3.0.
+// the /fN commands and, with --migrate, creates the phase-gate.json of the projects that lack one.
 //
 // It writes in files that are not its own (Cursor's and VS Code's configuration), so it does it with care:
 // it reads tolerating comments and trailing commas, it does not touch a JSON it does not understand, it does

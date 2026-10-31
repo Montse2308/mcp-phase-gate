@@ -9,8 +9,6 @@ import { z } from "zod";
 
 import { diagnosticoShape } from "../schemas.js";
 
-export const ErrorApi = z.object({ error: z.string() });
-
 // ─── /api/estado ────────────────────────────────────────────────────────────
 export const Modo = z.enum(["vivo", "demo", "estatico"]);
 // activo: the watcher reports; degradado: polling saw a change the watcher did not report; apagado: there is none.
@@ -99,7 +97,7 @@ export const ProyectosRespuesta = z.object({
 });
 
 // ─── One task ───────────────────────────────────────────────────────────────
-// The signal of each station on the board: shape, text and colour all come from here.
+// The state of each of the task's phases on the Board: the indicator's shape, text and colour all come from here.
 export const Senal = z.enum(["verde", "ambar", "rojo", "apagado"]);
 export const TextoDeSenal = z.enum(["cerrada", "con pendientes", "en curso", "hueco", "pendiente"]);
 

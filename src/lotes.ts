@@ -16,7 +16,7 @@ import { anclarArtefacto, anclarCommit, reverificar } from "./anclas.js";
 import { configuracionDe, fasesDe, reposDeLaTarea } from "./capas.js";
 import { DOCS, requireBasePath } from "./config.js";
 import type { ResultadoConfirmacion } from "./confirmacion.js";
-import { datosDeCommit, ramaActual, resolverCommit, sonConsecutivos, tieneGit, tienePadre } from "./git.js";
+import { datosDeCommit, ramaActual, sonConsecutivos, tieneGit, tienePadre } from "./git.js";
 import { fallo, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import { estaDentroReal, leerTextoAcotado, taskFolderPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
@@ -152,8 +152,6 @@ function unicoDe(porLote: Map<number, ReciboEnDisco[]>, lote: number, fase: Fase
   }
   return deEste[0] ?? null;
 }
-
-export const esSellado = (ancla: Ancla): boolean => ancla.tipo === "commit" || ancla.tipo === "sha256";
 
 // Closed: with a receipt and an anchor other than pending. A failed one is closed for the order, but does not
 // close the phase.

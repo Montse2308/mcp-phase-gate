@@ -222,10 +222,7 @@ export async function proyectoPorRaices(mcp: McpServer): Promise<ResolucionProye
 
 // ─── Resolving the project in a tool ────────────────────────────────────────
 // The order: the `project` that is given; if not, the one the roots deduce. (The gate and the pending-items
-// notice also use the single pointer: they do that themselves.) `deducido` carries the line that the
-// response adds so that it shows where it came from.
-export type ProyectoResuelto = { carpetaProyecto: string; deducido: string | null };
-
+// notice also use the single pointer: they do that themselves.)
 export function lineaDeDeduccion(resolucion: Extract<ResolucionProyecto, { tipo: "unico" }>): string {
   // The reason, again in the language of now: when it was deduced the project's was not known yet.
   const motivo = motivos.get(resolucion);
