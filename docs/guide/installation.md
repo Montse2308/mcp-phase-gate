@@ -95,9 +95,9 @@ The language of the tool descriptions and of the messages that don't belong to a
 
 ## Route B — from source
 
-Building from source needs **Node 22.12 or newer**, because of Vite; the npm package works on any Node 22.
-
 Only needed if you're going to edit the repo's prompts directly, or contribute. You do *not* need it to add prompts of your own: that's done by layering folders, [see the Prompts guide](prompts.md#the-phase-prompts-live-in-promptslanguage).
+
+Building from source needs **Node 22.12 or newer**, because of Vite; the npm package works on any Node 22.
 
 **1. Clone and build.** `build/` is **not** committed, so it has to be generated on every machine:
 
@@ -110,7 +110,7 @@ npm run build
 
 **2. Tell the server where your folders are**, with THIS machine's paths (never committed). Don't use `init` here: it registers the npm package with `npx`, not your clone. Open the Studio from the clone, `node build/index.js ui`, and fill in **Settings › This machine**, or write `machine.json` yourself ([its format](configuration.md#machinejson-what-belongs-to-each-machine)). If you prefer a file next to the code, a `.env` also works, and it **wins** over `machine.json`:
 
-```bash
+```bat
 copy .env.example .env
 ```
 

@@ -95,9 +95,9 @@ El idioma de las descripciones de las tools y de los mensajes que no son de un p
 
 ## Camino B — desde el código
 
-Compilar desde el código pide **Node 22.12 o superior**, por Vite; el paquete de npm funciona con cualquier Node 22.
-
 Necesario solo si vas a editar los prompts del repo directamente o a contribuir. Para *añadir* prompts propios no hace falta: eso se hace superponiendo carpetas, [ver la guía de Prompts](prompts.md#los-prompts-de-las-fases-viven-en-promptsidioma).
+
+Compilar desde el código pide **Node 22.12 o superior**, por Vite; el paquete de npm funciona con cualquier Node 22.
 
 **1. Clona y compila.** La carpeta `build/` NO se sube al repo, así que hay que generarla en cada dispositivo:
 
@@ -110,7 +110,7 @@ npm run build
 
 **2. Dile al servidor dónde están tus carpetas**, con las rutas de ESTE equipo (no se sube al repo). Aquí no uses `init`: registra el paquete de npm con `npx`, no tu clon. Abre el Studio desde el clon, `node build/index.js ui`, y llena **Ajustes › Este equipo**, o escribe tú el `machine.json` ([su formato](configuracion.md#machinejson-lo-de-cada-equipo)). Si prefieres un archivo junto al código, también sirve un `.env`, que **gana** a `machine.json`:
 
-```bash
+```bat
 copy .env.example .env
 ```
 
