@@ -12,7 +12,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { DOCS, REPOS, SERVER_VERSION, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
+import { SERVER_VERSION, leerVariable } from "../config.js";
 import { diagnosticarSinBloquear } from "../diagnostico.js";
 import { enIdioma, mensaje } from "../i18n/mensajes.js";
 import { capasDe, configuracionDe, contenidoEfectivoDeRanura, contextoInicialDe, ensamblarFase, fasesDe } from "../capas.js";
@@ -51,7 +51,6 @@ import type {
   ProyectoApi,
   ProyectosRespuesta,
   RepoApi,
-  SesionApi,
   TareaRespuesta,
   TareasRespuesta,
 } from "./contrato.js";
@@ -316,9 +315,9 @@ function mtimeDe(ruta: string): number | null {
 //   apagado  not due yet.
 export function estaciones(carpetaProyecto: string, estado: EstadoTarea, phases: Map<number, PhaseFile>): Estacion[] {
   const ordenadas = [...phases.entries()].filter(([, d]) => d.documento).sort((a, b) => a[0] - b[0]);
-  const presente = (numero: number, datos: PhaseFile): boolean =>
+  const presente = (datos: PhaseFile): boolean =>
     fs.existsSync(path.join(estado.folderPath, datos.documento!)) || (datos.recibos ? recibosDe(estado.folderPath, datos.recibos).length > 0 : false);
-  const ultimaPresente = ordenadas.filter(([n, d]) => presente(n, d)).map(([n]) => n).pop() ?? 0;
+  const ultimaPresente = ordenadas.filter(([, d]) => presente(d)).map(([n]) => n).pop() ?? 0;
   const huecos = new Set((detectarSalto(ultimaPresente, estado, phases)?.faltan ?? []).map((f) => f.fase));
 
   const lista: Estacion[] = [];

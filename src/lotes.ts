@@ -16,7 +16,7 @@ import { anclarArtefacto, anclarCommit, reverificar } from "./anclas.js";
 import { configuracionDe, fasesDe, reposDeLaTarea } from "./capas.js";
 import { DOCS, requireBasePath } from "./config.js";
 import type { ResultadoConfirmacion } from "./confirmacion.js";
-import { datosDeCommit, ramaActual, resolverCommit, sonConsecutivos, tieneGit, tienePadre } from "./git.js";
+import { datosDeCommit, ramaActual, sonConsecutivos, tieneGit, tienePadre } from "./git.js";
 import { fallo, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import { estaDentroReal, leerTextoAcotado, taskFolderPath } from "./paths.js";
 import { separarFrontmatter } from "./phases.js";
