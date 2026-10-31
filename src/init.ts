@@ -1,14 +1,15 @@
-// `npx mcp-phase-gate init`: registra el servidor en los clientes MCP de este equipo, y opcionalmente
-// copia los comandos /fN y migra los proyectos a la 3.0.
+// `npx mcp-phase-gate init`: registers the server in the MCP clients of this machine, and optionally copies
+// the /fN commands and migrates the projects to 3.0.
 //
-// Escribe en archivos que no son suyos (la configuración de Cursor y de VS Code), así que lo hace con
-// cuidado: lee tolerando comentarios y comas finales, no toca un JSON que no entiende, no duplica un
-// registro que ya existe (cambiar su clave cambiaría el nombre de todas las tools y rompería los
-// permisos ya concedidos), muestra el diff y pide confirmación antes de cambiar algo que ya estaba, y
-// deja una copia .bak antes de escribir. Con --dry-run solo dice lo que haría.
+// It writes in files that are not its own (Cursor's and VS Code's configuration), so it does it with care:
+// it reads tolerating comments and trailing commas, it does not touch a JSON it does not understand, it does
+// not duplicate a registration that already exists (changing its key would change the name of all the tools
+// and break the permissions already granted), it shows the diff and asks for confirmation before changing
+// something that was already there, and it leaves a .bak copy before writing. With --dry-run it only says
+// what it would do.
 //
-// Todo lo que toca el sistema (la carpeta del usuario, ejecutar `claude`, preguntar en la terminal)
-// llega en EntornoInit, para que los tests lo hagan sobre carpetas temporales.
+// Everything that touches the system (the user's folder, running `claude`, asking in the terminal) arrives
+// in EntornoInit, so that the tests do it on temporary folders.
 
 import { execFile } from "child_process";
 import * as fs from "fs";
@@ -33,19 +34,19 @@ import { fallo, idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 export const CLIENTES = ["claude-code", "cursor", "vscode"] as const;
 export type Cliente = (typeof CLIENTES)[number];
 
-// La clave sugerida para un registro nuevo. Un registro que ya existe conserva la suya.
+// The suggested key for a new registration. A registration that already exists keeps its own.
 export const CLAVE_POR_DEFECTO = "pg";
 export const CLAVE_VALIDA = /^[A-Za-z0-9_-]{1,64}$/;
 
 export type OpcionesInit = {
-  clientes: Cliente[] | null; // null: detectarlos
-  clave: string | null; // null: CLAVE_POR_DEFECTO para registros nuevos
+  clientes: Cliente[] | null; // null: detect them
+  clave: string | null; // null: CLAVE_POR_DEFECTO for new registrations
   docs: string | null;
   repos: string | null;
   comandos: boolean;
   migrate: boolean;
   preset: string | null;
-  idioma?: Idioma | null; // --idioma: el de los proyectos sin documentos que lo digan (§8.3)
+  idioma?: Idioma | null; // --idioma: that of the projects without documents that say it
   soloEsteEquipo: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -65,10 +66,9 @@ export type EntornoInit = {
   ahora: () => Date;
 };
 
-// ─── El entorno real ────────────────────────────────────────────────────────
-// En Windows, `claude` puede ser un .exe (instalador nativo) o un .cmd (instalado con npm). execFile
-// encuentra el .exe; un .cmd solo se puede lanzar a través de cmd.exe, con cada argumento entre
-// comillas (las rutas de los usuarios llevan espacios).
+// ─── The real environment ───────────────────────────────────────────────────
+// On Windows, `claude` can be an .exe (native installer) or a .cmd (installed with npm). execFile finds the
+// .exe; a .cmd can only be launched through cmd.exe, with each argument in quotes (users' paths have spaces).
 function citarParaCmd(argumento: string): string {
   return /[\s"&|<>^()%!]/.test(argumento) ? `"${argumento.replace(/"/g, '""')}"` : argumento;
 }
@@ -93,8 +93,8 @@ export async function ejecutarComando(comando: string, args: string[]): Promise<
     if (directo.noEncontrado) throw fallo("INIT-NO-INSTALADO", { comando });
     return directo;
   }
-  // Dentro de cmd.exe /c, un % se expande aunque vaya entre comillas, y una comilla rompe la cita: no
-  // hay forma fiable de pasarlos. Antes que arriesgar otro comando, se pide hacerlo a mano.
+  // Inside cmd.exe /c, a % is expanded even in quotes, and a quote breaks the quoting: there is no reliable
+  // way to pass them. Rather than risk another command, the person is asked to do it by hand.
   if (args.some((arg) => /[%"]/.test(arg))) {
     throw fallo("INIT-CMD-INSEGURO", { comando });
   }
@@ -127,13 +127,13 @@ export function entornoDelProceso(salida: Salida): EntornoInit {
   };
 }
 
-// ─── JSON con comentarios ───────────────────────────────────────────────────
-// Los mcp.json de los clientes admiten comentarios y comas finales. Se toleran SOLO para leer: lo que
-// se escribe es JSON estricto. Recorre el texto respetando las cadenas, para no tomar un "//" de una
-// URL por un comentario.
-// Las comas finales se quitan en el mismo recorrido, fuera de las cadenas: una expresión regular sobre
-// el texto entero cambiaba también un argumento como "--sep=,}" de otro servidor (hallazgo 6 de la
-// auditoría de la Etapa 3). Devuelve además si había comentarios, para avisar de que se perderán.
+// ─── JSON with comments ─────────────────────────────────────────────────────
+// The clients' mcp.json files allow comments and trailing commas. They are tolerated ONLY for reading: what
+// is written is strict JSON. It walks the text respecting the strings, so as not to take a "//" in a URL for
+// a comment.
+// Trailing commas are removed in the same walk, outside the strings: a regular expression over the whole
+// text would also change an argument such as "--sep=,}" of another server. It also returns whether there
+// were comments, to warn that they will be lost.
 export function limpiarJsonc(texto: string): { limpio: string; comentarios: boolean } {
   let salida = "";
   let comentarios = false;
@@ -153,7 +153,7 @@ export function limpiarJsonc(texto: string): { limpio: string; comentarios: bool
       const fin = texto.indexOf("*/", i + 2);
       i = fin === -1 ? texto.length : fin + 2;
     } else if (c === "}" || c === "]") {
-      // Una coma final es la última cosa no blanca que se escribió antes de cerrar.
+      // A trailing comma is the last non-blank thing written before closing.
       salida = salida.replace(/,(\s*)$/, "$1") + c;
       i++;
     } else {
@@ -178,7 +178,7 @@ export function leerJsonTolerante(archivo: string): LecturaJson {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { estado: "ausente", datos: {}, comentarios: false };
     return { estado: "roto", datos: {}, comentarios: false, error: error instanceof Error ? error.message : String(error) };
   }
-  // En algunas instalaciones el mcp.json de VS Code existe con 0 bytes (validación V5).
+  // In some installations VS Code's mcp.json exists with 0 bytes.
   if (texto.trim() === "") return { estado: "vacio", datos: {}, comentarios: false };
 
   const { limpio, comentarios } = limpiarJsonc(texto);
@@ -193,7 +193,7 @@ export function leerJsonTolerante(archivo: string): LecturaJson {
   }
 }
 
-// ─── Utilidades ─────────────────────────────────────────────────────────────
+// ─── Utilities ──────────────────────────────────────────────────────────────
 export function marcaDeTiempo(fecha: Date): string {
   const dos = (n: number): string => String(n).padStart(2, "0");
   return (
@@ -202,7 +202,7 @@ export function marcaDeTiempo(fecha: Date): string {
   );
 }
 
-// Un diff de líneas pequeño (los bloques que se comparan son de unas decenas de líneas).
+// A small line diff (the blocks that are compared are a few dozen lines).
 export function diffDeLineas(antes: string, despues: string): string {
   const a = antes.split("\n");
   const b = despues.split("\n");
@@ -248,7 +248,7 @@ function fallar(ctx: Contexto, texto: string): void {
   ctx.entorno.salida.err(texto);
 }
 
-// En inglés se pregunta (y/N) y se acepta y o yes; en español, (s/N) y s o sí, como siempre.
+// In English the question is (y/N) and y or yes is accepted; in Spanish, (s/N) and s or sí.
 async function confirmar(ctx: Contexto, pregunta: string): Promise<boolean> {
   if (ctx.opciones.yes) return true;
   if (ctx.opciones.dryRun || !ctx.entorno.esTerminal) return false;
@@ -257,7 +257,7 @@ async function confirmar(ctx: Contexto, pregunta: string): Promise<boolean> {
   return (idioma === "en" ? /^y(es)?$/i : /^s[ií]?$/i).test(respuesta);
 }
 
-// Escribe con copia: si el archivo ya tenía contenido, primero <archivo>.bak-<AAAAMMDD-HHMMSS>.
+// Writes with a copy: if the file already had content, first <file>.bak-<YYYYMMDD-HHMMSS>.
 function escribirConCopia(ctx: Contexto, archivo: string, texto: string): string | null {
   if (ctx.opciones.dryRun) return null;
   let copia: string | null = null;
@@ -272,7 +272,7 @@ function escribirConCopia(ctx: Contexto, archivo: string, texto: string): string
   return copia;
 }
 
-// ─── 1. Rutas ───────────────────────────────────────────────────────────────
+// ─── 1. Paths ───────────────────────────────────────────────────────────────
 async function rutaPedida(ctx: Contexto, valor: string | null, logica: "DOCS_PATH" | "REPOS_PATH"): Promise<string | null> {
   const que = mensaje(logica === "DOCS_PATH" ? "INIT-RUTA-DOCS" : "INIT-RUTA-REPOS");
   let crudo = valor ?? leerVariable(logica).valor ?? null;
@@ -318,7 +318,7 @@ async function guardarRutas(ctx: Contexto, rutas: Rutas): Promise<boolean> {
   return true;
 }
 
-// ─── 2. Clientes ────────────────────────────────────────────────────────────
+// ─── 2. Clients ─────────────────────────────────────────────────────────────
 function carpetaDeVsCode(entorno: EntornoInit): string {
   if (entorno.plataforma === "win32") return path.join(entorno.appData ?? path.join(entorno.home, "AppData", "Roaming"), "Code", "User");
   if (entorno.plataforma === "darwin") return path.join(entorno.home, "Library", "Application Support", "Code", "User");
@@ -347,8 +347,8 @@ type Rutas = { docs: string; repos: string };
 // Studio read them from there. An entry only carries an "env" for what is really about that client.
 export function entradaDelServidor(cliente: Cliente, plataforma: NodeJS.Platform): Record<string, unknown> {
   const env: Record<string, string> = {};
-  // Cursor para Windows tiene abierto un bug en el que el formulario de confirmación no aparece
-  // (validación V4): se registra con las confirmaciones en el chat.
+  // Cursor for Windows has an open bug where the confirmation form does not appear: it is registered with the
+  // confirmations in the chat.
   if (cliente === "cursor" && plataforma === "win32") env.PHASE_GATE_ELICITATION = "off";
   const base = { command: "npx", args: ["-y", SERVER_NAME], ...(Object.keys(env).length ? { env } : {}) };
   return cliente === "vscode" ? { type: "stdio", ...base } : base;
@@ -422,11 +422,10 @@ export function sinRutasEnElEntorno(
   return { env: resto, quita, distintas };
 }
 
-// ¿Esta parte de un comando lanza mcp-phase-gate? El paquete exacto (`mcp-phase-gate`, o con versión
-// `mcp-phase-gate@3`), el binario global, o un build/index.js cuyo package.json, dos carpetas más
-// arriba, se llama mcp-phase-gate (un clon de desarrollo). Antes bastaba con contener el nombre o con
-// ser un build/index.js cualquiera, y init le inyectaba sus variables a un servidor ajeno (hallazgo 5
-// de la auditoría de la Etapa 3).
+// Does this part of a command launch mcp-phase-gate? The exact package (`mcp-phase-gate`, or with a version
+// `mcp-phase-gate@3`), the global binary, or a build/index.js whose package.json, two folders up, is called
+// mcp-phase-gate (a development clone). Merely containing the name, or being any build/index.js, would not
+// do: init would inject its variables into someone else's server.
 export function lanzaPhaseGate(parte: string): boolean {
   if (parte === SERVER_NAME || parte.startsWith(`${SERVER_NAME}@`)) return true;
   if (path.basename(parte).replace(/\.(cmd|exe)$/i, "") === SERVER_NAME && /[\\/]/.test(parte)) return true;
@@ -469,15 +468,15 @@ function bloqueParaPegar(seccion: string, clave: string, entrada: Record<string,
   return json({ [seccion]: { [clave]: entrada } });
 }
 
-// ─── El plan de un cliente de archivo (Cursor, VS Code) ─────────────────────
-// Qué haría init en su mcp.json, sin escribir nada: lo calcula una sola función, que usan `init` (que
-// después pregunta y escribe) y el Studio (que lo enseña y lo aplica con su huella).
+// ─── The plan of a file client (Cursor, VS Code) ────────────────────────────
+// What init would do in its mcp.json, without writing anything: a single function computes it, used by `init`
+// (which then asks and writes) and the Studio (which shows it and applies it with its fingerprint).
 type BaseDePlan = {
   cliente: "cursor" | "vscode";
-  nombre: string; // "Cursor" o "VS Code"
+  nombre: string; // "Cursor" or "VS Code"
   archivo: string;
   seccion: string;
-  clave: string; // la pedida
+  clave: string; // the one requested
 };
 export type PlanDeArchivo =
   | (BaseDePlan & { estado: "roto"; error: string | null; paraPegar: string })
@@ -487,14 +486,14 @@ export type PlanDeArchivo =
   | (BaseDePlan & {
       estado: "nuevo" | "actualiza";
       claveFinal: string;
-      quita: QuitaDelEntorno; // lo que el "env" de la entrada llevaba y deja de llevar
-      distintas: RutaDistinta[]; // las rutas que se quedan porque no son las de machine.json
-      renombra: string | null; // la clave que se sustituye por --clave
-      conserva: string | null; // la clave que ya tenía y se conserva
+      quita: QuitaDelEntorno; // what the "env" of the entry carried and stops carrying
+      distintas: RutaDistinta[]; // the paths that stay because they are not machine.json's
+      renombra: string | null; // the key that is replaced by --clave
+      conserva: string | null; // the key it already had and keeps
       comentarios: boolean;
-      diff: string | null; // el de la entrada que ya existía (null si es nueva)
-      entrada: string; // la entrada que queda, en JSON
-      texto: string; // el archivo entero que se escribiría
+      diff: string | null; // the diff of the entry that already existed (null if it is new)
+      entrada: string; // the entry that remains, in JSON
+      texto: string; // the whole file that would be written
     });
 
 export function carpetaDelCliente(cliente: "cursor" | "vscode", entorno: Pick<EntornoInit, "home" | "appData" | "xdgConfig" | "plataforma">): string {
@@ -513,7 +512,7 @@ export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | 
   if (lectura.estado === "roto") return { ...base, estado: "roto", error: lectura.error ?? null, paraPegar: bloqueParaPegar(seccion, clave, deseada) };
 
   const datos = lectura.datos;
-  // Una sección o un env que no son un objeto no se "arreglan" por su cuenta: no se toca el archivo.
+  // A section or an env that is not an object is not "fixed" on its own: the file is not touched.
   const esObjeto = (valor: unknown): valor is Record<string, unknown> => valor !== null && typeof valor === "object" && !Array.isArray(valor);
   const seccionActual = datos[seccion];
   const formaRara =
@@ -522,7 +521,7 @@ export function planDeArchivo(cliente: "cursor" | "vscode", claveDada: string | 
   if (formaRara) return { ...base, estado: "forma-rara", paraPegar: bloqueParaPegar(seccion, clave, deseada) };
   const servidores = { ...((seccionActual as Record<string, unknown> | undefined) ?? {}) };
 
-  // ¿Ya está registrado? Se busca primero bajo la clave pedida y después bajo cualquier otra.
+  // Is it already registered? It is looked for first under the requested key and then under any other.
   const yaRegistrada = Object.keys(servidores).find((k) => k === clave && ejecutaPhaseGate(servidores[k])) ?? Object.keys(servidores).find((k) => ejecutaPhaseGate(servidores[k]));
 
   let claveFinal = clave;
@@ -594,7 +593,7 @@ async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode"): 
     return;
   }
 
-  // Cambiar algo que ya existía (o perder comentarios) se confirma; añadir una entrada nueva, no.
+  // Changing something that already existed (or losing comments) is confirmed; adding a new entry, not.
   const yaRegistrada = plan.estado === "actualiza";
   const cambiaAlgo = yaRegistrada || plan.comentarios;
   if (yaRegistrada) ctx.entorno.salida.out(mensaje("INIT-DIFF", { nombre, clave: plan.claveFinal, archivo, diff: plan.diff }));
@@ -608,12 +607,12 @@ async function registrarEnArchivo(ctx: Contexto, cliente: "cursor" | "vscode"): 
   decir(ctx, mensaje("INIT-REGISTRADO-ARCHIVO", { nombre, actualizado: yaRegistrada, clave: plan.claveFinal, archivo, copia }));
 }
 
-// `claude mcp list` imprime una línea por servidor: "<clave>: <comando o URL> - <estado>".
+// `claude mcp list` prints one line per server: "<key>: <command or URL> - <status>".
 export function registroEnClaude(lista: string): string | null {
   for (const linea of lista.split(/\r?\n/)) {
     const corte = linea.indexOf(": ");
     if (corte <= 0) continue;
-    // "<comando y args> - <estado>": las partes del comando, sin el estado del final.
+    // "<command and args> - <status>": the parts of the command, without the status at the end.
     const comando = linea.slice(corte + 2).replace(/\s+-\s+\S*\s.*$/, "");
     if (comando.split(/\s+/).some(lanzaPhaseGate)) return linea.slice(0, corte);
   }
@@ -680,8 +679,8 @@ function mostrarComando(args: string[]): string {
   return ["claude", ...args].map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(" ");
 }
 
-// El plan en Claude Code: el comando que se ejecutaría, o por qué no. Lee `claude mcp list`, que no
-// escribe nada.
+// The plan in Claude Code: the command that would be run, or why not. It reads `claude mcp list`, which
+// writes nothing.
 // An entry that already exists is not touched: `rehacer` says, for each scope where it is, the two commands
 // that leave it the same but without the paths (`claude mcp remove` and `claude mcp add-json`). The person
 // runs them: if the add failed after the remove, the server would be left unregistered. `quita` is what it
@@ -698,7 +697,7 @@ export async function planDeClaude(claveDada: string | null, entorno: Pick<Entor
   } catch (error) {
     return { cliente: "claude-code", estado: "sin-lista", mensaje: mensaje("INIT-CLAUDE-SIN-LISTA", { error: error instanceof Error ? error.message : String(error) }) };
   }
-  // Sin la lista no se puede saber si ya está registrado: añadirlo podría duplicarlo.
+  // Without the list there is no way to know whether it is already registered: adding it could duplicate it.
   if (lista.codigo !== 0) {
     return { cliente: "claude-code", estado: "sin-lista", mensaje: mensaje("INIT-CLAUDE-LISTA-FALLO", { stderr: lista.stderr.trim(), codigo: lista.codigo }) };
   }
@@ -743,7 +742,7 @@ async function registrarEnClaude(ctx: Contexto): Promise<void> {
   decir(ctx, mensaje("INIT-CLAUDE-REGISTRADO", { clave }));
 }
 
-// ─── 3. Comandos ────────────────────────────────────────────────────────────
+// ─── 3. Commands ────────────────────────────────────────────────────────────
 export const MARCA_DE_COMANDO = "<!-- generado por mcp-phase-gate init";
 
 function comandosDeFabrica(): { numero: number; texto: string }[] {
@@ -756,8 +755,9 @@ function comandosDeFabrica(): { numero: number; texto: string }[] {
     });
 }
 
-// El plan de --comandos para un cliente que lee comandos de archivo: cada /fN, dónde iría, con qué texto y
-// qué pasaría. "ajeno" es un archivo sin la marca de init: es de la persona y no se pisa sin --yes.
+// The plan of --comandos for a client that reads commands from files: each /fN, where it would go, with what
+// text and what would happen. "ajeno" is a file without init's mark: it is the person's and is not
+// overwritten without --yes.
 export type ComandoPlaneado = { numero: number; archivo: string; texto: string; estado: "nuevo" | "actualiza" | "sin-cambios" | "ajeno" | "carpeta" };
 
 export function carpetaDeComandos(cliente: "claude-code" | "cursor", entorno: Pick<EntornoInit, "home">): string {
@@ -793,7 +793,7 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
         fallar(ctx, mensaje("INIT-COMANDO-CARPETA", { nombre, archivo }));
         continue;
       }
-      // Un archivo sin la marca es de la persona: no se pisa sin --yes.
+      // A file without the mark is the person's: it is not overwritten without --yes.
       if (estado === "ajeno" && !ctx.opciones.yes) {
         ctx.entorno.salida.out(mensaje("INIT-COMANDO-AJENO", { nombre, archivo }));
         continue;
@@ -803,7 +803,7 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
         continue;
       }
 
-      // Reemplazar un archivo de la persona deja copia; uno generado por init se reescribe sin más.
+      // Replacing a person's file leaves a copy; one generated by init is rewritten as is.
       let copia: string | null = null;
       if (estado === "ajeno") {
         copia = escribirConCopia(ctx, archivo, contenido);
@@ -816,16 +816,16 @@ async function copiarComandos(ctx: Contexto, clientes: Cliente[]): Promise<void>
   }
 }
 
-// ─── 4. Migración ───────────────────────────────────────────────────────────
-// El phase-gate.json que crea la migración (y "Crear phase-gate.json" en el Studio): $schema, version,
-// preset e idioma. El idioma va siempre escrito: así el proyecto no cambia de idioma si mañana cambia el
-// del equipo (§8.3).
+// ─── 4. Migration ───────────────────────────────────────────────────────────
+// The phase-gate.json that the migration creates (and "Crear phase-gate.json" in the Studio): $schema,
+// version, preset and idioma. The idioma is always written: so the project does not change language if the
+// machine's changes tomorrow.
 export function manifiestoNuevo(preset: string, idioma?: Idioma): string {
   return `${json({ $schema: URL_ESQUEMA_PROYECTO, version: 1, preset, ...(idioma ? { idioma } : {}) })}\n`;
 }
 
-// El idioma de un manifiesto nuevo: el de los documentos del proyecto si los hay (paso 2 de §8.3, nunca el
-// del sistema), y si no, el elegido.
+// The language of a new manifest: that of the project's documents if there are any (never the system's), and
+// otherwise, the chosen one.
 export function idiomaParaManifiesto(carpetaProyecto: string, elegido: Idioma): Idioma {
   const enDisco = idiomaDelProyecto(carpetaProyecto, null);
   return enDisco.origen === "de sus documentos" ? enDisco.idioma : elegido;
@@ -867,8 +867,8 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
 
   const proyectos = [...discoverProjects(docs).values()].sort();
   const nuevos = proyectos.filter((proyecto) => !fs.existsSync(path.join(docs, proyecto, ARCHIVO_MANIFIESTO)));
-  // Para los proyectos cuyos documentos no dicen su idioma: --idioma, o se pregunta con el del equipo por
-  // defecto (pasos 3 a 5 de §8.3); sin terminal, el del equipo.
+  // For the projects whose documents do not say their language: --idioma, or it is asked with the machine's as
+  // the default; without a terminal, the machine's.
   let elegido: Idioma | null = ctx.opciones.idioma ?? null;
   const sinDocumentos = nuevos.filter((proyecto) => idiomaDelProyecto(proyecto, null).origen !== "de sus documentos");
   if (!elegido && sinDocumentos.length) {
@@ -892,9 +892,9 @@ async function migrar(ctx: Contexto, docs: string): Promise<boolean> {
   return true;
 }
 
-// La migración lee manifiestos y documentos con las funciones del servidor, que buscan la Documentación en
-// PHASE_GATE_DOCS_PATH; la de init puede venir de --docs o de la pregunta, sin esa variable en el entorno.
-// Sin esto, el idioma de los documentos no se detectaba y un manifiesto no se podía leer.
+// The migration reads manifests and documents with the server's functions, which look for the Documentation
+// in PHASE_GATE_DOCS_PATH; init's can come from --docs or from the question, without that variable in the
+// environment. Without this, the language of the documents was not detected and a manifest could not be read.
 async function conLaDocumentacion<T>(docs: string, funcion: () => Promise<T>): Promise<T> {
   const antes = process.env.PHASE_GATE_DOCS_PATH;
   process.env.PHASE_GATE_DOCS_PATH = docs;
@@ -906,10 +906,10 @@ async function conLaDocumentacion<T>(docs: string, funcion: () => Promise<T>): P
   }
 }
 
-// Los manifiestos de la 3.0 y la 3.1 no llevan `idioma`. Se les añade el que el proyecto ya usa (el de sus
-// documentos, o el español de la 3.x si no tiene), para que no dependa del equipo que lo abra (hallazgo 2
-// de la auditoría de la Etapa 6). Solo se añade esa clave, detrás de `preset`, y queda copia del original;
-// un manifiesto inválido no se toca: lo dice doctor.
+// The 3.0 and 3.1 manifests carry no `idioma`. The one the project already uses is added (that of its
+// documents, or the Spanish of 3.x if it has none), so that it does not depend on the machine that opens it.
+// Only that key is added, after `preset`, and a copy of the original is left; an invalid manifest is not
+// touched: doctor says so.
 function completarIdiomas(ctx: Contexto, proyectos: string[]): number {
   let completados = 0;
   for (const proyecto of proyectos) {
@@ -930,8 +930,8 @@ function completarIdiomas(ctx: Contexto, proyectos: string[]): number {
   return completados;
 }
 
-// ─── 6. El candado de git push ──────────────────────────────────────────────
-// En el idioma de los mensajes: una función, porque se calcula al usarlo.
+// ─── 6. The git push lock ───────────────────────────────────────────────────
+// In the messages' language: a function, because it is computed when used.
 export function candadoDePush(): string {
   return mensaje("INIT-CANDADO-DE-PUSH");
 }
