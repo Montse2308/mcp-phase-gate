@@ -1,36 +1,36 @@
-// Resolución de rutas dentro de la Documentación Central: proyectos, carpetas de tarea
-// y el archivo concreto que una tool va a leer o escribir.
+// Path resolution inside the Central Documentation: projects, task folders and the specific file that a
+// tool is going to read or write.
 //
-// Todo lo que arma una ruta vive aquí, en un solo lugar. Un error de ruta no truena: escribe
-// el archivo correctamente en el sitio equivocado, y eso no se descubre hasta que alguien lo
-// busca. Por eso además de armarlas hay que comprobar que caigan dentro de la base.
+// Everything that builds a path lives here, in one place. A path error does not blow up: it writes the
+// file correctly in the wrong place, and that is not found until someone looks for it. That is why,
+// besides building them, it is necessary to check that they fall inside the base.
 
 import * as fs from "fs";
 import * as path from "path";
 import { DOCS, REPOS, requireBasePath, tasksSubdir } from "./config.js";
 import { fallo, mensaje } from "./i18n/mensajes.js";
 
-// Comprueba que una ruta quede dentro de otra. No sirve startsWith, y falla en las dos
-// direcciones: con base "C:\PROYECTOS\TRABAJO" deja pasar "C:\PROYECTOS\TRABAJO_VIEJO",
-// que empieza igual sin estar dentro; y rechaza rutas válidas cuando la base viene escrita
-// con otras mayúsculas. Comparar la ruta relativa resuelve ambos.
+// Checks that a path falls inside another. startsWith does not work, and it fails in both directions: with
+// base "C:\PROYECTOS\TRABAJO" it lets "C:\PROYECTOS\TRABAJO_VIEJO" through, which starts the same without
+// being inside; and it rejects valid paths when the base is written with other capitals. Comparing the
+// relative path solves both.
 export function estaDentro(base: string, ruta: string): boolean {
   const relativa = path.relative(path.resolve(base), path.resolve(ruta));
   return relativa === "" || (!relativa.startsWith("..") && !path.isAbsolute(relativa));
 }
 
-// Resuelve symlinks y junctions del ancestro existente más cercano y vuelve a unir el resto.
-// Hace falta porque la ruta que se va a escribir casi nunca existe todavía, y realpath solo
-// funciona sobre lo que existe. "Existe" se mira con lstat y no con existsSync: un enlace roto
-// cuenta como existente, realpath falla sobre él y la operación se rechaza. Con existsSync se
-// saltaría, y escribir a través de él crearía su destino, esté donde esté.
+// Resolves symlinks and junctions of the nearest existing ancestor and joins the rest back. It is needed
+// because the path that is going to be written almost never exists yet, and realpath only works on what
+// exists. "Exists" is checked with lstat and not with existsSync: a broken link counts as existing,
+// realpath fails on it and the operation is rejected. With existsSync it would be skipped, and writing
+// through it would create its target, wherever that is.
 export function rutaReal(ruta: string): string {
   let existente = path.resolve(ruta);
   const pendientes: string[] = [];
 
   while (!fs.lstatSync(existente, { throwIfNoEntry: false })) {
     const padre = path.dirname(existente);
-    if (padre === existente) break; // ni la raíz existe: que realpath dé el error
+    if (padre === existente) break; // not even the root exists: let realpath give the error
     pendientes.unshift(path.basename(existente));
     existente = padre;
   }
@@ -38,33 +38,32 @@ export function rutaReal(ruta: string): string {
   return path.join(fs.realpathSync.native(existente), ...pendientes);
 }
 
-// estaDentro sobre rutas reales. Comparar el texto no basta: un symlink dentro de la
-// Documentación que apunta fuera tiene una ruta que "está dentro" y un destino que no.
-// La base también se resuelve: una DOCS que es symlink sigue valiendo.
+// estaDentro on real paths. Comparing the text is not enough: a symlink inside the Documentation that
+// points outside has a path that "is inside" and a target that is not. The base is also resolved: a DOCS
+// that is a symlink still works.
 export function estaDentroReal(base: string, ruta: string): boolean {
   return estaDentro(rutaReal(base), rutaReal(ruta));
 }
 
-// Clave para comparar nombres de documento: dos nombres con la misma clave se ven iguales, y en
-// Windows y macOS abren el mismo archivo. rutaReal solo corrige las mayúsculas de lo que ya
-// existe, así que lo que todavía no existe se compara por aquí. Sin distinguir mayúsculas en
-// todos los sistemas, para que el comportamiento no dependa del equipo.
+// Key to compare document names: two names with the same key look the same, and on Windows and macOS they
+// open the same file. rutaReal only fixes the capitals of what already exists, so what does not exist yet
+// is compared here. Case-insensitive on every system, so that the behavior does not depend on the machine.
 export function claveDeNombre(nombre: string): string {
   return nombre.normalize("NFC").toLowerCase();
 }
 
-// Un nombre de proyecto, tarea o repo es UN segmento de ruta, portable entre sistemas:
-// la Documentación viaja entre equipos con Windows, macOS y Linux. Lo que se rechaza es lo
-// que hoy ya era peligroso (separadores, "..") o lo que Windows no puede guardar y rompe la
-// sincronización (caracteres reservados, punto o espacio final, CON, NUL…).
+// A project, task or repo name is ONE path segment, portable between systems: the Documentation travels
+// between machines with Windows, macOS and Linux. What is rejected is what was already dangerous
+// (separators, "..") or what Windows cannot store and breaks synchronization (reserved characters, a
+// trailing dot or space, CON, NUL…).
 const CARACTERES_RESERVADOS = /[<>:"|?*]/;
 const CARACTERES_DE_CONTROL = /[\u0000-\u001f\u007f]/;
-// Windows también reserva COM y LPT con los superíndices ¹²³, y las consolas CONIN$ y CONOUT$.
-// Los espacios antes de la extensión no cuentan: "nul .txt" sigue siendo NUL.
+// Windows also reserves COM and LPT with the superscripts ¹²³, and the consoles CONIN$ and CONOUT$.
+// The spaces before the extension do not count: "nul .txt" is still NUL.
 const NOMBRES_RESERVADOS_WINDOWS = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³]) *(\..*)?$/i;
 
 export function validarSegmento(valor: string, campo: string): string {
-  // La regla se nombra por su código y se redacta dentro de la frase, en el mismo idioma.
+  // The rule is named by its code and worded inside the sentence, in the same language.
   const incumple = (codigoDeRegla: string): never => {
     throw fallo("RUTA-SEGMENTO-INVALIDO", { campo, valor, regla: mensaje(codigoDeRegla, { valor }) });
   };
@@ -80,10 +79,10 @@ export function validarSegmento(valor: string, campo: string): string {
   return valor;
 }
 
-// Un proyecto o una tarea que start_task va a crear tampoco puede empezar por punto: las carpetas
-// con punto no son proyecto ni tarea, así que no aparecería en list_tasks y write_central_doc no
-// podría escribir en ella. No va en validarSegmento porque read_central_doc también lo usa, y la
-// lectura no cambia.
+// A project or a task that start_task is going to create cannot start with a dot either: folders with a
+// dot are neither project nor task, so it would not show up in list_tasks and write_central_doc could not
+// write in it. It does not go in validarSegmento because read_central_doc uses it too, and reading does
+// not change.
 export function validarNombreVisible(valor: string, campo: string): string {
   if (valor.startsWith(".")) {
     throw fallo("RUTA-NOMBRE-CON-PUNTO", { campo, valor });
@@ -91,19 +90,18 @@ export function validarNombreVisible(valor: string, campo: string): string {
   return valor;
 }
 
-// ─── Proyectos ──────────────────────────────────────────────────────────────
-// Los proyectos no se declaran en ninguna parte: son las carpetas que existen. Antes había
-// una tabla fija con los proyectos de quien escribió el código, que no restringía nada
-// —cualquier nombre inventado resolvía una ruta y start_task le creaba la carpeta— porque
-// solo era una tabla de alias y cada entrada coincidía con su propio nombre en mayúsculas.
+// ─── Projects ───────────────────────────────────────────────────────────────
+// The projects are not declared anywhere: they are the folders that exist. A fixed table of aliases would
+// restrict nothing —any made-up name would resolve a path and start_task would create its folder— so there
+// is none.
 //
-// Es proyecto la carpeta que contenga la subcarpeta de tareas. Esa regla deja fuera sola a
-// las carpetas que no son proyectos, y da de alta uno nuevo con solo crearle su subcarpeta.
-// Si la subcarpeta está vacía la regla no se puede aplicar y vale cualquier carpeta.
-// Las carpetas con punto nunca son proyecto: .obsidian o .git en la raíz de la Documentación.
-// `base` es para quien recorre otra Documentación que la del entorno: init --docs --migrate.
+// A project is a folder that contains the tasks subfolder. That rule leaves out by itself the folders that
+// are not projects, and registers a new one just by creating its subfolder. If the subfolder is empty the
+// rule cannot be applied and any folder is valid.
+// Folders with a dot are never a project: .obsidian or .git at the root of the Documentation.
+// `base` is for whoever walks a Documentation other than the environment's: init --docs --migrate.
 export function discoverProjects(base: string = requireBasePath(DOCS)): Map<string, string> {
-  const proyectos = new Map<string, string>(); // clave en minúsculas -> nombre real de la carpeta
+  const proyectos = new Map<string, string>(); // lowercase key -> real name of the folder
   const subdir = tasksSubdir();
 
   for (const entrada of fs.readdirSync(base, { withFileTypes: true })) {
@@ -120,12 +118,12 @@ export function describeProjects(): string {
     const nombres = [...discoverProjects().values()].sort();
     return nombres.length ? nombres.join(", ") : mensaje("RUTA-PROYECTOS-NINGUNO");
   } catch {
-    // Sin DOCS_PATH configurada no se pueden listar; el error real lo da la tool.
+    // Without DOCS_PATH configured they cannot be listed; the real error comes from the tool.
     return mensaje("RUTA-PROYECTOS-ILEGIBLES");
   }
 }
 
-// Devuelve el nombre real de la carpeta, respetando mayúsculas, o null si no existe.
+// Returns the real name of the folder, respecting capitals, or null if it does not exist.
 export function findProjectFolder(project: string): string | null {
   return discoverProjects().get(String(project).trim().toLowerCase()) ?? null;
 }
@@ -138,9 +136,9 @@ export function requireProjectFolder(project: string): string {
   return carpeta;
 }
 
-// ─── Carpetas de tarea ──────────────────────────────────────────────────────
-// La ruta de una tarea SIEMPRE se arma aquí, en un solo lugar.
-// Estructura: <PHASE_GATE_DOCS_PATH>/<PROYECTO>/<subcarpeta de tareas>/<tarea>
+// ─── Task folders ───────────────────────────────────────────────────────────
+// The path of a task is ALWAYS built here, in one place.
+// Structure: <PHASE_GATE_DOCS_PATH>/<PROJECT>/<tasks subfolder>/<task>
 export function taskFolderPath(carpetaProyecto: string, taskName: string): string {
   validarSegmento(taskName, "task_name");
   return path.join(requireBasePath(DOCS), carpetaProyecto, tasksSubdir(), taskName);
@@ -150,18 +148,15 @@ export function resolveTaskFolder(project: string, taskName: string): string {
   return taskFolderPath(requireProjectFolder(project), taskName);
 }
 
-// Carpeta que contiene todas las tareas de un proyecto. Es la que se lista para saber qué
-// tareas existen: el disco es el registro, no hay un archivo aparte que mantener en sincronía.
+// Folder that contains all the tasks of a project. It is the one that is listed to know which tasks exist:
+// the disk is the register, there is no separate file to keep in sync.
 export function tasksRootPath(carpetaProyecto: string): string {
   return path.join(requireBasePath(DOCS), carpetaProyecto, tasksSubdir());
 }
 
-// Resuelve la ruta absoluta para read/write. Prioriza project+task_name+file_name;
-// si no, cae al modo legacy con file_path relativo a la Documentación Central.
-//
-// Una ruta relativa hecha de segmentos portables. Cada segmento se valida por separado para que
-// una subcarpeta legítima como "04 - Ejecución/L01 - x.md" siga valiendo.
-// `relativaA` es el código del mensaje que nombra la carpeta de referencia.
+// A relative path made of portable segments. Each segment is validated separately so that a legitimate
+// subfolder such as "04 - Ejecución/L01 - x.md" still works.
+// `relativaA` is the code of the message that names the reference folder.
 function validarRutaRelativa(valor: string, campo: string, relativaA: "RUTA-RELATIVA-A-TAREA" | "RUTA-RELATIVA-A-DOCS"): void {
   if (path.isAbsolute(valor)) {
     throw fallo("RUTA-RELATIVA-ABSOLUTA", { campo, valor, relativaA: mensaje(relativaA) });
@@ -169,7 +164,7 @@ function validarRutaRelativa(valor: string, campo: string, relativaA: "RUTA-RELA
   for (const segmento of valor.split(/[\\/]/)) validarSegmento(segmento, campo);
 }
 
-// Los argumentos de read_central_doc y write_central_doc, ya validados por su schema.
+// The arguments of read_central_doc and write_central_doc, already validated by their schema.
 export type ArgumentosDeDocumento = {
   project?: string | undefined;
   task_name?: string | undefined;
@@ -177,14 +172,17 @@ export type ArgumentosDeDocumento = {
   file_path?: string | undefined;
 };
 
-// Con file_name la ruta tiene que quedar dentro de la carpeta de la tarea, no solo dentro de
-// la base: antes "../otra-tarea/x.md" escribía en otra tarea y la comprobación de la tool,
-// que solo miraba la base, lo dejaba pasar.
+// Resolves the absolute path for read/write. It prioritizes project+task_name+file_name; otherwise it falls
+// back to the legacy mode, with file_path relative to the Central Documentation.
 //
-// Con file_path aquí basta con no salir de la base (write_central_doc además exige que caiga en
-// una tarea: ubicarEnTarea), pero sus segmentos también tienen que ser portables: antes creaba
-// dentro de la Documentación un "CON", un "nul.md" o un flujo alterno "nota.md:secreto", que el
-// Explorador y OneDrive no saben manejar.
+// With file_name the path has to stay inside the task's folder, not just inside the base: otherwise
+// "../otra-tarea/x.md" would write in another task, and a check that only looked at the base would let it
+// through.
+//
+// With file_path it is enough here not to leave the base (write_central_doc also demands that it fall in a
+// task: ubicarEnTarea), but its segments also have to be portable: otherwise a "CON", a "nul.md" or an
+// alternate stream "nota.md:secreto" would be created inside the Documentation, which Explorer and
+// OneDrive cannot handle.
 export function resolveDocPath(args: ArgumentosDeDocumento): string {
   const { project = "", task_name: taskName = "", file_name: fileName = "", file_path: filePath = "" } = args;
 
@@ -213,15 +211,15 @@ export function resolveDocPath(args: ArgumentosDeDocumento): string {
   throw fallo("RUTA-FALTAN-ARGUMENTOS");
 }
 
-// ─── Ubicación dentro de una tarea ──────────────────────────────────────────
+// ─── Location inside a task ─────────────────────────────────────────────────
 export type UbicacionEnTarea = {
-  carpetaProyecto: string; // nombre real de la carpeta del proyecto
+  carpetaProyecto: string; // real name of the project folder
   taskName: string;
-  carpetaTarea: string; // ruta absoluta (real)
-  relativo: string; // ruta dentro de la tarea, con "/" como separador
+  carpetaTarea: string; // absolute (real) path
+  relativo: string; // path inside the task, with "/" as separator
 };
 
-// Segmentos de `ruta` dentro de `base`, o null si no cae dentro. Las dos ya vienen resueltas.
+// Segments of `ruta` inside `base`, or null if it does not fall inside. Both come already resolved.
 function segmentosDentro(base: string, ruta: string): string[] | null {
   const relativa = path.relative(base, ruta);
   if (relativa === "") return [];
@@ -229,23 +227,23 @@ function segmentosDentro(base: string, ruta: string): string[] | null {
   return relativa.split(/[\\/]/);
 }
 
-// write_central_doc solo escribe dentro de la carpeta de una tarea que ya existe. Con file_path
-// se podía escribir en cualquier lugar de la Documentación, incluido el phase-gate.json del
-// proyecto, y con una tarea mal escrita el mkdir recursivo creaba una carpeta suelta.
+// write_central_doc only writes inside the folder of a task that already exists. With file_path one could
+// write anywhere in the Documentation, including the project's phase-gate.json, and with a misspelled task
+// the recursive mkdir created a loose folder.
 //
-// Se mide sobre rutas reales, como la contención: un enlace interno que lleva a una tarea vale,
-// porque lo que se escribe acaba dentro de ella. La subcarpeta de tareas se compara con la que
-// hay en disco y no con la variable: en Windows y macOS pueden diferir en mayúsculas, y
-// discoverProjects ya da el proyecto por bueno.
+// It is measured on real paths, like containment: an internal link that leads to a task is fine, because
+// what is written ends up inside it. The tasks subfolder is compared with the one on disk and not with the
+// variable: on Windows and macOS they can differ in capitals, and discoverProjects already takes the
+// project as good.
 //
-// Devuelve null si la ruta no cae dentro de la carpeta de una tarea existente, o si algún
-// segmento dentro de la tarea empieza por punto (.git, .phase-gate no son documentos).
+// Returns null if the path does not fall inside the folder of an existing task, or if any segment inside
+// the task starts with a dot (.git, .phase-gate are not documents).
 export function ubicarEnTarea(rutaAbsoluta: string): UbicacionEnTarea | null {
   const docsReal = rutaReal(requireBasePath(DOCS));
   const segmentos = segmentosDentro(docsReal, rutaReal(rutaAbsoluta));
   if (!segmentos || segmentos.length === 0) return null;
 
-  // El nombre que da el disco tiene que ser el del proyecto, no solo parecerse en mayúsculas.
+  // The name the disk gives has to be the project's, not just look like it in capitals.
   const [proyecto = "", ...resto] = segmentos;
   const carpetaProyecto = findProjectFolder(proyecto);
   if (carpetaProyecto !== proyecto) return null;
@@ -265,12 +263,12 @@ export function ubicarEnTarea(rutaAbsoluta: string): UbicacionEnTarea | null {
 }
 
 // ─── Repos ──────────────────────────────────────────────────────────────────
-// Ruta de un archivo dentro de UN repo. Antes la comprobación miraba la carpeta de repos
-// entera, y desde repoA "../repoB/.env" pasaba: estaba dentro de la carpeta de repos. El repo
-// se resuelve a su ruta real para que un repo que es un enlace a otra unidad siga valiendo.
+// Path of a file inside ONE repo. The check has to look at that repo and not at the whole repos folder:
+// from repoA, "../repoB/.env" would pass, since it is inside the repos folder. The repo is resolved to its
+// real path so that a repo that is a link to another drive still works.
 //
-// Tampoco entra en .git, con la misma regla que read_repo_file: config puede llevar el token de la URL
-// del remoto (hallazgo 9 de la auditoría de la Etapa 3, que ya pasaba antes de ella).
+// It does not enter .git either, with the same rule as read_repo_file: config can carry the token of the
+// remote's URL.
 export function resolveRepoPath(repoName: string, filePath: string): string {
   validarSegmento(repoName, "repo_name");
 
@@ -290,35 +288,34 @@ export function resolveRepoPath(repoName: string, filePath: string): string {
   return ruta;
 }
 
-// Nada de .git: ni la carpeta (config puede llevar credenciales en una URL, y hooks/ es código), ni
-// un archivo .git (el puntero de un worktree o un submódulo). Se rechaza todo segmento que sea
-// `.git` o empiece por `.git`, sin distinguir mayúsculas (en Windows y macOS `.GIT` abre lo mismo).
-// La excepción es `.github`, que no puede ser .git y guarda los workflows de CI. Consecuencia
-// aceptada: .gitignore, .gitattributes y .gitmodules tampoco se leen con read_repo_file ni con
-// read_cross_repo. La ruta ya resuelta se comprueba igual, así que un nombre corto 8.3 (GIT~1) o un
-// enlace interno no lleva a .git.
+// No .git: neither the folder (config can carry credentials in a URL, and hooks/ is code), nor a .git file
+// (the pointer of a worktree or a submodule). Every segment that is `.git` or starts with `.git` is
+// rejected, case-insensitively (on Windows and macOS `.GIT` opens the same). The exception is `.github`,
+// which cannot be .git and holds the CI workflows. Accepted consequence: .gitignore, .gitattributes and
+// .gitmodules are not read with read_repo_file or read_cross_repo either. The already resolved path is
+// checked the same way, so a short 8.3 name (GIT~1) or an internal link does not lead to .git.
 export function esSegmentoDeGit(segmento: string): boolean {
   const nombre = segmento.toLowerCase();
   return nombre.startsWith(".git") && nombre !== ".github";
 }
 
-// ─── Lectura acotada ────────────────────────────────────────────────────────
-// Lo que leen las tools va entero al contexto del modelo. Un volcado de varios megas o un
-// binario no le sirven de nada y se comen la conversación, así que se cortan antes de leer.
+// ─── Bounded reading ────────────────────────────────────────────────────────
+// What the tools read goes whole into the model's context. A dump of several megabytes or a binary is of
+// no use to it and eats the conversation, so they are cut before reading.
 export const LIMITE_LECTURA_BYTES = 1_048_576;
 
-// La misma heurística que usa git para decidir si un archivo es binario.
+// The same heuristic git uses to decide whether a file is binary.
 const BYTES_PARA_DETECTAR_BINARIO = 8000;
 
-// Se lee del descriptor y no de la ruta: tipo, tamaño y contenido salen del mismo archivo
-// abierto. Con statSync seguido de readFileSync, un archivo que crecía entre las dos llamadas
-// se leía entero, sin tope. Y nunca se piden más de LIMITE + 1 bytes, que es lo justo para
-// saber si se pasa. O_NONBLOCK, que no existe en Windows, evita que abrir un FIFO se quede
-// esperando a que alguien escriba en él.
+// It is read from the descriptor and not from the path: type, size and content come from the same open
+// file. With statSync followed by readFileSync, a file that grew between the two calls was read whole,
+// without a cap. And never more than LIMITE + 1 bytes are requested, which is just enough to know whether
+// it goes over. O_NONBLOCK, which does not exist on Windows, keeps opening a FIFO from waiting for someone
+// to write into it.
 //
-// Riesgo aceptado: la contención se comprueba sobre la ruta real y aquí se abre la ruta tal
-// cual, así que cambiar un enlace justo entre las dos cosas abriría otro destino. Cerrarlo
-// exige abrir sin seguir enlaces componente a componente, que Node no ofrece de forma portable.
+// Accepted risk: containment is checked on the real path and here the path is opened as it is, so swapping
+// a link right between the two would open another target. Closing it requires opening without following
+// links component by component, which Node does not offer in a portable way.
 export function leerTextoAcotado(ruta: string): string {
   let descriptor: number;
   try {
