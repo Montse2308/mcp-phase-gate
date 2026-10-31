@@ -1,6 +1,6 @@
 - link "Saltar al contenido":
   - /url: "#contenido"
-- note:
+- complementary "Aviso sobre los datos":
   - text: "Demo: datos de ejemplo. Todo es de solo lectura."
   - link "Qué es mcp-phase-gate":
     - /url: https://montse2308.github.io/mcp-phase-gate/es/

@@ -280,9 +280,17 @@ export function borrarDemo(raiz: string): void {
 // only if it belongs to whoever opens it, is not a link, and nobody else can write to it. Otherwise another
 // user could leave a prepared "demo" with links to the opener's files.
 // The English demo has its own folder (with "-en"): the two can coexist.
+// The temp directory is resolved to its long path: on Windows it can come as an 8.3 short name
+// (C:\Users\LONGNA~1\...), which is what the notice of `ui --demo` would print.
 export function carpetaDeLaDemo(idioma: Idioma = "es"): string {
   const sufijo = idioma === "es" ? "" : `-${idioma}`;
-  return path.join(os.tmpdir(), process.getuid ? `mcp-phase-gate-demo${sufijo}-${process.getuid()}` : `mcp-phase-gate-demo${sufijo}`);
+  let temporal = os.tmpdir();
+  try {
+    temporal = fs.realpathSync.native(temporal);
+  } catch {
+    // it may not exist: the path as the system gives it is enough
+  }
+  return path.join(temporal, process.getuid ? `mcp-phase-gate-demo${sufijo}-${process.getuid()}` : `mcp-phase-gate-demo${sufijo}`);
 }
 
 function demoValida(raiz: string, idioma: Idioma): boolean {

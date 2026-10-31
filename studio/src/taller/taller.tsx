@@ -113,6 +113,15 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
     <section class="vista vista-taller" aria-labelledby="titulo-taller">
       <h1 id="titulo-taller">{t("taller.titulo")}</h1>
       {proyectos.error ? <Aviso error={proyectos.error} /> : null}
+      {proyectos.datos?.error ? <Aviso error={proyectos.datos.error} /> : null}
+      {proyectos.datos && (proyectos.datos.error || proyectos.datos.proyectos.length === 0) ? (
+        <>
+          {proyectos.datos.error ? null : <p>{t("red.vacia")}</p>}
+          <p>
+            <a href={enlace("ajustes", "equipo")}>{t("red.abrirAjustes")}</a>
+          </p>
+        </>
+      ) : null}
       <form class="selectores" onSubmit={(e) => e.preventDefault()}>
         <label for="taller-proyecto">{t("taller.proyecto")}</label>
         <select id="taller-proyecto" value={p ?? ""} onChange={(e) => irA((e.target as HTMLSelectElement).value, fase, null)}>
