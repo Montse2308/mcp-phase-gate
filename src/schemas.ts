@@ -1,27 +1,27 @@
-// Los argumentos de cada tool, declarados una sola vez con zod.
+// The arguments of each tool, declared once with zod.
 //
-// Antes cada tool leía sus argumentos con String(args?.x), que no valida nada: sin task_name,
-// String(undefined) creaba la tarea "undefined/" y la dejaba activa. Desde la Etapa 0 todo pasa
-// por aquí antes de usarse, y el error nombra el campo.
+// Reading the arguments with String(args?.x) validates nothing: without task_name, String(undefined) would
+// create the task "undefined/" and leave it active. That is why everything goes through here before being
+// used, and the error names the field.
 //
-// Se exportan shapes (los campos sueltos) y no z.object(...): es lo que recibe registerTool del
-// SDK. El SDK genera con ellos el JSON Schema que ve el cliente —por eso cada campo lleva aquí su
-// descripción— y valida cada llamada antes del callback.
+// Shapes (the loose fields) are exported and not z.object(...): that is what the SDK's registerTool
+// receives. The SDK generates from them the JSON Schema that the client sees —that is why each field
+// carries its description here— and validates each call before the callback.
 //
-// Los mensajes de error van en cada campo, en el idioma del servidor (§8.5), porque el SDK los entrega
-// tal cual detrás de su prefijo en inglés ("Input validation error: Invalid arguments for tool …"). Sin
-// ellos llegaría el texto genérico de zod ("expected string, received undefined"), que no le dice al
-// modelo cómo corregir la llamada.
+// The error messages go in each field, in the server's language, because the SDK delivers them as they are
+// behind its English prefix ("Input validation error: Invalid arguments for tool …"). Without them the
+// generic zod text would arrive ("expected string, received undefined"), which does not tell the model how
+// to correct the call.
 //
-// Las descripciones y los mensajes se fijan al arrancar, en un idioma: `shapesDe(idioma)` construye los
-// shapes de entrada de ese idioma (una vez por idioma), y crearServidor los pide con el suyo. Los nombres
-// de siempre (startTaskShape…) siguen exportados: son los del idioma de los mensajes al usarlos, y se
-// construyen al primer uso, no al importar este módulo.
+// The descriptions and the messages are fixed at startup, in one language: `shapesDe(idioma)` builds the
+// input shapes of that language (once per language), and crearServidor asks for them with its own. The usual
+// names (startTaskShape…) remain exported: they are those of the messages' language when used, and they are
+// built on first use, not when this module is imported.
 //
-// Los opcionales son .nullish() y null cuenta como ausente: algunos clientes con modelos en
-// modo estricto mandan null en todo campo opcional. Un número en texto (phase: "3") no se
-// convierte: se rechaza con un mensaje que dice qué se espera. Es raro, el modelo lo corrige
-// al primer intento, y convertirlo complicaría el JSON Schema que se genera desde aquí.
+// The optionals are .nullish() and null counts as absent: some clients with models in strict mode send null
+// in every optional field. A number as text (phase: "3") is not converted: it is rejected with a message
+// that says what is expected. It is rare, the model corrects it on the first try, and converting it would
+// complicate the JSON Schema that is generated from here.
 
 import { z } from "zod";
 
@@ -31,8 +31,8 @@ import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
 import type { Idioma } from "./vocabulario.js";
 
 const ID_REPO = /^[a-z0-9][a-z0-9-]{0,39}$/;
-// Los valores canónicos y, desde la Etapa 6, también sus nombres en inglés (los usan los prompts en inglés).
-// record_batch los normaliza al canónico antes de usarlos (normalizarEntradaDeLote).
+// The canonical values and also their English names (the English prompts use them). record_batch normalizes
+// them to the canonical one before using them (normalizarEntradaDeLote).
 const ESTADOS_DE_LOTE = ["verificado", "con pendientes", "fallido", "descartado", "verified", "with pending items", "failed", "discarded"] as const;
 const TITULOS_CONDICIONALES = [
   "Lo que sigue igual",
@@ -45,25 +45,25 @@ const TITULOS_CONDICIONALES = [
   "Debt noted",
 ] as const;
 
-// ─── Shapes de entrada, en un idioma ────────────────────────────────────────
+// ─── Input shapes, in one language ──────────────────────────────────────────
 function construirShapes(idioma: Idioma) {
   const t = (codigo: string, parametros: Record<string, unknown> = {}): string => mensaje(codigo, parametros, idioma);
 
-  // El mensaje de un campo. null también es "falta": en un opcional se tolera antes de llegar aquí,
-  // en un obligatorio es lo mismo que no venir.
+  // The message of a field. null is also "missing": in an optional it is tolerated before getting here, in a
+  // required one it is the same as not coming.
   const errorDe =
     (campo: string) =>
     (issue: z.core.$ZodRawIssue): string => {
       if (issue.input === undefined || issue.input === null) return t("TOOL-ARG-FALTA", { campo });
       if (issue.code === "invalid_type") return t("TOOL-ARG-TIPO", { campo, esperado: issue.expected });
-      // El único máximo que puede saltar es el del entero seguro de `phase`.
+      // The only maximum that can trigger is the one of the safe integer of `phase`.
       if (issue.code === "too_big") return t("TOOL-ARG-DEMASIADO-GRANDE", { campo });
       return t("TOOL-ARG-NO-VALIDO", { campo });
     };
 
   const texto = (campo: string) => z.string({ error: errorDe(campo) });
 
-  // `recortar` quita los espacios ANTES de exigir el mínimo: "   " cuenta como que falta.
+  // `recortar` trims the spaces BEFORE demanding the minimum: "   " counts as missing.
   const obligatorio = (campo: string, opciones: { recortar?: boolean } = {}) => {
     const base = opciones.recortar ? texto(campo).trim() : texto(campo);
     return base.min(1, t("TOOL-ARG-FALTA", { campo }));
@@ -71,13 +71,13 @@ function construirShapes(idioma: Idioma) {
 
   const booleano = (campo: string) => z.boolean({ error: errorDe(campo) });
 
-  // ─── Descripciones ────────────────────────────────────────────────────────
-  // Son estáticas: no nombran proyectos ni fases concretas. Antes se armaban al arrancar con la
-  // lista de proyectos y de fases, y se quedaban viejas en cuanto alguien creaba una carpeta con el
-  // cliente abierto, porque la lista de tools no se vuelve a pedir. Lo que cambia vive ahora en los
-  // recursos phase-gate://estado y phase-gate://fases, que sí avisan cuando cambian.
+  // ─── Descriptions ─────────────────────────────────────────────────────────
+  // They are static: they name no specific projects or phases. A description built at startup with the list
+  // of projects and phases would go stale as soon as someone created a folder with the client open, because
+  // the list of tools is not requested again. What changes lives in the resources phase-gate://estado and
+  // phase-gate://fases, which do notify when they change.
   const PROYECTO = t("DESC-ARG-PROYECTO");
-  // Donde el proyecto se puede deducir de la carpeta abierta (MCP Roots, Etapa 3).
+  // Where the project can be deduced from the open folder (MCP Roots).
   const DEDUCIBLE = t("DESC-ARG-DEDUCIBLE");
   const FASE = t("DESC-ARG-FASE");
   const TAREA = t("DESC-ARG-TAREA");
@@ -90,7 +90,7 @@ function construirShapes(idioma: Idioma) {
     task_name: obligatorio("task_name").describe(t("DESC-ARG-START-TASK-NAME")),
     initial_context: obligatorio("initial_context").describe(t("DESC-ARG-START-INITIAL-CONTEXT")),
     crear_proyecto: booleano("crear_proyecto").nullish().describe(t("DESC-ARG-START-CREAR-PROYECTO")),
-    // El mismo parámetro con su nombre en inglés: vale cualquiera de los dos (si vienen los dos, iguales).
+    // The same parameter with its English name: either is valid (if both come, they must be equal).
     create_project: booleano("create_project").nullish().describe(t("DESC-ARG-START-CREATE-PROJECT")),
     repos: z
       .array(texto("repos"), { error: errorDe("repos") })
@@ -105,8 +105,8 @@ function construirShapes(idioma: Idioma) {
 
   const getPhasePrompt = {
     phase: z.number({ error: errorDe("phase") }).int({ error: errorDe("phase") }).describe(FASE),
-    // Un texto propio: aquí, sin proyecto la tool no falla, entrega el prompt sin configuración de
-    // proyecto (hallazgo 8 de la auditoría de la Etapa 3).
+    // A text of its own: here, without a project the tool does not fail, it delivers the prompt without the
+    // project configuration.
     project: texto("project").nullish().describe(t("DESC-ARG-PROMPT-PROJECT")),
     task_name: texto("task_name").nullish().describe(t("DESC-ARG-PROMPT-TASK-NAME")),
   };
@@ -126,7 +126,7 @@ function construirShapes(idioma: Idioma) {
     task_name: obligatorio("task_name").describe(t("DESC-ARG-CAMBIAR-TASK-NAME")),
   };
 
-  // Los cuatro son opcionales por separado: qué combinación vale lo decide resolveDocPath.
+  // The four are optional separately: which combination is valid is decided by resolveDocPath.
   const readCentralDoc = {
     project: texto("project").nullish().describe(`${PROYECTO}${t("DESC-ARG-LEER-SUFIJO")}${DEDUCIBLE}`),
     task_name: texto("task_name").nullish().describe(TAREA),
@@ -146,7 +146,7 @@ function construirShapes(idioma: Idioma) {
     file_path: obligatorio("file_path").describe(t("DESC-ARG-CROSS-FILE-PATH")),
   };
 
-  // ─── Repos de un proyecto (Etapa 3) ───────────────────────────────────────
+  // ─── Repos of a project ───────────────────────────────────────────────────
   const REPO = t("DESC-ARG-REPO");
 
   const readRepoFile = {
@@ -163,7 +163,7 @@ function construirShapes(idioma: Idioma) {
       .describe(`${REPO}${t("DESC-ARG-REPO-STATUS-SUFIJO")}`),
   };
 
-  // ─── Lotes de la Fase 4 (Etapa 4) ─────────────────────────────────────────
+  // ─── Batches of Phase 4 ───────────────────────────────────────────────────
   const textoNoVacio = (campo: string) => texto(campo).trim().min(1, t("TOOL-ARG-NO-VACIO", { campo }));
 
   const FILA_ARCHIVO = z
@@ -194,7 +194,7 @@ function construirShapes(idioma: Idioma) {
       .min(1, LOTE_RANGO)
       .max(99, LOTE_RANGO)
       .describe(t("DESC-ARG-LOTE")),
-    // El contenido: obligatorio al crear el recibo; se omite al solo anclar un recibo pendiente.
+    // The content: required when creating the receipt; omitted when only anchoring a pending receipt.
     titulo: textoNoVacio("titulo")
       .max(120, t("TOOL-ARG-MAX-CARACTERES", { campo: "titulo", max: 120 }))
       .nullish()
@@ -226,20 +226,20 @@ function construirShapes(idioma: Idioma) {
       .max(4, t("TOOL-ARG-MAX-SECCIONES", { campo: "condicionales", max: 4 }))
       .nullish()
       .describe(t("DESC-ARG-LOTE-CONDICIONALES")),
-    // El ancla: como mucho una de las tres.
+    // The anchor: at most one of the three.
     commit: texto("commit").nullish().describe(t("DESC-ARG-LOTE-COMMIT")),
     artifact_path: texto("artifact_path").nullish().describe(t("DESC-ARG-LOTE-ARTIFACT")),
     verification_note: textoNoVacio("verification_note")
       .max(2000, t("TOOL-ARG-MAX-CARACTERES", { campo: "verification_note", max: 2000 }))
       .nullish()
       .describe(t("DESC-ARG-LOTE-NOTE")),
-    // El cierre de la fase.
+    // Closing the phase.
     cerrar_fase: booleano("cerrar_fase").nullish().describe(t("DESC-ARG-LOTE-CERRAR")),
     motivo_descarte: textoNoVacio("motivo_descarte")
       .max(500, t("TOOL-ARG-MAX-CARACTERES", { campo: "motivo_descarte", max: 500 }))
       .nullish()
       .describe(t("DESC-ARG-LOTE-MOTIVO")),
-    // El sellado.
+    // Sealing.
     reanclar: booleano("reanclar").nullish().describe(t("DESC-ARG-LOTE-REANCLAR")),
     force: booleano("force").nullish().describe(t("DESC-ARG-LOTE-FORCE")),
   };
@@ -259,7 +259,7 @@ function construirShapes(idioma: Idioma) {
     readCentralDoc,
     writeCentralDoc,
     readCrossRepo,
-    // get_orchestrator_status no recibe nada.
+    // get_orchestrator_status receives nothing.
     getOrchestratorStatus: {},
     readRepoFile,
     repoStatus,
@@ -272,8 +272,8 @@ export type ShapesDeEntrada = ReturnType<typeof construirShapes>;
 
 const porIdioma = new Map<Idioma, ShapesDeEntrada>();
 
-// Los shapes de entrada de todas las tools, con descripciones y mensajes en `idioma`. Se construyen una
-// vez por idioma: dos servidores en el mismo idioma comparten los mismos objetos.
+// The input shapes of all the tools, with descriptions and messages in `idioma`. They are built once per
+// language: two servers in the same language share the same objects.
 export function shapesDe(idioma: Idioma): ShapesDeEntrada {
   let shapes = porIdioma.get(idioma);
   if (!shapes) {
@@ -283,9 +283,9 @@ export function shapesDe(idioma: Idioma): ShapesDeEntrada {
   return shapes;
 }
 
-// Un shape de entrada con el nombre de siempre, en el idioma de los mensajes al usarlo. Se resuelve al
-// primer acceso (no al importar: los mensajes no se piden al cargar un módulo) y se comporta como el
-// objeto de verdad para leer sus campos, recorrerlo o pasarlo a z.object.
+// An input shape with the usual name, in the language of the messages when used. It is resolved on first
+// access (not on import: the messages are not requested when a module loads) and it behaves like the real
+// object for reading its fields, walking it or passing it to z.object.
 function perezoso<K extends keyof ShapesDeEntrada>(clave: K): ShapesDeEntrada[K] {
   const real = (): object => shapesDe(idiomaDeMensajes())[clave];
   return new Proxy(
@@ -302,7 +302,7 @@ function perezoso<K extends keyof ShapesDeEntrada>(clave: K): ShapesDeEntrada[K]
   ) as ShapesDeEntrada[K];
 }
 
-// ─── Shapes de entrada con su nombre de siempre ─────────────────────────────
+// ─── Input shapes with their usual name ─────────────────────────────────────
 export const startTaskShape = perezoso("startTask");
 export const getPhasePromptShape = perezoso("getPhasePrompt");
 export const getActiveTaskShape = perezoso("getActiveTask");
@@ -317,10 +317,10 @@ export const repoStatusShape = perezoso("repoStatus");
 export const recordBatchShape = perezoso("recordBatch");
 export const getBatchStatusShape = perezoso("getBatchStatus");
 
-// ─── Salidas ────────────────────────────────────────────────────────────────
-// No llevan descripciones: su estructura es la misma en los dos idiomas.
+// ─── Outputs ────────────────────────────────────────────────────────────────
+// They carry no descriptions: their structure is the same in both languages.
 
-// Salida de repo_status: el estado de cada repo, campo por campo (EstadoDeRepo de repos.ts).
+// Output of repo_status: the state of each repo, field by field (EstadoDeRepo in repos.ts).
 export const repoStatusSalidaShape = {
   proyecto: z.string(),
   repos: z.array(
@@ -379,10 +379,10 @@ export const recordBatchSalidaShape = {
   documentoDeFase: z.string().nullable(),
 };
 
-// ─── Salida de get_orchestrator_status ──────────────────────────────────────
-// El objeto Diagnostico de diagnostico.ts, campo por campo. Con un outputSchema el cliente recibe
-// además `structuredContent`, y el SDK comprueba antes de enviarlo que cuadra con este shape:
-// si diagnostico.ts cambia y esto no, la tool falla en los tests en vez de mentir al cliente.
+// ─── Output of get_orchestrator_status ──────────────────────────────────────
+// The Diagnostico object of diagnostico.ts, field by field. With an outputSchema the client also receives
+// `structuredContent`, and the SDK checks before sending it that it matches this shape: if diagnostico.ts
+// changes and this does not, the tool fails in the tests instead of lying to the client.
 const estadoRuta = z.object({ ruta: z.string().optional(), existe: z.boolean(), error: z.string().optional() });
 
 export const diagnosticoShape = {
@@ -463,8 +463,8 @@ export const diagnosticoShape = {
   ),
 };
 
-// null cuenta como ausente: se quita una vez, al entrar en la tool, para que ninguna tenga que
-// distinguir entre un campo que no vino y uno que vino vacío.
+// null counts as absent: it is removed once, on entering the tool, so that no tool has to distinguish
+// between a field that did not come and one that came empty.
 export type SinNulos<T> = { [K in keyof T]: Exclude<T[K], null> };
 
 export function sinNulos<T extends Record<string, unknown>>(args: T): SinNulos<T> {
