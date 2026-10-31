@@ -210,7 +210,10 @@ describe("Studio: Host (DNS rebinding)", () => {
     const s = await studio();
     const p = s.puerto;
     assert.equal((await get(p, "/", [], "atacante.example")).cuerpo, "Host no permitido: el Studio solo atiende en 127.0.0.1 y localhost, con su puerto.");
+    assert.equal((await get(p, "/no-existe.js")).cuerpo, "No existe.");
     process.env.PHASE_GATE_LANG = "en";
+    assert.equal((await get(p, "/no-existe.js")).cuerpo, "Not found.");
+    assert.equal((await get(p, "/no-existe.js", ["X-Phase-Gate-Lang: es"])).cuerpo, "Not found.");
     assert.equal((await get(p, "/", [], "atacante.example")).cuerpo, "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.");
     assert.equal((await get(p, "/", ["X-Phase-Gate-Lang: es"], "atacante.example")).cuerpo, "Host not allowed: the Studio only answers on 127.0.0.1 and localhost, with its port.");
     assert.equal((await get(p, "/api/estado", [])).cuerpo, "There is no session: open the link that `mcp-phase-gate ui` printed.");
