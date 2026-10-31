@@ -1,4 +1,4 @@
-// El registro de sesiones MCP abiertas (§7.4 del plan): el servidor lo escribe al conocer las raíces y lo
+// El registro de sesiones MCP abiertas: el servidor lo escribe al conocer las raíces y lo
 // borra al salir; el Studio solo cree a las sesiones vivas y recientes, y limpia las demás sin seguir
 // enlaces. Lo que se afirma entre procesos se prueba con procesos node de verdad.
 

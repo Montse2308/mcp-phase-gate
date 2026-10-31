@@ -1,4 +1,4 @@
-// `npx mcp-phase-gate init` (§5.8.1 del plan maestro v3), sobre un HOME y un APPDATA temporales y con
+// `npx mcp-phase-gate init`, sobre un HOME y un APPDATA temporales y con
 // un `claude` de mentira: nunca toca la configuración real de quien corre los tests.
 
 import { strict as assert } from "node:assert";
@@ -190,7 +190,7 @@ describe("init: registrar en los clientes", () => {
     assert.match(p.texto(), /--clave pide renombrarlo a «pg»/);
   });
 
-  // Hallazgo 5 de la auditoría de la Etapa 3: contener el nombre o ser un build/index.js cualquiera no
+  // Contener el nombre o ser un build/index.js cualquiera no
   // basta para ser mcp-phase-gate.
   it("no toma por suyo un servidor ajeno: otro build/index.js, ni un paquete cuyo nombre contiene mcp-phase-gate", async () => {
     const r = rutas();
@@ -216,7 +216,7 @@ describe("init: registrar en los clientes", () => {
     assert.equal(registroEnClaude("visor: npx -y mcp-phase-gate-viewer - ✔ Connected\nfs: node C:/x/build/index.js - ✔ Connected\n"), null);
   });
 
-  // Hallazgo 6: las comas finales se quitaban también dentro de las cadenas.
+  // Las comas finales no se quitan dentro de las cadenas.
   it("las comas finales se quitan fuera de las cadenas, y una // en una URL no cuenta como comentario", async () => {
     const r = rutas();
     const p = entornoDePrueba({ plataforma: "linux" });
@@ -430,7 +430,7 @@ describe("init --migrate", () => {
 
     assert.equal(await ejecutarInit(opciones({ ...r, clientes: [], migrate: true }), p.entorno), 0, p.errores());
     // El suyo no se reemplaza: solo se le añade el idioma que ya usaba, detrás de `preset`, con copia del
-    // original (hallazgo 2 de la auditoría de la Etapa 6).
+    // original.
     assert.equal(
       fs.readFileSync(path.join(r.docs, "PROYECTO-A", "phase-gate.json"), "utf-8"),
       `${JSON.stringify({ version: 1, preset: "research-ops", idioma: "es" }, null, 2)}\n`
@@ -440,7 +440,7 @@ describe("init --migrate", () => {
     assert.equal(fs.readFileSync(path.join(r.docs, "PROYECTO-ROTO", "phase-gate.json"), "utf-8"), roto);
     assert.equal(leer(path.join(r.docs, "PROYECTO-EN", "phase-gate.json")).idioma, "en");
     assert.equal(process.env.PHASE_GATE_DOCS_PATH, undefined, "la variable vuelve a como estaba");
-    // Desde la Etapa 6 lleva también el idioma: sin documentos que lo digan, el del equipo (aquí, el de los
+    // Lleva también el idioma: sin documentos que lo digan, el del equipo (aquí, el de los
     // tests: PHASE_GATE_LANG=es).
     assert.deepEqual(leer(path.join(r.docs, "PROYECTO-B", "phase-gate.json")), {
       $schema: "https://unpkg.com/mcp-phase-gate@3/schema/project.json",

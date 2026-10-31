@@ -16,7 +16,7 @@ const FUENTE = path.join(RAIZ, "prompts", "es", "comandos");
 const COPIA = path.join(RAIZ, ".claude", "commands");
 const DOCUMENTO = path.join(RAIZ, "docs", "comandos-de-fase.md");
 
-// Los archivos propios pueden llegar en CRLF (§1.3 del plan): se compara el texto, no los bytes.
+// Los archivos propios pueden llegar en CRLF: se compara el texto, no los bytes.
 function leerTexto(ruta: string): string {
   return fs.readFileSync(ruta, "utf-8").replace(/\r\n/g, "\n");
 }

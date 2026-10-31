@@ -1,4 +1,4 @@
-// La seguridad del servidor local del Studio (§7.3 del plan): cada fila del filtro y del modelo de
+// La seguridad del servidor local del Studio: cada fila del filtro y del modelo de
 // amenazas. Las peticiones salen por un socket crudo (net) y no por http.request, que normaliza lo
 // que aquí se quiere romper: cabeceras repetidas, rutas con barras invertidas o sin codificar, un
 // Host ausente o un cuerpo que llega a trozos.
@@ -122,7 +122,7 @@ describe("Studio: arranque", () => {
     assert.deepEqual(ejecutarCli(["ui"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--puerto", "4321", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: 4321, abrir: false, demo: false } });
     assert.deepEqual(ejecutarCli(["ui", "--demo", "--no-abrir"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: true } });
-    // La demo en un idioma (§8.7).
+    // La demo en un idioma.
     assert.deepEqual(ejecutarCli(["ui", "--demo", "--idioma", "en"], salida), { accion: "ui", opciones: { puerto: null, abrir: true, demo: true, idioma: "en" } });
     // --export-static no arranca el Studio: nunca abre nada.
     assert.deepEqual(ejecutarCli(["ui", "--export-static", "sitio"], salida), { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: "sitio", datosReales: false, yes: false } } });
@@ -204,7 +204,7 @@ describe("Studio: Host (DNS rebinding)", () => {
     assert.equal((await get(p, "/", [`Host: 127.0.0.1:${p}`])).estado, 421);
   });
 
-  // Hallazgo 9 de la auditoría de la Etapa 6: el texto del filtro estaba fijo en español. Sale en el idioma del
+  // El texto del filtro ya no está fijo en español: sale en el idioma del
   // proceso (la cabecera de idioma de la petición no cuenta aquí: el filtro no la lee), y en español es el de siempre.
   it("el texto del filtro sale en el idioma del proceso; la cabecera de idioma no lo cambia", async () => {
     const s = await studio();

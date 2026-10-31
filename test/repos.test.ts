@@ -1,4 +1,4 @@
-// La puerta única a git y las tools multi-repo (§5.7 del plan maestro v3), con repos reales en
+// La puerta única a git y las tools multi-repo, con repos reales en
 // carpetas temporales: sin commits, con upstream, separado, sucio, y uno con una trampa en
 // core.fsmonitor.
 
@@ -144,7 +144,7 @@ describe("estadoDeRepo con repos reales", () => {
     assert.equal(columnaDeConfiguracion(noExiste), null);
   });
 
-  // E3-R4: git status ejecuta core.fsmonitor. El control positivo prueba que la trampa funciona en
+  // git status ejecuta core.fsmonitor. El control positivo prueba que la trampa funciona en
   // este equipo; la puerta única no debe dispararla.
   it("un core.fsmonitor trampa se dispara con un git status normal y NO con la puerta única", async () => {
     const repo = repoNuevo();
@@ -168,7 +168,7 @@ describe("estadoDeRepo con repos reales", () => {
   });
 });
 
-describe("filtros de .gitattributes (hallazgo 1 de la auditoría de la Etapa 3)", () => {
+describe("filtros de .gitattributes", () => {
   // Un filtro clean o process de .git/config es un comando que git status ejecuta con un archivo
   // que cambió de fecha. Mismo esquema que el de fsmonitor: control positivo y después la puerta.
   for (const variable of ["clean", "process"]) {

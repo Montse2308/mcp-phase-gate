@@ -21,8 +21,8 @@ import { crearProyecto, crearTarea, docsTemporales, estadoTemporal, limpiarEntor
 
 afterEach(limpiarEntorno);
 
-// Las 8 de siempre, get_orchestrator_status (Etapa 2), read_repo_file y repo_status (Etapa 3), y
-// record_batch y get_batch_status (Etapa 4).
+// Las 8 de siempre, get_orchestrator_status, read_repo_file y repo_status, y
+// record_batch y get_batch_status.
 const TOOLS = [
   "get_active_task",
   "get_batch_status",
@@ -110,7 +110,7 @@ describe("tools/list", () => {
       const { tools } = await cliente.listTools();
       const porNombre = new Map(tools.map((t) => [t.name, t.inputSchema]));
 
-      // `project` es opcional desde la Etapa 3: sin él, se deduce de la carpeta abierta (Roots).
+      // `project` es opcional: sin él, se deduce de la carpeta abierta (Roots).
       assert.deepEqual([...(porNombre.get("start_task")?.required ?? [])].sort(), ["initial_context", "task_name"]);
       assert.deepEqual(porNombre.get("switch_task")?.required, ["task_name"]);
       assert.deepEqual(porNombre.get("write_central_doc")?.required, ["content"]);
@@ -637,7 +637,7 @@ describe("una capa de prompts que no es carpeta", () => {
   });
 });
 
-// Ajustes de la auditoría de la Etapa 2: la cancelación del cliente y los valores de apagado.
+// La cancelación del cliente y los valores de apagado.
 describe("confirmaciones: cancelación y apagado", () => {
   const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
   const CONGELADO = "01 - Análisis Técnico.md";
@@ -694,7 +694,7 @@ describe("confirmaciones: cancelación y apagado", () => {
   }
 });
 
-// Ajuste de la auditoría de la Etapa 2: un argumento de una línea no puede abrir secciones.
+// Un argumento de una línea no puede abrir secciones.
 describe("argumentos de /fN", () => {
   const PROMPTS_DEL_REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "prompts", "es");
 

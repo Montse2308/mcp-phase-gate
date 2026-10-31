@@ -321,7 +321,7 @@ describe("promptsLayers", () => {
   });
 });
 
-// Ajustes de la auditoría de la Etapa 2: la fuente manda antes que el nombre.
+// La fuente manda antes que el nombre.
 describe("leerVariable cuando cada nombre llega por una vía distinta", () => {
   function envTemporal(contenido: string): string {
     const archivo = path.join(carpetaTemporal("env"), ".env");

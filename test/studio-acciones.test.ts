@@ -1,4 +1,4 @@
-// Las escrituras del Studio (§7.6 del plan): las cinco acciones con su ciclo de plan y huella, la carrera
+// Las escrituras del Studio: las cinco acciones con su ciclo de plan y huella, la carrera
 // entre la vista previa y el "Aplicar", las huellas ajenas o reutilizadas, los argumentos hostiles, el
 // manifiesto con sus claves en su orden y su copia, y que init-cliente nunca toca la configuración real de
 // los clientes. Lo que se afirma entre procesos se prueba con dos procesos node de verdad.
@@ -32,8 +32,7 @@ afterEach(() => {
 
 // La configuración real de los clientes, antes de empezar: al final se comprueba que nada la tocó. Por su
 // contenido y no por su fecha: Claude Code reescribe ~/.claude.json por su cuenta mientras trabaja (contadores,
-// sesiones), así que de ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto
-// (hallazgo 8 de la auditoría de la Etapa 6).
+// sesiones), así que de ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto.
 function huellaReal(): string[] {
   const { home, appData: appDataReal } = CARPETAS_REALES;
   const appData = appDataReal ?? path.join(home, "AppData", "Roaming");

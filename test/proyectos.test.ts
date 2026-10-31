@@ -1,4 +1,4 @@
-// Prompts, reglas y deducción de fase por proyecto (§5.2.3 y §5.4 del plan maestro v3): qué preset y
+// Prompts, reglas y deducción de fase por proyecto: qué preset y
 // qué reglas gana, qué capas entran, qué dice el bloque CONFIGURACIÓN DEL PROYECTO, y cómo lo usan
 // las tools.
 
@@ -106,7 +106,7 @@ describe("configuracionDe: el preset efectivo", () => {
   });
 });
 
-describe("un machine.json roto solo afecta a quien lo necesita (hallazgo 7 de la auditoría de la Etapa 3)", () => {
+describe("un machine.json roto solo afecta a quien lo necesita", () => {
   it("un proyecto con manifiesto sin repos sigue funcionando; uno sin manifiesto falla explícito", async () => {
     const { docs, config } = instalacion({ version: 1, preset: "software-tdd" });
     crearProyecto(docs, "SIN-MANIFIESTO");
@@ -127,7 +127,7 @@ describe("un machine.json roto solo afecta a quien lo necesita (hallazgo 7 de la
     }
   });
 
-  it("una ruta relativa en machine.json es inválida (hallazgo 17)", () => {
+  it("una ruta relativa en machine.json es inválida", () => {
     const { config } = instalacion();
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, repos: { "PROYECTO-A/api": "relativo/x" } }), "utf-8");
 
@@ -135,7 +135,7 @@ describe("un machine.json roto solo afecta a quien lo necesita (hallazgo 7 de la
   });
 });
 
-describe("get_phase_prompt sin proyecto lo dice (hallazgo 8 de la auditoría de la Etapa 3)", () => {
+describe("get_phase_prompt sin proyecto lo dice", () => {
   it("sin project, o con uno que no existe, una nota dice qué preset se usa; con project, no hay nota", async () => {
     const { config } = instalacion();
     presetDeUsuario(config, "de-maquina", "---\nnombre: de-maquina\n---\n");
@@ -155,7 +155,7 @@ describe("get_phase_prompt sin proyecto lo dice (hallazgo 8 de la auditoría de 
     }
   });
 
-  it("un project vacío explícito se rechaza en start_task y switch_task (hallazgo 15)", async () => {
+  it("un project vacío explícito se rechaza en start_task y switch_task", async () => {
     instalacion();
     const { cliente, cerrar } = await conectar();
     try {
@@ -181,7 +181,7 @@ describe("frontmatterDeTarea", () => {
       return frontmatterDeTarea(carpeta, CONTEXTO);
     };
 
-    // Desde la Etapa 6, también `redaccion` (§8.3).
+    // También `redaccion`.
     assert.deepEqual(leer("---\nrepos: api, web\npreset: ai-agent-ops\nredaccion: en\n---\nreq"), { repos: ["api", "web"], preset: "ai-agent-ops", redaccion: "en" });
     assert.deepEqual(leer("---\r\nrepos: [api, \"web\"]\r\n---\r\nreq"), { repos: ["api", "web"], preset: null, redaccion: null });
     assert.deepEqual(leer("solo el requerimiento"), { repos: null, preset: null, redaccion: null });
@@ -210,7 +210,7 @@ describe("capasDe con preset y reglas", () => {
     ["auto", "Política: **el agente hace el commit en cuanto el lote pasa su verificación**, sin esperar OK."],
     ["ninguno", "Política: **sin commits por lote.**"],
   ] as const) {
-    // Desde la Etapa 4 (deuda E3-D5), la variante cambia también sus líneas de PROHIBIDO y de
+    // La variante cambia también sus líneas de PROHIBIDO y de
     // AUTOVERIFICACIÓN sobre los commits, que son ranuras. Todo lo demás que sigue a COMMITS, igual.
     it(`commits: ${politica} cambia COMMITS y sus líneas de PROHIBIDO y AUTOVERIFICACIÓN de la Fase 4, y nada más`, () => {
       instalacion({ version: 1, reglas: { commits: politica } });
@@ -222,7 +222,7 @@ describe("capasDe con preset y reglas", () => {
       assert.equal(texto.includes("Política: **el agente hace el commit con el OK del usuario.**"), false);
       assert.equal(texto.includes("<!--"), false);
       // Lo esperado es lo de fábrica con el contenido exacto de esas dos ranuras sustituido por el de los
-      // bloques de la variante: cualquier otra diferencia es un error (hallazgo 13 de la auditoría).
+      // bloques de la variante: cualquier otra diferencia es un error.
       const despuesDeCommits = (t: string) => t.slice(t.indexOf("\n## PROHIBIDO"));
       const fabrica = fs.readFileSync(path.join(RAIZ, "prompts", "es", "fase-4-ejecucion.md"), "utf-8").replace(/\r\n/g, "\n");
       const variante = fs.readFileSync(path.join(RAIZ, "prompts", "es", "reglas", `commits-${politica}.md`), "utf-8").replace(/\r\n/g, "\n");
@@ -245,7 +245,7 @@ describe("capasDe con preset y reglas", () => {
     const fase4 = ensamblarFase(4, "PROYECTO-A").texto;
     assert.ok(fase3.includes("## LOTES\nEste proyecto no trabaja por lotes."));
     assert.ok(fase3.includes("- Escribir el plan sin el frontmatter `lotes: 1`."));
-    // Desde la Etapa 4 el recibo lo escribe record_batch: sin-lotes ya no trae su plantilla, añade una
+    // El recibo lo escribe record_batch: sin-lotes ya no trae su plantilla, añade una
     // línea después del ciclo.
     assert.ok(fase4.includes("El plan tiene un solo lote (`lotes: 1`)"));
     assert.ok(fase4.includes("1. **Mira dónde vas:** `get_batch_status`"));

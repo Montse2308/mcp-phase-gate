@@ -1,4 +1,4 @@
-// El proyecto deducido de las raíces del cliente (§5.6 del plan maestro v3), con un cliente en
+// El proyecto deducido de las raíces del cliente, con un cliente en
 // memoria que anuncia (o no) la capacidad roots y responde roots/list.
 
 import { strict as assert } from "node:assert";
@@ -99,7 +99,7 @@ describe("resolverPorRaices", () => {
   });
 });
 
-describe("raíces demasiado amplias (hallazgo 3 de la auditoría de la Etapa 3)", () => {
+describe("raíces demasiado amplias", () => {
   it("la raíz de un disco y la carpeta del usuario no dan coincidencia débil", () => {
     const e = escenario();
     const raizDelDisco = path.parse(e.repos).root;
@@ -131,7 +131,7 @@ describe("raíces demasiado amplias (hallazgo 3 de la auditoría de la Etapa 3)"
   });
 });
 
-describe("roots/list_changed fuera de orden (hallazgo 4)", () => {
+describe("roots/list_changed fuera de orden", () => {
   it("una respuesta vieja que llega tarde no pisa a la nueva", async () => {
     const e = escenario();
     let llamada = 0;

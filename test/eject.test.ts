@@ -1,4 +1,4 @@
-// `npx mcp-phase-gate eject` (§5.8.2 del plan maestro v3): cada objetivo, el rechazo sin --fuerza, y
+// `npx mcp-phase-gate eject`: cada objetivo, el rechazo sin --fuerza, y
 // que lo copiado gane después.
 
 import { strict as assert } from "node:assert";

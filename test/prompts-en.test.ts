@@ -1,4 +1,4 @@
-// Los prompts en inglés (§8.4 del plan maestro v3) frente a sus gemelos en español: mismas ranuras en el
+// Los prompts en inglés frente a sus gemelos en español: mismas ranuras en el
 // mismo orden, mismo número de puntos en cada PROHIBIDO / FORBIDDEN y AUTOVERIFICACIÓN / SELF-CHECK, mismos
 // bloques en las variantes de regla, y un proyecto en inglés los ensambla sin avisos con cada regla. El
 // test de contrato del vocabulario (test/vocabulario.test.ts) comprueba los encabezados y los nombres.
@@ -122,7 +122,7 @@ describe("prompts en inglés: un proyecto en inglés los ensambla", () => {
           assert.ok(!/<!--\s*\/?(?:slot|ranura|block|bloque)\b/.test(texto), `${donde}: queda un marcador`);
           assert.ok(!/\b(?:Fase \d|Documentación|recibos de lote|nombres exactos|CONFIGURACIÓN)\b/.test(texto), `${donde}: queda texto del servidor en español`);
           assert.match(texto, /## PROJECT CONFIGURATION/);
-          // La prohibición del push no depende de ninguna regla (P1).
+          // La prohibición del push no depende de ninguna regla.
           if (fase === 4) assert.match(texto, /push/i, donde);
         }
       }

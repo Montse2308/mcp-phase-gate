@@ -1,4 +1,4 @@
-// El Studio en inglés (§8.6 del plan) en Chromium real: las cinco vistas con sus textos en inglés, `<html
+// El Studio en inglés en Chromium real: las cinco vistas con sus textos en inglés, `<html
 // lang="en">` y axe sin violaciones graves; el selector ES / EN cambia el idioma en vivo y se recuerda;
 // `#?lang=en` lo comparte por la URL; y lo que dice el servidor (describeEstado, los hallazgos de doctor,
 // los errores, el asistente de clientes) llega también en inglés, porque cada petición lleva el idioma.
