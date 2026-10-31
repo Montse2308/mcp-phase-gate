@@ -281,7 +281,7 @@ export function borrarDemo(raiz: string): void {
 // user could leave a prepared "demo" with links to the opener's files.
 // The English demo has its own folder (with "-en"): the two can coexist.
 // The temp directory is resolved to its long path: on Windows it can come as an 8.3 short name
-// (C:\Users\USUARI~1\...), which is what the notice of `ui --demo` would print.
+// (C:\Users\LONGNA~1\...), which is what the notice of `ui --demo` would print.
 export function carpetaDeLaDemo(idioma: Idioma = "es"): string {
   const sufijo = idioma === "es" ? "" : `-${idioma}`;
   let temporal = os.tmpdir();
