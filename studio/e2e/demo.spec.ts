@@ -63,7 +63,8 @@ test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documenta
   await page.goto(`${servidor.origen}/`);
   await expect(banda(page)).toHaveText(`Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)} Qué es mcp-phase-gate`);
   await expect(banda(page).getByRole("link", { name: "Qué es mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/es/");
-  await expect(banda(page)).toHaveAttribute("role", "note");
+  // Un landmark con nombre: fuera de toda región, axe la marca.
+  await expect(page.getByRole("complementary", { name: "Aviso sobre los datos" })).toHaveClass("banda-demo");
   for (const nombre of ["TIENDA", "ASISTENTE", "INVESTIGACION"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
   await expect(page.getByText("MARCADOR")).toHaveCount(0);
 });
