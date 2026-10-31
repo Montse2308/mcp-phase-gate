@@ -23,7 +23,7 @@ export const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 // The .env at the package root (one level above build/ or src/) lets each device define its paths without
 // touching mcp.json. It is read with a reader of its own and not with dotenv or process.loadEnvFile:
 // loadEnvFile does not strip the UTF-8 BOM, and with a .env saved with a BOM the first key arrived as
-// "﻿ORQUESTADOR_DOCS_PATH" and the variable vanished. And a UTF-16 .env —what PowerShell produces with
+// "\uFEFFORQUESTADOR_DOCS_PATH" and the variable vanished. And a UTF-16 .env —what PowerShell produces with
 // ">"— would only show up as broken accents.
 //
 // The client's "env" block still wins: only the keys that are not already in the environment are assigned,
@@ -367,8 +367,6 @@ export function carpetaPromptsGlobal(): string | null {
 // force explaining why the folder is called differently from everything else. Pointers stored under the old
 // name are not migrated: a `switch_task` recomputes the pointer, and migration code would cost more than
 // the problem.
-// No se migran: el puntero se recalcula solo con un `switch_task`, y arrastrar código de
-// migración para un dato que cuesta un comando en recuperarse es más caro que el problema.
 export const APP_DIR_NAME = "mcp-phase-gate";
 
 // The variable is trimmed and resolved, like the other paths: a space stuck to the end of the value would
@@ -540,7 +538,8 @@ export function stateFile(): string {
 
 // ─── Server identity ────────────────────────────────────────────────────────
 // It is what the client shows in its MCP panel. It is `mcp-phase-gate` to be exactly the name of the package
-// on npm and of the repo: three equal names instead of three similar ones. "phase-gate" is the
+// on npm and of the repo: three equal names instead of three similar ones. The `mcp-` prefix is redundant
+// inside an MCP server, but the package needs it to be found when searching npm for "mcp". "phase-gate" is the
 // process-engineering term for advancing by phases without being able to skip the previous one, which is
 // exactly what this flow does.
 //
