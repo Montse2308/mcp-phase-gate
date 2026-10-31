@@ -1,10 +1,10 @@
-// La línea de comandos del paquete. Sin argumentos, el binario es el servidor MCP que lanza el
-// cliente; con argumentos, es una herramienta para la persona que lo instaló.
+// The command line of the package. Without arguments, the binary is the MCP server that a client launches;
+// with arguments, it is a tool for the person who installed it.
 //
-// Un servidor MCP habla JSON-RPC por stdin y no imprime nada por stdout. Ejecutado a mano en
-// una terminal —que es exactamente lo que hace quien acaba de leer `npx mcp-phase-gate` en el
-// README— se queda esperando entrada, sin señal de vida, y parece roto. Por eso existen la ayuda
-// y `doctor`: el primero explica qué es esto, el segundo dice si está bien instalado.
+// An MCP server speaks JSON-RPC on stdin and prints nothing on stdout. Run by hand in a terminal —which is
+// exactly what someone who has just read `npx mcp-phase-gate` in the README does— it waits for input, with
+// no sign of life, and looks broken. That is why the help and `doctor` exist: the first explains what this
+// is, the second says whether it is installed correctly.
 
 import { parseArgs } from "util";
 
@@ -17,7 +17,7 @@ import { mensaje } from "./i18n/mensajes.js";
 import type { Cliente, OpcionesInit } from "./init.js";
 import type { Idioma } from "./vocabulario.js";
 
-// La ayuda y el aviso de la terminal, en el idioma de los mensajes (PHASE_GATE_LANG, si no el del sistema).
+// The help and the terminal notice, in the language of the messages (PHASE_GATE_LANG, otherwise the system's).
 export function ayuda(): string {
   return mensaje("CLI-AYUDA", { servidor: SERVER_NAME, version: SERVER_VERSION });
 }
@@ -33,10 +33,10 @@ export const SALIDA_DE_PROCESO: Salida = {
   err: (texto) => process.stderr.write(`${texto}\n`),
 };
 
-// "servidor": quien llama arranca el servidor MCP. "salir": el código de salida del comando.
-// "init": las opciones ya validadas; init es asíncrono (pregunta, ejecuta `claude`) y lo lanza index.ts.
-// "doctor-reverificar": doctor con las anclas comprobadas contra git, que es asíncrono; también lo lanza
-// index.ts, con doctorReverificando.
+// "servidor": whoever calls starts the MCP server. "salir": the exit code of the command.
+// "init": the options already validated; init is asynchronous (it asks, it runs `claude`) and index.ts launches it.
+// "doctor-reverificar": doctor with the anchors checked against git, which is asynchronous; index.ts also
+// launches it, with doctorReverificando.
 export type ResultadoCli =
   | { accion: "servidor" }
   | { accion: "salir"; codigo: number }
@@ -44,10 +44,10 @@ export type ResultadoCli =
   | { accion: "doctor-reverificar"; json: boolean }
   | { accion: "ui"; opciones: OpcionesUi };
 
-// Las opciones de `ui`, ya validadas. El Studio vive en src/studio/ y se carga solo para `ui`, con un
-// import dinámico: el servidor MCP por stdio no carga nada de él (test/aislamiento.test.ts).
-// Con `exportar`, `ui` no arranca el Studio: escribe el sitio estático (§7.9 del plan).
-// `idioma`: el de la demo de `ui --demo` (§8.7); sin él, el de PHASE_GATE_LANG o el del sistema.
+// The options of `ui`, already validated. The Studio lives in src/studio/ and is loaded only for `ui`, with
+// a dynamic import: the MCP server over stdio loads nothing of it (test/aislamiento.test.ts).
+// With `exportar`, `ui` does not start the Studio: it writes the static site.
+// `idioma`: that of the demo of `ui --demo`; without it, that of PHASE_GATE_LANG or the system's.
 export type OpcionesUi = { puerto: number | null; abrir: boolean; demo: boolean; idioma?: Idioma; exportar?: { destino: string; datosReales: boolean; yes: boolean } };
 
 export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_DE_PROCESO): Promise<number> {
@@ -61,7 +61,7 @@ export async function ejecutarUi(opciones: OpcionesUi, salida: Salida = SALIDA_D
   return lanzarStudio(opciones, salida);
 }
 
-// El diagnóstico impreso, y el código de salida: 1 si hay algún error.
+// The diagnosis printed, and the exit code: 1 if there is any error.
 function escribirDiagnostico(diagnostico: Diagnostico, json: boolean, salida: Salida): number {
   salida.out(json ? JSON.stringify(diagnostico, null, 2) : formatearDiagnostico(diagnostico, "texto"));
   return diagnostico.hallazgos.some((h) => h.severidad === "error") ? 1 : 0;
@@ -77,7 +77,7 @@ function invalido(salida: Salida, motivo?: string): ResultadoCli {
   return { accion: "salir", codigo: 2 };
 }
 
-// Qué banderas acepta cada subcomando: una bandera de init pasada a doctor es un error, no se ignora.
+// Which flags each subcommand accepts: an init flag passed to doctor is an error, it is not ignored.
 const BANDERAS_DE: Record<string, string[]> = {
   doctor: ["json", "fase", "proyecto", "reverificar"],
   init: ["cliente", "clave", "docs", "repos", "comandos", "migrate", "preset", "idioma", "solo-este-equipo", "dry-run", "yes"],
@@ -149,7 +149,7 @@ export function ejecutarCli(
   esTerminal: boolean = Boolean(process.stdin.isTTY)
 ): ResultadoCli {
   if (argv.length === 0) {
-    // stderr, no stdout: stdout es el canal del JSON-RPC aunque nadie esté escuchando.
+    // stderr, not stdout: stdout is the JSON-RPC channel even if nobody is listening.
     if (esTerminal) salida.err(avisoTerminal());
     return { accion: "servidor" };
   }
@@ -207,13 +207,13 @@ export function ejecutarCli(
     return { accion: "salir", codigo: 0 };
   }
 
-  // doctor --reverificar necesita git, que es asíncrono: lo ejecuta index.ts (doctorReverificando).
+  // doctor --reverificar needs git, which is asynchronous: index.ts runs it (doctorReverificando).
   if (posicionales.length === 1 && subcomando === "doctor" && valores.reverificar) {
     if (valores.fase !== undefined || valores.proyecto !== undefined) return invalido(salida, mensaje("CLI-REVERIFICAR-CON-FASE"));
     return { accion: "doctor-reverificar", json: Boolean(valores.json) };
   }
 
-  // doctor --fase N [--proyecto P]: la procedencia de cada ranura de esa fase.
+  // doctor --fase N [--proyecto P]: the origin of each slot of that phase.
   if (posicionales.length === 1 && subcomando === "doctor" && (valores.fase !== undefined || valores.proyecto !== undefined)) {
     const fase = Number(valores.fase);
     if (valores.fase === undefined || !Number.isInteger(fase) || fase < 1) return invalido(salida, mensaje("CLI-FASE-NECESARIA"));
@@ -246,7 +246,7 @@ export function ejecutarCli(
     if (exportar !== undefined) {
       if (!exportar.trim()) return invalido(salida, mensaje("CLI-EXPORT-SIN-CARPETA"));
       if (valores.puerto !== undefined || valores["no-abrir"] || valores.demo) return invalido(salida, mensaje("CLI-EXPORT-INCOMPATIBLE"));
-      // El export escribe siempre los dos idiomas (§8.7): --idioma no tiene sentido aquí.
+      // The export always writes both languages: --idioma makes no sense here.
       if (valores.idioma !== undefined) return invalido(salida, mensaje("CLI-IDIOMA-SOLO-CON-DEMO"));
       return { accion: "ui", opciones: { puerto: null, abrir: false, demo: false, exportar: { destino: exportar, datosReales: valores["incluir-datos-reales"] === true, yes: valores.yes === true } } };
     }

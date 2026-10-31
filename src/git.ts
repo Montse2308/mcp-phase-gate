@@ -1,19 +1,17 @@
-// La única puerta a git, y de solo lectura para el servidor MCP. (La única escritura, gitEnLaDemo, es la de
-// la demo del Studio en sus propios repos temporales: ver al final.)
+// The only door to git, and read-only for the MCP server. (The only write, gitEnLaDemo, is the one of the
+// Studio's demo in its own temporary repos: see the end.)
 //
-// El servidor nunca escribe en git (principio 3 del plan): los commits los hace el agente con su
-// terminal. Pero hasta leer tiene efectos si no se tiene cuidado: `git status` puede reescribir el
-// índice y tomar index.lock (y estorbar a un commit que el agente esté haciendo a la vez), y si el
-// repo configura core.fsmonitor, git EJECUTA ese comando. Un repo clonado de cualquier sitio podría
-// traerlo. Por eso toda llamada pasa por aquí, con:
-//   - `-c core.fsmonitor=false` delante de todo, y cada filtro de .gitattributes anulado (ver abajo);
-//   - GIT_OPTIONAL_LOCKS=0, para que status no tome locks opcionales;
-//   - GIT_TERMINAL_PROMPT=0, para que nada se quede esperando una contraseña;
-//   - LC_ALL=C, para que los mensajes de error no dependan del idioma del equipo;
-//   - execFile, sin shell, con argumentos que son constantes del código: ningún texto que venga del
-//     modelo llega a la línea de comandos de git, salvo el hash de un lote: antes pasa por SHA (solo
-//     hexadecimal) y va detrás de --end-of-options, y las consultas siguientes usan el SHA completo
-//     que devolvió git.
+// The server never writes to git: the commits are made by the agent with its terminal. But even reading has
+// effects if one is not careful: `git status` can rewrite the index and take index.lock (and get in the way
+// of a commit the agent is making at the same time), and if the repo configures core.fsmonitor, git RUNS
+// that command. A repo cloned from anywhere could bring it. That is why every call goes through here, with:
+//   - `-c core.fsmonitor=false` in front of everything, and every .gitattributes filter cancelled (see below);
+//   - GIT_OPTIONAL_LOCKS=0, so that status takes no optional locks;
+//   - GIT_TERMINAL_PROMPT=0, so that nothing is left waiting for a password;
+//   - LC_ALL=C, so that the error messages do not depend on the machine's language;
+//   - execFile, without a shell, with arguments that are constants of the code: no text that comes from the
+//     model reaches git's command line, except the hash of a batch: first it goes through SHA (hexadecimal
+//     only) and it goes after --end-of-options, and the following queries use the full SHA that git returned.
 
 import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
@@ -35,7 +33,7 @@ export class ErrorDeGit extends Error {
   }
 }
 
-// El error de git dicho para una persona, con lo que tiene que hacer.
+// A git error put for a person, with what they have to do.
 export type FalloDeEjecucion = { code?: string | number | null | undefined; killed?: boolean | undefined; message: string };
 
 export function traducirError(error: FalloDeEjecucion, stderr: string, dir: string): ErrorDeGit {
@@ -48,7 +46,7 @@ export function traducirError(error: FalloDeEjecucion, stderr: string, dir: stri
   return new ErrorDeGit(mensaje("GITX-FALLO", { dir, detalle: stderr.trim() || error.message }), "otro");
 }
 
-// Las mismas opciones para las dos variantes: es lo que hace de esto una sola puerta.
+// The same options for both variants: that is what makes this a single door.
 function opcionesDe(dir: string) {
   return {
     cwd: dir,
@@ -62,13 +60,12 @@ function opcionesDe(dir: string) {
 
 const ARGUMENTOS_FIJOS = ["-c", "core.fsmonitor=false"];
 
-// Los filtros de .gitattributes (`filter.<nombre>.clean`, `.smudge`, `.process`) también son comandos
-// que git ejecuta: `git status` pasa por el filtro clean un archivo que cambió de fecha, y como
-// GIT_OPTIONAL_LOCKS=0 no refresca el índice, lo haría en cada llamada. Un `.git/config` manipulado
-// podría traer uno, igual que un core.fsmonitor (hallazgo 1 de la auditoría de la Etapa 3). Leer la
-// configuración no ejecuta nada, así que primero se leen los nombres de los drivers definidos (en
-// cualquier ámbito) y cada uno se anula con -c. Comprobado con control positivo en git 2.51: con el
-// valor vacío, ni clean ni process se ejecutan.
+// The .gitattributes filters (`filter.<name>.clean`, `.smudge`, `.process`) are also commands that git runs:
+// `git status` passes through the clean filter a file whose date changed, and since GIT_OPTIONAL_LOCKS=0 does
+// not refresh the index, it would do so on every call. A tampered `.git/config` could bring one, just like a
+// core.fsmonitor. Reading the configuration runs nothing, so the names of the defined drivers are read first
+// (in any scope) and each one is cancelled with -c. Checked with a positive control on git 2.51: with the
+// empty value, neither clean nor process runs.
 const CONSULTA_DE_FILTROS = ["config", "--get-regexp", "^filter\\."];
 
 export function anularFiltros(salidaDeConfig: string, dir: string): string[] {
@@ -80,7 +77,7 @@ export function anularFiltros(salidaDeConfig: string, dir: string): string[] {
   }
   const args: string[] = [];
   for (const nombre of nombres) {
-    // Un nombre que no se puede escribir en un -c sin ambigüedad no se puede anular: se falla cerrado.
+    // A name that cannot be written in a -c without ambiguity cannot be cancelled: it fails closed.
     if (!nombre || /[=\s]/.test(nombre)) throw new ErrorDeGit(mensaje("GITX-FILTRO-RARO", { dir, nombre }), "otro");
     for (const variable of ["clean", "smudge", "process"]) args.push("-c", `filter.${nombre}.${variable}=`);
     args.push("-c", `filter.${nombre}.required=false`);
@@ -88,16 +85,16 @@ export function anularFiltros(salidaDeConfig: string, dir: string): string[] {
   return args;
 }
 
-// `git config --get-regexp` sale con 1 cuando no encuentra nada: eso no es un error.
+// `git config --get-regexp` exits with 1 when it finds nothing: that is not an error.
 const sinCoincidencias = (codigo: unknown): boolean => codigo === 1;
 
-// Con un cwd que no existe, execFile da ENOENT y se confundiría con "git no está instalado".
+// With a cwd that does not exist, execFile gives ENOENT and it would be mistaken for "git is not installed".
 function siNoEsCarpeta(dir: string): ErrorDeGit | null {
   return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? null : new ErrorDeGit(mensaje("GITX-NO-ES-CARPETA", { dir }), "otro");
 }
 
-// `aceptados`: los códigos de salida que son una respuesta y no un error (merge-base --is-ancestor
-// contesta "no" con un 1).
+// `aceptados`: the exit codes that are an answer and not an error (merge-base --is-ancestor answers "no"
+// with a 1).
 function ejecutar(dir: string, args: readonly string[], aceptados: readonly number[] = []): Promise<{ stdout: string; stderr: string; codigo: number }> {
   return new Promise((resolve, reject) => {
     execFile("git", [...ARGUMENTOS_FIJOS, ...args], opcionesDe(dir), (error, stdout, stderr) => {
@@ -130,8 +127,8 @@ function ejecutarSincrono(dir: string, args: readonly string[]): string {
   }
 }
 
-// La misma puerta, síncrona: solo para `doctor`, que se ejecuta de una vez en la terminal. El servidor
-// usa siempre la asíncrona, para no bloquear el resto de mensajes mientras git responde.
+// The same door, synchronous: only for `doctor`, which runs at once in the terminal. The server always uses
+// the asynchronous one, so as not to block the rest of the messages while git answers.
 export function gitSincrono(dir: string, args: readonly string[]): string {
   const noEs = siNoEsCarpeta(dir);
   if (noEs) throw noEs;
@@ -139,20 +136,20 @@ export function gitSincrono(dir: string, args: readonly string[]): string {
   return ejecutarSincrono(dir, [...filtros, ...args]);
 }
 
-// ─── Commits de los lotes (Etapa 4, §6.3 del plan) ──────────────────────────
-// El hash que registra un lote viene del modelo. Antes de llegar a git se valida con SHA: así no entran
-// referencias (HEAD, nombres de rama), opciones (--help) ni prefijos de menos de 7 caracteres, que git
-// resolvería sin quejarse (desde 4). Después de resolverCommit, el resto de consultas recibe el SHA
-// completo que devolvió git, nunca el texto del modelo.
+// ─── Commits of the batches ─────────────────────────────────────────────────
+// The hash that a batch records comes from the model. Before reaching git it is validated with SHA: so that
+// no references (HEAD, branch names), options (--help) or prefixes of fewer than 7 characters get in, which
+// git would resolve without complaint from 4 characters on. After resolverCommit, the rest of the queries
+// receive the full SHA that git returned, never the model's text.
 export const SHA = /^[0-9a-f]{7,40}$/i;
-const SHA_COMPLETO = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/; // SHA-1, o SHA-256 en un repo que lo use
+const SHA_COMPLETO = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/; // SHA-1, or SHA-256 in a repo that uses it
 
 export type CommitResuelto = { ok: true; sha: string } | { ok: false; motivo: "formato" | "no-existe" | "ambiguo" };
 
-// Sin --quiet: con él, git calla el "short object ID … is ambiguous" y un hash ambiguo salía con 1, igual
-// que uno que no existe (hallazgo 3 de la auditoría de la Etapa 4). Medido en git 2.51: ambiguo, 128 con
-// "is ambiguous"; inexistente, 128 con "Needed a single revision"; un árbol o un blob, 128 con "expected
-// commit type". Lo que no es una respuesta sobre el hash (no es un repo, propiedad dudosa) es un error.
+// Without --quiet: with it, git silences the "short object ID … is ambiguous" and an ambiguous hash came out
+// with 1, the same as one that does not exist. Measured on git 2.51: ambiguous, 128 with "is ambiguous";
+// nonexistent, 128 with "Needed a single revision"; a tree or a blob, 128 with "expected commit type". What
+// is not an answer about the hash (not a repo, dubious ownership) is an error.
 export function clasificarRevParse(dir: string, codigo: number, stdout: string, stderr: string): CommitResuelto {
   const completo = stdout.trim().toLowerCase();
   if (codigo === 0 && SHA_COMPLETO.test(completo)) return { ok: true, sha: completo };
@@ -167,7 +164,7 @@ export async function resolverCommit(dir: string, sha: string): Promise<CommitRe
   return clasificarRevParse(dir, codigo, stdout, stderr);
 }
 
-// merge-base --is-ancestor contesta con el código de salida: 0 sí, 1 no, y otro (128) si no pudo.
+// merge-base --is-ancestor answers with the exit code: 0 yes, 1 no, and another (128) if it could not.
 export async function esAncestroDeHead(dir: string, sha: string): Promise<{ resultado: "si" | "no" | "error"; salida: string }> {
   try {
     const { codigo, stderr } = await conFiltrosAnulados(dir, ["merge-base", "--is-ancestor", sha, "HEAD"], [1]);
@@ -178,7 +175,7 @@ export async function esAncestroDeHead(dir: string, sha: string): Promise<{ resu
   }
 }
 
-// Solo para el mensaje: decir en qué rama está un commit que no está en la actual.
+// Only for the message: to say which branch a commit that is not on the current one is on.
 export async function ramasQueContienen(dir: string, sha: string): Promise<string[]> {
   const salida = await git(dir, ["branch", "--contains", sha, "--format=%(refname:short)"]);
   return salida.split(/\r?\n/).map((rama) => rama.trim()).filter(Boolean);
@@ -194,40 +191,40 @@ function isoDeUnix(segundos: string): string {
   const fecha = new Date(instante);
   if (Number.isNaN(fecha.getTime())) return "";
   const texto = fecha.toISOString();
-  // Outside years 0000-9999 Date writes "+010000-…", which is not AAAA-MM-DDTHH:MM:SSZ: there is no
+  // Outside years 0000-9999 Date writes "+010000-…", which is not YYYY-MM-DDTHH:MM:SSZ: there is no
   // canonical text for that instant, so it is left empty instead of making one up.
   return /^\d{4}-\d{2}-\d{2}T/.test(texto) ? texto.slice(0, 19) + "Z" : "";
 }
 
-// --no-show-signature: con log.showSignature en la configuración, `show` verifica la firma y ejecuta
-// gpg.program, que también puede venir en .git/config.
+// --no-show-signature: with log.showSignature in the configuration, `show` verifies the signature and runs
+// gpg.program, which can also come from .git/config.
 export async function datosDeCommit(dir: string, sha: string): Promise<{ sha: string; corto: string; fecha: string; asunto: string }> {
   const salida = await git(dir, ["show", "-s", "--no-show-signature", "--format=%H%n%h%n%ct%n%s", "--abbrev=7", sha]);
   const [completo = "", corto = "", segundos = "", ...asunto] = salida.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
   return { sha: completo.trim(), corto: corto.trim(), fecha: isoDeUnix(segundos.trim()), asunto: asunto.join("\n").trim() };
 }
 
-// Los archivos que toca un commit, con / y tal como los guarda git. -z: sin comillas ni escapes en los
-// nombres con acentos; --root: también el primer commit del repo.
+// The files a commit touches, with / and as git stores them. -z: no quotes or escapes in names with accents;
+// --root: also the first commit of the repo.
 export async function archivosDeCommit(dir: string, sha: string): Promise<string[]> {
   const salida = await git(dir, ["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "--root", sha]);
   return salida.split("\0").filter(Boolean);
 }
 
-// null si HEAD está separado (detached).
+// null if HEAD is detached.
 export async function ramaActual(dir: string): Promise<string | null> {
   return (await git(dir, ["branch", "--show-current"])).trim() || null;
 }
 
-// ¿El commit tiene padre? El primero del repo no, y `<sha>^` no existe (rev-parse sale con 1).
+// Does the commit have a parent? The first one of the repo does not, and `<sha>^` does not exist (rev-parse exits with 1).
 export async function tienePadre(dir: string, sha: string): Promise<boolean> {
   const { codigo } = await conFiltrosAnulados(dir, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${sha}^`], [1]);
   return codigo === 0;
 }
 
-// ¿Los commits de los lotes son, en orden, exactamente los de `<primero>^..<último>`? Si el primero es
-// el commit raíz, `<primero>^` no existe: entonces se listan todos los ancestros del último (medido: la
-// forma con ^ falla con 128). Los SHA llegan completos, de resolverCommit.
+// Are the commits of the batches, in order, exactly those of `<first>^..<last>`? If the first is the root
+// commit, `<first>^` does not exist: then all the ancestors of the last one are listed (measured: the form
+// with ^ fails with 128). The SHAs arrive complete, from resolverCommit.
 export async function sonConsecutivos(dir: string, shas: string[]): Promise<boolean> {
   if (shas.length === 0) return false;
   const primero = shas[0]!;
@@ -237,13 +234,13 @@ export async function sonConsecutivos(dir: string, shas: string[]): Promise<bool
   return lista.length === shas.length && lista.every((sha, i) => sha === shas[i]!.toLowerCase());
 }
 
-// ─── Los repos de la demo del Studio ────────────────────────────────────────
-// La única escritura en git del paquete, y no la hace el servidor MCP: la demo del Studio (§7.8 del plan)
-// crea sus propios repos en una carpeta nueva y hace en ellos commits reales, con autor y fecha fijos, para
-// que sus SHA sean siempre los mismos. Solo vale dentro de una carpeta marcada como demo (MARCA_DE_DEMO en
-// su raíz), y deja fuera la configuración global y del sistema de quien la genera: sus hooks, su
-// core.autocrlf o una firma obligatoria cambiarían los SHA, o ejecutarían código. El archivo de la marca,
-// que solo lleva un comentario, hace de configuración global.
+// ─── The repos of the Studio's demo ─────────────────────────────────────────
+// The only git write of the package, and the MCP server does not do it: the Studio's demo creates its own
+// repos in a new folder and makes real commits in them, with a fixed author and date, so that their SHAs are
+// always the same. It is only valid inside a folder marked as a demo (MARCA_DE_DEMO at its root), and it
+// leaves out the global and system configuration of whoever generates it: their hooks, their core.autocrlf
+// or a mandatory signature would change the SHAs, or run code. The mark file, which only holds a comment,
+// acts as the global configuration.
 export const MARCA_DE_DEMO = ".demo-mcp-phase-gate";
 
 export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string[], cuando: { fecha: string; nombre: string; correo: string }): string {
@@ -251,7 +248,7 @@ export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string
   if (!fs.statSync(marca, { throwIfNoEntry: false })?.isFile()) throw fallo("GITX-DEMO-NO-MARCADA", { raiz: raizDemo });
   const relativa = path.relative(path.resolve(raizDemo), path.resolve(dir));
   if (!relativa || relativa.startsWith("..") || path.isAbsolute(relativa)) throw fallo("GITX-DEMO-FUERA", { dir });
-  // Ninguna GIT_* de quien la genera (GIT_DIR, GIT_TEMPLATE_DIR, GIT_CONFIG_PARAMETERS…): solo las de aquí.
+  // No GIT_* of whoever generates it (GIT_DIR, GIT_TEMPLATE_DIR, GIT_CONFIG_PARAMETERS…): only the ones from here.
   const heredado = Object.fromEntries(Object.entries(process.env).filter(([clave]) => !clave.toUpperCase().startsWith("GIT_")));
   const env = {
     ...heredado,
@@ -272,8 +269,8 @@ export function gitEnLaDemo(raizDemo: string, dir: string, args: readonly string
   return execFileSync("git", [...fijos, ...args], { cwd: dir, env, timeout: ESPERA_DE_GIT_MS, maxBuffer: SALIDA_MAXIMA, windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
-// ¿La carpeta está dentro de un repositorio de git? Cualquier otro fallo (git no instalado, propiedad
-// dudosa) se lanza: no es lo mismo que "no tiene git".
+// Is the folder inside a git repository? Any other failure (git not installed, dubious ownership) is
+// thrown: it is not the same as "it has no git".
 export async function tieneGit(dir: string): Promise<boolean> {
   try {
     return (await git(dir, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
