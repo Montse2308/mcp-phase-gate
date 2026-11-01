@@ -75,6 +75,61 @@ test("las vistas sin proyecto ni tarea no cambian de ruta al cambiar de idioma",
   expect(await hashActual(page)).toBe("#/vigia");
 });
 
+test("una ruta que no está en el índice del idioma actual se traduce al entrar, sin pulsar ES/EN", async ({ browser, servidor }) => {
+  const contexto = await browser.newContext({ locale: "en-US" });
+  const page = await contexto.newPage();
+  try {
+    await page.goto(sitio(servidor, "#/tablero/TIENDA/envio-gratis"));
+    await expect.poll(() => hashActual(page)).toBe("#/tablero/SHOP/free-shipping");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("main")).toContainText("SHOP");
+    await expect(page.getByText(/This is not in the published demo/)).toHaveCount(0);
+    await expect(page).toHaveTitle("Board · SHOP · free-shipping · Studio");
+  } finally {
+    await contexto.close();
+  }
+});
+
+test("al volver atrás después de cambiar de idioma, la entrada anterior se traduce y no deja el aviso", async ({ page, servidor, registro }) => {
+  registro.permitidos.push(/status of 404/);
+  await page.goto(sitio(servidor, "#/tablero/TIENDA/envio-gratis"));
+  await expect(page.getByRole("main")).toContainText("TIENDA");
+  await page.goto(sitio(servidor, "#/bitacora/TIENDA/envio-gratis"));
+  await idiomas(page).getByRole("button", { name: "EN" }).click();
+  await expect.poll(() => hashActual(page)).toBe("#/bitacora/SHOP/free-shipping");
+  await page.goBack();
+  await expect.poll(() => hashActual(page)).toBe("#/tablero/SHOP/free-shipping");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("main")).toContainText("SHOP");
+  await expect(page.getByText(/This is not in the published demo/)).toHaveCount(0);
+});
+
+test("un enlace con ?lang del otro idioma traduce la ruta y conserva lang", async ({ page, servidor, registro }) => {
+  registro.permitidos.push(/status of 404/);
+  await page.goto(sitio(servidor, "#/tablero/TIENDA/envio-gratis?lang=en"));
+  await expect.poll(() => hashActual(page)).toBe("#/tablero/SHOP/free-shipping?lang=en");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("main")).toContainText("SHOP");
+  await expect(page.getByText(/This is not in the published demo/)).toHaveCount(0);
+});
+
+test("una ruta que no está en ningún índice va a la Red sin pulsar el idioma", async ({ page, servidor }) => {
+  await page.goto(sitio(servidor, "#/tablero/NO-EXISTE/nada"));
+  await expect.poll(() => hashActual(page)).toBe("#/red");
+  await expect(page.getByRole("heading", { level: 1, name: "Red" })).toBeVisible();
+  await expect(page.getByText(/no está en la demo publicada/)).toHaveCount(0);
+});
+
+test("si no se puede leer el índice del otro idioma, el cambio de idioma va a la Red", async ({ page, servidor, registro }) => {
+  registro.permitidos.push(/status of 404|status of 500|ERR_FAILED|ERR_ABORTED|Failed to load resource/);
+  await page.goto(sitio(servidor, "#/tablero/TIENDA/envio-gratis"));
+  await expect(page.getByRole("main")).toContainText("TIENDA");
+  await page.route("**/datos/en/**", (route) => route.abort());
+  await idiomas(page).getByRole("button", { name: "EN" }).click();
+  await expect.poll(() => hashActual(page)).toBe("#/red");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+});
+
 // ─── La banda de la demo y axe ──────────────────────────────────────────────────────────────────────────────
 // Todas las reglas de axe, con sus violaciones de cualquier gravedad: la banda fuera de un landmark era una
 // violación moderada de «region».
@@ -94,8 +149,10 @@ test("la banda de la demo va dentro de un landmark, y axe no marca ninguna viola
     for (const hash of VISTAS) {
       await page.goto(sitio(servidor, `${hash}${hash.includes("?") ? "&" : "?"}lang=${idioma}`));
       await expect(page.locator(".banda-demo")).toBeVisible();
-      // La banda es un complementary con nombre.
+      // La banda es un complementary con nombre. La vista espera a que la ruta esté en el idioma: sin esto,
+      // axe miraría el main vacío.
       await expect(page.locator("aside.banda-demo")).toHaveAttribute("aria-label", /.+/);
+      await expect(page.getByRole("main").getByRole("heading").first()).toBeVisible();
       for (const tema of ["claro", "oscuro"] as const) {
         await ponerTema(page, tema);
         await expect(page.getByRole("main")).toBeVisible();
@@ -220,10 +277,10 @@ vivo("la Red con la Documentación vacía dice el siguiente paso y enlaza a Ajus
 });
 
 // ─── La banda de `ui --demo` y la ruta de la carpeta temporal ───────────────────────────────────────────────
-// La carpeta temporal llega por un enlace (en Windows puede llegar como un nombre corto 8.3): el título de la
-// banda tiene que decir la ruta real, no la que dio el sistema, y el texto de la banda es corto: a 390 px cabe en
-// dos líneas.
-vivo("ui --demo con la carpeta temporal por un enlace: el título de la banda dice la ruta larga, el texto es corto y a 390 px no desborda", async ({ browser }) => {
+// La carpeta temporal llega por un enlace (en Windows puede llegar como un nombre corto 8.3): la banda dice
+// la ruta real en el texto, sin pasar el puntero, y en su descripción accesible. A 390 px salta de línea y no
+// ensancha la página.
+vivo("ui --demo con la carpeta temporal por un enlace: la ruta larga se lee en la banda y en su descripción, y a 390 px no desborda", async ({ browser }) => {
   vivo.setTimeout(180_000);
   const raiz = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "pg-e2e-demo-larga-"));
   const real = path.join(raiz, "temporal-real");
@@ -239,12 +296,12 @@ vivo("ui --demo con la carpeta temporal por un enlace: el título de la banda di
   const page = await contexto.newPage();
   try {
     await page.goto(`${servidor.origen}/`);
+    const frase = `Demo: datos de ejemplo en ${demo}`;
     const banda = page.locator(".banda-demo");
-    await expect(banda).toHaveText("Demo: datos de ejemplo. Qué es mcp-phase-gate");
-    await expect(banda).toHaveAttribute("title", `Demo: datos de ejemplo en ${demo}`);
-    expect(await banda.getAttribute("title")).not.toContain(enlace);
-    const { alto, linea } = await banda.evaluate((e) => ({ alto: e.getBoundingClientRect().height, linea: parseFloat(getComputedStyle(e).lineHeight) }));
-    expect(alto, "la banda no ocupa más de dos líneas").toBeLessThanOrEqual(linea * 2 + 24);
+    await expect(banda).toContainText(frase);
+    await expect(banda).toContainText("Qué es mcp-phase-gate");
+    await expect(banda).toHaveAccessibleDescription(frase);
+    expect(await banda.innerText()).not.toContain(enlace);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   } finally {
     await contexto.close();
