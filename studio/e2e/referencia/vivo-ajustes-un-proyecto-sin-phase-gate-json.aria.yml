@@ -69,7 +69,7 @@
           - option "ai-agent-ops"
           - option "multi-repo-feature"
           - option "research-ops"
-          - option "software"
-          - option "software-replica" [selected]
+          - option "software" [selected]
+          - option "software-replica"
           - option "software-tdd"
       - 'button "Crear phase-gate.json: vista previa"'
