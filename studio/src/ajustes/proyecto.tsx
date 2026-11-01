@@ -204,10 +204,18 @@ function EditorDeRepos({ b, quitarRutas, ponerQuitarRutas }: { b: ControlDeBorra
   );
 }
 
+// El preset con el que se ofrece el archivo nuevo: el que el proyecto ya usa, si está entre los que se pueden
+// elegir. Si no llega o no está en la lista, software.
+function presetInicialDelNuevo(efectivo: AjustesDeProyecto["efectivo"], presets: string[]): string {
+  const nombre = efectivo?.preset;
+  return nombre !== undefined && presets.includes(nombre) ? nombre : "software";
+}
+
 // Con `creado`, el archivo ya existe: la sección se queda para que se lea el «Hecho», y el resto de la página pasa
-// a editarlo.
-function CrearManifiesto({ proyecto, presets, creado, alAplicar }: { proyecto: string; presets: string[]; creado: boolean; alAplicar: () => void }) {
-  const [preset, setPreset] = useState("software-replica");
+// a editarlo. Hasta que la persona elija, el selector sigue al preset efectivo (la lista puede llegar después).
+function CrearManifiesto({ proyecto, presets, creado, alAplicar, efectivo }: { proyecto: string; presets: string[]; creado: boolean; alAplicar: () => void; efectivo: AjustesDeProyecto["efectivo"] }) {
+  const [elegido, setElegido] = useState<string | null>(null);
+  const preset = elegido ?? presetInicialDelNuevo(efectivo, presets);
   return (
     <section class="crear-manifiesto" aria-label={t("ajustes.proyecto.crear")}>
       {creado ? null : (
@@ -216,7 +224,7 @@ function CrearManifiesto({ proyecto, presets, creado, alAplicar }: { proyecto: s
           <p>
             <label>
               {t("ajustes.proyecto.presetNuevo")}{" "}
-              <select value={preset} disabled={SOLO_LECTURA} onChange={(e) => setPreset((e.target as HTMLSelectElement).value)}>
+              <select value={preset} disabled={SOLO_LECTURA} onChange={(e) => setElegido((e.target as HTMLSelectElement).value)}>
                 {presets.map((p) => (
                   <option key={p} value={p}>
                     {p}
@@ -254,7 +262,7 @@ export function PaginaProyecto({ proyecto, presets }: { proyecto: string; preset
       {SIN_DATOS_REALES ? <NoDisponible /> : null}
       {recurso.error ? <Aviso error={recurso.error} /> : null}
       {recurso.cargando && !datos && !SIN_DATOS_REALES ? <Cargando /> : null}
-      {datos?.manifiesto.estado === "ausente" || (seCreo && datos?.manifiesto.estado === "valido") ? <CrearManifiesto proyecto={proyecto} presets={presets} creado={datos.manifiesto.estado === "valido"} alAplicar={recurso.recargar} /> : null}
+      {datos?.manifiesto.estado === "ausente" || (seCreo && datos?.manifiesto.estado === "valido") ? <CrearManifiesto proyecto={proyecto} presets={presets} creado={datos.manifiesto.estado === "valido"} alAplicar={recurso.recargar} efectivo={datos.efectivo} /> : null}
       {datos?.manifiesto.estado === "invalido" ? (
         <>
           <p class="aviso aviso-error" role="alert">
