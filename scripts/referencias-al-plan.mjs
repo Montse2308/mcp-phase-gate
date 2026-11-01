@@ -1,5 +1,7 @@
-// Busca en los comentarios y en los nombres de los tests las referencias a documentos internos de trabajo, que
-// no viajan con el repo: ni el código, ni sus comentarios, ni los nombres de sus tests deben apuntar a ellos.
+// Busca en los comentarios, en los nombres de los tests y en el valor de las claves $comentario de los JSON las
+// referencias a los documentos de planeación de la versión, que no están en el repo: ni el código, ni sus
+// comentarios, ni los nombres de sus tests deben apuntar a ellos. El plan de la versión 3 sí está en docs/, pero
+// como historia de aquella versión, no como una fuente a la que el código remita.
 //
 // Uso: node scripts/referencias-al-plan.mjs [--resumen]
 //   Revisa los archivos que git tiene versionados. Sin opciones lista cada hallazgo (archivo:línea); --resumen
@@ -16,8 +18,10 @@
 //     número; y una L de dos cifras entre paréntesis (las L de dos cifras sueltas son los lotes del producto).
 //
 // Solo revisa los comentarios y los nombres de tests de los archivos de código, CSS, HTML, JSON con comentarios y
-// los que llevan # (YAML, .gitignore…). No revisa el texto de los .md, .txt ni los literales de las cadenas:
-// las carpetas docs y sitio salen con 0 porque ahí no hay comentarios que leer, no porque estén limpias.
+// los que llevan # (YAML, .gitignore…), y en los .json y .jsonc el valor de cada clave $comentario (el campo con
+// que un JSON, que no admite comentarios, se explica a sí mismo; viaja con el paquete si el archivo viaja). No
+// revisa el texto de los .md, .txt ni los demás literales de las cadenas: las carpetas docs y sitio salen con 0
+// porque ahí no hay comentarios que leer, no porque estén limpias.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -53,6 +57,22 @@ function carpetaDe(ruta) {
   return CARPETAS.at(-1);
 }
 
+// El valor de cada clave "$comentario" de un JSON, con la línea donde empieza. Se busca en el texto y no con
+// JSON.parse porque los .jsonc (tsconfig) admiten comentarios y comas finales.
+const CLAVE_COMENTARIO = /"\$comentario"\s*:\s*"((?:[^"\\\n]|\\.)*)"/g;
+
+function valoresDeComentario(texto) {
+  return [...texto.matchAll(CLAVE_COMENTARIO)].map((m) => {
+    let valor = m[1];
+    try {
+      valor = JSON.parse(`"${m[1]}"`);
+    } catch {
+      // un escape inválido: se revisa el texto tal cual
+    }
+    return { linea: texto.slice(0, m.index).split("\n").length, valor };
+  });
+}
+
 export function hallazgosDe(ruta, texto) {
   const salida = [];
   const buscar = (donde, linea, renglon) => {
@@ -62,6 +82,9 @@ export function hallazgosDe(ruta, texto) {
   };
   for (const c of comentariosDe(ruta, texto) ?? []) c.lineas.forEach((renglon, i) => buscar("comentario", c.linea + i, renglon));
   for (const t of nombresDeTests(texto, ruta)) buscar("nombre de test", t.linea, t.texto);
+  if ([".json", ".jsonc"].includes(path.posix.extname(ruta))) {
+    for (const v of valoresDeComentario(texto)) buscar("$comentario", v.linea, v.valor);
+  }
   return salida;
 }
 
@@ -100,8 +123,8 @@ function main() {
   console.log("Por expresión:");
   for (const [regla] of REGLAS) console.log(`  ${regla.padEnd(34)} ${String(porRegla.get(regla) ?? 0).padStart(5)}`);
   const porDonde = cuenta((h) => h.donde);
-  console.log(`En comentarios: ${porDonde.get("comentario") ?? 0}, en ${distintas("comentario")} líneas. En nombres de tests: ${porDonde.get("nombre de test") ?? 0}, en ${distintas("nombre de test")} nombres.`);
-  console.log("No revisa el texto de los .md ni de los .txt, ni los literales de las cadenas: un 0 en docs o en sitio no dice que estén limpios.");
+  console.log(`En comentarios: ${porDonde.get("comentario") ?? 0}, en ${distintas("comentario")} líneas. En nombres de tests: ${porDonde.get("nombre de test") ?? 0}, en ${distintas("nombre de test")} nombres. En valores de $comentario: ${porDonde.get("$comentario") ?? 0}, en ${distintas("$comentario")} líneas.`);
+  console.log("No revisa el texto de los .md ni de los .txt, ni los demás literales de las cadenas: un 0 en docs o en sitio no dice que estén limpios.");
   process.exitCode = hallazgos.length === 0 ? 0 : 1;
 }
 

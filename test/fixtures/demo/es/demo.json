@@ -1,5 +1,5 @@
 {
-  "$comentario": "El guion de la demo del Studio (§7.8 del plan): proyectos, repos con sus archivos de partida, tareas con sus documentos (en esta misma carpeta, <PROYECTO>/<tarea>/) y los lotes que se registran con record_batch. Todo es un ejemplo inventado.",
+  "$comentario": "El guion de la demo del Studio: proyectos, repos con sus archivos de partida, tareas con sus documentos (en esta misma carpeta, <PROYECTO>/<tarea>/) y los lotes que se registran con record_batch. Todo es un ejemplo inventado.",
   "inicio": "2026-03-02T10:00:00Z",
   "autor": { "nombre": "Demo", "correo": "demo@example.invalid" },
   "proyectos": [
