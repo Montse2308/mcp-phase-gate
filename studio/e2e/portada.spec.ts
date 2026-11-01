@@ -3,7 +3,7 @@
 // un subdirectorio (/mcp-phase-gate/) por un servidor de archivos sin nada más, como GitHub Pages. Comprueba los
 // dos idiomas y su elección recordada, que los botones lleven a la demo y a la guía, axe, que a 390 px nada
 // desborde, que no se pida nada fuera del sitio, el peso de la primera carga y que los enlaces de la demo de antes
-// lleguen a demo/ con su hash.
+// lleguen a demo/, traduciendo el proyecto y la tarea si no están en el idioma del navegador.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -209,12 +209,18 @@ test.describe("con el navegador en inglés", () => {
   });
 
   test("los links de la demo de antes llegan a demo/ con su hash", async ({ page, sitio }) => {
-    const viejos = ["#/tablero/TIENDA/cupones-de-descuento", "#red", "#?lang=en", "#?sobrio=1"];
+    // Sin proyecto ni tarea el hash se queda. El del tablero nombra TIENDA en español y el navegador va en
+    // inglés, así que al abrir la demo la ruta pasa a su equivalente. Hay que esperar ese hash: el intermedio
+    // en español solo dura hasta que carga el índice, y en Windows la traducción ya está hecha al afirmar.
+    const viejos = ["#red", "#?lang=en", "#?sobrio=1"];
     for (const hash of viejos) {
       await page.goto(portada(sitio, hash));
       await expect(page).toHaveURL(portada(sitio, `demo/${hash}`));
       await expect(page.locator("#app")).not.toBeEmpty();
     }
+    await page.goto(portada(sitio, "#/tablero/TIENDA/cupones-de-descuento"));
+    await expect(page).toHaveURL(portada(sitio, "demo/#/tablero/SHOP/discount-coupons"));
+    await expect(page.locator("#app")).not.toBeEmpty();
     // La misma redirección desde la portada en español.
     await page.goto(portada(sitio, "es/#/red"));
     await expect(page).toHaveURL(portada(sitio, "demo/#/red"));
