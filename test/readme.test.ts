@@ -284,4 +284,14 @@ describe("los README y las guías", () => {
       });
     }
   });
+
+  describe("la tabla de clientes", () => {
+    const FRASES = ["Por verificar", "To be verified"];
+    for (const archivo of ["docs/guide/installation.md", "docs/guia/instalacion.md", ...READMES]) {
+      it(`${archivo} no deja la tabla de clientes sin observar`, () => {
+        const texto = leer(archivo);
+        for (const frase of FRASES) assert.ok(!texto.includes(frase), `${archivo} todavía dice «${frase}»`);
+      });
+    }
+  });
 });
