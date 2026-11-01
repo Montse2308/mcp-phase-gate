@@ -106,7 +106,7 @@ export const TEXTOS_AJUSTES = {
   },
   "AJUSTES-AVANZADA-COMO-CAMBIARLA": {
     es: (p: { variable: string }) => `No se edita desde Ajustes. Se cambia en el bloque "env" del mcp.json de tu cliente (o en el entorno de quien lanza el servidor): ${p.variable}.`,
-    en: (p: { variable: string }) => `It is not edited from Ajustes. It is changed in the "env" block of your client's mcp.json (or in the environment of whoever launches the server): ${p.variable}.`,
+    en: (p: { variable: string }) => `It is not edited from Settings. It is changed in the "env" block of your client's mcp.json (or in the environment of whoever launches the server): ${p.variable}.`,
   },
 
   // ─── studio/acciones.ts: the order and the destinations of several files ───
