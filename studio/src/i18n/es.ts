@@ -26,6 +26,7 @@ export const es = {
   "banda.estaticoDemo": "Demo: datos de ejemplo. Todo es de solo lectura.",
   "banda.estaticoDatos": "Exportación de una Documentación: solo lectura.",
   "banda.queEs": "Qué es mcp-phase-gate",
+  "banda.etiqueta": "Aviso sobre los datos",
 
   // ─── Comunes ───
   "comun.cargando": "Cargando…",
@@ -61,6 +62,7 @@ export const es = {
   // ─── Red ───
   "red.titulo": "Red de proyectos",
   "red.vacia": "No hay proyectos en la Documentación todavía.",
+  "red.vaciaPaso": "Crea una tarea con /f1 desde tu cliente de IA, o revisa la ruta de la Documentación en Ajustes.",
   "red.manifiestoValido": "phase-gate.json válido",
   "red.sinManifiesto": "sin phase-gate.json",
   "red.manifiestoInvalido": "phase-gate.json inválido",

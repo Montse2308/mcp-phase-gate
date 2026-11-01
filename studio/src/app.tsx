@@ -5,16 +5,17 @@
 import { Ajustes } from "./ajustes/ajustes";
 import { guardarSalida } from "./ajustes/borrador";
 import { Bitacora } from "./bitacora/bitacora";
-import { MODO, enlaceDeLaPortada, get, textoDeLaBanda } from "./datos";
-import { IDIOMAS_UI, NOMBRE_DEL_IDIOMA, cambiarIdioma, t, useIdioma } from "./i18n/idioma";
+import { MODO, ayudaDeLaBanda, enlaceDeLaPortada, get, hashDeLaRed, hashEnElIdioma, hashSiNoEstaEnElIdioma, textoDeLaBanda } from "./datos";
+import { IDIOMAS_UI, NOMBRE_DEL_IDIOMA, cambiarIdioma, idiomaActual, t, useIdioma } from "./i18n/idioma";
+import type { IdiomaUi } from "./i18n/idioma";
 import { cambiarTema, useTemaOscuro } from "./preferencias";
 import { Red } from "./red/red";
-import { VISTAS, enlace, useRuta } from "./rutas";
+import { VISTAS, enlace, leerRuta, referenciaDe, useRuta } from "./rutas";
 import { Tablero } from "./tablero/tablero";
 import { Taller } from "./taller/taller";
 import { Vigia } from "./vigia/vigia";
 import type { Ruta } from "./rutas";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 function Pendiente({ nombre }: { nombre: string }) {
   return (
@@ -44,6 +45,54 @@ function Vista({ ruta }: { ruta: Ruta }) {
   }
 }
 
+// En la demo estática, los nombres de proyecto y de tarea son otros en cada idioma: la ruta pasa a la
+// equivalente (o a la Red) a la vez que el idioma. Se reescribe el hash sin añadir una entrada al historial, y el
+// idioma cambia en el mismo instante: así no se pinta la ruta vieja con el diccionario nuevo. Si la traducción
+// no se puede leer, se va a la Red: no se deja el hash del idioma anterior.
+function elegirIdioma(nuevo: IdiomaUi): void {
+  const de = idiomaActual();
+  if (MODO !== "estatico" || nuevo === de) {
+    cambiarIdioma(nuevo);
+    return;
+  }
+  const ruta = leerRuta();
+  const irA = (hash: string): void => {
+    if (hash !== window.location.hash) {
+      window.history.replaceState(window.history.state, "", hash);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
+    cambiarIdioma(nuevo);
+  };
+  hashEnElIdioma(ruta, de, nuevo).then(irA, () => irA(hashDeLaRed(ruta, nuevo)));
+}
+
+// Al entrar, al volver atrás o al abrir un enlace: si el proyecto o la tarea no están en el índice del idioma
+// actual, se traducen con el otro o se va a la Red. No queda solo en el botón ES/EN. Hasta saberlo, la vista
+// no se pinta: así no pide un nombre del otro idioma y no sale el aviso.
+function useTraducirLaRuta(ruta: Ruta, idioma: IdiomaUi): boolean {
+  const necesita = MODO === "estatico" && referenciaDe(ruta).proyecto !== null;
+  const clave = `${idioma}\n${window.location.hash}`;
+  const [confirmada, setConfirmada] = useState<string | null>(null);
+  useEffect(() => {
+    if (!necesita) return;
+    let vigente = true;
+    const hashAlPedir = window.location.hash;
+    hashSiNoEstaEnElIdioma(ruta, idioma).then((hash) => {
+      if (!vigente || idiomaActual() !== idioma || window.location.hash !== hashAlPedir) return;
+      if (hash !== null && hash !== window.location.hash) {
+        window.history.replaceState(window.history.state, "", hash);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        return;
+      }
+      setConfirmada(`${idiomaActual()}\n${window.location.hash}`);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [ruta, idioma, necesita]);
+  return !necesita || confirmada === clave;
+}
+
 // ES / EN: dos botones de verdad, con aria-pressed, en un grupo con nombre. Cada uno lleva el nombre del
 // idioma en ese idioma (title y lang), para que se lea bien sea cual sea el de la página.
 function SelectorDeIdioma() {
@@ -51,7 +100,7 @@ function SelectorDeIdioma() {
   return (
     <div class="idiomas" role="group" aria-label={t("idioma.grupo")}>
       {IDIOMAS_UI.map((id) => (
-        <button key={id} type="button" class="idioma" lang={id} title={NOMBRE_DEL_IDIOMA[id]} aria-pressed={idioma === id} onClick={() => cambiarIdioma(id)}>
+        <button key={id} type="button" class="idioma" lang={id} title={NOMBRE_DEL_IDIOMA[id]} aria-pressed={idioma === id} onClick={() => elegirIdioma(id)}>
           {id.toUpperCase()}
         </button>
       ))}
@@ -74,27 +123,39 @@ function useAjustesSiNoHayDocumentacion(): void {
   }, []);
 }
 
+// El título de la pestaña: la vista y, si los hay, el proyecto y la tarea («Tablero · TIENDA · envio-gratis ·
+// Studio»), en el idioma de la interfaz.
+function tituloDe(ruta: Ruta): string {
+  const { proyecto, tarea } = referenciaDe(ruta);
+  return [t(`vista.${ruta.vista}`), proyecto, tarea, "Studio"].filter(Boolean).join(" · ");
+}
+
 export function App() {
   const ruta = useRuta();
   useEffect(guardarSalida, []);
   useAjustesSiNoHayDocumentacion();
   const oscuro = useTemaOscuro();
-  useIdioma(); // al cambiar, se vuelve a pintar todo con el diccionario nuevo
+  const idioma = useIdioma(); // al cambiar, se vuelve a pintar todo con el diccionario nuevo
+  const rutaLista = useTraducirLaRuta(ruta, idioma);
+  useEffect(() => {
+    document.title = tituloDe(ruta);
+  }, [ruta, idioma]);
+  const ayuda = ayudaDeLaBanda();
   return (
     <>
       <a class="saltar" href="#contenido" onClick={(e) => { e.preventDefault(); document.getElementById("contenido")?.focus(); }}>
         {t("app.saltar")}
       </a>
       {MODO !== "vivo" ? (
-        <p class="banda-demo" role="note">
-          {textoDeLaBanda()}
+        <aside class="banda-demo" aria-label={t("banda.etiqueta")} aria-describedby={ayuda ? "banda-demo-ruta" : undefined}>
+          {ayuda ? <span id="banda-demo-ruta">{ayuda}</span> : textoDeLaBanda()}
           {enlaceDeLaPortada() ? (
             <>
               {" "}
               <a href={enlaceDeLaPortada()!}>{t("banda.queEs")}</a>
             </>
           ) : null}
-        </p>
+        </aside>
       ) : null}
       <header class="barra">
         <p class="marca-studio">
@@ -119,7 +180,7 @@ export function App() {
         </div>
       </header>
       <main id="contenido" tabIndex={-1}>
-        <Vista ruta={ruta} />
+        {rutaLista ? <Vista ruta={ruta} /> : null}
       </main>
     </>
   );

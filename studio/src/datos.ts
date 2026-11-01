@@ -8,7 +8,11 @@
 // (describeEstado, los hallazgos, los resúmenes de las acciones, los errores). Es una cabecera propia en un
 // fetch del mismo origen: no pide preflight ni toca la seguridad del Studio.
 
+import { equivalente } from "./equivalente";
 import { carpetaDeDatos, idiomaActual, t } from "./i18n/idioma";
+import type { IdiomaUi } from "./i18n/idioma";
+import { conReferencia, hashDe, referenciaDe } from "./rutas";
+import type { Ruta } from "./rutas";
 
 declare global {
   interface Window {
@@ -25,12 +29,19 @@ declare global {
 export type ModoApp = "vivo" | "demo" | "estatico";
 export const MODO: ModoApp = window.PG_MODO ?? "vivo";
 // El texto de la banda de la demo, en el idioma de la interfaz: con la carpeta de `ui --demo` o la clave del
-// export, el del diccionario; si no, el que mandó quien sirve la página; si no, uno genérico.
+// export, el del diccionario; si no, el que mandó quien sirve la página; si no, uno genérico. La carpeta de
+// `ui --demo` va en el texto (salta de línea y no ensancha la página) para leerla sin pasar el puntero.
 export function textoDeLaBanda(): string {
   if (window.PG_DEMO_RAIZ) return t("banda.demoEn", { raiz: window.PG_DEMO_RAIZ });
   if (window.PG_BANDA_CLAVE === "estatico-demo") return t("banda.estaticoDemo");
   if (window.PG_BANDA_CLAVE === "estatico-datos") return t("banda.estaticoDatos");
   return window.PG_BANDA ?? t("banda.demo");
+}
+
+// La descripción accesible de la banda en `ui --demo`: la misma frase, con la carpeta. El nombre del
+// landmark sigue siendo el aviso; sin esto la carpeta no se anuncia.
+export function ayudaDeLaBanda(): string | undefined {
+  return window.PG_DEMO_RAIZ ? textoDeLaBanda() : undefined;
 }
 
 // La portada del sitio, con su URL absoluta: cualquier `ui --export-static` sin datos reales muestra la misma banda,
@@ -75,8 +86,8 @@ export async function get<T>(ruta: string): Promise<T> {
 type Indice = { rutas: Record<string, { archivo: string; estado: number }> };
 const indices = new Map<string, Promise<Indice["rutas"]>>();
 
-async function getEstatico<T>(ruta: string): Promise<T> {
-  const carpeta = carpetaDeDatos(idiomaActual());
+async function getEstatico<T>(ruta: string, idioma: IdiomaUi = idiomaActual()): Promise<T> {
+  const carpeta = carpetaDeDatos(idioma);
   let indice = indices.get(carpeta);
   if (!indice) {
     indice = fetch(`${carpeta}indice.json`).then(async (r) => {
@@ -101,6 +112,56 @@ async function getEstatico<T>(ruta: string): Promise<T> {
     throw new ErrorDeApi(entrada.estado, cuerpo && typeof cuerpo === "object" && "error" in cuerpo ? String((cuerpo as { error: unknown }).error) : t("error.estado", { estado: entrada.estado }));
   }
   return cuerpo as T;
+}
+
+async function nombresDeProyectos(idioma: IdiomaUi): Promise<string[]> {
+  return (await getEstatico<{ proyectos: { nombre: string }[] }>("/api/proyectos", idioma)).proyectos.map((p) => p.nombre);
+}
+
+async function nombresDeTareas(idioma: IdiomaUi, proyecto: string): Promise<string[]> {
+  return (await getEstatico<{ tareas: { tarea: string }[] }>(`/api/proyectos/${ruta(proyecto)}/tareas`, idioma)).tareas.map((x) => x.tarea);
+}
+
+// La Red, conservando `lang` del enlace si lo traía, ya en el idioma de destino.
+export function hashDeLaRed(desde: Ruta, idioma: IdiomaUi): string {
+  const consulta = new URLSearchParams();
+  if (desde.consulta.has("lang")) consulta.set("lang", idioma);
+  return hashDe({ vista: "red", partes: [], consulta });
+}
+
+// El hash de la ruta `r` al pasar del idioma `de` al idioma `a`: la misma ruta con el proyecto y la tarea en su
+// nombre equivalente, o la Red si alguno no lo tiene. Una ruta sin proyecto ni tarea queda como está.
+export async function hashEnElIdioma(r: Ruta, de: IdiomaUi, a: IdiomaUi): Promise<string> {
+  const ref = referenciaDe(r);
+  if (ref.proyecto === null) return hashDe(r);
+  const aLaRed = hashDeLaRed(r, a);
+  const proyecto = equivalente(ref.proyecto, await nombresDeProyectos(de), await nombresDeProyectos(a));
+  if (proyecto === null) return aLaRed;
+  let tarea = ref.tarea;
+  if (tarea !== null) {
+    tarea = equivalente(tarea, await nombresDeTareas(de, ref.proyecto), await nombresDeTareas(a, proyecto));
+    if (tarea === null) return aLaRed;
+  }
+  const nueva = conReferencia(r, { proyecto, tarea });
+  if (nueva.consulta.has("lang")) nueva.consulta.set("lang", a);
+  return hashDe(nueva);
+}
+
+// Si el proyecto o la tarea de `r` no están en el índice de `idioma`, el hash traducido con el otro índice,
+// o la Red. null si la ruta ya está en este idioma, o si no nombra un proyecto. Si el índice no carga, la Red.
+export async function hashSiNoEstaEnElIdioma(r: Ruta, idioma: IdiomaUi): Promise<string | null> {
+  const ref = referenciaDe(r);
+  if (ref.proyecto === null) return null;
+  const otro: IdiomaUi = idioma === "es" ? "en" : "es";
+  try {
+    const proyectos = await nombresDeProyectos(idioma);
+    const proyectoYaEsta = proyectos.includes(ref.proyecto);
+    const tareaYaEsta = ref.tarea === null || (proyectoYaEsta && (await nombresDeTareas(idioma, ref.proyecto)).includes(ref.tarea));
+    if (proyectoYaEsta && tareaYaEsta) return null;
+    return await hashEnElIdioma(r, otro, idioma);
+  } catch {
+    return hashDeLaRed(r, idioma);
+  }
 }
 
 // Toda escritura lleva X-Phase-Gate: 1. El servidor la exige, y obliga a un preflight que nunca concede. Y,

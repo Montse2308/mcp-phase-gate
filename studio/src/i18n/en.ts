@@ -20,6 +20,7 @@ export const en = {
   "banda.estaticoDemo": "Demo: sample data. Everything is read-only.",
   "banda.estaticoDatos": "Export of a Documentation: read-only.",
   "banda.queEs": "What is mcp-phase-gate",
+  "banda.etiqueta": "Notice about the data",
 
   // ─── Comunes ───
   "comun.cargando": "Loading…",
@@ -55,6 +56,7 @@ export const en = {
   // ─── Red ───
   "red.titulo": "Project network",
   "red.vacia": "There are no projects in the Documentation yet.",
+  "red.vaciaPaso": "Create a task with /f1 from your AI client, or check the Documentation path in Settings.",
   "red.manifiestoValido": "phase-gate.json valid",
   "red.sinManifiesto": "no phase-gate.json",
   "red.manifiestoInvalido": "phase-gate.json invalid",
