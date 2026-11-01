@@ -382,6 +382,68 @@ test("salir de una página con cambios sin aplicar pide confirmación: si se can
   await expect(page.getByLabel("Idioma del proyecto")).toHaveValue("");
 });
 
+// machine.json puede no existir (esta prueba, sola) o ya existir (las de Este equipo corrieron antes). Se deja
+// como estaba: solo cambia presetPorDefecto mientras corre el cuerpo.
+async function conPresetPorDefecto(servidor: Servidor, preset: string | null, cuerpo: () => Promise<void>): Promise<void> {
+  const ruta = maquinaDe(servidor);
+  const antes = fs.existsSync(ruta) ? fs.readFileSync(ruta, "utf-8") : null;
+  const datos: Record<string, unknown> = antes === null ? { version: 2 } : leerJson(ruta);
+  if (preset === null) delete datos.presetPorDefecto;
+  else datos.presetPorDefecto = preset;
+  fs.writeFileSync(ruta, `${JSON.stringify(datos, null, 2)}\n`, "utf-8");
+  try {
+    await cuerpo();
+  } finally {
+    if (antes === null) fs.rmSync(ruta, { force: true });
+    else fs.writeFileSync(ruta, antes, "utf-8");
+  }
+}
+
+// NUEVO es el proyecto sin manifiesto de las pruebas que escriben. Al terminar se borra el archivo, para que la
+// prueba que lo crea a mano siga encontrándolo ausente.
+async function creandoManifiestoDeNuevo(servidor: Servidor, cuerpo: () => Promise<void>): Promise<void> {
+  const archivo = manifiestoDe(servidor, "NUEVO");
+  expect(fs.existsSync(archivo), "NUEVO sigue sin phase-gate.json").toBe(false);
+  try {
+    await cuerpo();
+  } finally {
+    fs.rmSync(archivo, { force: true });
+  }
+}
+
+const selectorDelPresetNuevo = (p: Page) => p.getByLabel("Preset del phase-gate.json nuevo");
+
+async function aplicarManifiestoNuevo(page: Page, preset: string): Promise<void> {
+  await page.getByRole("button", { name: "Crear phase-gate.json: vista previa" }).click();
+  const region = page.getByRole("region", { name: "Vista previa: Crear phase-gate.json" });
+  // «software» es prefijo de otros presets: hace falta el cierre de la cadena, no un includes.
+  await expect(region.locator(".diff-mas").filter({ hasText: new RegExp(`"preset": "${preset}"[,}]`) })).toHaveCount(1);
+  await region.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Hecho" })).toBeVisible();
+}
+
+test("sin presetPorDefecto, el phase-gate.json nuevo arranca en software y así se escribe", async ({ page, servidor }) => {
+  await conPresetPorDefecto(servidor, null, () =>
+    creandoManifiestoDeNuevo(servidor, async () => {
+      await page.goto(`${servidor.origen}/#/ajustes/proyecto/NUEVO`);
+      await expect(selectorDelPresetNuevo(page)).toHaveValue("software");
+      await aplicarManifiestoNuevo(page, "software");
+      expect(leerJson(manifiestoDe(servidor, "NUEVO")).preset).toBe("software");
+    }),
+  );
+});
+
+test("con presetPorDefecto, el phase-gate.json nuevo arranca en ese preset y así se escribe", async ({ page, servidor }) => {
+  await conPresetPorDefecto(servidor, "software-tdd", () =>
+    creandoManifiestoDeNuevo(servidor, async () => {
+      await page.goto(`${servidor.origen}/#/ajustes/proyecto/NUEVO`);
+      await expect(selectorDelPresetNuevo(page)).toHaveValue("software-tdd");
+      await aplicarManifiestoNuevo(page, "software-tdd");
+      expect(leerJson(manifiestoDe(servidor, "NUEVO")).preset).toBe("software-tdd");
+    }),
+  );
+});
+
 test("un proyecto sin phase-gate.json se crea desde su página, con su vista previa", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/ajustes/proyecto/NUEVO`);
   await expect(page.getByText("Este proyecto no tiene phase-gate.json todavía.")).toBeVisible();
