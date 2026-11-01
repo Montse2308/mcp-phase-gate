@@ -14,9 +14,7 @@
 // to correct the call.
 //
 // The descriptions and the messages are fixed at startup, in one language: `shapesDe(idioma)` builds the
-// input shapes of that language (once per language), and crearServidor asks for them with its own. The usual
-// names (startTaskShape…) remain exported: they are those of the messages' language when used, and they are
-// built on first use, not when this module is imported.
+// input shapes of that language (once per language), and crearServidor asks for them with its own.
 //
 // The optionals are .nullish() and null counts as absent: some clients with models in strict mode send null
 // in every optional field. A number as text (phase: "3") is not converted: it is rejected with a message
@@ -27,7 +25,7 @@ import { z } from "zod";
 
 import { NOMBRES_LOGICOS } from "./config.js";
 import type { NombreLogico } from "./config.js";
-import { idiomaDeMensajes, mensaje } from "./i18n/mensajes.js";
+import { mensaje } from "./i18n/mensajes.js";
 import type { Idioma } from "./vocabulario.js";
 
 const ID_REPO = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -282,40 +280,6 @@ export function shapesDe(idioma: Idioma): ShapesDeEntrada {
   }
   return shapes;
 }
-
-// An input shape with the usual name, in the language of the messages when used. It is resolved on first
-// access (not on import: the messages are not requested when a module loads) and it behaves like the real
-// object for reading its fields, walking it or passing it to z.object.
-function perezoso<K extends keyof ShapesDeEntrada>(clave: K): ShapesDeEntrada[K] {
-  const real = (): object => shapesDe(idiomaDeMensajes())[clave];
-  return new Proxy(
-    {},
-    {
-      get: (_, propiedad) => Reflect.get(real(), propiedad),
-      has: (_, propiedad) => Reflect.has(real(), propiedad),
-      ownKeys: () => Reflect.ownKeys(real()),
-      getOwnPropertyDescriptor: (_, propiedad) => {
-        const descriptor = Reflect.getOwnPropertyDescriptor(real(), propiedad);
-        return descriptor ? { ...descriptor, configurable: true } : undefined;
-      },
-    }
-  ) as ShapesDeEntrada[K];
-}
-
-// ─── Input shapes with their usual name ─────────────────────────────────────
-export const startTaskShape = perezoso("startTask");
-export const getPhasePromptShape = perezoso("getPhasePrompt");
-export const getActiveTaskShape = perezoso("getActiveTask");
-export const listTasksShape = perezoso("listTasks");
-export const switchTaskShape = perezoso("switchTask");
-export const readCentralDocShape = perezoso("readCentralDoc");
-export const writeCentralDocShape = perezoso("writeCentralDoc");
-export const readCrossRepoShape = perezoso("readCrossRepo");
-export const getOrchestratorStatusShape = {};
-export const readRepoFileShape = perezoso("readRepoFile");
-export const repoStatusShape = perezoso("repoStatus");
-export const recordBatchShape = perezoso("recordBatch");
-export const getBatchStatusShape = perezoso("getBatchStatus");
 
 // ─── Outputs ────────────────────────────────────────────────────────────────
 // They carry no descriptions: their structure is the same in both languages.

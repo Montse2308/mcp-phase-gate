@@ -17,8 +17,6 @@ export const GLOBAL_RULES_FILE = "global-rules.md";
 // The command of each phase (`/fN`): `comandos/fN.md` inside a prompts layer (`commands/fN.md` in an English
 // layer; within one layer `comandos/` wins). The highest layer that has it wins, like the phases; with none,
 // the phase uses a generic text.
-export const CARPETA_COMANDOS = "comandos";
-
 export function resolveCommandFile(numero: number, capas: string[] = promptsLayers()): string | null {
   for (const base of [...capas].reverse()) {
     for (const carpeta of CARPETAS_DE_COMANDOS) {

@@ -20,9 +20,11 @@
     // and npm install -D @types/node
 
     // Other Outputs
-    "sourceMap": true,
+    // No maps: the package does not publish them, and without them the build carries no sourceMappingURL
+    // pointing at files that are not there.
+    "sourceMap": false,
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
 
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
@@ -31,8 +33,8 @@
     // Style Options
     // "noImplicitReturns": true,
     // "noImplicitOverride": true,
-    // "noUnusedLocals": true,
-    // "noUnusedParameters": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     // "noFallthroughCasesInSwitch": true,
     // "noPropertyAccessFromIndexSignature": true,
 

@@ -477,11 +477,6 @@ export type TareaResuelta = { estado: EstadoTarea; carpetaProyecto: string; phas
 // The task a get_phase_prompt call talks about: the one indicated, or the project's active one. Without a
 // project it can only be resolved if there is exactly one candidate with an active task; with several,
 // "ambigua" is returned so that the caller says so instead of staying silent.
-export function tareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): EstadoTarea | "ambigua" | null {
-  const resuelta = resolverTareaDelPrompt(phases, opciones);
-  return resuelta === "ambigua" || resuelta === null ? resuelta : resuelta.estado;
-}
-
 export function resolverTareaDelPrompt(phases: FasesPorProyecto, opciones: OpcionesDeTarea = {}): TareaResuelta | "ambigua" | null {
   let carpetaProyecto: string;
 

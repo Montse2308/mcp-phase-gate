@@ -29,7 +29,6 @@ import {
 import type { Idioma, SeccionDeRecibo } from "./vocabulario.js";
 
 export type EstadoLote = "verificado" | "con pendientes" | "fallido" | "descartado";
-export const ESTADOS_LOTE: readonly EstadoLote[] = ["verificado", "con pendientes", "fallido", "descartado"];
 
 export type Ancla =
   | { tipo: "commit"; repo: string; sha: string; corto: string; asunto: string; rama: string; verificado: string }

@@ -360,14 +360,14 @@ export async function arrancarStudio(opciones: OpcionesStudio = {}): Promise<Stu
     }
     const ruta = rutaDeEstatico(dist, url.pathname);
     if (!ruta) {
-      enviar(res, 404, "No existe.");
+      enviar(res, 404, mensaje("STUDIO-ESTATICO-NO-EXISTE"));
       return;
     }
     let contenido: Buffer;
     try {
       contenido = fs.readFileSync(ruta);
     } catch {
-      enviar(res, 404, "No existe.");
+      enviar(res, 404, mensaje("STUDIO-ESTATICO-NO-EXISTE"));
       return;
     }
     enviar(res, 200, contenido, TIPOS[path.extname(ruta).toLowerCase()] ?? "application/octet-stream");
