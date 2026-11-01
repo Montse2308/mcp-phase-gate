@@ -50,7 +50,7 @@ En la Fase 4 la IA hace el commit de cada lote solo con tu OK (la política por 
 
 ## Para quién es
 
-Para quien trabaja sobre **código que ya existe y no se puede romper**, y necesita que quede constancia de por qué se hizo cada cosa. Encaja especialmente si trabajas desde más de un equipo, o si te toca justificar decisiones semanas después. No es para prototipos desechables ni para arrancar un proyecto de cero: cinco fases para cambiar un color es una ceremonia absurda. Habla MCP estándar, así que funciona en cualquier cliente compatible, y está **probado en Cursor, VS Code y Claude Code**.
+Para quien trabaja sobre **código que ya existe y no se puede romper**, y necesita que quede constancia de por qué se hizo cada cosa. Encaja especialmente si trabajas desde más de un equipo, o si te toca justificar decisiones semanas después. No es para prototipos desechables ni para arrancar un proyecto de cero: cinco fases para cambiar un color es una ceremonia absurda. Habla MCP estándar, así que funciona en cualquier cliente compatible. Los comandos de fase se comprobaron en Cursor y Claude Code. En VS Code el servidor arranca, y `/f1`…`/f5` no aparecen en el menú de `/`; la [guía de instalación](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guia/instalacion.md) dice lo que mostró cada cliente.
 
 ## Arquitectura
 

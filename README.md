@@ -50,7 +50,7 @@ In phase 4 the AI commits each batch only with your OK (the default policy; a pr
 
 ## Who it's for
 
-For people working on **code that already exists and must not break**, who need a record of why each thing was done. It fits especially well if you work from more than one machine, or if you have to justify decisions weeks later. It is not for throwaway prototypes or greenfield projects: five phases to change a colour is absurd ceremony. It speaks standard MCP, so it works with any compatible client, and it is **tested on Cursor, VS Code and Claude Code**.
+For people working on **code that already exists and must not break**, who need a record of why each thing was done. It fits especially well if you work from more than one machine, or if you have to justify decisions weeks later. It is not for throwaway prototypes or greenfield projects: five phases to change a colour is absurd ceremony. It speaks standard MCP, so it works with any compatible client. The phase commands were checked on Cursor and Claude Code. On VS Code the server starts, and `/f1`…`/f5` do not appear in the `/` menu; the [installation guide](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/guide/installation.md) has what each client showed.
 
 ## Architecture
 
