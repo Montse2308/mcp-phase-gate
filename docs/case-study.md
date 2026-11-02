@@ -68,21 +68,21 @@ For the release itself, the rule is that no `v4.0.0` tag exists while a blocking
 
 ## 7. What was measured
 
-The 3.2 column was measured by hand on a Windows machine with Node 24.11.0, before 4.0 started. In the 4.0 column, the test and bundle figures come from the CI run of this pull request's last commit, and the landing page and media figures from the manual run of the Pages workflow 41127672319 (it only builds, it doesn't deploy) on commit `5d5ba7c`, this pull request with the same media pipeline. Four figures don't come from CI or a workflow but from a command anyone can run on the same commit, and the table says which: the package, the decision log, the messages and the READMEs.
+The 3.2 column was measured by hand on a Windows machine with Node 24.11.0, before 4.0 started. In the 4.0 column, the test and bundle figures come from the CI run of this pull request's last commit, and the landing page and media figures from the manual run of the Pages workflow 41488978782 (it only builds, it doesn't deploy) on commit `7efe7c7`, the version commit, with the same media pipeline. Four figures don't come from CI or a workflow but from a command anyone can run on the same commit, and the table says which: the package, the decision log, the messages and the READMEs.
 
 | Figure | 3.2 | 4.0 | Where the 4.0 figure comes from |
 |---|---|---|---|
 | Test suite | 1,004 tests: 1,002 pass, 2 skipped | 1,149 tests: 1,147 pass, 2 skipped on Windows; 1,145 pass, 4 skipped on Linux; 0 fail | `npm test`, jobs `build-and-test` of the CI run |
 | Studio end-to-end | 51 pass | 269 pass, on each of Linux, Windows and macOS | `npm run test:e2e`, jobs `e2e-studio` of the CI run |
 | Studio front-end | 125.76 kB gzip of a 200 kB budget | 161.24 kB gzip of the same budget | `npm run build`, its log in the CI run |
-| Package | 183 files, 536.0 kB packed, 1.8 MB unpacked | 137 files, 510.0 kB packed, 1.5 MB unpacked. Before this pull request it was 188 files: the 51 `.d.ts` (263 kB) are left out because it is a CLI with no `types` | command: `npm pack --dry-run` |
+| Package | 183 files, 536.0 kB packed, 1.8 MB unpacked | 137 files, 507.6 kB packed, 1.5 MB unpacked. Before this pull request it was 188 files: the 51 `.d.ts` (263 kB) are left out because it is a CLI with no `types` | command: `npm pack --dry-run` |
 | Decision log | 101 entries | 107 entries | command: `node scripts/indice-decisiones.mjs`, which builds the index from them |
 | Server messages | 724 codes in Spanish and English, 7 catalogs | 756 codes, 8 catalogs | command: keys of each `TEXTOS_*` object in `build/i18n/textos/*.js` |
 | READMEs | 1,002 and 1,046 lines | 105 lines each | command: `wc -l`; in CI, `test/readme.test.ts` fails above 200 |
-| Landing page, first load with its three screenshots | there was none | 245,555 bytes in English, 250,551 in Spanish, of a 300,000 budget | job `ensamblar` of the Pages run, which fails above the budget |
+| Landing page, first load with its three screenshots | there was none | 245,550 bytes in English, 250,546 in Spanish, of a 300,000 budget | job `ensamblar` of the Pages run, which fails above the budget |
 | Link-preview image, 1200 × 630 | there was none | 107,111 bytes (English) and 113,350 (Spanish), PNG | job `capturas` of the Pages run; GitHub accepts up to 1 MB |
-| Video | 41.3 s and 42.4 s; MP4 of 1.52 MB each | 41.6 s (English) and 41.7 s (Spanish); MP4 of 1,100,799 and 1,154,349 bytes | `medios.json` of the Pages run |
-| GIF of the README | 42 s, 4.93 MB and 4.72 MB, at 8 fps and 760 px | 21.8 s (English) and 21.9 s (Spanish), 2,305,855 and 2,235,759 bytes, at 10 fps and 840 px; budget 2,621,440 (2.5 MiB) | `medios.json` of the Pages run |
+| Video | 41.3 s and 42.4 s; MP4 of 1.52 MB each | 41.8 s (English) and 41.8 s (Spanish); MP4 of 1,208,441 and 1,172,086 bytes | `medios.json` of the Pages run |
+| GIF of the README | 42 s, 4.93 MB and 4.72 MB, at 8 fps and 760 px | 22.0 s (English) and 22.0 s (Spanish), 2,304,277 and 2,567,654 bytes, at 10 fps and 840 px; budget 2,621,440 (2.5 MiB) | `medios.json` of the Pages run |
 
 The demo, counted by generating it in both languages and listing receipt files and each repository's `git rev-list --count HEAD`: three projects, two git repositories with six real commits, and eight receipts. Six are sealed (four to a commit, two to a sha256), one was discarded with a note, one waits for its commit.
 
