@@ -140,7 +140,7 @@ A version is published by a tag, never by a merge. The order is what keeps a tag
 2. After the merge, `git fetch origin master` and check that `git tag -l` shows no stray local tag and that `git show origin/master:package.json` has the new version.
 3. Tag the merge commit with an annotated tag, `git tag -a vX.Y.Z <commit>`, and push it **by name**, `git push origin vX.Y.Z`. Never `git push --tags`.
 4. Two workflows start from the tag:
-   - `publish.yml` checks that the tag and `package.json` agree and publishes to npm with provenance, with no stored token: npm trusts this repository and this exact file, so don't rename or move it. A version with a hyphen (`4.1.0-rc.1`) goes out with the `beta` tag and never becomes `latest`. It installs npm 11 on purpose, because the version Node 22 brings can't authenticate by OIDC.
+   - `publish.yml` checks that the tag and `package.json` agree and publishes to npm with provenance, with no stored token: npm trusts this repository and this exact file, so don't rename or move it. A version with a hyphen (`4.1.0-beta.1`) goes out with the `beta` tag and never becomes `latest`. It installs npm 11 on purpose, because the version Node 22 brings can't authenticate by OIDC.
    - `pages.yml` publishes the landing page, the demo and the media, and only for tags without a hyphen. Run by hand on a branch it builds the site and leaves it as the `sitio-completo` artifact for 14 days, without deploying.
 5. The version's Release on GitHub carries its notes: `gh release create <tag> --verify-tag --notes-file docs/notas/<tag>.md`. `--verify-tag` matters: without it, `gh` would create a missing tag, and that would publish.
 
@@ -302,7 +302,7 @@ Una versión se publica con un tag, nunca con un merge. El orden es lo que evita
 2. Después del merge, `git fetch origin master` y comprueba que `git tag -l` no muestra ningún tag local suelto y que `git show origin/master:package.json` trae la versión nueva.
 3. Etiqueta el commit de merge con un tag anotado, `git tag -a vX.Y.Z <commit>`, y empújalo **por su nombre**, `git push origin vX.Y.Z`. Nunca `git push --tags`.
 4. El tag arranca dos workflows:
-   - `publish.yml` comprueba que el tag y `package.json` coinciden y publica en npm con provenance, sin ningún token guardado: npm confía en este repositorio y en este archivo exacto, así que no lo renombres ni lo muevas. Una versión con guion (`4.1.0-rc.1`) sale con la etiqueta `beta` y nunca pasa a ser `latest`. Instala npm 11 a propósito, porque el que trae Node 22 no sabe autenticarse por OIDC.
+   - `publish.yml` comprueba que el tag y `package.json` coinciden y publica en npm con provenance, sin ningún token guardado: npm confía en este repositorio y en este archivo exacto, así que no lo renombres ni lo muevas. Una versión con guion (`4.1.0-beta.1`) sale con la etiqueta `beta` y nunca pasa a ser `latest`. Instala npm 11 a propósito, porque el que trae Node 22 no sabe autenticarse por OIDC.
    - `pages.yml` publica la portada, la demo y los medios, y solo con tags sin guion. Corrido a mano sobre una rama, construye el sitio y lo deja como el artefacto `sitio-completo` durante 14 días, sin desplegar.
 5. El Release de la versión en GitHub lleva sus notas: `gh release create <tag> --verify-tag --notes-file docs/notas/<tag>.md`. El `--verify-tag` importa: sin él, `gh` crearía el tag si faltara, y eso publicaría.
 
