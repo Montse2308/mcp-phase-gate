@@ -2,11 +2,17 @@ name: CI
 
 # En cada PR, y en master al mergear. No se corre en cada push a una rama suelta a propósito:
 # el flujo de este repo siempre pasa por un PR, así que un push a una rama sin PR abierto se
-# revisaría dos veces al abrirlo y ninguna antes.
+# revisaría dos veces al abrirlo y ninguna antes. master es una rama protegida: los merges
+# por PR caen ahí y la CI tiene que correr sobre el resultado.
 on:
   push:
     branches: [master]
   pull_request:
+
+# Los jobs solo leen el repo: ninguno escribe en él ni publica nada. Se declara aquí, como en los otros dos
+# workflows, para que no dependa del ajuste del repositorio, que se puede cambiar sin tocar este archivo.
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
@@ -38,13 +44,24 @@ jobs:
 
       - run: npm ci
 
+      # Las dependencias de producción, sin una vulnerabilidad alta o crítica abierta. Solo en una de las
+      # combinaciones: el árbol de dependencias es el mismo en las cinco y repetirlo no agrega nada.
+      - name: Auditar las dependencias de producción
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 22
+        run: npm audit --omit=dev --audit-level=high
+
+      # Ni los comentarios ni los nombres de los tests pueden citar documentos de trabajo que no viajan
+      # con el repo (secciones numeradas, etapas, hallazgos, códigos). Va dentro de este job, y no en otro
+      # aparte, para no cambiar la lista de checks obligatorios.
+      - run: node scripts/referencias-al-plan.mjs
+
       # El build va aparte del test para que un fallo de compilación del servidor se distinga
       # de un test en rojo: son dos problemas distintos y el log lo tiene que decir solo.
       - run: npm run build
 
       - run: npm test
 
-  # Los E2E del Studio en Chromium (§7.10): cada vista, la demo y el sitio estático, con axe y en un
+  # Los E2E del Studio en Chromium: cada vista, la demo y el sitio estático, con axe y en un
   # teléfono. Aparte de build-and-test porque necesitan el navegador. En los tres sistemas: hay fallos de
   # maquetación que dependen de las rutas del equipo, y las de Windows son otras. Node 22, la última 22.x
   # (Vite 8 pide al menos la 22.12 para compilar).

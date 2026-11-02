@@ -1,7 +1,7 @@
-// La demo (§7.8 del plan) en Chromium real, contra un `ui --demo` de verdad: el temporal del sistema del
+// La demo en Chromium real, contra un `ui --demo` de verdad: el temporal del sistema del
 // proceso es una carpeta propia (ahí genera la demo) y sus cuatro PHASE_GATE_* apuntan a una Documentación
 // de quien lo lanza, con un proyecto marcador que no puede aparecer y que al terminar sigue intacta. Los E2E
-// de las vistas (L05 a L09) siguen sobre el árbol mínimo de arbol.ts: el documento malicioso, los
+// de las vistas siguen sobre el árbol mínimo de arbol.ts: el documento malicioso, los
 // manifiestos rotos o las tareas con hueco no caben en una demo que se publica.
 
 import * as fs from "node:fs";
@@ -10,7 +10,7 @@ import * as path from "node:path";
 
 import { git } from "./arbol";
 import type { Arbol } from "./arbol";
-import { expect, lanzarUi, ningunEstadoSoloColor, ponerModo, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
+import { expect, fasesDeLaTarea, lanzarUi, lotesDeLaFase, ningunEstadoSoloColor, ponerTema, sinDesbordamiento, sinViolacionesGraves, test as base } from "./ayudas";
 import type { Servidor } from "./ayudas";
 import { huellaDeLosClientesReales } from "./entorno";
 
@@ -58,52 +58,51 @@ const test = base.extend<{}, { servidor: Servidor }>({
 });
 
 const banda = (page: import("@playwright/test").Page) => page.locator(".banda-demo");
-const vagones = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Lotes de la Fase 4" });
 
 test("la Red de la demo: TIENDA, ASISTENTE e INVESTIGACION, nada de la Documentación de quien la lanza, y la banda fija", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/`);
-  await expect(banda(page)).toHaveText(`Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
-  await expect(banda(page)).toHaveAttribute("role", "note");
+  // La carpeta de la demo se lee en el texto y en la descripción accesible, sin pasar el puntero.
+  const frase = `Demo: datos de ejemplo en ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`;
+  await expect(banda(page)).toHaveText(`${frase} Qué es mcp-phase-gate`);
+  await expect(banda(page)).toHaveAccessibleDescription(frase);
+  await expect(banda(page).getByRole("link", { name: "Qué es mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/es/");
+  // Un landmark con nombre: fuera de toda región, axe la marca.
+  await expect(page.getByRole("complementary", { name: "Aviso sobre los datos" })).toHaveClass("banda-demo");
   for (const nombre of ["TIENDA", "ASISTENTE", "INVESTIGACION"]) await expect(page.getByRole("heading", { name: nombre })).toBeVisible();
   await expect(page.getByText("MARCADOR")).toHaveCount(0);
 });
 
-test("el tablero de cupones-de-descuento: cuatro vagones, VERIFICADO tres veces y ANULADO; en sobrio, las mismas filas", async ({ page, servidor }) => {
+test("el tablero de cupones-de-descuento: cuatro lotes, verificado tres veces y descartado, las mismas filas en los dos temas", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento`);
-  await ponerModo(page, "cabina");
-  await expect(banda(page)).toBeVisible();
-  const lista = vagones(page).getByRole("listitem");
-  await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFICADO");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("ANULADO");
-  await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero de la demo en modo cabina");
-
-  await ponerModo(page, "sobrio");
-  await expect(banda(page)).toBeVisible();
-  const filas = page.getByRole("table", { name: "Lotes de la Fase 4" });
-  for (const lote of ["L01", "L02", "L03"]) await expect(filas.getByRole("row", { name: new RegExp(lote) })).toContainText(/verificado · [0-9a-f]{7}/);
-  await expect(filas.getByRole("row", { name: /L04/ })).toContainText("descartado");
-  await ningunEstadoSoloColor(page);
-  await sinViolacionesGraves(page, "el tablero de la demo en modo sobrio");
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
+    await expect(banda(page)).toBeVisible();
+    const lista = lotesDeLaFase(page);
+    await expect(lista).toHaveCount(4);
+    for (const i of [0, 1, 2]) {
+      await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verificado");
+      await expect(lista.nth(i).locator(".estado-detalle").first()).toHaveText(/^[0-9a-f]{7}$/);
+    }
+    await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("descartado");
+    await ningunEstadoSoloColor(page);
+    await sinViolacionesGraves(page, `el tablero de la demo en tema ${tema}`);
+  }
 });
 
 test("las otras dos: la tarea de agente sellada por sha256 y la de investigación con pendientes en la Fase 1", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
-  await ponerModo(page, "cabina");
-  const sellados = vagones(page).getByRole("listitem");
+  const sellados = lotesDeLaFase(page);
   await expect(sellados).toHaveCount(2);
-  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".sello-sellado")).toContainText("SELLADO");
+  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".estado-sellado")).toHaveText("sellado");
   await page.goto(`${servidor.origen}/#/tablero/INVESTIGACION/costo-de-embeddings`);
-  await expect(page.getByRole("list", { name: "Estaciones de la tarea" }).getByRole("listitem").nth(1)).toContainText("con pendientes");
+  await expect(fasesDeLaTarea(page).nth(1)).toContainText("con pendientes");
 });
 
 test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sello llega por SSE sin recargar", async ({ page, servidor }) => {
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/envio-gratis`);
-  await ponerModo(page, "cabina");
-  const lote = vagones(page).getByRole("listitem").nth(1);
-  await expect(lote.locator(".sello-en-via")).toContainText("EN VÍA");
-  await expect(vagones(page).getByRole("listitem").nth(2)).toContainText("sin recibo");
+  const lote = lotesDeLaFase(page).nth(1);
+  await expect(lote.locator(".estado-commit-pendiente")).toHaveText("commit pendiente");
+  await expect(lotesDeLaFase(page).nth(2)).toContainText("sin recibo");
   await page.evaluate(() => ((window as unknown as { __sinRecargar: boolean }).__sinRecargar = true));
 
   // Lo que haría el agente: el commit en tienda-web (el cambio ya estaba sin commitear) y record_batch con
@@ -124,41 +123,76 @@ test("en vivo: el commit pendiente de envio-gratis se hace y se ancla, y el sell
     for (const clave of Object.keys(env)) delete process.env[clave];
     Object.assign(process.env, anterior);
   }
-  await expect(lote.locator(".sello-verificado")).toContainText("VERIFICADO", { timeout: 15_000 });
-  await expect(lote.locator(".sello-verificado .sello-detalle").first()).toHaveText(sha.slice(0, 7));
-  await expect(lote.locator(".sello-nuevo")).toHaveCount(1);
+  await expect(lote.locator(".estado-verificado")).toHaveText("verificado", { timeout: 15_000 });
+  await expect(lote.locator(".estado-detalle").first()).toHaveText(sha.slice(0, 7));
+  await expect(lote).toHaveClass(/estado-nuevo/);
   expect(await page.evaluate(() => (window as unknown as { __sinRecargar?: boolean }).__sinRecargar)).toBe(true);
 });
 
-test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos modos", async ({ page, servidor }) => {
-  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
-  await ponerModo(page, "cabina");
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(banda(page)).toHaveText(`Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`);
-  const lista = page.getByRole("list", { name: "Batches of Phase 4" }).getByRole("listitem");
-  await expect(lista).toHaveCount(4);
-  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".sello-verificado")).toContainText("VERIFIED");
-  await expect(lista.nth(3).locator(".sello-anulado")).toContainText("VOID");
-  await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo cabina");
-  await ponerModo(page, "sobrio");
-  await expect(page.getByRole("table", { name: "Batches of Phase 4" }).getByRole("row", { name: /L04/ })).toContainText("discarded");
-  await sinViolacionesGraves(page, "el tablero de la demo en inglés, modo sobrio");
-  await ponerModo(page, "cabina");
-  await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
-  const sellados = page.getByRole("list", { name: "Batches of Phase 4" }).getByRole("listitem");
-  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".sello-sellado")).toContainText("SEALED");
+test("Ajustes sobre la demo: cambiar la política de commits de TIENDA, con un diff que se lee y un solo Aplicar", async ({ page, servidor }) => {
+  const { carpetasDeDemo } = await import("../../build/studio/demo.js");
+  const manifiesto = path.join(carpetasDeDemo(raizDeLaDemo(servidor.arbol.env.TEMP!)).docs, "TIENDA", "phase-gate.json");
+  const antes = JSON.parse(fs.readFileSync(manifiesto, "utf-8")) as { reglas?: { commits?: string } };
+  const nueva = antes.reglas?.commits === "auto" ? "agente-propone" : "auto";
+  const aplicaciones: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/acciones/aplicar")) aplicaciones.push(r.url());
+  });
+  await page.goto(`${servidor.origen}/#/ajustes/proyecto/TIENDA`);
+  await expect(banda(page)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Proyecto TIENDA" })).toBeVisible();
+  await page.getByLabel("Política de commits").selectOption(nueva);
+  await page.getByRole("button", { name: "Guardar los cambios: vista previa" }).click();
+  const previa = page.getByRole("region", { name: "Vista previa: Guardar los cambios" });
+  // Un diff legible: un solo archivo, y lo que cambia con su +.
+  await expect(previa).toContainText(`reglas.commits = "${nueva}"`);
+  await expect(previa.locator("pre.diff")).toHaveCount(1);
+  await expect(previa.locator(".diff-mas").filter({ hasText: `"commits": "${nueva}"` })).toHaveCount(1);
+  await ningunEstadoSoloColor(page);
+  await sinViolacionesGraves(page, "Ajustes sobre la demo, con la vista previa abierta");
+  await previa.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Hecho" })).toContainText("TIENDA actualizado");
+  expect(aplicaciones, "un solo Aplicar").toHaveLength(1);
+  expect((JSON.parse(fs.readFileSync(manifiesto, "utf-8")) as { reglas: { commits: string } }).reglas.commits).toBe(nueva);
+  await expect(page.getByLabel("Política de commits")).toHaveValue(nueva);
+  // La Red lo dice con sus palabras: lo que se aplicó es lo que se ve.
+  await page.goto(`${servidor.origen}/#/red`);
+  await page.getByRole("heading", { level: 2, name: "TIENDA" }).getByRole("button").click();
+  await expect(page.getByRole("article", { name: "TIENDA" }).locator(".campo-reglas dd")).toContainText(`Commits: ${nueva}`);
 });
 
-test("en un teléfono (390×844), con la banda y su ruta larga, nada desborda en los dos modos", async ({ page, servidor }) => {
+test("en inglés (#?lang=en): la banda y los sellos de la demo, y axe en los dos temas", async ({ page, servidor }) => {
+  await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento?lang=en`);
+  await ponerTema(page, "oscuro");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  const frase = `Demo: sample data in ${raizDeLaDemo(servidor.arbol.env.TEMP!)}`;
+  await expect(banda(page)).toHaveText(`${frase} What is mcp-phase-gate`);
+  await expect(banda(page)).toHaveAccessibleDescription(frase);
+  await expect(banda(page).getByRole("link", { name: "What is mcp-phase-gate" })).toHaveAttribute("href", "https://montse2308.github.io/mcp-phase-gate/");
+  const lista = lotesDeLaFase(page, "Batches of Phase 4");
+  await expect(lista).toHaveCount(4);
+  for (const i of [0, 1, 2]) await expect(lista.nth(i).locator(".estado-verificado")).toHaveText("verified");
+  await expect(lista.nth(3).locator(".estado-descartado")).toHaveText("discarded");
+  await sinViolacionesGraves(page, "el tablero de la demo en inglés, tema oscuro");
+  await ponerTema(page, "claro");
+  await expect(lotesDeLaFase(page, "Batches of Phase 4").nth(3)).toContainText("discarded");
+  await sinViolacionesGraves(page, "el tablero de la demo en inglés, tema claro");
+  await ponerTema(page, "oscuro");
+  await page.goto(`${servidor.origen}/#/tablero/ASISTENTE/tono-en-reclamos`);
+  const sellados = lotesDeLaFase(page, "Batches of Phase 4");
+  for (const i of [0, 1]) await expect(sellados.nth(i).locator(".estado-sellado")).toHaveText("sealed");
+});
+
+test("en un teléfono (390×844), con la banda, nada desborda en los dos temas", async ({ page, servidor }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${servidor.origen}/`);
   await expect(page.getByRole("heading", { name: "TIENDA" })).toBeVisible();
   await sinDesbordamiento(page, "la Red de la demo");
   await page.goto(`${servidor.origen}/#/tablero/TIENDA/cupones-de-descuento`);
-  for (const modo of ["cabina", "sobrio"] as const) {
-    await ponerModo(page, modo);
+  for (const tema of ["oscuro", "claro"] as const) {
+    await ponerTema(page, tema);
     await expect(banda(page)).toBeVisible();
-    await expect(page.getByText("ANULADO").or(page.getByText("descartado")).first()).toBeVisible();
-    await sinDesbordamiento(page, `el tablero de la demo en ${modo}`);
+    await expect(page.getByText("descartado").first()).toBeVisible();
+    await sinDesbordamiento(page, `el tablero de la demo en tema ${tema}`);
   }
 });

@@ -1,9 +1,9 @@
-// El log del servidor. Va siempre a stderr, que es lo que guardan los clientes en su archivo de
-// log, y además, cuando hay un cliente conectado, como notificación MCP (`notifications/message`),
-// que algunos clientes muestran en su panel. stdout nunca: es el canal del JSON-RPC.
+// The server log. It always goes to stderr, which is what clients keep in their log file, and, when a
+// client is connected, also as an MCP notification (`notifications/message`), which some clients show in
+// their panel. Never stdout: it is the JSON-RPC channel.
 //
-// Vive en su propio módulo y no en servidor.ts porque lo usan también phases.ts y tasks.ts, que
-// servidor.ts importa: ponerlo ahí haría un import circular.
+// It lives in its own module and not in servidor.ts because phases.ts and tasks.ts use it too, and
+// servidor.ts imports them: putting it there would make a circular import.
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
@@ -12,12 +12,12 @@ import { SERVER_NAME } from "./config.js";
 
 export const PREFIJO_LOG = `[${SERVER_NAME}]`;
 
-// Un solo servidor por proceso, que es lo que hay en producción. Si se crean varios (los tests),
-// las notificaciones van al último que se creó; stderr sigue recibiendo todo.
+// One server per process, which is what production has. If several are created (the tests), the
+// notifications go to the last one created; stderr still receives everything.
 let conectado: McpServer | null = null;
 
-// Lo llama crearServidor. Desde ese momento, si el servidor está conectado, cada línea del log
-// también sale como notificación.
+// Called by crearServidor. From then on, if the server is connected, every log line also goes out as a
+// notification.
 export function conectarLog(mcp: McpServer | null): void {
   conectado = mcp;
 }
@@ -25,11 +25,11 @@ export function conectarLog(mcp: McpServer | null): void {
 export function log(nivel: LoggingLevel, texto: string): void {
   console.error(`${PREFIJO_LOG} ${texto}`);
 
-  // Solo después del initialize: antes, el cliente no espera notificaciones, y en una terminal la
-  // línea JSON aparecía cruda en stdout al arrancar.
+  // Only after initialize: before it, the client does not expect notifications, and in a terminal the
+  // JSON line showed up raw on stdout at startup.
   if (!conectado?.isConnected() || !conectado.server.getClientVersion()) return;
 
-  // El SDK descarta solo lo que esté por debajo del nivel que pidió el cliente. Un fallo al
-  // notificar no puede tumbar la operación que estaba registrando: ya quedó en stderr.
+  // The SDK drops only what is below the level the client asked for. A failure to notify cannot bring
+  // down the operation being logged: it is already on stderr.
   conectado.server.sendLoggingMessage({ level: nivel, logger: SERVER_NAME, data: texto }).catch(() => {});
 }

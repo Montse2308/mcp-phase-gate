@@ -1,9 +1,11 @@
-// Cómo se arregla cada hallazgo del diagnóstico, por su código (§7.7.4 del plan), en español. Un test
+// Cómo se arregla cada hallazgo del diagnóstico, por su código, en español. Un test
 // (test/vigia-arreglos.test.ts) exige que esta tabla y la inglesa (arreglos-en.ts) tengan exactamente los
 // códigos que el servidor puede emitir.
 
 export const ARREGLOS_ES = {
-  "VAR-FALTA": "Define la variable en el bloque \"env\" del mcp.json de tu cliente (o en el .env de la raíz del paquete), apuntando a una carpeta que exista.",
+  "VAR-FALTA": "Guarda la ruta en machine.json (`npx mcp-phase-gate init --docs <ruta> --repos <ruta>` la escribe), o define la variable en el bloque \"env\" del mcp.json de tu cliente (o en el .env de la raíz del paquete), apuntando a una carpeta que exista.",
+  "VAR-PISA-MAQUINA": "Gana la variable del entorno. Para usar la de machine.json, quita esa variable del bloque \"env\" del mcp.json de tu cliente (o del .env).",
+  "LANG-PISA-MAQUINA": "Gana PHASE_GATE_LANG. Para usar el idioma de machine.json, quítala del bloque \"env\" del mcp.json de tu cliente.",
   "VAR-DISCREPA": "Deja un solo nombre: borra el ORQUESTADOR_* (el alias) o dale el mismo valor que a su PHASE_GATE_*.",
   "LANG-INVALIDO": "Pon PHASE_GATE_LANG=es o PHASE_GATE_LANG=en en el bloque \"env\" del mcp.json de tu cliente, o quítala para usar el idioma del sistema.",
   "ENV-UTF16": "Vuelve a guardar el .env como UTF-8, sin BOM (en PowerShell, `> .env` lo escribe en UTF-16).",

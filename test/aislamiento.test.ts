@@ -1,4 +1,4 @@
-// El servidor MCP por stdio no carga nada del Studio (§7.2 del plan). Se comprueba sobre el código
+// El servidor MCP por stdio no carga nada del Studio. Se comprueba sobre el código
 // compilado, siguiendo los imports estáticos de verdad —leídos con el analizador de TypeScript, no con
 // una expresión regular— desde index.js: cada archivo alcanzado, y cada paquete que importa. El
 // despacho de `ui` es un import() dinámico, que no se sigue: es justo lo que no carga el servidor.

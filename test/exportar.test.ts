@@ -1,4 +1,4 @@
-// El export estático (§7.9 del plan): sin --incluir-datos-reales exporta la demo y nunca lee la
+// El export estático: sin --incluir-datos-reales exporta la demo y nunca lee la
 // Documentación de quien exporta; dos exports dan los mismos bytes, y una parte de ellos se compara con un
 // export de oro (test/oro/export/, ORO_REGENERAR=1 lo reescribe); nada del equipo llega al sitio; los datos
 // reales solo con la confirmación escrita (o --yes); una carpeta que no está vacía no se toca; y la barrera
@@ -70,7 +70,7 @@ function bytesDelSitio(raiz: string): string[] {
     .sort();
 }
 
-// Desde la Etapa 6 (§8.7), un conjunto por idioma: datos/es/ y datos/en/.
+// Un conjunto por idioma: datos/es/ y datos/en/.
 const leerIndice = (sitio: string, idioma = "es"): Indice => JSON.parse(fs.readFileSync(path.join(sitio, "datos", idioma, ARCHIVO_DEL_INDICE), "utf-8")) as Indice;
 const datosDe = (sitio: string, ruta: string, idioma = "es"): string => fs.readFileSync(path.join(sitio, "datos", idioma, leerIndice(sitio, idioma).rutas[ruta]!.archivo), "utf-8");
 
@@ -132,7 +132,7 @@ describe("export estático de la demo", () => {
     assert.match(datosDe(a, "/api/prompts/SHOP/4?tarea=discount-coupons", "en"), /## FILES OF THIS TASK \(exact names\)/);
     assert.match(datosDe(a, "/api/prompts/SHOP/4?tarea=discount-coupons", "en"), /<repos>\/shop-api`/);
 
-    // Contra el export de oro reducido. El de español es el de la Etapa 5, sin tocar: la demo en español no
+    // Contra el export de oro reducido. El de español es el de siempre, sin tocar: la demo en español no
     // cambió. El de inglés es nuevo (test/oro/export/en/), con la lista de rutas y los proyectos.
     const rutas = `${Object.keys(indice.rutas).join("\n")}\n`;
     const rutasEn = `${Object.keys(leerIndice(a, "en").rutas).join("\n")}\n`;
@@ -163,6 +163,16 @@ describe("export estático de la demo", () => {
     // Las rutas de la demo, sustituidas y con "/": lo mismo en Windows que en Linux.
     assert.match(datosDe(a, "/api/prompts/TIENDA/4?tarea=cupones-de-descuento"), /<repos>\/tienda-api`/);
     assert.match(datosDe(a, "/api/estado"), /"archivo":"<estado>\/active-tasks\.json"/);
+
+    // Ajustes sale en la demo, en los dos idiomas, con las rutas de este equipo sustituidas.
+    for (const [idioma, proyecto] of [["es", "TIENDA"], ["en", "SHOP"]] as const) {
+      const equipo = JSON.parse(datosDe(a, "/api/ajustes", idioma)) as { campos: { campo: string; efectivo: string | null }[]; avanzadas: unknown[] };
+      assert.equal(equipo.campos.find((c) => c.campo === "documentacion")!.efectivo, "<Documentación>", idioma);
+      assert.equal(equipo.avanzadas.length, 5, idioma);
+      const delProyecto = JSON.parse(datosDe(a, `/api/ajustes/proyectos/${proyecto}`, idioma)) as { manifiesto: { estado: string }; archivo: { repos: unknown[] } | null };
+      assert.equal(delProyecto.manifiesto.estado, "valido", idioma);
+      assert.ok(delProyecto.archivo!.repos.length > 0, idioma);
+    }
   });
 
   it("el index.html del frontend compilado solo usa rutas relativas: el sitio vale bajo un subdirectorio", () => {
@@ -247,6 +257,10 @@ describe("export estático con datos reales", () => {
       assert.match(e.mensajes.join("\n"), /archivos de datos\.$/);
       assert.equal(fs.readFileSync(path.join(destino, "config.js"), "utf-8"), `window.PG_MODO = "estatico";\nwindow.PG_BANDA = ${JSON.stringify(BANDA_DE_DATOS_REALES)};\nwindow.PG_BANDA_CLAVE = "estatico-datos";\n`);
       assert.deepEqual((JSON.parse(datosDe(destino, "/api/proyectos")) as { proyectos: { nombre: string }[] }).proyectos.map((p) => p.nombre), ["REAL"]);
+      // Lo que enseña rutas de este equipo (Ajustes) no se exporta: la página dice que no está disponible.
+      for (const idioma of ["es", "en"]) {
+        assert.deepEqual(Object.keys(leerIndice(destino, idioma).rutas).filter((r) => r.startsWith("/api/ajustes")), [], idioma);
+      }
       const contexto = JSON.parse(datosDe(destino, `/api/tareas/REAL/tarea-real/documento?archivo=${encodeURIComponent("00 - Contexto Inicial.md")}`)) as { texto: string };
       assert.match(contexto.texto, /El código está en <Documentación>\/otra\./);
       for (const idioma of ["es", "en"]) {

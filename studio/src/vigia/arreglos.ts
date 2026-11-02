@@ -1,6 +1,6 @@
-// Cómo se arregla cada hallazgo del diagnóstico, por su código (§7.7.4 del plan): una tabla por idioma
-// (arreglos-es.ts y arreglos-en.ts, con los mismos códigos) y aquí la del idioma de la interfaz. El texto
-// del hallazgo lo trae el servidor, ya en ese idioma; esta línea es la de "cómo se arregla".
+// Cómo se arregla cada hallazgo del diagnóstico, por su código: una tabla por idioma (arreglos-es.ts y
+// arreglos-en.ts, con los mismos códigos) y aquí la del idioma de la interfaz. El texto del hallazgo lo trae el
+// servidor, ya en ese idioma; esta línea es la de "cómo se arregla".
 
 import { idiomaActual, t } from "../i18n/idioma";
 import { ARREGLOS_EN } from "./arreglos-en";

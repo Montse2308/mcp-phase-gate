@@ -1,13 +1,12 @@
-// Mensajes del grupo «nucleo» (ver i18n/mensajes.ts): cada código con su texto en español y en inglés.
-// El español es el texto de siempre, byte a byte; el inglés, una redacción natural con el glosario
-// de docs/glosario.md.
+// Messages of the "nucleo" group (see i18n/mensajes.ts): each code with its text in Spanish and in English;
+// the English follows the glossary in docs/glosario.md.
 
 import type { Catalogo } from "./tipos.js";
 
 type Detalle = { detalle: string };
 
-// De dónde sale el idioma de un proyecto que no lo declara (OrigenDelIdioma de manifiesto.ts, sin los que
-// lo declaran): el valor canónico va en español y se traduce al escribir en inglés.
+// Where the language of a project that does not declare it comes from (OrigenDelIdioma in manifiesto.ts,
+// without the ones that declare it): the canonical value is in Spanish and is translated when writing in English.
 const ORIGENES_EN: Readonly<Record<string, string>> = {
   "de machine.json": "from machine.json",
   "de PHASE_GATE_LANG": "from PHASE_GATE_LANG",
@@ -52,28 +51,38 @@ export const TEXTOS_NUCLEO = {
     en: "the folder that contains your code repositories",
   },
   "CONFIG-FALTA-VARIABLE": {
-    es: ({ variable, apuntaA, delEnv }: { variable: string; apuntaA: string; delEnv: string | null }) =>
-      `Falta ${variable}, que debe apuntar a ${apuntaA}. Defínela en el archivo ` +
-      `.env de la raíz del repo, o en el bloque "env" del mcp.json de tu cliente.${delEnv ? ` ${delEnv}` : ""}`,
-    en: ({ variable, apuntaA, delEnv }: { variable: string; apuntaA: string; delEnv: string | null }) =>
-      `${variable} is missing; it must point to ${apuntaA}. Define it in the ` +
-      `.env file at the root of the repo, or in the "env" block of your client's mcp.json.${delEnv ? ` ${delEnv}` : ""}`,
+    es: ({ variable, apuntaA, clave, delEnv, delMaquina }: { variable: string; apuntaA: string; clave: string; delEnv: string | null; delMaquina: string | null }) =>
+      `Falta ${variable}, que debe apuntar a ${apuntaA}. Guárdala en machine.json, en "${clave}" ` +
+      "(`npx mcp-phase-gate init --docs <ruta> --repos <ruta>` la escribe ahí) o, para un solo cliente o una " +
+      `ejecución, en el bloque "env" del mcp.json de ese cliente.${delMaquina ? ` ${delMaquina}` : ""}${delEnv ? ` ${delEnv}` : ""}`,
+    en: ({ variable, apuntaA, clave, delEnv, delMaquina }: { variable: string; apuntaA: string; clave: string; delEnv: string | null; delMaquina: string | null }) =>
+      `${variable} is missing; it must point to ${apuntaA}. Save it in machine.json, under "${clave}" ` +
+      "(`npx mcp-phase-gate init --docs <path> --repos <path>` writes it there) or, for a single client or " +
+      `run, in the "env" block of that client's mcp.json.${delMaquina ? ` ${delMaquina}` : ""}${delEnv ? ` ${delEnv}` : ""}`,
   },
   "CONFIG-RUTA-NO-EXISTE": {
-    es: ({ variable, ruta }: { variable: string; ruta: string }) =>
-      `${variable} apunta a "${ruta}", que no existe en este equipo. Corrige la ruta en el .env. ` +
-      `Si lleva acentos, revisa que el .env esté guardado en UTF-8: en otra codificación los ` +
-      `acentos llegan rotos y la carpeta parece no existir.`,
-    en: ({ variable, ruta }: { variable: string; ruta: string }) =>
-      `${variable} points to "${ruta}", which does not exist on this machine. Fix the path in the .env. ` +
-      `If it has accented characters, check that the .env is saved as UTF-8: in any other encoding the ` +
-      `accents arrive broken and the folder seems not to exist.`,
+    es: ({ variable, ruta, fuente }: { variable: string; ruta: string; fuente?: string }) =>
+      fuente === "machine.json"
+        ? `${variable} apunta a "${ruta}", que no existe en este equipo. Corrige la ruta en machine.json.`
+        : `${variable} apunta a "${ruta}", que no existe en este equipo. Corrige la ruta en el .env. ` +
+          `Si lleva acentos, revisa que el .env esté guardado en UTF-8: en otra codificación los ` +
+          `acentos llegan rotos y la carpeta parece no existir.`,
+    en: ({ variable, ruta, fuente }: { variable: string; ruta: string; fuente?: string }) =>
+      fuente === "machine.json"
+        ? `${variable} points to "${ruta}", which does not exist on this machine. Fix the path in machine.json.`
+        : `${variable} points to "${ruta}", which does not exist on this machine. Fix the path in the .env. ` +
+          `If it has accented characters, check that the .env is saved as UTF-8: in any other encoding the ` +
+          `accents arrive broken and the folder seems not to exist.`,
   },
   "CONFIG-RUTA-ES-ARCHIVO": {
     es: ({ variable, ruta }: { variable: string; ruta: string }) => `${variable} apunta a "${ruta}", que es un archivo y no una carpeta.`,
     en: ({ variable, ruta }: { variable: string; ruta: string }) => `${variable} points to "${ruta}", which is a file, not a folder.`,
   },
-  // index.ts (el log al arrancar)
+  "CONFIG-MAQUINA-EN-MEMORIA": {
+    es: ({ error }: { error: string }) => `machine.json dejó de ser válido: se siguen usando sus valores de la última lectura buena hasta que lo arregles. ${error}`,
+    en: ({ error }: { error: string }) => `machine.json stopped being valid: the values from the last good read keep being used until you fix it. ${error}`,
+  },
+  // index.ts (the startup log)
   "CONFIG-ARRANQUE-SIN-CONFIGURAR": {
     es: ({ detalle }: Detalle) => `SIN CONFIGURAR: ${detalle}`,
     en: ({ detalle }: Detalle) => `NOT CONFIGURED: ${detalle}`,
@@ -282,9 +291,16 @@ export const TEXTOS_NUCLEO = {
       `(${ORIGENES_EN[origen] ?? origen}). That language can change on another machine. Add "idioma" to its ${archivo}, or run \`init --migrate\`.`,
   },
   "MAQUINA-TXT-RUTA-ABSOLUTA": { es: "tiene que ser una ruta absoluta", en: "must be an absolute path" },
+  "MAQUINA-TXT-RUTAS-EN-V1": { es: 'solo existe en la versión 2: pon "version": 2', en: 'only exists in version 2: set "version": 2' },
   "MAQUINA-TXT-INVALIDA": {
     es: ({ archivo, ruta, error }: { archivo: string; ruta: string; error: string }) => `${archivo} no es válido (${ruta}): ${error}`,
     en: ({ archivo, ruta, error }: { archivo: string; ruta: string; error: string }) => `${archivo} is not valid (${ruta}): ${error}`,
+  },
+  "MAQUINA-TXT-SINTAXIS": {
+    es: ({ linea, columna, caracter }: { linea: number; columna: number; caracter: string | null }) =>
+      `no es un JSON válido: ${caracter === null ? "el archivo termina antes de tiempo" : `carácter inesperado «${caracter}»`} (línea ${linea}, columna ${columna}).`,
+    en: ({ linea, columna, caracter }: { linea: number; columna: number; caracter: string | null }) =>
+      `is not valid JSON: ${caracter === null ? "the file ends too soon" : `unexpected character «${caracter}»`} (line ${linea}, column ${columna}).`,
   },
   "MAQUINA-CLAVE-DUPLICADA": {
     es: ({ ruta, clave }: { ruta: string; clave: string }) =>

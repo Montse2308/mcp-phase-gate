@@ -1,4 +1,4 @@
-// La demo del Studio (§7.8 del plan): determinista entre procesos, carpetas y zonas horarias; inmune al
+// La demo del Studio: determinista entre procesos, carpetas y zonas horarias; inmune al
 // entorno de quien la genera (sus PHASE_GATE_*, su GIT_DIR, su configuración de git); sin datos del equipo
 // en lo que escribe; y con sus guardas: gitEnLaDemo solo escribe dentro de una carpeta marcada, borrarDemo
 // solo borra una, prepararDemo reutiliza solo la de esta versión, y `ui --demo` no lee la Documentación de
@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { fijarRaizDelPaquete } from "../src/config.js";
 import { MARCA_DE_DEMO, gitEnLaDemo } from "../src/git.js";
-import { activarDemo, borrarDemo, carpetaDeTextos, carpetasDeDemo, entornoDeDemo, entornoInitDeDemo, generarDemo, prepararDemo, textoDeLaMarca } from "../src/studio/demo.js";
+import { activarDemo, borrarDemo, carpetaDeLaDemo, carpetaDeTextos, carpetasDeDemo, entornoDeDemo, entornoInitDeDemo, generarDemo, prepararDemo, textoDeLaMarca } from "../src/studio/demo.js";
 import { carpetaTemporal, crearProyecto, crearSymlink, limpiarEntorno } from "./helpers.js";
 import { git, huellaDelArbol, pedir } from "./studio-ayudas.js";
 
@@ -30,7 +30,7 @@ const INDEX_JS = pathToFileURL(path.join(AQUI, "..", "src", "index.js")).href;
 // cualquier cosa del equipo que se cuele en un commit (la zona horaria, una configuración de git, el autor).
 const HEAD_DE_ORO = { "tienda-api": "debffa2c5f0b55eb2c337d03c75f877a2328a15e", "tienda-web": "cacff76178c5fa43ad7ed46a0587232bc45b1270" };
 const COMMITS = { "tienda-api": "4", "tienda-web": "2" };
-// La demo en inglés (§8.7): la misma historia, otros textos, otros SHA; también fijos.
+// La demo en inglés: la misma historia, otros textos, otros SHA; también fijos.
 const HEAD_DE_ORO_EN = { "shop-api": "46b45c1bc9351ff7db8d6e58607dd1da77eb077f", "shop-web": "8706b5ac3c2aac64f2640193eadad97977b95101" };
 
 const cerrables: (() => void)[] = [];
@@ -399,6 +399,27 @@ describe("demo: borrar, preparar y activar", () => {
     const antes = huellaDelArbol(path.dirname(ajena));
     await assert.rejects(prepararDemo("es", ajena), /no es una carpeta de demo/);
     assert.deepEqual(huellaDelArbol(path.dirname(ajena)), antes);
+  });
+
+  it("carpetaDeLaDemo: cuelga de la ruta larga de la carpeta temporal, no de la forma 8.3 ni de un enlace, y sigue el idioma", () => {
+    const real = carpetaTemporal("temporal");
+    const enlace = path.join(carpetaTemporal("enlaces"), "tmp");
+    crearSymlink(real, enlace);
+    // Otra forma del mismo directorio: lo que daría la variable del sistema con un nombre corto.
+    const antes = { TMP: process.env.TMP, TEMP: process.env.TEMP, TMPDIR: process.env.TMPDIR };
+    cerrables.push(() => {
+      for (const [clave, valor] of Object.entries(antes)) {
+        if (valor === undefined) delete process.env[clave];
+        else process.env[clave] = valor;
+      }
+    });
+    process.env.TMP = process.env.TEMP = process.env.TMPDIR = enlace;
+    assert.equal(path.dirname(carpetaDeLaDemo("es")), fs.realpathSync.native(enlace));
+    assert.equal(path.dirname(carpetaDeLaDemo("en")), fs.realpathSync.native(enlace));
+    assert.notEqual(carpetaDeLaDemo("es"), carpetaDeLaDemo("en"));
+    // Una carpeta temporal que no existe no rompe el cálculo.
+    process.env.TMP = process.env.TEMP = process.env.TMPDIR = path.join(real, "no-existe");
+    assert.equal(path.dirname(carpetaDeLaDemo("es")), path.join(real, "no-existe"));
   });
 
   it("activarDemo: fuera las PHASE_GATE_* (salvo PHASE_GATE_LANG), ORQUESTADOR_* y GIT_* de quien lanza, dentro las de la demo; init en la casa de la demo, sin ejecutar nada", async () => {

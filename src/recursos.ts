@@ -1,17 +1,16 @@
-// Los documentos de las tareas, expuestos como MCP Resources de solo lectura. Un cliente que los
-// muestra (con "@" en Claude Code, Cursor o VS Code) deja a la persona adjuntar al chat el plan
-// técnico o un recibo sin pedírselo al modelo, y al modelo leerlos sin gastar una llamada a
-// read_central_doc.
+// The documents of the tasks, exposed as read-only MCP Resources. A client that shows them (with "@" in
+// Claude Code, Cursor or VS Code) lets the person attach the technical plan or a receipt to the chat
+// without asking the model, and lets the model read them without spending a call on read_central_doc.
 //
-//   phase-gate://estado                                     el diagnóstico de la instalación
-//   phase-gate://fases                                      las fases, con su documento y su capa
-//   phase-gate://tareas/{proyecto}/{tarea}/{documento}      un archivo de la carpeta de una tarea
-//   phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo} un recibo de lote de la Fase 4
-//   phase-gate://configuracion/{proyecto}                   la configuración efectiva de un proyecto
+//   phase-gate://estado                                     the diagnosis of the installation
+//   phase-gate://fases                                      the phases, with their document and their layer
+//   phase-gate://tareas/{proyecto}/{tarea}/{documento}      a file in the folder of a task
+//   phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo} a batch receipt of Phase 4
+//   phase-gate://configuracion/{proyecto}                   the effective configuration of a project
 //
-// Solo lectura, y con las mismas defensas que read_central_doc: cada variable se decodifica y se
-// valida como un segmento portable antes de armar ninguna ruta, la ruta final tiene que quedar
-// dentro de la carpeta de la tarea, y la lectura está acotada a 1 MB de texto.
+// Read-only, and with the same defenses as read_central_doc: every variable is decoded and validated as a
+// portable segment before any path is built, the final path has to stay inside the task's folder, and the
+// reading is bounded to 1 MB of text.
 
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -52,14 +51,14 @@ export function uriDeRecibo(proyecto: string, tarea: string, recibo: string): st
   return `phase-gate://tareas/${encodeURIComponent(proyecto)}/${encodeURIComponent(tarea)}/recibos/${encodeURIComponent(recibo)}`;
 }
 
-// La subcarpeta de recibos la declara una fase en su cabecera (con los prompts de fábrica, la 4).
+// The receipts subfolder is declared by a phase in its header (with the factory prompts, phase 4).
 function subcarpetaDeRecibos(phases: Map<number, PhaseFile>): string | null {
   const conRecibos = [...phases.entries()].sort((a, b) => a[0] - b[0]).find(([, datos]) => datos.recibos);
   return conRecibos?.[1].recibos ?? null;
 }
 
-// statSync con throwIfNoEntry solo calla el ENOENT; un tramo de la ruta que es un archivo
-// (ENOTDIR) o un permiso denegado no son un error para preguntar "¿es un archivo?".
+// statSync with throwIfNoEntry only silences ENOENT; a segment of the path that is a file (ENOTDIR) or a
+// denied permission are not an error when asking "is it a file?".
 function esArchivo(ruta: string): boolean {
   try {
     return fs.statSync(ruta, { throwIfNoEntry: false })?.isFile() ?? false;
@@ -68,8 +67,8 @@ function esArchivo(ruta: string): boolean {
   }
 }
 
-// Lo que se lista o se autocompleta pasa por la misma contención que la lectura: un enlace dentro
-// de la tarea que lleva fuera de ella no se lee, y tampoco se enseña su nombre ni su fecha.
+// What is listed or autocompleted goes through the same containment as reading: a link inside the task that
+// leads outside it is not read, and its name and its date are not shown either.
 function dentroDeLaTarea(carpetaTarea: string, ruta: string): boolean {
   try {
     return estaDentroReal(carpetaTarea, ruta);
@@ -78,13 +77,13 @@ function dentroDeLaTarea(carpetaTarea: string, ruta: string): boolean {
   }
 }
 
-// Los errores de lectura llegan al cliente con un código que dice qué pasó, no como un error
-// interno: -32002 si el recurso no existe (el que propone la especificación de MCP), -32602 si el
-// URI o lo que apunta no es válido, y -32603 solo para un fallo de E/S inesperado.
+// Read errors reach the client with a code that says what happened, not as an internal error: -32002 if the
+// resource does not exist (the one the MCP specification proposes), -32602 if the URI or what it points to
+// is not valid, and -32603 only for an unexpected I/O failure.
 const RECURSO_NO_ENCONTRADO = -32002;
 
-// "No existe" se reconoce por el código del mensaje, que no depende del idioma. El texto en español
-// queda para los errores de otros módulos que todavía lleguen sin código.
+// "Does not exist" is recognized by the message code, which does not depend on the language. The Spanish
+// text is left for errors from other modules that still arrive without a code.
 const CODIGOS_NO_ENCONTRADO = new Set(["RUTA-PROYECTO-NO-EXISTE", "RECURSO-TAREA-NO-EXISTE", "RECURSO-ARCHIVO-NO-EXISTE", "RECURSO-SIN-SUBCARPETA-DE-RECIBOS"]);
 
 function conCodigo<T>(leerRecurso: () => T): T {
@@ -101,8 +100,8 @@ function conCodigo<T>(leerRecurso: () => T): T {
   }
 }
 
-// El SDK entrega las variables tal como venían en el URI, con su codificación porcentual. Se
-// decodifican aquí y se validan DESPUÉS: un %2F decodificado a "/" lo rechaza validarSegmento.
+// The SDK delivers the variables as they came in the URI, with their percent-encoding. They are decoded
+// here and validated AFTER: a %2F decoded to "/" is rejected by validarSegmento.
 function variable(variables: Variables, nombre: string): string {
   const crudo = variables[nombre];
   const valor = Array.isArray(crudo) ? crudo.join(",") : String(crudo ?? "");
@@ -113,9 +112,9 @@ function variable(variables: Variables, nombre: string): string {
   }
 }
 
-// Ruta de un archivo dentro de una tarea, a partir de las variables ya decodificadas. Las carpetas
-// y archivos con punto no son tareas ni documentos, igual que para write_central_doc. La usa también
-// la API del Studio para su visor de documentos.
+// Path of a file inside a task, from the already decoded variables. Folders and files with a dot are
+// neither tasks nor documents, as for write_central_doc. The Studio's API also uses it for its document
+// viewer.
 export function archivoDeTarea(proyecto: string, tarea: string, partes: string[]): { ruta: string; tarea: string } {
   validarSegmento(proyecto, "proyecto");
   validarSegmento(tarea, "tarea");
@@ -162,11 +161,11 @@ function recurso(uri: string, nombre: string, titulo: string, ruta: string): Res
   };
 }
 
-// ─── Listado ────────────────────────────────────────────────────────────────
-// Solo los documentos que existen de la tarea ACTIVA de cada proyecto, con las fases de SU proyecto. Listar todas las tareas de
-// todos los proyectos inundaría el selector de "@" del cliente; el resto se alcanza por plantilla,
-// con autocompletado. Si la Documentación no está configurada no hay nada que listar, y el listado
-// no debe fallar por eso: los recursos fijos siguen sirviendo para diagnosticarlo.
+// ─── Listing ────────────────────────────────────────────────────────────────
+// Only the documents that exist of the ACTIVE task of each project, with the phases of ITS project. Listing
+// all the tasks of all the projects would flood the client's "@" picker; the rest is reached through the
+// template, with autocompletion. If the Documentation is not configured there is nothing to list, and the
+// listing must not fail for that: the fixed resources keep serving so that it can be diagnosed.
 function tareasActivas(): { proyecto: string; tarea: string; carpeta: string; phases: Map<number, PhaseFile>; contexto: string }[] {
   try {
     return [...discoverProjects().values()].sort().flatMap((proyecto) => {
@@ -177,7 +176,7 @@ function tareasActivas(): { proyecto: string; tarea: string; carpeta: string; ph
           ? [{ proyecto, tarea: activa.estado.taskName, carpeta: activa.estado.folderPath, phases, contexto: contextoInicialDe(proyecto) }]
           : [];
       } catch {
-        return []; // un proyecto con el manifiesto roto no se lista; doctor lo avisa
+        return []; // a project with a broken manifest is not listed; doctor reports it
       }
     });
   } catch {
@@ -250,10 +249,10 @@ function listarConfiguraciones(): Resource[] {
   }
 }
 
-// ─── Autocompletado ─────────────────────────────────────────────────────────
-// Lo que ya se escribió filtra la lista, sin distinguir mayúsculas. Un fallo (Documentación sin
-// configurar, proyecto que no existe) devuelve una lista vacía: autocompletar no es el sitio
-// para explicar errores, eso lo hace la lectura.
+// ─── Autocompletion ─────────────────────────────────────────────────────────
+// What was already typed filters the list, case-insensitively. A failure (Documentation not configured, a
+// project that does not exist) returns an empty list: autocompletion is not the place to explain errors,
+// reading does that.
 function filtrar(valores: string[], escrito: string): string[] {
   const prefijo = escrito.toLowerCase();
   return valores.filter((valor) => valor.toLowerCase().startsWith(prefijo));
@@ -309,7 +308,7 @@ function completarRecibo(escrito: string, contexto?: { arguments?: Record<string
   });
 }
 
-// ─── La tabla de fases ──────────────────────────────────────────────────────
+// ─── The table of phases ────────────────────────────────────────────────────
 function celda(texto: string): string {
   return texto.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
 }
@@ -329,8 +328,8 @@ export function tablaDeFases(): string {
   ].join("\n");
 }
 
-// ─── Registro ───────────────────────────────────────────────────────────────
-// Los títulos y descripciones se fijan al registrar, en el idioma del arranque (el de crearServidor).
+// ─── Registration ───────────────────────────────────────────────────────────
+// The titles and descriptions are fixed at registration, in the language of startup (crearServidor's).
 export function registrarRecursos(mcp: McpServer, idioma: Idioma = idiomaDeMensajes()): void {
   const texto = (codigo: string): string => mensaje(codigo, {}, idioma);
 
@@ -358,7 +357,7 @@ export function registrarRecursos(mcp: McpServer, idioma: Idioma = idiomaDeMensa
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: MIME, text: tablaDeFases() }] })
   );
 
-  // La configuración efectiva de cada proyecto (Etapa 3): manifiesto, preset, reglas y repos.
+  // The effective configuration of each project: manifest, preset, rules and repos.
   mcp.registerResource(
     "configuracion",
     new ResourceTemplate("phase-gate://configuracion/{proyecto}", {
@@ -380,8 +379,8 @@ export function registrarRecursos(mcp: McpServer, idioma: Idioma = idiomaDeMensa
     }
   );
 
-  // El de recibos va antes que el de documentos: los dos empiezan igual, y el SDK usa la primera
-  // plantilla que encaja. Con variables que no cruzan "/" no se pisan, pero el orden lo deja claro.
+  // The receipts one goes before the documents one: both start the same, and the SDK uses the first template
+  // that fits. With variables that do not cross "/" they do not step on each other, but the order makes it clear.
   mcp.registerResource(
     "recibo",
     new ResourceTemplate("phase-gate://tareas/{proyecto}/{tarea}/recibos/{recibo}", {
@@ -395,7 +394,7 @@ export function registrarRecursos(mcp: McpServer, idioma: Idioma = idiomaDeMensa
     },
     async (uri, variables) =>
       conCodigo(() => {
-        // La subcarpeta la declara una fase de SU proyecto: el proyecto se valida antes de mirarla.
+        // The subfolder is declared by a phase of ITS project: the project is validated before looking at it.
         const proyecto = variable(variables, "proyecto");
         validarSegmento(proyecto, "proyecto");
         const subcarpeta = subcarpetaDeRecibos(fasesDe(requireProjectFolder(proyecto)));

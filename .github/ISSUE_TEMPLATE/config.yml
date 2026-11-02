@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability (private) / Reportar una vulnerabilidad (privado)
+    url: https://github.com/Montse2308/mcp-phase-gate/security/advisories/new
+    about: Please don't open a public issue for a security problem. / Un problema de seguridad no va en un issue público.

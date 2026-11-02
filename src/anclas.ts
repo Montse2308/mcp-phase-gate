@@ -1,9 +1,9 @@
-// Las anclas de los lotes: lo que demuestra que un lote se hizo (§6.3 del plan maestro v3).
+// The anchors of the batches: what proves that a batch was done.
 //
-// Un lote con git se ancla a su commit, y el servidor comprueba que el commit exista, que esté en la
-// rama actual y qué archivos toca. Sin git, se ancla al sha256 de un artefacto (el archivo que
-// cambió) o a una nota. Todo pasa por la puerta única de git (git.ts) y por la contención de rutas de
-// siempre (paths.ts): el servidor solo lee.
+// A batch with git is anchored to its commit, and the server checks that the commit exists, that it is on
+// the current branch and which files it touches. Without git, it is anchored to the sha256 of an artifact
+// (the file that changed) or to a note. Everything goes through git's single door (git.ts) and the usual
+// path containment (paths.ts): the server only reads.
 
 import * as crypto from "crypto";
 import * as fs from "fs";
@@ -22,8 +22,8 @@ type AnclaCommit = Extract<Ancla, { tipo: "commit" }>;
 type AnclaSha256 = Extract<Ancla, { tipo: "sha256" }>;
 
 // ─── Commit ─────────────────────────────────────────────────────────────────
-// Una ruta de la tabla Archivos tal como la escribe una persona o un modelo: con comillas de código,
-// con \, con ./ delante o absoluta dentro del repo. Se compara en la forma de git: relativa y con /.
+// A path of the Archivos table as a person or a model writes it: with code quotes, with \, with ./ in
+// front, or absolute inside the repo. It is compared in git's form: relative and with /.
 export function normalizarArchivo(declarado: string, raizRepo: string): string {
   let ruta = declarado.trim().replace(/^`+|`+$/g, "").trim().replace(/\\/g, "/");
   if (path.win32.isAbsolute(ruta) || path.posix.isAbsolute(ruta)) {
@@ -33,8 +33,8 @@ export function normalizarArchivo(declarado: string, raizRepo: string): string {
   return ruta.replace(/^(?:\.\/)+/, "").normalize("NFC");
 }
 
-// Es un aviso, no un bloqueo (decisión H5): queda escrito en el recibo y lo audita la Fase 5. Por eso va
-// en el idioma del proyecto, el del recibo.
+// It is a warning, not a block: it is written in the receipt and Phase 5 audits it. That is why it goes in
+// the project's language, the receipt's.
 export function compararArchivos(delCommit: string[], declarados: string[], raizRepo: string, idioma: Idioma = "es"): { texto: string; coinciden: boolean } {
   const enCommit = new Set(delCommit.map((archivo) => archivo.normalize("NFC")));
   const enRecibo = new Set(declarados.map((archivo) => normalizarArchivo(archivo, raizRepo)).filter(Boolean));
@@ -53,8 +53,8 @@ export function compararArchivos(delCommit: string[], declarados: string[], raiz
 
 export type OtroLote = { lote: number; sha: string };
 
-// `idioma`: el del proyecto, en el que se escribe la comparación de archivos ("Verificación del commit").
-// Los errores salen en el de la llamada.
+// `idioma`: the project's, in which the comparison of files is written ("Verificación del commit"). The
+// errors come out in the call's.
 export async function anclarCommit(
   proyecto: string,
   repoId: string,
@@ -76,7 +76,7 @@ export async function anclarCommit(
   const completo = resuelto.sha;
   const corto = completo.slice(0, 7);
 
-  // Un commit, un lote. Un recibo manual de la 2.x puede guardar solo el hash corto.
+  // One commit, one batch. A manual receipt from 2.x may store only the short hash.
   const repetido = otros.find((otro) => otro.sha && completo.startsWith(otro.sha.toLowerCase()));
   if (repetido) throw fallo("ANCLA-REPETIDO", { corto, lote: etiquetaDeLote(repetido.lote) });
 
@@ -97,12 +97,12 @@ export async function anclarCommit(
   };
 }
 
-// ─── Artefacto (sha256) ─────────────────────────────────────────────────────
+// ─── Artifact (sha256) ──────────────────────────────────────────────────────
 export const TOPE_DE_ARTEFACTO = 256 * 1024 * 1024;
 
-// La ruta de un artefacto dentro de su base, con la contención de read_repo_file: relativa, cada
-// segmento portable (sin "..", sin ":" de un flujo alterno, sin nombres reservados), nada de .git, ni en
-// lo pedido ni en la ruta real (un enlace o un nombre corto 8.3 como GIT~1), y dentro de la base real.
+// The path of an artifact inside its base, with the containment of read_repo_file: relative, every segment
+// portable (no "..", no ":" of an alternate stream, no reserved names), nothing of .git, neither in what was
+// asked for nor in the real path (a link or a short 8.3 name such as GIT~1), and inside the real base.
 export function rutaDeArtefacto(base: string, relativa: string): { ruta: string; segmentos: string[] } {
   if (path.win32.isAbsolute(relativa) || path.posix.isAbsolute(relativa)) {
     throw fallo("ANCLA-ARTEFACTO-ABSOLUTO", { ruta: relativa });
@@ -121,9 +121,9 @@ export function rutaDeArtefacto(base: string, relativa: string): { ruta: string;
 
 type Conversion = "ninguna" | "crlf-a-lf" | "lf-a-crlf";
 
-// Convierte los finales de línea de un trozo, con el estado del trozo anterior (un \r al final de un
-// trozo puede ir seguido de un \n al principio del siguiente). Sobre Buffer, buscando con indexOf: byte a
-// byte en JavaScript, 128 MB costaban más de 2 s por conversión (hallazgo 8 de la auditoría de la Etapa 4).
+// Converts the line endings of a chunk, with the state of the previous chunk (a \r at the end of a chunk can
+// be followed by a \n at the start of the next). On a Buffer, searching with indexOf: byte by byte in
+// JavaScript, 128 MB cost more than 2 s per conversion.
 const CR = Buffer.from([0x0d]);
 const CRLF = Buffer.from([0x0d, 0x0a]);
 const VACIO = Buffer.alloc(0);
@@ -141,7 +141,7 @@ function convertidor(conversion: Conversion): { trozo: (b: Buffer) => Buffer; fi
         let desde = 0;
         for (let i = entrada.indexOf(CRLF, desde); i !== -1; i = entrada.indexOf(CRLF, desde)) {
           partes.push(entrada.subarray(desde, i));
-          desde = i + 1; // se salta el \r y se queda el \n
+          desde = i + 1; // skips the \r and keeps the \n
         }
         partes.push(entrada.subarray(desde));
         return Buffer.concat(partes);
@@ -169,8 +169,8 @@ function convertidor(conversion: Conversion): { trozo: (b: Buffer) => Buffer; fi
   };
 }
 
-// La misma heurística que git (y que leerTextoAcotado): un byte NUL en los primeros 8000 es binario. Los
-// finales de línea solo se normalizan en texto: en un binario, quitar un 0x0D es un cambio de verdad.
+// The same heuristic as git (and as leerTextoAcotado): a NUL byte in the first 8000 means binary. Line
+// endings are only normalized in text: in a binary, removing a 0x0D is a real change.
 async function pareceTexto(ruta: string): Promise<boolean> {
   const descriptor = fs.openSync(ruta, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
   try {
@@ -182,10 +182,10 @@ async function pareceTexto(ruta: string): Promise<boolean> {
   }
 }
 
-// El sha256 en streaming, del mismo descriptor que se comprobó: tipo y tamaño salen del archivo abierto,
-// no de un stat aparte. Un archivo que crece mientras se lee y pasa del tope se rechaza igual.
-// `mostrar` es como se nombra en los mensajes (repo:api/docs/x.md): la ruta absoluta no le dice nada al
-// modelo y enseña la del equipo.
+// The sha256 as a stream, from the same descriptor that was checked: type and size come from the open file,
+// not from a separate stat. A file that grows while it is read and passes the cap is rejected all the same.
+// `mostrar` is how it is named in the messages (repo:api/docs/x.md): the absolute path tells the model
+// nothing and shows the machine's.
 export async function sha256DeArchivo(ruta: string, conversion: Conversion = "ninguna", mostrar: string = ruta): Promise<{ sha256: string; bytes: number }> {
   let descriptor: number;
   try {
@@ -217,7 +217,7 @@ export async function sha256DeArchivo(ruta: string, conversion: Conversion = "ni
   }
 }
 
-// La base de un artefacto: la raíz real del repo, o la carpeta del proyecto en la Documentación.
+// The base of an artifact: the real root of the repo, or the project's folder in the Documentation.
 function baseDeArtefacto(proyecto: string, repoId: string | null): string {
   return repoId ? rutaReal(resolverRepo(proyecto, repoId).ruta!) : path.join(requireBasePath(DOCS), proyecto);
 }
@@ -238,12 +238,12 @@ export function partirRutaDeArtefacto(guardada: string): { repo: string | null; 
   return enProyecto ? { repo: null, relativa: enProyecto[1]! } : null;
 }
 
-// ─── Reverificar ────────────────────────────────────────────────────────────
-// Para get_batch_status y la Fase 5: ¿el ancla sigue valiendo hoy?
-// `sha`: el commit completo, cuando el ancla es un commit y sigue vigente (el bloque de la Fase 5 lo usa
-// sin volver a preguntárselo a git).
-// `idioma`: el del texto; sin él, el de la llamada (get_batch_status, doctor). El bloque de la Fase 5 pasa
-// el del proyecto. Un error de git o del disco sale con su propio texto, en el de la llamada.
+// ─── Re-verifying ───────────────────────────────────────────────────────────
+// For get_batch_status and Phase 5: is the anchor still valid today?
+// `sha`: the full commit, when the anchor is a commit and is still valid (the Phase 5 block uses it without
+// asking git again).
+// `idioma`: that of the text; without it, that of the call (get_batch_status, doctor). The Phase 5 block
+// passes the project's. A git or disk error comes out with its own text, in the call's.
 export async function reverificar(proyecto: string, recibo: Recibo, idioma?: Idioma): Promise<{ vigente: boolean; texto: string; sha?: string }> {
   const ancla = recibo.ancla;
   try {
@@ -279,8 +279,8 @@ async function reverificarArtefacto(proyecto: string, ancla: AnclaSha256, idioma
   const actual = await sha256DeArchivo(ruta, "ninguna", ancla.ruta);
   if (actual.sha256 === ancla.sha256) return { vigente: true, texto: mensaje("ANCLA-ARTEFACTO-SIN-CAMBIOS", { ruta: ancla.ruta }, idioma) };
 
-  // El hash es de los bytes, y un archivo de texto en un repo con core.autocrlf tiene otros bytes en
-  // Windows que en Linux o macOS (§6.1). Se prueba en las dos direcciones, y solo con texto.
+  // The hash is of the bytes, and a text file in a repo with core.autocrlf has other bytes on Windows than on
+  // Linux or macOS. It is tried in both directions, and only with text.
   const cambio = { vigente: false, texto: mensaje("ANCLA-ARTEFACTO-CAMBIO", { ruta: ancla.ruta, antes: ancla.sha256.slice(0, 12), ahora: actual.sha256.slice(0, 12) }, idioma) };
   if (!(await pareceTexto(ruta))) return cambio;
   for (const conversion of ["crlf-a-lf", "lf-a-crlf"] as const) {

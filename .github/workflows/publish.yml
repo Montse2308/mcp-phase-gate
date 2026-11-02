@@ -11,6 +11,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    # El entorno donde se configura la aprobación manual antes de publicar.
+    environment: npm
+
     permissions:
       contents: read
       id-token: write # lo exige --provenance para firmar el paquete
@@ -25,7 +28,7 @@ jobs:
 
       # Node 22 trae npm 10, que no sabe autenticarse por OIDC. Sin esta línea el publish
       # pide credenciales y falla con un 401 que no menciona la versión de npm, que es la causa.
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@11
 
       - run: npm ci
 

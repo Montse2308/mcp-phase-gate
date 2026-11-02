@@ -1,13 +1,12 @@
-// Lo que el Studio no enseña sin necesidad: las rutas absolutas de este equipo. En los mensajes de error y
-// en los nombres de archivo de las acciones se sustituyen por <Documentación>, <repos>, <configuración>,
-// <estado> o ~.
+// The Studio does not show this machine's absolute paths unless it has to: in error messages and in the file
+// names of actions they are replaced by <Documentación>, <repos>, <configuración>, <estado> or ~.
 
 import * as os from "os";
 
 import { DOCS, REPOS, configDir, requireBasePath, stateDir } from "../config.js";
 import { rutaReal } from "../paths.js";
 
-// Las rutas del equipo que no hace falta enseñar, de la más larga a la más corta.
+// Replaced longest first, so a root nested in another one is not left half-masked.
 export function sinRutasDelEquipo(texto: string): string {
   const raices: [string, string][] = [];
   const anotar = (obtener: () => string, nombre: string): void => {
@@ -17,10 +16,10 @@ export function sinRutasDelEquipo(texto: string): string {
       try {
         raices.push([rutaReal(ruta), nombre]);
       } catch {
-        // si no existe, basta con la ruta tal cual
+        // it may not exist: the path as configured is enough
       }
     } catch {
-      // sin esa ruta configurada no hay nada que quitar
+      // not configured: nothing to mask
     }
   };
   anotar(() => requireBasePath(DOCS), "<Documentación>");

@@ -10,12 +10,598 @@ plan de lo que falta (eso son los [issues](https://github.com/Montse2308/mcp-pha
 Formato: una entrada por decisión, la más reciente arriba. Si una decisión se revierte,
 no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja.
 
+El índice de abajo se genera con `node scripts/indice-decisiones.mjs`, y un test comprueba que está al día.
+
+<!-- indice:inicio -->
+**Índice** · *Index*
+
+Una línea por entrada, la más reciente primero. *One line per entry, newest first. The entries are written in Spanish: each one says what was decided, why, and what was discarded.*
+
+- [2026-10-29 — Los README son cortos y el detalle vive en cinco guías gemelas; las notas de cada versión van en sus Releases](#2026-10-29--los-readme-son-cortos-y-el-detalle-vive-en-cinco-guías-gemelas-las-notas-de-cada-versión-van-en-sus-releases)
+- [2026-10-29 — El sitio tiene una portada completa, la demo se muda a `demo/` y el video son dos piezas](#2026-10-29--el-sitio-tiene-una-portada-completa-la-demo-se-muda-a-demo-y-el-video-son-dos-piezas)
+- [2026-10-28 — Ajustes es el único lugar donde se edita la configuración](#2026-10-28--ajustes-es-el-único-lugar-donde-se-edita-la-configuración)
+- [2026-10-28 — Las rutas de este equipo y el idioma por defecto viven en `machine.json`, que pasa a la versión 2, y el entorno siempre gana](#2026-10-28--las-rutas-de-este-equipo-y-el-idioma-por-defecto-viven-en-machinejson-que-pasa-a-la-versión-2-y-el-entorno-siempre-gana)
+- [2026-10-27 — El Studio adopta la dirección visual sobria: Inter y JetBrains Mono, un acento azul, un fondo gris, pizarra azulada en oscuro y un indicador para cada estado](#2026-10-27--el-studio-adopta-la-dirección-visual-sobria-inter-y-jetbrains-mono-un-acento-azul-un-fondo-gris-pizarra-azulada-en-oscuro-y-un-indicador-para-cada-estado)
+- [2026-10-27 — El Studio tiene una sola estructura por vista, y el tema, claro u oscuro, solo cambia colores; el modo Cabina se elimina](#2026-10-27--el-studio-tiene-una-sola-estructura-por-vista-y-el-tema-claro-u-oscuro-solo-cambia-colores-el-modo-cabina-se-elimina)
+- [2026-10-19 — El Studio elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo](#2026-10-19--el-studio-elige-su-idioma-en-el-navegador-y-lo-manda-en-cada-petición-los-sellos-llevan-la-palabra-fuera-del-dibujo)
+- [2026-10-19 — Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del equipo](#2026-10-19--un-manifiesto-sin-idioma-es-español-sin-proyecto-manda-el-idioma-del-equipo)
+- [2026-10-18 — El README principal pasa a inglés](#2026-10-18--el-readme-principal-pasa-a-inglés)
+- [2026-10-18 — Los medios se generan de la demo real y se publican en Pages, no en git](#2026-10-18--los-medios-se-generan-de-la-demo-real-y-se-publican-en-pages-no-en-git)
+- [2026-10-18 — Los prompts en inglés se reescriben con glosario y revisión, no se traducen a máquina](#2026-10-18--los-prompts-en-inglés-se-reescriben-con-glosario-y-revisión-no-se-traducen-a-máquina)
+- [2026-10-18 — Mensajes y descripciones en dos idiomas; los nombres de las tools no se traducen](#2026-10-18--mensajes-y-descripciones-en-dos-idiomas-los-nombres-de-las-tools-no-se-traducen)
+- [2026-10-18 — El idioma es del proyecto y se deduce primero del disco; la redacción puede ser de la tarea](#2026-10-18--el-idioma-es-del-proyecto-y-se-deduce-primero-del-disco-la-redacción-puede-ser-de-la-tarea)
+- [2026-10-18 — Los textos de los que depende el código viven en un vocabulario bilingüe; se escribe en el idioma del proyecto y se lee en los dos](#2026-10-18--los-textos-de-los-que-depende-el-código-viven-en-un-vocabulario-bilingüe-se-escribe-en-el-idioma-del-proyecto-y-se-lee-en-los-dos)
+- [2026-10-17 — El export estático publica la demo y nunca datos reales sin confirmación](#2026-10-17--el-export-estático-publica-la-demo-y-nunca-datos-reales-sin-confirmación)
+- [2026-10-17 — La demo se genera con el código real y commits de git deterministas](#2026-10-17--la-demo-se-genera-con-el-código-real-y-commits-de-git-deterministas)
+- [2026-10-17 — El Studio solo ejecuta acciones del CLI, con vista previa y huella](#2026-10-17--el-studio-solo-ejecuta-acciones-del-cli-con-vista-previa-y-huella)
+- [2026-10-17 — El servidor MCP deja constancia de sus sesiones abiertas](#2026-10-17--el-servidor-mcp-deja-constancia-de-sus-sesiones-abiertas)
+- [2026-10-17 — El Studio es un servidor local separado del MCP, en `127.0.0.1`, con token, cookie y CSP](#2026-10-17--el-studio-es-un-servidor-local-separado-del-mcp-en-127001-con-token-cookie-y-csp)
+- [2026-10-16 — Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras](#2026-10-16--las-líneas-de-prohibido-y-autoverificación-que-dependen-de-una-regla-son-ranuras)
+- [2026-10-16 — El auditor recibe los commits ya verificados](#2026-10-16--el-auditor-recibe-los-commits-ya-verificados)
+- [2026-10-16 — La Fase 4 tiene granularidad de lote](#2026-10-16--la-fase-4-tiene-granularidad-de-lote)
+- [2026-10-16 — Los recibos con ancla quedan sellados y la Fase 4 solo la escribe el servidor](#2026-10-16--los-recibos-con-ancla-quedan-sellados-y-la-fase-4-solo-la-escribe-el-servidor)
+- [2026-10-16 — `04 - Ejecución.md` lo genera el servidor; con un solo lote, el recibo se mueve](#2026-10-16--04---ejecuciónmd-lo-genera-el-servidor-con-un-solo-lote-el-recibo-se-mueve)
+- [2026-10-16 — `record_batch` registra cada lote en dos tiempos: antes y después del commit](#2026-10-16--record_batch-registra-cada-lote-en-dos-tiempos-antes-y-después-del-commit)
+- [2026-10-16 — Un lote se ancla a un commit en la rama actual, a un sha256 o a una nota](#2026-10-16--un-lote-se-ancla-a-un-commit-en-la-rama-actual-a-un-sha256-o-a-una-nota)
+- [2026-10-16 — Los recibos son datos con un formato determinista que escribe el servidor](#2026-10-16--los-recibos-son-datos-con-un-formato-determinista-que-escribe-el-servidor)
+- [2026-10-15 — `init` escribe la configuración del cliente con copia, diff y confirmación](#2026-10-15--init-escribe-la-configuración-del-cliente-con-copia-diff-y-confirmación)
+- [2026-10-15 — Git se consulta por una sola puerta, de solo lectura y sin efectos](#2026-10-15--git-se-consulta-por-una-sola-puerta-de-solo-lectura-y-sin-efectos)
+- [2026-10-15 — El servidor deduce el proyecto de las raíces del cliente](#2026-10-15--el-servidor-deduce-el-proyecto-de-las-raíces-del-cliente)
+- [2026-10-15 — El preset por defecto es `software`; la réplica pasa a `software-replica`](#2026-10-15--el-preset-por-defecto-es-software-la-réplica-pasa-a-software-replica)
+- [2026-10-15 — Las fases, los prompts y la deducción se resuelven por proyecto; la política de commits es configurable y el push queda fuera de cualquier variante](#2026-10-15--las-fases-los-prompts-y-la-deducción-se-resuelven-por-proyecto-la-política-de-commits-es-configurable-y-el-push-queda-fuera-de-cualquier-variante)
+- [2026-10-15 — Cada proyecto puede declarar un `phase-gate.json`; cada equipo, un `machine.json`](#2026-10-15--cada-proyecto-puede-declarar-un-phase-gatejson-cada-equipo-un-machinejson)
+- [2026-10-15 — Los presets y las personalizaciones se escriben como bloques sobre ranuras, en un solo archivo, con modos `reemplazar`, `antes` y `despues`](#2026-10-15--los-presets-y-las-personalizaciones-se-escriben-como-bloques-sobre-ranuras-en-un-solo-archivo-con-modos-reemplazar-antes-y-despues)
+- [2026-10-15 — Los prompts de fábrica viven en `prompts/<idioma>/`](#2026-10-15--los-prompts-de-fábrica-viven-en-promptsidioma)
+- [2026-10-15 — El servidor avisa de los pendientes heredados leyendo encabezados, sin guardar estado](#2026-10-15--el-servidor-avisa-de-los-pendientes-heredados-leyendo-encabezados-sin-guardar-estado)
+- [2026-10-15 — Las confirmaciones de `force` y `crear_proyecto` se piden al usuario por elicitation cuando el cliente puede](#2026-10-15--las-confirmaciones-de-force-y-crear_proyecto-se-piden-al-usuario-por-elicitation-cuando-el-cliente-puede)
+- [2026-10-15 — Los comandos de fase se sirven como MCP Prompts desde `prompts/comandos/`](#2026-10-15--los-comandos-de-fase-se-sirven-como-mcp-prompts-desde-promptscomandos)
+- [2026-10-15 — Los documentos de las tareas se exponen como recursos de solo lectura](#2026-10-15--los-documentos-de-las-tareas-se-exponen-como-recursos-de-solo-lectura)
+- [2026-10-15 — Las tools se registran en `McpServer`; sus descripciones son estáticas y la parte que cambia vive en Resources y Prompts](#2026-10-15--las-tools-se-registran-en-mcpserver-sus-descripciones-son-estáticas-y-la-parte-que-cambia-vive-en-resources-y-prompts)
+- [2026-10-15 — El `.env` se lee con un lector propio sobre `util.parseEnv`, sin `dotenv`](#2026-10-15--el-env-se-lee-con-un-lector-propio-sobre-utilparseenv-sin-dotenv)
+- [2026-10-15 — Las variables se llaman `PHASE_GATE_*` y `ORQUESTADOR_*` queda como alias](#2026-10-15--las-variables-se-llaman-phase_gate_-y-orquestador_-queda-como-alias)
+- [2026-10-14 — La Fase 5 audita los commits de los recibos y trata los pendientes sin comprobar como bloqueantes](#2026-10-14--la-fase-5-audita-los-commits-de-los-recibos-y-trata-los-pendientes-sin-comprobar-como-bloqueantes)
+- [2026-10-14 — La Fase 4 ejecuta lote por lote y hace el commit de cada uno con el OK del usuario](#2026-10-14--la-fase-4-ejecuta-lote-por-lote-y-hace-el-commit-de-cada-uno-con-el-ok-del-usuario)
+- [2026-10-14 — Los lotes son estructurales en la Fase 3](#2026-10-14--los-lotes-son-estructurales-en-la-fase-3)
+- [2026-10-14 — Base de cada decisión y pendientes heredados viven en las reglas globales; Cero Rupturas se acota por fase](#2026-10-14--base-de-cada-decisión-y-pendientes-heredados-viven-en-las-reglas-globales-cero-rupturas-se-acota-por-fase)
+- [2026-10-14 — Un documento de fase se congela cuando existe el de una fase posterior](#2026-10-14--un-documento-de-fase-se-congela-cuando-existe-el-de-una-fase-posterior)
+- [2026-10-14 — Ranuras en los prompts base: estructura fija, contenido sustituible](#2026-10-14--ranuras-en-los-prompts-base-estructura-fija-contenido-sustituible)
+- [2026-10-14 — Los recibos de lote viven en una subcarpeta que declara el prompt](#2026-10-14--los-recibos-de-lote-viven-en-una-subcarpeta-que-declara-el-prompt)
+- [2026-10-14 — `write_central_doc` solo escribe dentro de carpetas de tarea, y las carpetas con punto no son proyecto ni tarea](#2026-10-14--write_central_doc-solo-escribe-dentro-de-carpetas-de-tarea-y-las-carpetas-con-punto-no-son-proyecto-ni-tarea)
+- [2026-10-14 — Dependabot agrupa lo menor e ignora las versiones mayores de TypeScript y de los tipos de Node](#2026-10-14--dependabot-agrupa-lo-menor-e-ignora-las-versiones-mayores-de-typescript-y-de-los-tipos-de-node)
+- [2026-10-14 — El plan maestro v3 se versiona en `docs/`](#2026-10-14--el-plan-maestro-v3-se-versiona-en-docs)
+- [2026-10-14 — Los argumentos se validan con zod declarado como dependencia directa, y los schemas son la fuente de la Etapa 2](#2026-10-14--los-argumentos-se-validan-con-zod-declarado-como-dependencia-directa-y-los-schemas-son-la-fuente-de-la-etapa-2)
+- [2026-10-14 — La contención se comprueba contra la ruta real y los nombres son un solo segmento portable](#2026-10-14--la-contención-se-comprueba-contra-la-ruta-real-y-los-nombres-son-un-solo-segmento-portable)
+- [2026-08-12 — La Fase 2 traduce el cambio para quien pidió el ticket, dentro de su documento](#2026-08-12--la-fase-2-traduce-el-cambio-para-quien-pidió-el-ticket-dentro-de-su-documento)
+- [2026-08-10 — Se publica por OIDC, sin token, y la primera versión sale a mano](#2026-08-10--se-publica-por-oidc-sin-token-y-la-primera-versión-sale-a-mano)
+- [2026-08-10 — Publicable en npm: los prompts se superponen en capas](#2026-08-10--publicable-en-npm-los-prompts-se-superponen-en-capas)
+- [2026-08-10 — Un solo nombre: `mcp-phase-gate` en el repo, el paquete y el servidor](#2026-08-10--un-solo-nombre-mcp-phase-gate-en-el-repo-el-paquete-y-el-servidor)
+- [2026-08-10 — Varias documentaciones se resuelven registrando el servidor dos veces, no con código](#2026-08-10--varias-documentaciones-se-resuelven-registrando-el-servidor-dos-veces-no-con-código)
+- [2026-08-08 — La compuerta avisa, no bloquea, y la resuelve el servidor](#2026-08-08--la-compuerta-avisa-no-bloquea-y-la-resuelve-el-servidor)
+- [2026-08-08 — La fase de cada tarea se deduce de sus documentos, no se guarda](#2026-08-08--la-fase-de-cada-tarea-se-deduce-de-sus-documentos-no-se-guarda)
+- [2026-08-08 — El estado se reduce a un puntero de tarea activa por proyecto](#2026-08-08--el-estado-se-reduce-a-un-puntero-de-tarea-activa-por-proyecto)
+- [2026-08-08 — La Fase 5 deja documento y `start_task` se niega a pisar una tarea](#2026-08-08--la-fase-5-deja-documento-y-start_task-se-niega-a-pisar-una-tarea)
+- [2026-08-08 — El código se parte en módulos para poder probarlo](#2026-08-08--el-código-se-parte-en-módulos-para-poder-probarlo)
+- [2026-08-08 — README bilingüe completo, asumiendo el costo de la duplicación](#2026-08-08--readme-bilingüe-completo-asumiendo-el-costo-de-la-duplicación)
+- [2026-08-08 — Licencia MIT](#2026-08-08--licencia-mit)
+- [2026-08-08 — El servidor se llama `phase-gate` y deja de presuponer Cursor](#2026-08-08--el-servidor-se-llama-phase-gate-y-deja-de-presuponer-cursor)
+- [2026-08-08 — Los proyectos son las carpetas que existen, no una lista](#2026-08-08--los-proyectos-son-las-carpetas-que-existen-no-una-lista)
+- [2026-08-08 — El nombre del documento lo declara el prompt de su fase](#2026-08-08--el-nombre-del-documento-lo-declara-el-prompt-de-su-fase)
+- [2026-08-08 — Sin rutas por defecto, y el error se entrega en la tool](#2026-08-08--sin-rutas-por-defecto-y-el-error-se-entrega-en-la-tool)
+- [2026-08-08 — La contención de rutas se comprueba con path.relative, no con startsWith](#2026-08-08--la-contención-de-rutas-se-comprueba-con-pathrelative-no-con-startswith)
+- [2026-08-07 — La configuración por dispositivo no vive en el repo](#2026-08-07--la-configuración-por-dispositivo-no-vive-en-el-repo)
+- [2026-08-07 — La Fase 4 hace; el documento es el recibo](#2026-08-07--la-fase-4-hace-el-documento-es-el-recibo)
+- [2026-08-07 — Por qué el documento de la Fase 4 existe, aun siendo secundario](#2026-08-07--por-qué-el-documento-de-la-fase-4-existe-aun-siendo-secundario)
+- [2026-08-07 — La Fase 4 ejecuta lo que puede y deja escrito lo que necesita mouse](#2026-08-07--la-fase-4-ejecuta-lo-que-puede-y-deja-escrito-lo-que-necesita-mouse)
+- [2026-08-07 — La Fase 4 no sube nada](#2026-08-07--la-fase-4-no-sube-nada)
+- [2026-08-07 — La Fase 3 dice qué debe verse; la Fase 4 dice cómo llegar a verlo](#2026-08-07--la-fase-3-dice-qué-debe-verse-la-fase-4-dice-cómo-llegar-a-verlo)
+- [2026-08-07 — El plan declara en qué nivel está cada fragmento de código](#2026-08-07--el-plan-declara-en-qué-nivel-está-cada-fragmento-de-código)
+- [2026-08-07 — La Fase 3 comprueba el plan contra el código antes de escribirlo](#2026-08-07--la-fase-3-comprueba-el-plan-contra-el-código-antes-de-escribirlo)
+- [2026-08-07 — Las numeraciones son continuas por tarea, no por fase](#2026-08-07--las-numeraciones-son-continuas-por-tarea-no-por-fase)
+- [2026-08-07 — Sin suite de pruebas: la comparación contra la réplica ocupa ese lugar](#2026-08-07--sin-suite-de-pruebas-la-comparación-contra-la-réplica-ocupa-ese-lugar)
+- [2026-08-07 — El plan declara desde qué rama y commit se planeó](#2026-08-07--el-plan-declara-desde-qué-rama-y-commit-se-planeó)
+- [2026-08-07 — Cada fase entrega documento, siempre](#2026-08-07--cada-fase-entrega-documento-siempre)
+- [2026-08-07 — La Fase 2 valida, no solo pregunta](#2026-08-07--la-fase-2-valida-no-solo-pregunta)
+- [2026-08-07 — Toda decisión dice a qué renuncia](#2026-08-07--toda-decisión-dice-a-qué-renuncia)
+- [2026-08-07 — Reparto de los criterios de validación entre fases](#2026-08-07--reparto-de-los-criterios-de-validación-entre-fases)
+- [2026-08-07 — Las decisiones se numeran de corrido por tarea](#2026-08-07--las-decisiones-se-numeran-de-corrido-por-tarea)
+- [2026-08-07 — No se clasifican las decisiones por quién las autoriza](#2026-08-07--no-se-clasifican-las-decisiones-por-quién-las-autoriza)
+- [2026-08-07 — Todas las tareas pasan por todas las fases; lo que se ajusta es la profundidad](#2026-08-07--todas-las-tareas-pasan-por-todas-las-fases-lo-que-se-ajusta-es-la-profundidad)
+- [2026-08-07 — Cada fase declara qué NO le toca](#2026-08-07--cada-fase-declara-qué-no-le-toca)
+- [2026-08-07 — En la Fase 1, la línea es describir contra comprometerse](#2026-08-07--en-la-fase-1-la-línea-es-describir-contra-comprometerse)
+- [2026-08-07 — La verificación se hace en la Fase 1, no se difiere](#2026-08-07--la-verificación-se-hace-en-la-fase-1-no-se-difiere)
+- [2026-08-07 — El documento de una fase no se reescribe en fases posteriores](#2026-08-07--el-documento-de-una-fase-no-se-reescribe-en-fases-posteriores)
+- [2026-08-07 — Formato de los documentos de fase](#2026-08-07--formato-de-los-documentos-de-fase)
+- [2026-08-07 — Los documentos de referencia no se versionan en el repo](#2026-08-07--los-documentos-de-referencia-no-se-versionan-en-el-repo)
+- [2026-08-07 — El estado local vive en la carpeta de datos del usuario](#2026-08-07--el-estado-local-vive-en-la-carpeta-de-datos-del-usuario)
+- [2026-08-07 — El plan del proyecto vive en Issues, no en un archivo](#2026-08-07--el-plan-del-proyecto-vive-en-issues-no-en-un-archivo)
+- [2026-08-07 — La descripción del PR se entrega dentro de un bloque de código](#2026-08-07--la-descripción-del-pr-se-entrega-dentro-de-un-bloque-de-código)
+- [2026-08-07 — El contrato del PR usa números, no adjetivos](#2026-08-07--el-contrato-del-pr-usa-números-no-adjetivos)
+- [2026-08-07 — La estructura del PR es fija; lo que se adapta es la agrupación](#2026-08-07--la-estructura-del-pr-es-fija-lo-que-se-adapta-es-la-agrupación)
+- [2026-08-07 — Los ejemplos de referencia del PR son PRs reales, no inventados](#2026-08-07--los-ejemplos-de-referencia-del-pr-son-prs-reales-no-inventados)
+- [2026-08-07 — Sin "cómo probar" en el PR; en su lugar, "Verificación" en pasado](#2026-08-07--sin-cómo-probar-en-el-pr-en-su-lugar-verificación-en-pasado)
+- [2026-08-07 — El título del PR no lleva número de ticket](#2026-08-07--el-título-del-pr-no-lleva-número-de-ticket)
+- [2026-08-07 — El PR trivial lleva bullets, pero no encabezados](#2026-08-07--el-pr-trivial-lleva-bullets-pero-no-encabezados)
+- [2026-08-07 — Los prompts de fase viven fuera del código](#2026-08-07--los-prompts-de-fase-viven-fuera-del-código)
+- [2026-08-07 — Los prompts se leen en cada llamada, sin caché](#2026-08-07--los-prompts-se-leen-en-cada-llamada-sin-caché)
+- [2026-08-07 — Las fases se descubren por nombre de archivo](#2026-08-07--las-fases-se-descubren-por-nombre-de-archivo)
+<!-- indice:fin -->
+
+---
+
+## 2026-10-29 — Los README son cortos y el detalle vive en cinco guías gemelas; las notas de cada versión van en sus Releases
+
+> **Reemplaza en parte** "El README principal pasa a inglés" (2026-10-18), en tres cosas: los dos README ya no
+> son completos sino cortos, con guías gemelas que llevan el detalle; la arquitectura queda en un párrafo y los
+> idiomas pasan a la guía de configuración; y la mitigación de "Dónde está cada cosa" pasa a `CONTRIBUTING.md`.
+> La apertura en cinco puntos y los gemelos siguen vigentes, y el riesgo que esa entrada aceptaba («ningún test
+> compara su estructura») lo cubre ahora `test/readme.test.ts`.
+
+> **Amplía** "Publicable en npm: los prompts se superponen en capas" (2026-08-10), que ya había descartado un
+> `CHANGELOG.md`: las notas de cada versión viven en los Releases de GitHub, y ahora se escriben de verdad.
+
+**Decisión.**
+
+- **Los dos README bajan a menos de 200 líneas** (de 1,002 y 1,046 a 105 cada uno). Abren como antes, y después
+  traen: para quién es y la arquitectura, un párrafo cada una; cómo funciona, con las cinco fases; una
+  instalación corta; el Studio en un párrafo; «Qué cambia si actualizas de la 3.x»; y los enlaces a las guías.
+  Dejan de enseñar lo que la v4 quitó: bloques `env` con rutas, el modo de pantalla y la metáfora de la vía.
+- **Cinco guías, gemelas, en `docs/guide/` (inglés) y `docs/guia/` (español)**, con los mismos títulos y las
+  mismas anclas: instalación (`installation.md` e `instalacion.md`), configuración (`configuration.md` y
+  `configuracion.md`, que abre con Ajustes y con quién gana), el Studio (`studio.md` en las dos), herramientas y
+  recursos (`tools.md` y `herramientas.md`) y prompts y capas (`prompts.md` en las dos). Cada sección de los README
+  de antes tiene su lugar en una guía, en `CONTRIBUTING.md` o en las notas, y nada se pierde: lo que cambia de
+  fondo (rutas en `machine.json`, el entorno que gana, Ajustes) está escrito con la 4.0, no con la 3.x.
+- **`CONTRIBUTING.md`**, que GitHub enlaza solo, recibe «Desarrollo» y «Dónde está cada cosa», y el diagrama de
+  la arquitectura. `docs/phase-commands.md` es el gemelo en inglés de `docs/comandos-de-fase.md`.
+- **Los enlaces de los README son absolutos**, a `blob/master/` y al sitio, porque el README también se ve en
+  npmjs.com y `docs/` no viaja en el paquete. Los de las guías son relativos. `test/readme.test.ts` comprueba el
+  tamaño, que los gemelos tengan los mismos títulos en el mismo orden, que cada enlace lleve a un archivo y a un
+  ancla que existen (o a un nombre que generan `medios.mjs` y `portada.mjs`), y que no queden las formas exactas
+  de lo que se quitó.
+- **Sin `CHANGELOG.md`.** Las notas de cada versión van en su Release. Los borradores viven en
+  `docs/notas/v<versión>.md`, en inglés y con una sección en español, y la de la 4.0.0 trae «Qué cambia si
+  actualizas» (el mismo texto, resumido, de la sección del README). Lo que decía «Migrar a la 3.0 en 3 pasos» pasa
+  a las notas de la 3.0.0.
+- **La historia de versiones se arregla con Releases:** uno por cada tag que existe (v2.0.1, v2.1.0, v2.2.0,
+  v3.0.0 y v3.2.0), más el de la 4.0.0, con notas que cuentan lo que faltaba. La 2.0.0 se publicó a mano en npm
+  el 2026-08-10 y no tiene tag. La 3.0.0-beta.0 se preparó pero nunca llegó a npm. La 3.1.0 falló: su tag se
+  empujó sobre un commit donde `package.json` todavía decía 3.0.0, el workflow de publicación lo rechazó en su
+  comprobación del tag, y ese tag ya no existe; lo que iba a ser la 3.1.0 salió en la 3.2.0. No se crea ningún tag
+  nuevo ni se publica la 3.1.0: en este repositorio empujar un tag publica en npm y en el sitio, y cada Release se
+  crea sobre su tag existente con `gh release create <tag> --verify-tag --notes-file docs/notas/<tag>.md`, que no
+  dispara ningún workflow.
+- **Las notas salen del historial y de lo medible:** de `git log` entre tags, de las fechas de publicación de npm
+  (`npm view mcp-phase-gate time`), de las corridas de CI (`gh run list`) y de este registro. Lo que no se pudo
+  comprobar con ninguna de las cuatro queda marcado `[REVISAR: …]` en el borrador, para quien lo publique.
+
+**Por qué.**
+
+- Un README de más de mil líneas es lo primero que ve quien llega, y no se entiende en diez segundos qué es y
+  cómo probarlo. Con la portada del sitio y un README corto, el detalle está a un enlace.
+- Las dos copias ya cambiaban juntas por disciplina; ahora las dos cosas que se rompían en silencio al mover
+  texto, los enlaces y los títulos de los gemelos, las vigila un test.
+- Sin Releases, quien mira el historial de versiones ve tags sin notas, una 2.0.0 sin tag y una 3.1.0 que no
+  existe en npm. Las notas lo cuentan una vez, en el sitio donde la gente lo busca.
+
+**Descartado.**
+
+- **Las guías como páginas del sitio.** El sitio solo se publica con un tag, y las guías se leen mejor en GitHub,
+  con sus enlaces relativos y su historial, que en una página aparte que mantener.
+- **Releases solo de aquí en adelante.** Dejaría la historia de versiones con huecos justo donde más confunde
+  (la 2.0.0, la beta y la 3.1.0).
+- **Publicar o etiquetar ahora la 3.1.0 o la 2.0.0.** Empujar un tag publica en npm y en el sitio, y publicaría un
+  commit viejo con su versión equivocada o duplicaría una versión que ya existe.
+
+**Riesgo aceptado.** Los enlaces de los README a `blob/master/docs/…` dan 404 mientras la v4 vive en
+`v4/integracion`: el README de `master` sigue siendo el de la 3.x hasta que la v4 llegue a `master`. El test los
+comprueba contra la copia local, que es la que llegará.
+
+---
+
+## 2026-10-29 — El sitio tiene una portada completa, la demo se muda a `demo/` y el video son dos piezas
+
+> **Reemplaza en parte** "Los medios se generan de la demo real y se publican en Pages, no en git" (2026-10-18):
+> las escenas, el tema, la fuente de la terminal, las piezas y las cifras medidas. Lo demás sigue vigente: los
+> medios salen de código real ejecutándose, se publican en Pages y no en git, y si fallan el sitio sale con los que
+> ya estaban publicados.
+
+**Decisión.**
+
+- **La raíz del sitio es una portada**, en inglés y en español (`sitio/`, que arma `scripts/portada.mjs` sin
+  framework): la frase, «Abrir la demo en vivo» e «Instalar», las cinco fases con una línea cada una, tres capturas
+  del Studio (Red, Tablero y Ajustes), el comando `npx mcp-phase-gate ui --demo` y un pie con GitHub, npm, la
+  licencia y la versión, que sale de `package.json`. Los colores son los de `tema-claro.css`, copiado tal cual, y
+  las fuentes se enlazan desde `demo/fuentes/`. «Instalar» lleva a `docs/guide/installation.md` (o
+  `docs/guia/instalacion.md`): esos nombres quedan fijados aquí.
+- **La demo vive en `demo/`.** Los enlaces de antes llevaban la vista o el idioma en el hash (`#/tablero/…`,
+  `#red`, `#?lang=en`, `#?sobrio=1`): la portada manda a `demo/`, con el hash intacto, lo que **parece** un
+  enlace de la demo —una ruta (`#/…`), una consulta (`#?…`) o el nombre de una vista del Studio—, y deja en la
+  portada cualquier otro fragmento. Al revés (una lista cerrada de anclas propias) cada sección nueva mandaría a
+  la demo a quien llegara con su enlace. Los nombres de las vistas no se copian: `scripts/portada.mjs` los saca
+  de `studio/src/rutas.ts` y los deja en `data-vistas`, y falla al armar el sitio si ese archivo cambia de forma.
+  La banda de la demo gana un enlace a la portada con su URL absoluta, porque cualquier `ui --export-static` sin
+  datos reales muestra la misma banda y un enlace relativo se rompería fuera de este sitio.
+- **El idioma al llegar.** La portada en inglés mira primero `?lang=`, después lo que ya elegiste (la misma clave
+  `pg-idioma` que usa el Studio, en el mismo origen) y después el idioma del navegador; si es español, lleva a
+  `es/`. El selector EN / ES guarda la elección, y el Studio y la portada recuerdan lo mismo.
+- **Pesa poco:** la primera carga, con las tres capturas, no pasa de 300 kB, y lo comprueban las dos partes: el
+  e2e sobre las capturas que él mismo saca, y el job `ensamblar` sobre las que de verdad se publican. Para eso las
+  capturas son WebP, que el propio Chromium codifica: en PNG pesaban 278 kB las tres y la portada pasaba del tope.
+  Cada captura empieza bajo la banda de la demo, que solo dice en qué carpeta temporal se generó: a quien llega a
+  la portada no le dice nada, y quitarla deja ver esa franja más de interfaz y ahorra otros 25 kB. Medido: 246 kB
+  en inglés y 251 kB en español, sin comprimir.
+- **El video son dos piezas del mismo script.** El MP4 completo, de unos 42 s, con siete escenas (la terminal con
+  solo `doctor`, la Red, el Tablero de una tarea terminada, un lote que pasa a verificado en vivo, Ajustes, el
+  Taller y el sitio en un teléfono), y un GIF corto, de unos 20 s, con la terminal breve, la Red, el lote en vivo y
+  Ajustes: es lo que el README muestra sin clic y lleva al MP4. En el GIF la terminal empieza con el comando casi
+  tecleado: en 3 s lo que vale es la salida de `doctor`, no ver escribirlo. La escena de `init` sale, porque con la 4.0 se
+  configura en Ajustes, que cambia la política de commits de un proyecto, enseña su diff y aplica.
+- **El Studio se graba en tema claro y la terminal se queda oscura**, con los tokens del tema oscuro y JetBrains
+  Mono; el marco del teléfono es el gris claro del Studio. `medios.json` gana la versión y el detalle de las dos
+  piezas.
+- **Tope del GIF corto: 2.5 MiB**, porque es lo primero que carga el README en un teléfono, con la escalera de
+  calidad de siempre (12 fps y 960 px, 10 y 840, 8 y 760). Si no cabe, se recortan segundos de sus escenas, nunca
+  del MP4.
+- **El workflow tiene cinco jobs.** `sitio` exporta la demo y arma la portada; `capturas` fotografía la portada
+  contra un `ui --demo` en vivo, para que Ajustes no salga de solo lectura; `medios` graba el video; `ensamblar`,
+  sin permisos, junta todo en el artefacto `sitio-completo`, que se guarda 14 días; y `desplegar` publica
+  exactamente ese artefacto, así que lo que se revisa es lo que se publica. `desplegar` solo corre con un tag sin
+  guion, y su primer paso exige además la forma de una versión (`vMAYOR.MENOR.PARCHE`): una beta nunca publica, y
+  una corrida manual sobre una rama solo construye. Las construcciones van por ref, así que una corrida manual no
+  cancela la de un tag; y la de un tag no se cancela nunca, para no dejar el sitio a medias.
+- **Los medios nunca frenan el sitio**, pero las capturas sí: sin ellas la portada no está completa.
+
+**Medido** (corrida manual sobre la rama, Ubuntu, con las escenas ya completadas hasta su tiempo): MP4 de
+1.10 MiB en español y 1.12 MiB en inglés, 41.7 s; GIF de 2.31 MiB en los dos idiomas (10 fps y 840 px), 21.9 s.
+El GIF cabe con un 12 % de margen, no más: entre corridas con el mismo código cambia de peso y de escalón de
+calidad (en una anterior salió a 1.88 y 2.13 MiB), y solo queda un escalón por debajo. Si una escena del GIF
+crece, deja de caber; entonces `medios` falla y el sitio sale con los medios ya publicados. En el tag v3.2.0, el
+GIF de la versión anterior ya no cabía en su tope de 5 MiB.
+
+**Descartado.**
+
+- **Una portada mínima, o una bienvenida dentro del Studio:** la portada es lo primero que ve quien llega de
+  fuera, y el Studio ya tiene su demo; una bienvenida dentro obliga a abrir la demo para saber qué es.
+- **Bajar más la calidad del GIF, o subir su tope:** más abajo del último escalón el texto de la terminal no se
+  lee, y más arriba deja de ser lo primero que carga un teléfono.
+- **Un video oscuro:** el Studio de la v4 se ve en claro por defecto, y el video tiene que enseñar lo que se ve al
+  abrirlo.
+
+**Riesgo aceptado.** El enlace «Instalar» y los de la banda apuntan a `blob/master/docs/…` y a la portada, que no
+existen hasta que la v4 llegue a `master` y se publique. Para que no se publique un botón roto, el job `sitio`
+comprueba que las dos guías existan **cuando la corrida es de un tag**; mientras la v4 se construye, no estorba.
+
+---
+
+## 2026-10-28 — Ajustes es el único lugar donde se edita la configuración
+
+> **Reemplaza en parte** la entrada siguiente (la de `machine.json` versión 2), en un punto: las acciones `preset` y
+> `reglas`, que allí conviven con las nuevas «mientras la interfaz las use», ya salieron. Las acciones del Studio son
+> cinco: `crear-manifiesto`, `eject`, `init-cliente`, `equipo` y `proyecto`. `proyecto` hace lo que hacían las dos que
+> salen, con las mismas protecciones (destinos cerrados por archivo y por clave, un solo shape de validación y la
+> huella).
+
+**Decisión.**
+
+- **Ajustes es una vista nueva, la sexta, y el único lugar donde se edita la configuración.** El preset (antes en la
+  Red), las reglas (antes en el Taller) y la conexión de los clientes y las variables (antes en el Vigía) se mudan
+  ahí, y esas vistas muestran el valor con un enlace «Cambiar en Ajustes». El eject se queda en el Taller, porque es
+  de prompts.
+- **Un menú a la izquierda y una página por archivo:** Este equipo (`machine.json`), cada proyecto (su
+  `phase-gate.json`), Clientes MCP, Studio y Avanzado. En un teléfono, el menú pasa a un selector arriba. Cada página
+  tiene su borrador, su diff y su Aplicar al pie.
+- **Los cambios se aplican juntos por archivo.** Se cambian varios campos y se ve un solo diff por archivo, con un
+  solo Aplicar o Descartar, con la huella y el 409 de siempre. Cada campo cambiado lo dice («Cambiado, sin aplicar»)
+  y el menú cuenta los cambios de cada página. Si el archivo cambia en el disco mientras hay un borrador, la página
+  lo dice y vuelve a pedir el plan; si lo que cambió es un campo que también está en el borrador, ese campo queda
+  en conflicto y la persona elige entre el suyo y el del disco, en vez de que se pise en silencio. Salir de una
+  página con cambios sin aplicar, o cerrar la pestaña, pide confirmación.
+- **La página de un proyecto es la única que escribe dos archivos.** Al agregar o cambiar un repo, su ruta propia en
+  esta computadora se escribe en `machine.json` desde la misma página, con dos diffs («viaja con la Documentación» y
+  «solo esta computadora») y un solo Aplicar. `machine.json` se escribe primero. El id de un repo no se renombra: se
+  quita y se agrega, con el aviso de si algún recibo lo cita.
+- **Las cinco variables avanzadas se muestran, no se editan:** su valor, su origen y cómo cambiarlas. El idioma sí se
+  edita: el de la interfaz, el de cada proyecto y el idioma por defecto del equipo, que cede ante `PHASE_GATE_LANG`
+  si está en el entorno.
+- **La página Studio no escribe en el disco:** el tema (Sistema, Claro u Oscuro; sin elección guardada, sigue al del
+  sistema) y el idioma de la interfaz se aplican al momento y los recuerda el navegador. El botón de la barra y el
+  selector ES / EN se quedan como atajos.
+- **El primer arranque abre Ajustes.** Sin Documentación configurada, abrir el Studio lleva a Este equipo, que pide
+  dónde está, en vez de enseñar una Red vacía. Si las rutas salen del entorno y `machine.json` no las tiene, la
+  página ofrece guardarlas ahí, con su vista previa.
+- **Lo que enseña Ajustes sale de dos lecturas que no escriben:** `GET /api/ajustes` (lo del equipo y sus avisos) y
+  `GET /api/ajustes/proyectos/<P>` (lo que dice el `phase-gate.json` de un proyecto, lo que de verdad aplica y las
+  rutas propias de sus repos). La segunda hace falta porque ninguna otra lectura enseña la carpeta de cada repo, el
+  idioma ni los comandos de verificación.
+- **En el sitio exportado, Ajustes se ve de solo lectura**, como las acciones de siempre, y la página Studio
+  funciona, porque solo cambia el navegador. Con `--incluir-datos-reales`, las páginas que enseñan rutas (Este
+  equipo, cada proyecto, Clientes MCP y Avanzado) no se exportan y dicen «No disponible en una exportación»: el
+  sustituto de nombres del export solo reconoce las raíces conocidas, y una ruta de otro sitio se colaría.
+
+**Descartado.**
+
+- **Las otras dos maquetas** (A y C) frente a la B de menú a la izquierda y una página por archivo.
+- **Aplicar campo por campo:** cada campo con su propia vista previa. Cambiar tres cosas de un proyecto eran tres
+  diffs del mismo archivo, tres huellas y tres escrituras, y entre una y otra el archivo ya no es el que se vio.
+- **Variables avanzadas editables:** carpetas de prompts, estado y config, preguntas de confirmación e idioma del
+  servidor. Cambiarlas desde un proceso que ya corre con ellas no las cambia para ese proceso, y la del estado o la
+  de config movería hasta el archivo que las edita.
+- **La ruta propia de un repo solo en Este equipo:** obliga a ir y volver entre dos páginas para algo que es de un
+  proyecto, y deja agregar un repo a medias hasta que alguien recuerda la segunda. En la página del proyecto se ven
+  juntos el repo y dónde está en esta computadora.
+
+---
+
+## 2026-10-28 — Las rutas de este equipo y el idioma por defecto viven en `machine.json`, que pasa a la versión 2, y el entorno siempre gana
+
+> **Reemplaza en parte** dos entradas. De "El Studio solo ejecuta acciones del CLI, con vista previa y huella"
+> (2026-10-17): que las cinco acciones sean las mismas y equivalgan a un comando del CLI. Entran `equipo` y
+> `proyecto`, que no tienen comando de CLI (tampoco lo tenían `preset` y `reglas`), y `preset` y `reglas` saldrán,
+> porque las cubre `proyecto`. Mientras la interfaz todavía las use, conviven con las nuevas: hoy son siete, y
+> serán cinco cuando salgan. Lo que esa entrada protege se mantiene: destinos cerrados por acción, un solo shape de
+> validación y la huella. De "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
+> equipo" (2026-10-19) y del paso 3 de "El idioma es del proyecto y se deduce primero del disco…" (2026-10-18):
+> solo el orden entre `idiomaPorDefecto` de `machine.json` y `PHASE_GATE_LANG`, que se invierte. El resto de esas
+> entradas sigue vigente.
+
+> **Reemplazada en parte** el 2026-10-28 por "Ajustes es el único lugar donde se edita la configuración": `preset`
+> y `reglas` ya salieron, y las acciones son cinco.
+
+**Decisión.**
+
+- **`machine.json` pasa a la versión 2.** Gana `rutas`, con tres claves: `documentacion` y `carpetaDeRepos`, que
+  son rutas absolutas con la misma regla que las de `repos`, y `subcarpetaTareas`, que puede ir vacía (las tareas
+  cuelgan entonces del proyecto). Sigue siendo estricto: una clave desconocida, también dentro de `rutas`, es un
+  error con su ruta. La 4.0 lee las versiones 1 y 2 y todo lo que escribe es versión 2, con el `$schema` en
+  `@4`. Su shape vive en `src/maquina.ts`, y lo usan el servidor, `doctor` y Ajustes, así que «roto» significa
+  lo mismo en los tres.
+- **Una sola regla de fuentes: el entorno siempre gana.** Para `PHASE_GATE_DOCS_PATH`, `PHASE_GATE_REPOS_PATH` y
+  `PHASE_GATE_TASKS_SUBDIR` el orden es el entorno, el `.env` y `machine.json`, y después nada. Para el idioma,
+  `PHASE_GATE_LANG` gana a `idiomaPorDefecto`, como el entorno gana en las rutas. **Es un cambio de
+  comportamiento:** quien tenga `PHASE_GATE_LANG` en el bloque `env` de un cliente verá que ahora gana a
+  `machine.json`, que antes le ganaba. Va en las notas de la 4.0.0.
+- **Se lee una vez por llamada, sin caché entre llamadas.** En NTFS, el `mtime` no cambió en el 48 % de las
+  escrituras atómicas seguidas, así que no sirve para saber si el archivo cambió. Cambiar las rutas en Ajustes vale
+  en la llamada siguiente, sin reiniciar el cliente. Dentro de una llamada (una herramienta, una lectura del Studio,
+  un `doctor`) se lee una sola vez: leerlo en cada pregunta eran más de cien lecturas por `doctor`, una llamada
+  podía mezclar dos versiones del archivo, y en Windows cada lectura es un momento en que el `rename` de una
+  escritura falla con EPERM. Por eso la escritura atómica, además, reintenta el `rename` durante un segundo en
+  Windows.
+- **Una `rutas` en un archivo versión 1 es un error**, que pide `"version": 2`: la 3.x lo rechazaría, y un mismo
+  archivo no debe leerse distinto según la versión.
+- **Si se rompe, el proceso conserva el último archivo válido que leyó** (sus rutas y su idioma) y avisa una vez.
+  Si nunca hubo uno válido, sus rutas no cuentan, y el error lo dice según el caso: un error de sintaxis, con su
+  línea y su columna; un error de forma, con el campo; una ruta que no existe o que es un archivo, nombrando
+  `machine.json` y no una variable de entorno.
+- **Cada servidor anota en su sesión las rutas que le llegaron del entorno** (`rutas`, opcional, con un tope de
+  longitud por ruta para que el registro siga cabiendo en 16 KB): es lo que no cambia mientras el proceso vive, y
+  lo que Ajustes compara con `machine.json`. Las sesiones de un servidor 3.x, que no la llevan, se siguen leyendo.
+- **`init` y `init-cliente` guardan las rutas en `machine.json` y dejan de escribirlas en el `env`.** A una
+  entrada de Cursor o VS Code que ya existe le quitan `PHASE_GATE_DOCS_PATH`, `PHASE_GATE_REPOS_PATH` y sus alias
+  `ORQUESTADOR_*` (y `PHASE_GATE_LANG` con `quitarIdioma`), conservan todo lo demás y, si las rutas aún no están en
+  `machine.json`, las agregan en el mismo plan. **Solo quitan una ruta si es la de `machine.json`, o si
+  `machine.json` no tiene ninguna** (y entonces pasa allí). Una ruta distinta se queda en el `env`, con sus alias, y
+  el plan lo dice: es justo el caso de un cliente con otra Documentación, y quitarla lo cambiaría a la de
+  `machine.json` sin que nadie lo decida. Quien quiera que use la de `machine.json` la quita a mano. En Claude Code, una entrada que ya existe no se toca: el plan
+  lee `~/.claude.json` y enseña los dos comandos (`claude mcp remove` y `claude mcp add-json`, en su ámbito) que
+  la rehacen sin las rutas. Los corre la persona, porque si el `add` fallara después del `remove` el servidor
+  quedaría sin registrar. `init` escribe `machine.json` con un temporal y un `rename`, como el Studio, para que un
+  servidor abierto no lo lea a medias.
+- **Dos acciones nuevas, `equipo` y `proyecto`**, con su plan, su huella y su 409. `equipo` edita `machine.json`:
+  `rutas`, `idiomaPorDefecto`, `presetPorDefecto` y la ruta propia de cualquier repo. `proyecto` edita en un solo
+  plan lo que cambió de un proyecto: en su `phase-gate.json`, `preset`, `idioma`, `reglas.*`, `fase5.prPorRepo` y
+  `repos`; en `machine.json`, solo las claves `<P>/<repo>` de ese proyecto. Cada campo admite un valor, o `null`
+  para quitarlo. Ninguna acción escribe fuera de su lista, por archivo y, en `machine.json`, por clave; con dos
+  archivos, `machine.json` va primero, y si falla la segunda escritura la respuesta dice qué quedó escrito y dónde
+  están las copias. Los planes viven en `src/ajustes/`, fuera de `src/studio/`, para que un CLI los pueda usar.
+- **Qué detecta Ajustes (`GET /api/ajustes`) y qué no.** Detecta que pisen `machine.json` con otro valor: el propio
+  Studio, por su entorno o su `.env` (el primer aviso); el `mcp.json` global de Cursor y de VS Code; `~/.claude.json`
+  en sus ámbitos de usuario y local; y cualquier cliente con un servidor abierto, por sus sesiones. `doctor` avisa
+  del mismo choque (`VAR-PISA-MAQUINA` y `LANG-PISA-MAQUINA`) y dice cuál gana y cómo quitarlo. **No cubre** los
+  `.cursor/mcp.json` y `.vscode/mcp.json` de cada proyecto, los perfiles de VS Code, otros clientes, el ámbito de
+  proyecto de Claude Code (su `.mcp.json`) ni los servidores con otro `PHASE_GATE_STATE_PATH`, cuyas sesiones el
+  Studio no ve.
+- **Los eventos en vivo.** `machine.json` gana su propio evento, `equipo`, en lugar del `prompts` de antes, y las
+  carpetas que vigila el Studio, que se fijaban una sola vez al arrancar, se recalculan cuando cambia: si la
+  Documentación es otra, se vigila la nueva.
+- **La 3.x no lee la versión 2, y volver a ella son dos pasos.** Con un `machine.json` versión 2, `doctor` de la
+  3.2 dice `MAQUINA-INVALIDA` («version: debe ser 1; (raíz): clave desconocida "rutas"») y, si el cliente ya no
+  lleva las rutas en su `env`, también `VAR-FALTA` para `PHASE_GATE_DOCS_PATH` y `PHASE_GATE_REPOS_PATH`: la 3.x
+  no tiene Documentación ni repos. Para volver: (1) restaurar la copia `machine.json.bak-<fecha>` de la versión 1
+  que dejaron el Studio o `init` al pasar el archivo a la 2; (2) devolver las rutas al `env` de cada cliente:
+  en Cursor y VS Code, restaurar su `mcp.json.bak-<fecha>` o volver a correr `init` de la 3.2; en Claude Code,
+  `claude mcp remove` y `claude mcp add` con sus `--env`, que es lo que hace `init` de la 3.2. El paso (1) solo
+  no basta. Es un cambio de versión mayor y las notas de la 4.0.0 lo explican. Mientras la
+  4.0 se desarrolla, se prueba con `PHASE_GATE_CONFIG_PATH` apuntando a una carpeta aparte, así que la 3.2 de uso
+  diario nunca ve un `machine.json` versión 2.
+- **Los tests no pueden leer la configuración real.** `limpiarEntorno` fija también `HOME`, `USERPROFILE`,
+  `APPDATA` y `XDG_CONFIG_HOME` a carpetas temporales: aunque un test borre `PHASE_GATE_CONFIG_PATH`, `configDir()`
+  cae en una carpeta falsa, y un test lo comprueba.
+
+**Por qué.**
+
+- Con `npx`, el `.env` de la raíz del paquete queda dentro de la caché de `npx`, y el Studio lanzado desde una
+  terminal no ve el bloque `env` de Cursor ni de Claude Code, así que no podía editar ni siquiera saber las rutas
+  que usa el servidor.
+- `machine.json` ya guarda la ruta de cada repo en este equipo y vive en una carpeta fija por sistema que leen
+  igual el servidor y el Studio: es el candidato natural. Pero su esquema no admitía claves nuevas, y colarlas sin
+  más habría dejado un archivo que dos versiones leen distinto. Por eso sube a la versión 2.
+- Gana el entorno porque es lo único que puede valer distinto por cliente o por ejecución: Cursor con la
+  Documentación del trabajo y Claude Code con otra, o una prueba de una sola vez sin tocar el archivo. Es la
+  convención de git y de npm: lo de la ejecución gana a lo guardado. Y una sola regla, también para el idioma,
+  se explica en una línea.
+
+**Qué se descartó.**
+
+- **Un archivo aparte para las rutas.** Solo servía para no romper la 3.x, y dejaba dos archivos de configuración
+  del equipo que mantener y que validar.
+- **Que gane Ajustes (o `machine.json`) sobre el entorno.** Un cliente no podría tener otra Documentación, y una
+  prueba de una sola vez obligaría a editar el archivo.
+- **Una 3.2.1 que tolerara la versión 2** e ignorara sus rutas, para que la 3.2 de uso diario conviviera con la 4.0
+  en desarrollo. No se publica ninguna 3.x nueva: basta con probar la 4.0 con su propia carpeta de configuración.
+- **Una caché por el `mtime` del archivo**, por lo medido en NTFS.
+- **Que `init` siga escribiendo las rutas en el `env` además de en `machine.json`:** dejaría cada cliente con su
+  copia, que gana y se queda vieja sin que nadie lo note.
+
+**Riesgo aceptado.** `machine.json` pasa a ser crítico: si se rompe, ya no fallan solo los repos, sino todo. Lo
+frenan la validación antes de escribir, la copia `.bak`, el último archivo válido en memoria, un error que dice qué
+está mal y dónde, y `doctor`, que lo muestra primero. Un `env` viejo sigue mandando aunque se cambie Ajustes: lo
+frenan el aviso con su botón, el hallazgo de `doctor` y que `init` ya no escribe rutas en él.
+
+---
+
+## 2026-10-27 — El Studio adopta la dirección visual sobria: Inter y JetBrains Mono, un acento azul, un fondo gris, pizarra azulada en oscuro y un indicador para cada estado
+
+> **Reemplaza en parte** la §7.2 de `docs/plan-maestro-v3.md`, solo en la tipografía: las tres familias (Big
+> Shoulders Display, Atkinson Hyperlegible e IBM Plex Mono) quedan superadas por Inter y JetBrains Mono. Lo demás
+> de esa sección sigue vigente: las fuentes van autoalojadas en `studio/public/fuentes/`, con licencia OFL, y el
+> Studio no pide nada fuera de `127.0.0.1`. La entrada anterior (el modo Cabina que se elimina y los sellos SVG,
+> ya marcados allí) solo se cita: esta no decide nada sobre la estructura.
+
+**Decisión.** Es solo capa visual: CSS, fuentes y un componente de estado. Ningún dato, texto ni comportamiento
+cambia, y la estructura de cada vista es la misma que antes (una prueba compara el árbol de accesibilidad de
+cada vista con el de antes).
+
+- **Dirección sobria.** Fondo claro gris `#f3f5f7`, superficies blancas, bordes de 1 px, sin sombras, radios de
+  6 px en los controles, 8 en las tarjetas y 10 en los contenedores. El acento es azul: `#1d4ed8` en claro y
+  `#93c5fd` en oscuro.
+- **Tema oscuro pizarra azulada**, con fondo `#0b0d10`, de la misma temperatura que el gris claro.
+- **Los colores tienen nombre de función, no de metáfora** (`fondo`, `superficie`, `superficie-2`, `borde`,
+  `borde-control`, `texto`, `texto-2`, `acento`, `acento-suave`, `sobre-acento`, `banda`, `texto-banda`, `verde`,
+  `ámbar`, `rojo`, `violeta` y `apagado`), una vez en cada tema. `test/studio-tokens.test.ts` lee las hojas y
+  comprueba que toda variable usada está definida, que los dos bloques del oscuro dicen lo mismo, que el texto
+  llega a 4.5:1 sobre sus fondos y que el acento y el borde de los controles llegan a 3:1. El verde, el ámbar y
+  el apagado del tema claro son algo más oscuros que en los bocetos: con los de los bocetos, el ámbar daba 4.15:1
+  sobre `superficie-2`.
+- **Inter variable para el texto y JetBrains Mono variable para el código, los SHA y los lotes**, un solo archivo
+  `woff2` cada una (48,256 y 40,404 bytes) dentro del paquete, porque la CSP solo admite `font-src 'self'`. Pesan
+  menos que Inter 400 y 600 juntas y traen los pesos intermedios.
+- **Densidad cómoda.** El cuerpo mide 15 px (`0.9375rem`; la raíz sigue al 100 %), las celdas de las tablas
+  11 por 14 px, y ningún texto baja de 12 px: tampoco las cabeceras, las etiquetas ni la insignia. Un test lo mide
+  con `getComputedStyle` en cada vista y en los dos temas.
+- **Cada estado tiene una forma propia dentro de su vista y siempre va con su texto**: nunca se dice nada solo con
+  color. Lo pinta `IndicadorDeEstado`, que es la única tabla de qué forma, qué color y qué insignia lleva cada
+  estado. Solo lo que pide atención lleva insignia (el texto en mayúsculas con `text-transform`, con borde del
+  color del estado, en JetBrains Mono 600 de 12 px): fase con pendientes y con hueco; lote con pendientes, no
+  vigente y rechazado; manifiesto inválido, repo que no existe o con error de git, error de configuración; y
+  errores y avisos del Vigía. Dos excepciones: cuando la insignia lleva datos (el mensaje de git de un repo, el
+  nombre `phase-gate.json`) no los pasa a mayúsculas, porque una ruta o un nombre en mayúsculas ya no es el que
+  es; y en un título (los grupos del Vigía) toma el tamaño y la familia del título, para que los títulos del mismo
+  nivel midan lo mismo lleven insignia o no.
+- **Los colores de los lotes que cambian:** «commit pendiente» pasa de ámbar a violeta, para no confundirse con el
+  acento ni con «con pendientes»; «sellado» pasa de azul a verde, porque el azul es ahora el acento; y «manual» y
+  «nota» pasan de morado a apagado: el morado era su único color y ahora los distingue su forma. «Descartado» y
+  «sin recibo» siguen en gris, ahora `apagado`.
+- **La pestaña activa** lleva fondo `acento-suave`, una raya inferior de 2 px y peso 600: el fondo solo da 1.22:1
+  contra la barra, así que no es lo que la distingue.
+- **La fase abierta del Tablero** lleva fondo `acento-suave` y borde en el acento, como la pestaña activa, y el
+  contorno queda para el foco: antes los dos eran el mismo contorno, y la fase abierta parecía enfocada. Su texto
+  (el título, el archivo y el estado en su color) llega a 4.5:1 sobre `acento-suave`, y lo comprueba el test de
+  los tokens.
+- **`studio/e2e/tema.spec.ts` cambia en tres cosas, ninguna de estructura:** el fondo de cada tema se lee de las
+  hojas en vez de ir escrito (cualquier paleta nueva lo cambiaba); los nombres de variables admiten dígitos
+  (`--texto-2`, `--superficie-2`); y el Taller espera a que se llene el selector de proyectos antes de fotografiar
+  (una carrera que se vio en la CI de Windows y macOS). Las pruebas de estructura y la función que compara no
+  cambian.
+
+**Por qué.**
+
+- Una paleta con funciones y no con metáforas se puede comprobar con un test, y una sola estructura de estados
+  hace que el mismo estado se vea igual en todas las vistas.
+- Inter es legible a 15 px en pantalla, y JetBrains Mono distingue el 0 de la O y el 1 de la l y la I justo donde
+  la ambigüedad importa: los SHA y los lotes.
+- El oscuro de la misma temperatura que el claro evita que cambiar de tema se sienta como cambiar de producto.
+
+**Qué se descartó.**
+
+- **Atkinson Hyperlegible.** Se diseñó para baja visión y se pierde. Baja el cuerpo de 16 a 15 px, así que no se
+  compensa: es una reducción que se eligió viendo las capturas. Lo que sí ayuda es JetBrains Mono en SHA y lotes,
+  el mínimo de 12 px y el contraste, comprobados por tests.
+- **El cuerpo de 14 px.** Era una reducción más fuerte desde los 16 de antes, no una mitigación, y se quedó en 15.
+- **IBM Plex Sans y un acento índigo.** Se compararon en las láminas de la dirección y no se eligieron.
+- **Un oscuro de gris neutro puro.** Con el gris claro azulado, el oscuro tenía que ser de la misma temperatura.
+- **La insignia en todos los estados.** Con varios repos activos, «con cambios» (lo normal mientras se trabaja)
+  llenaría la Red de alertas, y una alerta que está en todas partes deja de avisar.
+- **La alternativa `ss02` de Inter.** En las capturas no cambiaba nada visible, y donde la ambigüedad importa ya
+  va JetBrains Mono.
+
+**Riesgo aceptado.** Atkinson se pierde, y Taller, Vigía y Bitácora no tenían lámina: su aspecto sale de los
+mismos tokens y se revisó con capturas. El GIF de la demo, que se graba con el Studio, tiene otro aspecto.
+
+---
+
+## 2026-10-27 — El Studio tiene una sola estructura por vista, y el tema, claro u oscuro, solo cambia colores; el modo Cabina se elimina
+
+> **Reemplaza en parte** dos entradas, cada una solo en lo que dice de los modos del Studio. De "El Studio
+> elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo"
+> (2026-10-19): los sellos SVG y "En modo Sobrio, solo el texto"; lo del idioma sigue vigente. De "El README
+> principal pasa a inglés" (2026-10-18): solo la mención de las capturas `tablero-cabina.png` y
+> `tablero-sobrio.png`.
+
+**Decisión.**
+
+- **El modo Cabina se elimina.** El Studio pintaba cada vista de dos maneras, Cabina (una vía con semáforos,
+  vagones con su sello SVG) y Sobrio (tablas), y un botón «Modo» pasaba de una a otra. Ahora cada vista tiene
+  una sola estructura, y el botón «Tema oscuro», con `aria-pressed`, solo cambia los colores.
+- **La estructura de cada vista.** La Red es una lista de filas que se despliegan: plegada, el nombre, el preset,
+  los repos con su rol, la tarea activa y la sesión; desplegada, además, el manifiesto, las reglas y las
+  acciones. Las fases del Tablero son seis tarjetas, y los lotes, una tabla con lote, objetivo, repo, estado,
+  detalle, ancla y recibo. Ningún dato ni acción de los dos modos se pierde: lo que solo tenía uno de ellos
+  pasó a la estructura única.
+- **El tema.** Sin elección guardada, el tema es el del sistema (`prefers-color-scheme`), y lo resuelve solo el
+  CSS: no hay script en línea, porque la CSP del servidor local no lo admite, y no hay destello aunque el
+  JavaScript se cargue tarde. El botón lo cambia y la elección se recuerda en `localStorage` (`pg-tema`, `claro`
+  u `oscuro`); `<html data-tema>` solo existe cuando hay una elección, y con ella un cambio del sistema no la
+  pisa. `tema-claro.css` y `tema-oscuro.css` solo declaran custom properties y `color-scheme`.
+- **Lo viejo no se migra.** `pg-modo` y `#?sobrio=` dejan de leerse: quien tenía Cabina o Sobrio guardados
+  vuelve al tema del sistema.
+- **El vocabulario.** Ningún texto visible ni `aria-label` usa la metáfora de la vía («Estación», «Señal»,
+  «EN VÍA»): las fases son «Fases de la tarea». «Sello» se queda, porque es el término del motor: «recibo
+  sellado». El estado de un lote se dice en minúscula, con un solo conjunto de palabras (verificado, sellado,
+  con pendientes, commit pendiente, no vigente, rechazado, descartado, manual, nota, sin recibo), en las claves
+  `estado.*` y en las clases `estado-*`; las fases, en `fase.*` y `fase-*`. Los nombres `Estacion`,
+  `estaciones` y `Senal` siguen como identificadores internos del contrato del Studio: renombrarlos durante el
+  congelamiento cambiaría la API y obligaría a regenerar los datos de la demo y el dorado de la exportación, sin
+  que nada se viera distinto. No se ven en pantalla.
+- **Lo que deja de usarse se borra**: la vía, los vagones, los semáforos y los sellos SVG (`studio/public/sellos/`;
+  el sitio exportado ya no los lleva), con su CSS y sus variables.
+- **Una prueba comprueba que el tema no toca la estructura**: compara el árbol del DOM y el de accesibilidad
+  en claro y en oscuro, en cada vista a 1280 y a 390 px, con el visor abierto, con la vista previa de una
+  acción abierta, con un error de la API y en el sitio estático. Su función de comparación tiene su propia
+  prueba con árboles sintéticos.
+
+**Por qué.**
+
+- Dos estructuras por vista eran dos interfaces que mantener y probar, y Sobrio tenía menos funciones que
+  Cabina, no solo otro aspecto: quedarse con él sin más habría perdido datos.
+- El tema del sistema es lo que la persona ya eligió en su equipo, y que lo resuelva el CSS lo hace valer
+  también sin JavaScript.
+- Con una sola estructura, que el tema solo cambia colores se puede probar y se queda probado.
+
+**Qué se descartó.**
+
+- Cabina como tercer tema: seguiría pidiendo su propia estructura, o sería solo otra paleta sin razón para
+  distinguirse de las dos que quedan.
+- Todo en tablas: la Red y las fases perdían lo que cabe mal en una fila, y en un teléfono las tarjetas y la
+  lista que se despliega se apilan mejor.
+- Un script en `index.html` que fije el tema antes del primer pintado: la CSP lo prohíbe, y no se toca.
+- Migrar la elección de modo guardada: Cabina ya no existe, y Sobrio y el tema claro no son lo mismo.
+
+**Riesgo aceptado.** La paleta y la tipografía son todavía las de antes: el tema oscuro usa los colores de
+Cabina sobre la estructura nueva y puede verse raro, y los títulos aún cambian de fuente con el tema
+(`--texto-titulo`). Con una elección guardada distinta del tema del sistema, el primer pintado puede enseñar el
+otro tema un instante, hasta que corre el JavaScript.
+
 ---
 
 ## 2026-10-19 — El Studio elige su idioma en el navegador y lo manda en cada petición; los sellos llevan la palabra fuera del dibujo
 
 > Registra decisiones de la Etapa 6 (L07) que se tomaron en el código sin ADR (auditoría externa de la Etapa 6,
 > §8). **Matiza** §8.6 del plan, que pedía el texto de los sellos dentro del SVG.
+
+> **Reemplazada en parte** el 2026-10-27 por "El Studio tiene una sola estructura por vista, y el tema, claro
+> u oscuro, solo cambia colores; el modo Cabina se elimina": los sellos SVG y "En modo Sobrio, solo el texto"
+> ya no valen. Lo del idioma sigue vigente.
 
 **Decisión.**
 
@@ -28,6 +614,7 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
   lleva texto. El filtro de seguridad no la lee: sus respuestas salen en el idioma del proceso.
 - **Los sellos** son un marco SVG sin texto (`studio/public/sellos/`) con la palabra encima, en HTML y del
   diccionario de la interfaz (VERIFICADO / VERIFIED, SELLADO / SEALED…). En modo Sobrio, solo el texto.
+  *Reemplazado el 2026-10-27: los sellos SVG y los modos ya no existen; el estado de un lote es solo texto.*
 
 **Por qué.**
 
@@ -50,6 +637,10 @@ no se borra — se agrega una entrada nueva que la reemplaza y se marca la vieja
 ## 2026-10-19 — Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del equipo
 
 > **Matiza** la del 2026-10-18 "El idioma es del proyecto y se deduce primero del disco…", en su paso 5.
+
+> **Reemplazada en parte** el 2026-10-28 por "Las rutas de este equipo y el idioma por defecto viven en
+> `machine.json`, que pasa a la versión 2, y el entorno siempre gana": donde dice que `idiomaPorDefecto` y
+> `PHASE_GATE_LANG` cuentan en ese orden, ahora cuenta primero `PHASE_GATE_LANG`.
 
 **Decisión.**
 
@@ -100,6 +691,15 @@ en una línea o con otro formato cambia de forma (no de contenido). Queda la cop
 > duplicación": los dos README siguen completos y cambiar uno obliga a cambiar el otro; lo que cambia es
 > cuál es el principal.
 
+> **Reemplazada en parte** el 2026-10-27 por "El Studio tiene una sola estructura por vista, y el tema, claro
+> u oscuro, solo cambia colores; el modo Cabina se elimina": las capturas `tablero-cabina.png` y
+> `tablero-sobrio.png` enseñaban dos modos que ya no existen. El resto sigue vigente.
+
+> **Reemplazada en parte** el 2026-10-29 por "Los README son cortos y el detalle vive en cinco guías gemelas…": los
+> dos README ya no son completos sino cortos, la arquitectura queda en un párrafo y los idiomas pasan a la guía de
+> configuración, y «Dónde está cada cosa» pasa a `CONTRIBUTING.md`. La apertura en cinco puntos y los gemelos
+> siguen vigentes.
+
 **Decisión.** `README.md`, en inglés, es el principal: el que fija la estructura y el primero que se
 actualiza. `README.es.md` es su gemelo completo, con las mismas secciones en el mismo orden, las mismas
 tablas, el mismo esquema de enlaces y anclas, y los diagramas Mermaid traducidos. Los dos abren igual:
@@ -132,7 +732,8 @@ estudio sigue la misma regla: `docs/case-study.md` y su gemelo `docs/caso-de-est
 - Un solo README con los dos idiomas intercalados: el doble de largo para cualquiera de los dos lectores.
 - Imágenes con ruta relativa al repo: npmjs.com las rompe, porque `docs/medios/` no viaja en el paquete
   (§8.1 del plan). La captura de `tablero-cabina.png` sale de la cabecera y la de `tablero-sobrio.png` de
-  la sección del Studio: las dos enseñan la interfaz de antes del selector de idioma.
+  la sección del Studio: las dos enseñan la interfaz de antes del selector de idioma. *Reemplazado el
+  2026-10-27: los dos modos que enseñan esas capturas ya no existen.*
 
 **Riesgo aceptado.** El de siempre: dos documentos largos que cambian juntos. Ningún test compara su
 estructura (`test/docs.test.ts` solo vigila los comandos de fase); la mitigación sigue siendo la línea de
@@ -141,6 +742,10 @@ estructura (`test/docs.test.ts` solo vigila los comandos de fase); la mitigació
 ---
 
 ## 2026-10-18 — Los medios se generan de la demo real y se publican en Pages, no en git
+
+> **Reemplazada en parte** el 2026-10-29 por "El sitio tiene una portada completa, la demo se muda a `demo/` y el
+> video son dos piezas": las escenas, el tema, la fuente de la terminal, las piezas y las cifras medidas. Lo demás
+> sigue vigente.
 
 **Decisión.** El GIF, el video y el póster de los README salen de **código real ejecutándose**, nunca de
 capturas a mano ni de una conversación escenificada, con dos scripts y una cinta:
@@ -299,6 +904,10 @@ proyecto que no existe) sale en el idioma del equipo, no en el del proyecto: tod
 
 > **Matizada** el 2026-10-19 por "Un manifiesto sin `idioma` es español; sin proyecto, manda el idioma del
 > equipo": un manifiesto sin `idioma` y sin documentos que lo digan es español, no el idioma del sistema.
+
+> **Reemplazada en parte** el 2026-10-28 por "Las rutas de este equipo y el idioma por defecto viven en
+> `machine.json`, que pasa a la versión 2, y el entorno siempre gana": en el paso 3, `PHASE_GATE_LANG` pasa a
+> ganar a `idiomaPorDefecto` de `machine.json`, y no al revés.
 
 **Decisión.** Dos conceptos distintos:
 
@@ -561,6 +1170,12 @@ tests"): los textos son ese fixture y el mismo generador alimenta los tests de l
 > **Matizada** el 2026-10-18 (Etapa 6, desvío E6-D7 b): la huella ya no incluye el texto del resumen, que
 > depende del idioma de la interfaz, para que una vista previa hecha en un idioma se pueda aplicar en el otro.
 > No pierde protección: el resumen se deriva de la acción, las rutas y los contenidos, que siguen en la huella.
+
+> **Reemplazada en parte** el 2026-10-28 por "Las rutas de este equipo y el idioma por defecto viven en
+> `machine.json`, que pasa a la versión 2, y el entorno siempre gana": las acciones siguen siendo cinco, pero ya
+> no son estas (entran `equipo` y `proyecto`, que no tienen comando de CLI, y salen `preset` y `reglas`), y cada
+> acción tiene su lista cerrada de destinos, también por clave en `machine.json`. La huella, el 409, el shape de
+> validación y que nunca se escriba en una tarea ni en los repos siguen vigentes.
 
 **Decisión.** El Studio escribe solo con cinco acciones que ya existían en el CLI, y siempre en dos pasos
 (`src/studio/acciones.ts`):

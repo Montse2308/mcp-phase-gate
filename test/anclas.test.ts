@@ -1,4 +1,4 @@
-// La verificación de anclas (§6.3 del plan maestro v3), con repos de git reales en carpetas
+// La verificación de anclas, con repos de git reales en carpetas
 // temporales: commits en la rama y fuera de ella, el primero del repo, la comparación de archivos, y el
 // sha256 de un artefacto con su contención.
 
@@ -85,7 +85,7 @@ describe("resolverCommit y las consultas de git de los lotes", () => {
     assert.deepEqual(await resolverCommit(repo, blob), { ok: false, motivo: "no-existe" });
   });
 
-  // Hallazgo 3 de la auditoría de la Etapa 4: con --quiet, un hash ambiguo salía como inexistente. Para
+  // Con --quiet, un hash ambiguo no debe salir como inexistente. Para
   // tener uno de verdad hacen falta miles de commits: fast-import los crea en menos de un segundo, y con
   // fecha y autor fijos los SHA son siempre los mismos, así que la colisión de 7 caracteres también.
   it("un prefijo de 7 que comparten dos commits es ambiguo, y anclarCommit lo dice", async () => {
@@ -143,7 +143,7 @@ describe("resolverCommit y las consultas de git de los lotes", () => {
     assert.equal(await ramaActual(repo), null);
   });
 
-  // E3-R4 y hallazgo 1 de la Etapa 3: cada consulta nueva pasa por la puerta única. Control positivo
+  // Cada consulta nueva pasa por la puerta única. Control positivo
   // primero: la trampa se dispara con un git status normal.
   it("ninguna consulta de los lotes ejecuta un core.fsmonitor trampa (control positivo incluido)", async () => {
     const { repo, segundo, enOtra } = instalacion();
@@ -361,7 +361,7 @@ describe("reverificar", () => {
     }
   });
 
-  // Hallazgo 8 de la auditoría de la Etapa 4: en un binario, quitar un 0x0D es un cambio de verdad.
+  // En un binario, quitar un 0x0D es un cambio de verdad.
   it("en un binario, un cambio de finales de línea no cuenta como vigente", async () => {
     const { repo } = instalacion();
     const ruta = path.join(repo, "bin.dat");

@@ -1,4 +1,4 @@
-// El parser de bloques y su aplicación sobre las ranuras de un texto (§5.3.3 del plan maestro v3).
+// El parser de bloques y su aplicación sobre las ranuras de un texto.
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";

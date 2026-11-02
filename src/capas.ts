@@ -1,17 +1,16 @@
-// Las capas de prompts y el ensamblado de un prompt de fase a partir de ellas.
+// The prompt layers and the assembly of a phase prompt from them.
 //
-// De menor a mayor prioridad:
-//   1    fábrica   <paquete>/prompts/<idioma>/            fase-N-*.md, global-rules.md, comandos/
-//   2    preset    un archivo de bloques                   solo bloques
-//   2.5  reglas    variantes de regla del paquete          solo bloques
-//   3    global    PHASE_GATE_PROMPTS_PATH, o si no, <configDir>/prompts/ cuando existe
-//                  (lo mismo que la fábrica, más un bloques.md)
-//   4    proyecto  <DOCS>/<PROYECTO>/.phase-gate/prompts/  lo mismo que la 3
+// From lowest to highest priority:
+//   1    fábrica   <package>/prompts/<language>/          fase-N-*.md, global-rules.md, comandos/
+//   2    preset    a file of blocks                        blocks only
+//   2.5  reglas    rule variants of the package            blocks only
+//   3    global    PHASE_GATE_PROMPTS_PATH, or otherwise <configDir>/prompts/ when it exists
+//                  (the same as the factory, plus a bloques.md)
+//   4    proyecto  <DOCS>/<PROJECT>/.phase-gate/prompts/   the same as 3
 //
-// El CUERPO de una fase sale de la capa más alta (entre 1, 3 y 4) que tenga su fase-N-*.md, y su
-// cabecera da el nombre del documento: un bloque nunca lo cambia. Después cada ranura recibe los
-// bloques de las capas en orden ascendente, así que el de más arriba manda, aunque esté por debajo
-// de la capa del cuerpo.
+// The BODY of a phase comes from the highest layer (among 1, 3 and 4) that has its fase-N-*.md, and its
+// header gives the name of the document: a block never changes it. Then each slot receives the blocks of
+// the layers in ascending order, so the highest one rules, even if it is below the body's layer.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -43,22 +42,22 @@ export type EtiquetaCapa = "fábrica" | "preset" | "reglas" | "global" | "proyec
 export type Capa = { orden: 1 | 2 | 2.5 | 3 | 4; etiqueta: EtiquetaCapa; ruta: string };
 export type { Procedencia } from "./bloques.js";
 
-// El archivo de bloques de una capa global o de proyecto.
+// The blocks file of a global or project layer.
 export const ARCHIVO_BLOQUES = "bloques.md";
 
-// Las secciones de las reglas globales que son esqueleto: no son ranuras, ningún bloque las toca y,
-// si un global-rules.md propio no las tiene, se reinyectan las de fábrica. Del vocabulario (§8.2).
+// The sections of the global rules that are skeleton: they are not slots, no block touches them and, if a
+// global-rules.md of one's own lacks them, the factory ones are re-injected. From the vocabulary.
 export const SECCIONES_ESQUELETO: readonly string[] = VOCABULARIO.es.seccionesEsqueleto;
 
 export function carpetaPromptsDeProyecto(carpetaProyecto: string): string {
   return path.join(requireBasePath(DOCS), carpetaProyecto, ".phase-gate", "prompts");
 }
 
-// ─── Configuración efectiva de un proyecto ──────────────────────────────────
-// De qué preset y con qué reglas se ensambla un prompt. El preset sigue esta precedencia:
-//   frontmatter de la tarea > phase-gate.json del proyecto > presetPorDefecto de machine.json > software
-// y las reglas (lotes, commits): reglas del manifiesto > frontmatter del preset > valor de fábrica.
-// Un preset o un manifiesto que no existe o está mal escrito es un error explícito (decisión F2).
+// ─── Effective configuration of a project ───────────────────────────────────
+// Which preset and which rules a prompt is assembled with. The preset follows this precedence:
+//   task frontmatter > the project's phase-gate.json > presetPorDefecto of machine.json > software
+// and the rules (lotes, commits): manifest rules > preset frontmatter > factory value.
+// A preset or a manifest that does not exist or is badly written is an explicit error.
 export type OrigenDelPreset = "de la tarea" | "del proyecto" | "de machine.json" | "por defecto";
 export type OrigenDeRegla = "del proyecto" | "del preset" | "de fábrica";
 export type ReglasEfectivas = {
@@ -66,8 +65,8 @@ export type ReglasEfectivas = {
   commits: PoliticaCommit;
   origen: { lotes: OrigenDeRegla; commits: OrigenDeRegla };
 };
-// `redaccion`: el idioma en que se escribe el CONTENIDO de los documentos de la tarea, si no es el del
-// proyecto (§8.3). No cambia estructura, encabezados ni nombres.
+// `redaccion`: the language the CONTENT of the task's documents is written in, if it is not the project's.
+// It changes no structure, headings or names.
 export type FrontmatterDeTarea = { repos: string[] | null; preset: string | null; redaccion: Idioma | null };
 
 export type ConfiguracionProyecto = {
@@ -84,9 +83,9 @@ export type ConfiguracionProyecto = {
 export const LOTES_DE_FABRICA = true;
 export const COMMITS_DE_FABRICA: PoliticaCommit = "agente-commitea-con-OK";
 
-// Las capas que aportan cuerpos (1, 3 y 4), sin resolver preset ni reglas: lo que hace falta para
-// saber qué fases hay y cómo se llaman sus documentos. Solo lee el manifiesto (y los nombres de los
-// documentos en disco) por el idioma (§8.3).
+// The layers that contribute bodies (1, 3 and 4), without resolving preset or rules: what is needed to know
+// which phases exist and what their documents are called. It only reads the manifest (and the names of the
+// documents on disk) for the language.
 export function capasDeCuerpos(carpetaProyecto: string | null): Capa[] {
   const idioma = idiomaDelProyecto(carpetaProyecto, carpetaProyecto ? manifiestoDe(carpetaProyecto) : null).idioma;
   const capas: Capa[] = [{ orden: 1, etiqueta: "fábrica", ruta: defaultPromptsPath(idioma) }];
@@ -96,8 +95,8 @@ export function capasDeCuerpos(carpetaProyecto: string | null): Capa[] {
   return capas;
 }
 
-// Las fases de un proyecto: un proyecto puede sustituir una fase entera, con otro documento, y sus
-// tareas se deducen con ese nombre. Sin proyecto, las de fábrica y la capa global.
+// The phases of a project: a project can replace a whole phase, with another document, and its tasks are
+// deduced with that name. Without a project, the factory ones and the global layer.
 export function fasesDe(carpetaProyecto: string | null): Map<number, PhaseFile> {
   return discoverPhases(rutasDeCuerpos(capasDeCuerpos(carpetaProyecto)));
 }
@@ -106,14 +105,14 @@ export function contextoInicialDe(carpetaProyecto: string | null): string {
   return fasesDe(carpetaProyecto).get(1)?.documentoInicial || CONTEXTO_INICIAL_POR_DEFECTO;
 }
 
-// El frontmatter que start_task escribe en el contexto inicial cuando la tarea declara sus repos o
-// su preset. Se acepta `repos: api, web` y también `repos: [api, web]`.
+// The frontmatter that start_task writes in the initial context when the task declares its repos or its
+// preset. Both `repos: api, web` and `repos: [api, web]` are accepted.
 export function frontmatterDeTarea(carpetaTarea: string, contextoInicial: string): FrontmatterDeTarea {
   let meta: Record<string, string> = {};
   try {
     meta = separarFrontmatter(leerTextoAcotado(path.join(carpetaTarea, contextoInicial))).meta;
   } catch {
-    // Sin contexto inicial legible, la tarea no declara nada: usa lo del proyecto.
+    // Without a readable initial context, the task declares nothing: it uses the project's.
   }
   const repos =
     meta.repos === undefined
@@ -173,8 +172,8 @@ export function configuracionDe(carpetaProyecto: string | null, carpetaTarea?: s
   };
 }
 
-// Los archivos de bloques del paquete que activan las reglas: el contenido de fábrica es
-// "con lotes" y "agente-commitea-con-OK", así que esas dos no tienen archivo.
+// The block files of the package that activate the rules: the factory content is "with batches" and
+// "agente-commitea-con-OK", so those two have no file.
 export function variantesDeRegla(reglas: ReglasEfectivas, idioma: string = IDIOMA_POR_DEFECTO): string[] {
   const carpeta = path.join(defaultPromptsPath(idioma), "reglas");
   const variantes: string[] = [];
@@ -191,16 +190,15 @@ function capasConConfiguracion(config: ConfiguracionProyecto): Capa[] {
   return [...capas, ...resto];
 }
 
-// Todas las capas de un proyecto (o sin proyecto, con null: la fábrica, el preset de machine.json o
-// `software`, sus reglas y la capa global). Con la carpeta de la tarea, su frontmatter puede
-// cambiar el preset.
+// All the layers of a project (or without a project, with null: the factory, the preset of machine.json or
+// `software`, its rules and the global layer). With the task folder, its frontmatter can change the preset.
 export function capasDe(carpetaProyecto: string | null, carpetaTarea?: string | null): Capa[] {
   return capasConConfiguracion(configuracionDe(carpetaProyecto, carpetaTarea));
 }
 
-// ─── El bloque CONFIGURACIÓN DEL PROYECTO ───────────────────────────────────
-// Dato, no prosa: lo que declara el manifiesto, machine.json y la tarea, al final de cada prompt de
-// fase cuando se sabe el proyecto. El estado de git de cada repo lo añade quien lo sepa (`estado`).
+// ─── The PROJECT CONFIGURATION block ────────────────────────────────────────
+// Data, not prose: what the manifest, machine.json and the task declare, at the end of each phase prompt
+// when the project is known. The git state of each repo is added by whoever knows it (`estado`).
 export function reposDeLaTarea(config: ConfiguracionProyecto): RepoResuelto[] {
   if (!config.carpetaProyecto || !config.manifiesto) return [];
   const declarados = config.manifiesto.repos;
@@ -213,8 +211,8 @@ export function bloqueDeConfiguracion(
   repos: RepoResuelto[] = reposDeLaTarea(config),
   estado: (repo: RepoResuelto) => string | null = () => null
 ): string {
-  // En el idioma del proyecto: es un bloque del prompt. Los valores (preset, política de commits, ids)
-  // no se traducen; los orígenes y el sí/no, solo al escribirlos aquí.
+  // In the project's language: it is a block of the prompt. The values (preset, commit policy, ids) are not
+  // translated; the origins and the yes/no, only when written here.
   const idioma = config.idioma;
   const v = vocabulario(idioma);
   const m = config.manifiesto;
@@ -247,13 +245,13 @@ export function bloqueDeConfiguracion(
   return lineas.join("\n");
 }
 
-// Las capas que pueden aportar cuerpos (fases, reglas globales, comandos), de menor a mayor.
+// The layers that can contribute bodies (phases, global rules, commands), from lowest to highest.
 export function rutasDeCuerpos(capas: Capa[]): string[] {
   return capas.filter((capa) => capa.orden === 1 || capa.orden === 3 || capa.orden === 4).map((capa) => capa.ruta);
 }
 
-// Para quien todavía pasa una lista de carpetas (loadPhasePrompt con capas explícitas, los tests):
-// la primera es la de fábrica y las demás, globales.
+// For whoever still passes a list of folders (loadPhasePrompt with explicit layers, the tests): the first
+// is the factory one and the rest, global.
 export function capasDesdeRutas(rutas: string[]): Capa[] {
   return rutas.map((ruta, i): Capa => (i === 0 ? { orden: 1, etiqueta: "fábrica", ruta } : { orden: 3, etiqueta: "global", ruta }));
 }
@@ -263,13 +261,13 @@ function capaDelArchivo(archivo: string, capas: Capa[]): Capa | null {
   return [...capas].reverse().find((capa) => path.resolve(capa.ruta) === carpeta) ?? null;
 }
 
-// Todos los bloques que aportan las capas, en el orden en que se aplican: por capa ascendente y,
-// dentro de una capa, en el orden del archivo.
+// All the blocks that the layers contribute, in the order they are applied: by ascending layer and, within
+// a layer, in the file's order.
 export function bloquesDe(capas: Capa[]): { bloques: Bloque[]; avisos: Hallazgo[] } {
   const bloques: Bloque[] = [];
   const avisos: Hallazgo[] = [];
   for (const capa of [...capas].sort((a, b) => a.orden - b.orden)) {
-    if (capa.orden === 1) continue; // la fábrica no trae bloques: sus ranuras ya son el contenido por defecto
+    if (capa.orden === 1) continue; // the factory brings no blocks: its slots are already the default content
     const archivo = capa.orden === 2 || capa.orden === 2.5 ? capa.ruta : path.join(capa.ruta, ARCHIVO_BLOQUES);
     const leidos = leerBloques(archivo, capa);
     bloques.push(...leidos.bloques);
@@ -278,8 +276,8 @@ export function bloquesDe(capas: Capa[]): { bloques: Bloque[]; avisos: Hallazgo[
   return { bloques, avisos };
 }
 
-// Los datos de cada aviso de huérfano, para que notaDeHuerfano lo vuelva a escribir en el idioma del
-// proyecto: el texto del aviso va en el de la llamada.
+// The data of each orphan warning, so that notaDeHuerfano can write it again in the project's language: the
+// text of the warning goes in the call's.
 type DatosDeHuerfano = { id: string; archivo: string; linea: number };
 const DATOS_DE_HUERFANO = new WeakMap<Hallazgo, DatosDeHuerfano>();
 
@@ -294,23 +292,23 @@ function avisoDeHuerfano(bloque: Bloque): Hallazgo {
   return aviso;
 }
 
-// La línea que get_phase_prompt antepone por cada bloque huérfano de la fase que entrega, en el idioma
-// del proyecto. Un aviso que no salió de aquí (sin sus datos) se cita con el texto que trae. Con algo que
-// no es un idioma (el índice de un `.map(notaDeHuerfano)`), en español.
+// The line that get_phase_prompt prepends for each orphan block of the phase it delivers, in the project's
+// language. A warning that did not come from here (without its data) is cited with the text it carries.
+// With something that is not a language (the index of a `.map(notaDeHuerfano)`), in Spanish.
 export function notaDeHuerfano(aviso: Hallazgo, idioma: Idioma = "es"): string {
   const enIdioma: Idioma = esIdioma(idioma) ? idioma : "es";
   const datos = DATOS_DE_HUERFANO.get(aviso);
   return datos ? mensaje("CAPA-TXT-NOTA-HUERFANO", datos, enIdioma) : mensaje("CAPA-TXT-NOTA-DEL-SERVIDOR", { texto: aviso.texto }, enIdioma);
 }
 
-// Cómo se dice de dónde sale el contenido por defecto de una ranura: "fábrica", o el archivo y la
-// línea del marcador si el cuerpo es de una capa propia.
+// How to say where the default content of a slot comes from: "fábrica", or the file and the line of the
+// marker if the body belongs to a layer of one's own.
 function origenPorDefecto(archivo: string, capa: Capa | null, desplazamiento: number): (linea: number) => string {
   return (linea) => (capa?.etiqueta === "fábrica" ? "fábrica" : `${archivo}:${linea + desplazamiento}`);
 }
 
-// Las líneas de cabecera que separarFrontmatter quitó: para que el archivo:línea de una ranura
-// apunte a la línea real del archivo.
+// The header lines that separarFrontmatter removed: so that the file:line of a slot points to the real line
+// of the file.
 function lineasDeCabecera(archivo: string): number {
   try {
     const completo = leerPromptNormalizado(archivo);
@@ -320,7 +318,7 @@ function lineasDeCabecera(archivo: string): number {
   }
 }
 
-// Una sección "## X" de un texto: desde su encabezado hasta el siguiente "## " o el final.
+// A "## X" section of a text: from its heading to the next "## " or the end.
 function seccion(texto: string, titulo: string): string | null {
   const lineas = texto.split("\n");
   const inicio = lineas.findIndex((linea) => linea.trimEnd().normalize("NFC") === `## ${titulo}`);
@@ -335,15 +333,15 @@ export function tieneSeccion(texto: string, titulo: string): boolean {
 }
 
 export type ReglasGlobalesEnsambladas = {
-  texto: string | null; // null si ninguna capa tiene global-rules.md
+  texto: string | null; // null if no layer has global-rules.md
   archivo: string | null;
   procedencia: Procedencia[];
   huerfanos: Bloque[];
-  reinyectadas: string[]; // secciones esqueleto que se añadieron desde la de fábrica
+  reinyectadas: string[]; // skeleton sections that were added from the factory one
 };
 
-// Las reglas globales con sus bloques aplicados, sin la ranura `extra` si quedó vacía, y con las
-// secciones esqueleto de fábrica añadidas al final si el archivo que gana no las tiene.
+// The global rules with their blocks applied, without the `extra` slot if it stayed empty, and with the
+// factory skeleton sections added at the end if the file that wins lacks them.
 export function ensamblarReglasGlobales(capas: Capa[], bloques: Bloque[]): ReglasGlobalesEnsambladas {
   const archivo = resolveGlobalRules(rutasDeCuerpos(capas));
   if (!archivo) return { texto: null, archivo: null, procedencia: [], huerfanos: [], reinyectadas: [] };
@@ -357,8 +355,8 @@ export function ensamblarReglasGlobales(capas: Capa[], bloques: Bloque[]): Regla
   const deFabrica = fabrica ? path.join(fabrica.ruta, GLOBAL_RULES_FILE) : null;
   if (capa?.orden !== 1 && deFabrica && fs.existsSync(deFabrica)) {
     const original = leerPromptNormalizado(deFabrica);
-    // Cada sección, en el idioma de la fábrica; y un archivo propio que la tiene en el otro idioma ya la
-    // tiene (§8.2).
+    // Each section, in the factory's language; and a file of one's own that has it in the other language
+    // already has it.
     for (const [i, titulo] of SECCIONES_ESQUELETO.entries()) {
       const titulos = [titulo, VOCABULARIO.en.seccionesEsqueleto[i]!];
       const deFabricaEn = titulos.find((t) => seccion(original, t) !== null);
@@ -374,11 +372,11 @@ export function ensamblarReglasGlobales(capas: Capa[], bloques: Bloque[]): Regla
 }
 
 export type PromptEnsamblado = { texto: string; procedencia: Procedencia[]; avisos: Hallazgo[] };
-// `idioma`: el del proyecto, en el que se escriben los bloques que añade el servidor (ARCHIVOS DE ESTA
-// TAREA). Sin él, español.
+// `idioma`: the project's, in which the blocks the server adds are written (ARCHIVOS DE ESTA TAREA).
+// Without it, Spanish.
 export type OpcionesDeEnsamblado = { incluirConfigProyecto?: boolean; idioma?: Idioma };
 
-// El ensamblado con una lista de capas concreta. Lanza si la fase no existe en ninguna.
+// The assembly with a specific list of layers. It throws if the phase does not exist in any.
 export function ensamblarConCapas(fase: number, capas: Capa[], opciones: OpcionesDeEnsamblado = {}): PromptEnsamblado {
   const rutas = rutasDeCuerpos(capas);
   const phases: Map<number, PhaseFile> = discoverPhases(rutas);
@@ -407,7 +405,7 @@ export function ensamblarConCapas(fase: number, capas: Capa[], opciones: Opcione
   const archivos = describePhaseFiles(phases, fase, opciones.idioma ?? "es");
   if (archivos) partes.push(archivos);
 
-  // Huérfanos de lo que se entrega: los de las reglas globales y los de esta fase.
+  // Orphans of what is delivered: those of the global rules and those of this phase.
   for (const bloque of [...globales.huerfanos, ...cuerpo.huerfanos]) avisos.push(avisoDeHuerfano(bloque));
 
   if (globales.reinyectadas.length) {
@@ -425,10 +423,9 @@ export function textoDeReinyeccion(archivo: string, reinyectadas: string[]): str
   return mensaje("GLOBAL-REINYECTADO", { archivo, titulos: reinyectadas });
 }
 
-// El prompt de una fase tal como lo recibe el modelo en un proyecto (o sin proyecto, con null). Con
-// proyecto, termina con el bloque CONFIGURACIÓN DEL PROYECTO, salvo con incluirConfigProyecto:
-// false (la prueba de oro compara con la 2.2.0, que no lo tenía). `estadoDeRepo` lo pone quien
-// pueda preguntarle a git.
+// The prompt of a phase as the model receives it in a project (or without a project, with null). With a
+// project, it ends with the PROJECT CONFIGURATION block, except with incluirConfigProyecto: false (the
+// golden test compares with 2.2.0, which did not have it). `estadoDeRepo` is supplied by whoever can ask git.
 export function ensamblarFase(
   fase: number,
   carpetaProyecto: string | null,
@@ -437,15 +434,15 @@ export function ensamblarFase(
 ): PromptEnsamblado {
   const config = configuracionDe(carpetaProyecto, carpetaTarea);
   const ensamblado = ensamblarConCapas(fase, capasConConfiguracion(config), { ...opciones, idioma: config.idioma });
-  // Una tarea que se redacta en otro idioma que el de su proyecto lo dice al final, en el del proyecto.
+  // A task written in another language than its project's says so at the end, in the project's.
   const redaccion = config.tarea?.redaccion && config.tarea.redaccion !== config.idioma ? vocabulario(config.idioma).lineaDeRedaccion[config.tarea.redaccion] : null;
   const conRedaccion = (texto: string): string => (redaccion ? `${texto}\n\n${redaccion}` : texto);
   if (!carpetaProyecto || opciones.incluirConfigProyecto === false) return { ...ensamblado, texto: conRedaccion(ensamblado.texto) };
   return { ...ensamblado, texto: conRedaccion(`${ensamblado.texto}\n\n${bloqueDeConfiguracion(config, reposDeLaTarea(config), opciones.estadoDeRepo)}`) };
 }
 
-// El texto con sus ranuras (marcadores incluidos) de un archivo: "global" o "fase-N", el cuerpo que
-// gana en esas capas. null si no existe.
+// The text with its slots (markers included) of a file: "global" or "fase-N", the body that wins in those
+// layers. null if it does not exist.
 function cuerpoDe(capas: Capa[], archivo: string): string | null {
   const rutas = rutasDeCuerpos(capas);
   if (archivo === "global") {
@@ -456,14 +453,14 @@ function cuerpoDe(capas: Capa[], archivo: string): string | null {
   return entrada ? parsePhaseFile(entrada.file).cuerpo : null;
 }
 
-// Las ranuras que tiene un archivo en estas capas, en orden. Vacío si el archivo no existe.
+// The slots that a file has in these layers, in order. Empty if the file does not exist.
 export function ranurasDisponibles(capas: Capa[], archivo: string): string[] {
   const texto = cuerpoDe(capas, archivo);
   return texto === null ? [] : ranurasDe(texto).map((ranura) => ranura.nombre);
 }
 
-// El contenido de una ranura tal como le llega al modelo con estas capas: el del cuerpo que gana con
-// todos los bloques aplicados. Es lo que copia `eject fase-3/pruebas`. null si no existe.
+// The content of a slot as it reaches the model with these layers: that of the winning body with all the
+// blocks applied. It is what `eject fase-3/pruebas` copies. null if it does not exist.
 export function contenidoEfectivoDeRanura(capas: Capa[], id: string): { contenido: string; procedencia: Procedencia } | null {
   const [archivo = "", ranura = ""] = id.split("/");
   const texto = cuerpoDe(capas, archivo);
@@ -477,9 +474,9 @@ export function contenidoEfectivoDeRanura(capas: Capa[], id: string): { contenid
   };
 }
 
-// Los bloques que no encajan en ningún sitio, mirando todas las fases a la vez: lo que lista doctor.
-// Un bloque huérfano para una fase puede no serlo para otra, así que se mira cada bloque contra el
-// cuerpo de SU archivo; y uno de una fase que no existe es huérfano siempre.
+// The blocks that fit nowhere, looking at all the phases at once: what doctor lists. A block that is an
+// orphan for one phase may not be for another, so each block is looked at against the body of ITS file; and
+// one of a phase that does not exist is always an orphan.
 export function revisarBloques(capas: Capa[]): Hallazgo[] {
   const { bloques, avisos } = bloquesDe(capas);
   const phases = discoverPhases(rutasDeCuerpos(capas));
@@ -497,7 +494,7 @@ export function revisarBloques(capas: Capa[]): Hallazgo[] {
     try {
       huerfanos.push(...aplicarBloques(parsePhaseFile(datos.file).cuerpo, `fase-${numero}`, bloques, () => "").huerfanos);
     } catch {
-      // Un cuerpo ilegible lo avisa quien lo entrega; aquí solo se buscan bloques sueltos.
+      // An unreadable body is reported by whoever delivers it; here only loose blocks are looked for.
     }
   }
 

@@ -1,4 +1,4 @@
-// Los E2E del Studio en Chromium real (§7.10 del plan). No forman parte de `npm test`: se corren con
+// Los E2E del Studio en Chromium real. No forman parte de `npm test`: se corren con
 // `npm run test:e2e`, después de `npm run build` (lanzan el binario compilado). Los navegadores van dentro
 // de node_modules (PLAYWRIGHT_BROWSERS_PATH=0): `PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium`.
 // Los resultados se escriben en la carpeta temporal del sistema, no en el repo.

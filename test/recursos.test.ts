@@ -98,7 +98,7 @@ describe("resources/list", () => {
     }
   });
 
-  it("anuncia las tres plantillas (la de configuración, desde la Etapa 3)", async () => {
+  it("anuncia las tres plantillas (la de configuración)", async () => {
     escenario();
     const { cliente, cerrar } = await conectar();
     try {
@@ -315,7 +315,7 @@ describe("notificaciones y autocompletado", () => {
   });
 });
 
-// Ajustes de la auditoría de la Etapa 2: el listado no enseña lo que está fuera de la tarea, y los
+// El listado no enseña lo que está fuera de la tarea, y los
 // errores llegan con un código que dice qué pasó.
 describe("recursos: contención del listado y códigos de error", () => {
   it("una subcarpeta de recibos que es un enlace hacia fuera no se lista ni se autocompleta", async () => {

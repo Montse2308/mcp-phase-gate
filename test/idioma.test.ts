@@ -1,7 +1,7 @@
-// El idioma de cada proyecto y el de la redacción de cada tarea (§8.3 del plan maestro v3).
+// El idioma de cada proyecto y el de la redacción de cada tarea.
 //
 // El idioma del sistema se fija con fijarLocaleDelSistema y no con LANG: en Windows, Intl sigue a la
-// configuración regional e ignora LANG (validación V9), y así el mismo test vale en los dos sistemas.
+// configuración regional e ignora LANG, y así el mismo test vale en los dos sistemas.
 
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
@@ -54,7 +54,7 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     );
   });
 
-  it("2. sin manifiesto, los documentos en disco ganan al equipo y al sistema (E6-R1)", () => {
+  it("2. sin manifiesto, los documentos en disco ganan al equipo y al sistema", () => {
     const { docs, config } = instalacion();
     crearTarea(docs, "P", "vieja", ES);
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
@@ -74,14 +74,29 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     assert.equal(idiomaDelProyecto("P").idioma, "en");
   });
 
-  it("3. sin documentos, `idiomaPorDefecto` de machine.json", () => {
+  it("3. sin documentos, PHASE_GATE_LANG gana a `idiomaPorDefecto` de machine.json: lo de la ejecución gana a lo guardado", () => {
     const { config } = instalacion();
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
     process.env.PHASE_GATE_LANG = "es";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "es", origen: "de PHASE_GATE_LANG" });
+
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 2, idiomaPorDefecto: "es" }));
+    process.env.PHASE_GATE_LANG = "en";
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
+  });
+
+  it("4. sin PHASE_GATE_LANG, `idiomaPorDefecto` de machine.json", () => {
+    const { config } = instalacion();
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
+    delete process.env.PHASE_GATE_LANG;
+    assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de machine.json" });
+
+    // Un PHASE_GATE_LANG que no es es ni en no cuenta: machine.json sigue valiendo.
+    process.env.PHASE_GATE_LANG = "fr";
     assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de machine.json" });
   });
 
-  it("4. después, PHASE_GATE_LANG (también con región: en-GB, es_MX.UTF-8)", () => {
+  it("3. PHASE_GATE_LANG, también con región: en-GB, es_MX.UTF-8", () => {
     instalacion();
     process.env.PHASE_GATE_LANG = "en-GB";
     assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
@@ -112,7 +127,7 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     assert.equal(idiomaDelProyecto(null).idioma, "en");
   });
 
-  // Hallazgo 2 de la auditoría de la Etapa 6: un manifiesto de la 3.0 o la 3.1 no lleva `idioma` (su esquema
+  // Un manifiesto de la 3.0 o la 3.1 no lleva `idioma` (su esquema
   // daba "es" por defecto). Sin documentos, no pasa al idioma del sistema, que en un Linux sin LANG es inglés.
   it("5. un manifiesto sin `idioma` ni documentos es español aunque el sistema esté en inglés", () => {
     const { docs, config } = instalacion();
@@ -122,14 +137,14 @@ describe("idioma del proyecto: los cinco pasos, en orden", () => {
     const r = idiomaDelProyecto("P");
     assert.deepEqual([r.idioma, r.origen, r.sinIdiomaDeclarado], ["es", "del manifiesto sin idioma", true]);
 
-    // Lo que alguien fijó a propósito sí cuenta: PHASE_GATE_LANG y machine.json, en ese orden inverso.
+    // Lo que alguien fijó a propósito sí cuenta: PHASE_GATE_LANG primero y, sin ella, machine.json.
     process.env.PHASE_GATE_LANG = "en";
     assert.deepEqual((({ idioma, origen }) => ({ idioma, origen }))(idiomaDelProyecto("P")), { idioma: "en", origen: "de PHASE_GATE_LANG" });
     delete process.env.PHASE_GATE_LANG;
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "en" }));
     assert.equal(idiomaDelProyecto("P").origen, "de machine.json");
 
-    // Sin manifiesto, el sistema (E6-D5); y quien pasa el manifiesto ya leído obtiene lo mismo.
+    // Sin manifiesto, el sistema; y quien pasa el manifiesto ya leído obtiene lo mismo.
     fs.rmSync(path.join(config, "machine.json"));
     assert.equal(idiomaDelProyecto("P", { version: 1, preset: "software", repos: [], reglas: {}, fase5: {} }).origen, "del manifiesto sin idioma");
     assert.deepEqual([idiomaDelProyecto("P", null).idioma, idiomaDelProyecto("P", null).origen], ["en", "del sistema"]);
@@ -167,7 +182,7 @@ describe("idioma del proyecto: conflictos", () => {
     assert.deepEqual(hallazgos.map((h) => [h.codigo, h.severidad]), [["IDIOMA-CON-TAREAS", "error"]]);
   });
 
-  // El texto sale en el idioma del proyecto (aquí, "en"): la llamada lo resolvió (§8.5).
+  // El texto sale en el idioma del proyecto (aquí, "en"): la llamada lo resolvió.
   it("IDIOMA-CON-TAREAS: get_phase_prompt se niega con el mismo texto, en el idioma del proyecto", async () => {
     const { docs } = instalacion();
     crearTarea(docs, "P", "vieja", ES);
@@ -207,7 +222,7 @@ describe("idioma del proyecto: conflictos", () => {
     assert.equal(conflictoDeIdioma("P"), null);
   });
 
-  // Hallazgo 12 de la auditoría de la Etapa 6: el recuento no depende del sistema de archivos.
+  // El recuento no depende del sistema de archivos.
   it("el recuento compara en NFC y sin mayúsculas, igual en todos los sistemas", () => {
     const { docs } = instalacion();
     crearTarea(docs, "P", "minusculas", ["01 - technical analysis.md", "02 - DECISIONS.md"]);
@@ -218,7 +233,7 @@ describe("idioma del proyecto: conflictos", () => {
     assert.deepEqual(cuenta.es, { documentos: 1, tareas: ["nfd"] });
   });
 
-  // Hallazgo 3 de la auditoría de la Etapa 6: dentro de una llamada, cada proyecto se cuenta una vez.
+  // Dentro de una llamada, cada proyecto se cuenta una vez.
   it("la caché del recuento vale dentro de una llamada (conCacheDelIdioma) y no fuera", () => {
     const { docs } = instalacion();
     crearTarea(docs, "P", "a", ["00 - Initial Context.md"]);
@@ -236,7 +251,7 @@ describe("idioma del proyecto: conflictos", () => {
     assert.equal(conCacheDelIdioma(() => documentosPorIdioma("P").en.documentos), 4, "una llamada nueva cuenta otra vez");
   });
 
-  // Hallazgo 4 de la auditoría de la Etapa 6: antes solo se negaba get_phase_prompt.
+  // No solo get_phase_prompt se niega.
   it("IDIOMA-CON-TAREAS: start_task, record_batch, get_batch_status y write_central_doc de un documento de fase también se niegan; list_tasks avisa", async () => {
     const { docs } = instalacion();
     crearTarea(docs, "P", "vieja", ES);
@@ -342,7 +357,9 @@ describe("idioma sin proyecto: el del equipo", () => {
     assert.equal(fasesDe(null).get(1)?.documento, "01 - Technical Analysis.md");
     assert.ok(carpetaPresetsDelPaquete().endsWith(path.join("presets", "en")));
     fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 1, idiomaPorDefecto: "es" }));
-    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "es")), "machine.json gana a PHASE_GATE_LANG");
+    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "en")), "PHASE_GATE_LANG gana a machine.json");
+    delete process.env.PHASE_GATE_LANG;
+    assert.ok(promptsLayers()[0]!.endsWith(path.join("prompts", "es")), "sin PHASE_GATE_LANG, vale machine.json");
   });
 
   it("los /fN de un servidor en inglés salen con los títulos de las fases en inglés", async () => {
@@ -385,7 +402,6 @@ describe("doctor --fase en inglés", () => {
     const { formatearProcedencia, procedenciaDeFase } = await import("../src/diagnostico.js");
     const texto = formatearProcedencia(procedenciaDeFase(3, "P"));
     // La ruta del preset puede llevar espacios (C:\Users\Nombre Apellido\…): `.*`, que no pasa de línea, y no `\S*`
-    // (hallazgo 7 de la auditoría de la Etapa 6).
     assert.match(texto, /phase-3\/tests \(fase-3\/pruebas\)\s+.*presets.en.ai-agent-ops\.md:\d+/);
     assert.match(texto, /global\/zero-breakage \(global\/cero-rupturas\)\s+factory  \+ after \(/);
     assert.match(texto, /global\/extra\s+factory/);
@@ -394,7 +410,7 @@ describe("doctor --fase en inglés", () => {
   });
 });
 
-// Hallazgo 10 de la auditoría de la Etapa 6: un PHASE_GATE_LANG que no cuenta se ignoraba en silencio.
+// Un PHASE_GATE_LANG que no cuenta no se ignora en silencio.
 describe("doctor y un PHASE_GATE_LANG que no es es ni en", () => {
   it("LANG-INVALIDO: aviso con el valor; vacío, es-MX o en_US.UTF-8 no avisan", () => {
     instalacion();

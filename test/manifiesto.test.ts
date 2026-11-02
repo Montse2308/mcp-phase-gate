@@ -1,5 +1,5 @@
 // El manifiesto de cada proyecto, el machine.json de cada equipo, los presets disponibles y los JSON
-// Schema publicados (§5.2 del plan maestro v3).
+// Schema publicados.
 
 import { strict as assert } from "node:assert";
 import { afterEach, describe, it } from "node:test";
@@ -19,6 +19,7 @@ import {
   rutaDeError,
   textoDeEsquema,
 } from "../src/manifiesto.js";
+import { interpretarMaquina, lineaYColumna, posicionDeErrorJson } from "../src/maquina.js";
 import { carpetaTemporal, configTemporal, crearProyecto, docsTemporales, limpiarEntorno } from "./helpers.js";
 
 afterEach(() => {
@@ -53,7 +54,7 @@ describe("leerManifiesto", () => {
     assert.equal(manifiestoDe("PROYECTO-A"), null);
   });
 
-  it("el ejemplo del plan es válido y rellena los valores por defecto", () => {
+  it("el ejemplo de referencia es válido y rellena los valores por defecto", () => {
     proyectoCon({
       $schema: "https://unpkg.com/mcp-phase-gate@3/schema/project.json",
       version: 1,
@@ -67,7 +68,7 @@ describe("leerManifiesto", () => {
 
     const manifiesto = manifiestoDe("PROYECTO-A");
     assert.equal(manifiesto?.preset, "software");
-    // Antes: "es" por defecto. Desde la Etapa 6, sin `idioma` el del proyecto se deduce (§8.3).
+    // Sin `idioma`, el del proyecto se deduce: no hay un "es" por defecto.
     assert.equal(manifiesto?.idioma, undefined);
     assert.deepEqual(manifiesto?.repos.map((r) => r.id), ["api", "web"]);
     assert.equal(manifiesto?.reglas.lotes, undefined, "si falta, decide el preset");
@@ -174,6 +175,89 @@ describe("machine.json", () => {
     maquina("{ roto");
     assert.equal(leerMaquina().estado, "invalido");
     assert.throws(() => maquinaDe(), /no es un JSON válido/);
+  });
+
+  it("un machine.json versión 1 de hoy se lee igual, con su $schema @3", () => {
+    const destino = carpetaTemporal("repo");
+    maquina({
+      $schema: "https://unpkg.com/mcp-phase-gate@3/schema/machine.json",
+      version: 1,
+      repos: { "PROYECTO-A/api": destino },
+      presetPorDefecto: "software-replica",
+      idiomaPorDefecto: "en",
+    });
+
+    const lectura = maquinaDe();
+    assert.equal(lectura.estado, "valido");
+    assert.deepEqual(lectura.config, {
+      $schema: "https://unpkg.com/mcp-phase-gate@3/schema/machine.json",
+      version: 1,
+      repos: { "PROYECTO-A/api": destino },
+      presetPorDefecto: "software-replica",
+      idiomaPorDefecto: "en",
+    });
+    assert.equal(lectura.config?.rutas, undefined);
+  });
+
+  it("la versión 2 lee `rutas`, con la subcarpeta de tareas vacía incluida", () => {
+    const docs = carpetaTemporal("docs");
+    const repos = carpetaTemporal("repos");
+    maquina({ version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "" } });
+
+    assert.deepEqual(maquinaDe().config?.rutas, { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "" });
+    maquina({ version: 2 });
+    assert.equal(maquinaDe().config?.rutas, undefined);
+  });
+
+  it("una clave desconocida en la versión 2 sigue dando clave desconocida, en `rutas` y en la raíz", () => {
+    maquina({ version: 2, rutas: { documentacion: carpetaTemporal("docs"), inventada: "x" } });
+    assert.match(leerMaquina().error ?? "", /rutas: clave desconocida "inventada"/);
+
+    maquina({ version: 2, rutasExtra: {} });
+    assert.match(leerMaquina().error ?? "", /\(raíz\): clave desconocida "rutasExtra"/);
+  });
+
+  it("la versión 3, o una ruta relativa en `rutas`, hacen inválido el archivo", () => {
+    maquina({ version: 3 });
+    assert.equal(leerMaquina().estado, "invalido");
+
+    maquina({ version: 2, rutas: { documentacion: "relativa/docs" } });
+    assert.match(leerMaquina().error ?? "", /rutas\.documentacion: tiene que ser una ruta absoluta/);
+  });
+
+  it("`rutas` en un archivo versión 1 es un error que pide la versión 2: la 3.x lo leería distinto", () => {
+    maquina({ version: 1, rutas: { documentacion: carpetaTemporal("docs") } });
+    assert.equal(leerMaquina().estado, "invalido");
+    assert.match(leerMaquina().error ?? "", /rutas: solo existe en la versión 2: pon "version": 2/);
+
+    maquina({ version: 1, repos: {} });
+    assert.equal(leerMaquina().estado, "valido", "sin rutas, la versión 1 se sigue leyendo");
+  });
+
+  it("un error de sintaxis dice su línea y su columna", () => {
+    maquina('{\n  "version": 2,\n  "rutas": }');
+    assert.match(leerMaquina().error ?? "", /no es un JSON válido: carácter inesperado «\}» \(línea 3, columna 12\)/);
+  });
+});
+
+describe("interpretarMaquina", () => {
+  it("encuentra la línea y la columna del primer carácter que sobra, o dice que el archivo termina antes", () => {
+    const sintaxis = (texto: string): string => {
+      const lectura = interpretarMaquina(texto);
+      assert.equal(lectura.ok, false);
+      return lectura.ok ? "" : lectura.error;
+    };
+    assert.match(sintaxis('{ "version": 2,\n"repos": {},\n}'), /carácter inesperado «\}» \(línea 3, columna 1\)/);
+    assert.match(sintaxis('{ "version": 2'), /el archivo termina antes de tiempo \(línea 1, columna 15\)/);
+    assert.match(sintaxis("{ roto"), /carácter inesperado «r» \(línea 1, columna 3\)/);
+    assert.match(sintaxis('{ "version": 2 } x'), /carácter inesperado «x» \(línea 1, columna 18\)/);
+    assert.match(sintaxis('{ "a": "uno\ndos" }'), /\(línea 1, columna 12\)/, "un salto de línea dentro de una cadena no vale");
+  });
+
+  it("un JSON válido no tiene posición de error, con o sin BOM", () => {
+    assert.equal(posicionDeErrorJson('{ "a": [1, -2.5e3, true, null, "x\\u00e9\\n"] }'), null);
+    assert.equal(interpretarMaquina('﻿{ "version": 1 }').ok, true);
+    assert.deepEqual(lineaYColumna("ab\ncd", 4), { linea: 2, columna: 2 });
   });
 });
 

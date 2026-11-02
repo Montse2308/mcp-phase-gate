@@ -1,14 +1,14 @@
-// Los comandos de fase (/f1…/fN) servidos como MCP Prompts. Antes había que copiar cada comando a
-// mano en la carpeta de cada cliente y de cada equipo, y las copias se desincronizaban; ahora el
-// servidor los ofrece a cualquier cliente que muestre prompts, y llegan con cada versión.
+// The phase commands (/f1…/fN) served as MCP Prompts. Copies of each command in the folder of every client
+// and every machine went out of sync; served by the server, they reach any client that shows prompts and
+// arrive with each version.
 //
-// El texto de cada comando vive en `comandos/fN.md` dentro de una capa de prompts (los de fábrica
-// en prompts/es/comandos/), y se resuelve por capas como las fases: gana la más alta que lo tenga.
-// Una fase sin comando, como una fase-6 propia, recibe un texto genérico que funciona igual.
+// The text of each command lives in `comandos/fN.md` inside a prompts layer (the factory ones in
+// prompts/es/comandos/), and is resolved by layers like the phases: the highest one that has it wins. A
+// phase without a command, such as a phase 6 of one's own, gets a generic text that works the same.
 //
-// El prompt NO incluye el prompt de la fase: sigue siendo orquestación ("llama a
-// get_phase_prompt(N)…"). Devolver ya el texto de la fase ahorraría una llamada, pero crearía dos
-// caminos para recibir el mismo prompt, y en uno la compuerta no recibiría el `project`.
+// The prompt does NOT include the phase prompt: it stays orchestration ("call get_phase_prompt(N)…").
+// Returning the phase text right away would save a call, but it would create two ways of receiving the
+// same prompt, and in one of them the gate would not receive the `project`.
 
 import type { McpServer, RegisteredPrompt } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
@@ -24,12 +24,12 @@ import { proyectoPorRaices } from "./roots.js";
 import { discoverPhases, parsePhaseFile, resolveCommandFile } from "./phases.js";
 import type { Idioma } from "./vocabulario.js";
 
-// Todos los argumentos son opcionales: el texto de cada comando ya pide lo que falte, y así el
-// prompt sirve también en clientes que parten los argumentos por espacios (un contexto largo puede
-// ir pegado después del comando, como texto normal del chat).
+// All the arguments are optional: the text of each command already asks for what is missing, and so the
+// prompt also works in clients that split the arguments by spaces (a long context can be pasted after the
+// command, as normal chat text).
 //
-// Los títulos, las descripciones, los argumentos y el texto genérico van en el idioma con el que arrancó
-// el servidor (§8.5): la lista de prompts se fija al conectar, como la de tools.
+// The titles, descriptions, arguments and the generic text are in the language the server started with:
+// the list of prompts is fixed on connecting, like the tools'.
 export function argumentosDeFase(numero: number, idioma: Idioma = "es") {
   const project = z.string().optional().describe(mensaje("MCPPROMPT-ARG-PROJECT", {}, idioma));
   if (numero === 1) {
@@ -56,8 +56,8 @@ export function descripcionDePrompt(numero: number, titulo: string, idioma: Idio
   return mensaje("MCPPROMPT-DESCRIPCION", { numero, titulo }, idioma);
 }
 
-// El comando de una fase sin comandos/fN.md. También lo escriben eject e init, que pasan el idioma que
-// les toque; sin él, el español de siempre.
+// The command of a phase without comandos/fN.md. eject and init also write it, passing the language that
+// applies to them; without it, Spanish.
 export function textoGenerico(numero: number, titulo: string, idioma: Idioma = "es"): string {
   return mensaje("MCPPROMPT-GENERICO", { numero, titulo }, idioma);
 }
@@ -69,15 +69,15 @@ type Argumentos = {
   contexto?: string | undefined;
 };
 
-// La sección con lo que vino como argumento. Solo aparecen las líneas de los que vinieron, y sin
-// ninguno la sección no existe: así el texto queda igual que el comando escrito a mano.
+// The section with what came as an argument. Only the lines of the ones that came appear, and with none the
+// section does not exist: so the text stays the same as the hand-written command.
 function datosDeInvocacion(args: Argumentos, idioma: Idioma): string | null {
   const presente = (valor: string | undefined): valor is string => typeof valor === "string" && valor.trim() !== "";
   const lineas: string[] = [];
 
-  // project, task_name y commits son de una línea: los saltos se aplanan, para que un valor no
-  // pueda abrir secciones nuevas dentro del texto. El contexto sí es multilínea por naturaleza, y
-  // va tal cual: lo escribe la persona, igual que si lo pegara en el chat.
+  // project, task_name and commits are one line: the line breaks are flattened, so that a value cannot open
+  // new sections inside the text. The context is multiline by nature, and goes as it is: the person writes
+  // it, as if pasting it in the chat.
   const enUnaLinea = (valor: string): string => valor.replace(/\s+/g, " ").trim();
   if (presente(args.project)) lineas.push(`- project: ${enUnaLinea(args.project)}`);
   if (presente(args.task_name)) lineas.push(`- task_name: ${enUnaLinea(args.task_name)}`);
@@ -87,7 +87,7 @@ function datosDeInvocacion(args: Argumentos, idioma: Idioma): string | null {
   return lineas.length ? [mensaje("MCPPROMPT-DATOS-ENCABEZADO", {}, idioma), ...lineas].join("\n") : null;
 }
 
-// El texto se lee en cada llamada, como los prompts de fase: editar un comando no exige reiniciar.
+// The text is read on every call, like the phase prompts: editing a command does not require a restart.
 export function textoDelComando(numero: number, titulo: string, args: Argumentos, capas: string[] = promptsLayers(), idioma: Idioma = "es"): string {
   const archivo = resolveCommandFile(numero, capas);
 
@@ -107,32 +107,32 @@ export function textoDelComando(numero: number, titulo: string, args: Argumentos
   return datos ? `${cuerpo}\n\n${datos}` : cuerpo;
 }
 
-// Las capas de las que sale el texto de un comando. La lista de prompts no depende de ningún
-// proyecto (capas sin proyecto), pero al pedir uno con `project` el texto sale de las capas de ese
-// proyecto: un proyecto puede tener su propio comandos/f4.md. Un proyecto que no existe, o uno con el
-// manifiesto roto, no impide entregar el comando: se usa el de las capas sin proyecto.
+// The layers a command's text comes from. The list of prompts does not depend on any project (layers
+// without a project), but when one is requested with `project` the text comes from the layers of that
+// project: a project can have its own comandos/f4.md. A project that does not exist, or one with a broken
+// manifest, does not prevent delivering the command: the one of the layers without a project is used.
 export function capasDelComando(project: string | undefined): string[] {
   if (project?.trim()) {
     try {
       const carpeta = findProjectFolder(project);
       if (carpeta) return rutasDeCuerpos(capasDeCuerpos(carpeta));
     } catch {
-      // El comando se entrega igual; el error real lo dará la tool que use el proyecto.
+      // The command is delivered anyway; the real error will come from the tool that uses the project.
     }
   }
   return promptsLayers();
 }
 
-// ─── Registro dinámico ──────────────────────────────────────────────────────
-// Las fases se descubren de los archivos, así que los prompts también: una fase-6 que aparece en
-// una capa propia gana su /f6, y una fase que desaparece pierde el suyo. Cada registerPrompt,
-// update y remove del SDK emite prompts/list_changed por su cuenta.
+// ─── Dynamic registration ───────────────────────────────────────────────────
+// The phases are discovered from files, so the prompts are too: a phase 6 that appears in a layer of one's
+// own gets its /f6, and a phase that disappears loses its own. Each registerPrompt, update and remove of
+// the SDK emits prompts/list_changed on its own.
 type Registro = { prompt: RegisteredPrompt; titulo: string; comando: string | null };
 
 const registros = new WeakMap<McpServer, Map<number, Registro>>();
 
-// El idioma de los /fN de cada servidor: el de su primera sincronización (la de crearServidor). Las
-// siguientes, tras cada tool o al cambiar una capa, lo conservan.
+// The language of the /fN of each server: that of its first synchronization (the one in crearServidor).
+// The following ones, after each tool or when a layer changes, keep it.
 const idiomas = new WeakMap<McpServer, Idioma>();
 
 function registrar(mcp: McpServer, numero: number, titulo: string, idioma: Idioma): RegisteredPrompt {
@@ -144,10 +144,10 @@ function registrar(mcp: McpServer, numero: number, titulo: string, idioma: Idiom
       argsSchema: argumentosDeFase(numero, idioma),
     },
     async (args: Argumentos): Promise<GetPromptResult> => {
-      // El título se toma del registro vigente: puede haber cambiado desde que se registró.
+      // The title is taken from the current registry: it may have changed since it was registered.
       const vigente = registros.get(mcp)?.get(numero)?.titulo ?? titulo;
-      // Sin project, el de la carpeta abierta: el comando sale de sus capas y el modelo recibe su
-      // nombre en "Datos de esta invocación", para pasárselo a las tools.
+      // Without project, that of the open folder: the command comes from its layers and the model receives its
+      // name in the invocation-data section, to pass it on to the tools.
       let datos = args;
       if (!args.project?.trim()) {
         const porRaices = await proyectoPorRaices(mcp);
@@ -161,14 +161,14 @@ function registrar(mcp: McpServer, numero: number, titulo: string, idioma: Idiom
   );
 }
 
-// Nunca lanza: se llama tras cada tool, y un prompt que no se pudo registrar no debe convertir en
-// error la respuesta de una tool que salió bien. `idioma`, el de los /fN: sin él, el de la primera
-// sincronización de este servidor (y, si es la primera, el de los mensajes).
+// Never throws: it is called after each tool, and a prompt that could not be registered must not turn the
+// response of a tool that went well into an error. `idioma`, that of the /fN: without it, that of the first
+// synchronization of this server (and, if this is the first, that of the messages).
 export function sincronizarPrompts(mcp: McpServer, idioma?: Idioma): void {
   const delServidor = idioma ?? idiomas.get(mcp) ?? idiomaDeMensajes();
   idiomas.set(mcp, delServidor);
   try {
-    const capas = promptsLayers(delServidor); // los títulos de las fases, en el idioma de los /fN
+    const capas = promptsLayers(delServidor); // the titles of the phases, in the language of the /fN
     const fases = discoverPhases(capas);
     let actuales = registros.get(mcp);
     if (!actuales) {
@@ -206,21 +206,21 @@ export function sincronizarPrompts(mcp: McpServer, idioma?: Idioma): void {
   }
 }
 
-// La capacidad `prompts` solo se puede declarar antes de conectar. Si al arrancar no hay ninguna
-// fase (una carpeta de prompts vacía o mal configurada), el primer /fN que apareciera después
-// intentaría declararla con la conexión abierta y el SDK lo rechazaría. Registrar y quitar un
-// prompt de paso deja la capacidad declarada sin que la lista tenga nada.
+// The `prompts` capability can only be declared before connecting. If at startup there is no phase (an
+// empty or badly configured prompts folder), the first /fN to appear later would try to declare it with the
+// connection open and the SDK would reject it. Registering and removing a prompt in passing leaves the
+// capability declared without the list having anything.
 export function asegurarCapacidadDePrompts(mcp: McpServer): void {
   if ((registros.get(mcp)?.size ?? 0) > 0) return;
-  // Un nombre que ninguna fase puede tener: las fases se registran como f<número>.
+  // A name that no phase can have: the phases are registered as f<number>.
   mcp.registerPrompt("phase-gate-provisional", { description: "provisional" }, async () => ({ messages: [] })).remove();
 }
 
-// ─── Vigilancia de las capas ────────────────────────────────────────────────
-// Mejora oportunista: con fs.watch, un comando o una fase nueva aparece sin esperar a la siguiente
-// llamada a una tool. En OneDrive y en algunas unidades de red fs.watch no avisa, y por eso lo que
-// garantiza el resultado es la sincronización tras cada tool, no esto. Los vigilantes no mantienen
-// vivo el proceso (unref) y se cierran con el servidor.
+// ─── Watching the layers ────────────────────────────────────────────────────
+// An opportunistic improvement: with fs.watch, a new command or phase shows up without waiting for the next
+// call to a tool. On OneDrive and some network drives fs.watch does not notify, so what guarantees the
+// result is the synchronization after each tool, not this. The watchers do not keep the process alive
+// (unref) and are closed with the server.
 export function vigilarCapas(mcp: McpServer, esperaMs = 300): () => void {
   const vigilantes: fs.FSWatcher[] = [];
   let temporizador: NodeJS.Timeout | null = null;
@@ -241,7 +241,7 @@ export function vigilarCapas(mcp: McpServer, esperaMs = 300): () => void {
       vigilante.on("error", () => vigilante.close());
       vigilantes.push(vigilante);
     } catch {
-      // Sin vigilancia en esta capa: la sincronización tras cada tool sigue cubriéndola.
+      // No watching in this layer: the synchronization after each tool still covers it.
     }
   }
 

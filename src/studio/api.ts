@@ -1,19 +1,18 @@
-// La API de lectura del Studio (§7.5 del plan). Cada respuesta se arma con las MISMAS funciones que usan
-// las tools y `doctor`: aquí no hay lógica de dominio, solo la traducción a JSON. Donde una tool
-// devolvía texto, se usa la función de datos que hay debajo (estadoDeLotes, planDeArchivo…).
+// The Studio's read API. Each response is built with the SAME functions the tools and `doctor` use: there is
+// no domain logic here, only the translation to JSON. Where a tool returned text, the data function beneath
+// it is used (estadoDeLotes, planDeArchivo…).
 //
-// Los parámetros de ruta (`:p`, `:t`) y `archivo` se decodifican UNA vez y pasan por validarSegmento
-// y las reglas de ruta de siempre (estaDentroReal, nada que empiece por punto, nada de .git, tampoco a
-// través de un enlace o de un nombre corto 8.3). Un proyecto o una tarea que no existen dan 404; un
-// parámetro que no es un nombre válido, 400. Ningún GET escribe en el disco, y los errores no llevan
-// las rutas absolutas del equipo: se sustituyen por <Documentación>, <repos>, <configuración>,
-// <estado> o ~.
+// Route parameters (`:p`, `:t`) and `archivo` are decoded ONCE and go through validarSegmento and the usual
+// path rules (estaDentroReal, nothing starting with a dot, nothing under .git, not even through a link or an
+// 8.3 short name). A project or task that does not exist gives 404; a parameter that is not a valid name, 400.
+// No GET writes to disk, and errors do not carry this machine's absolute paths: they are replaced by
+// <Documentación>, <repos>, <configuración>, <estado> or ~.
 
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { DOCS, REPOS, SERVER_VERSION, configDir, leerVariable, requireBasePath, stateDir } from "../config.js";
+import { SERVER_VERSION, leerVariable } from "../config.js";
 import { diagnosticarSinBloquear } from "../diagnostico.js";
 import { enIdioma, mensaje } from "../i18n/mensajes.js";
 import { capasDe, configuracionDe, contenidoEfectivoDeRanura, contextoInicialDe, ensamblarFase, fasesDe } from "../capas.js";
@@ -27,6 +26,9 @@ import { discoverProjects, esSegmentoDeGit, estaDentro, leerTextoAcotado, requir
 import { separarFrontmatter } from "../phases.js";
 import type { PhaseFile } from "../phases.js";
 import { etiquetaDeLote, parsearRecibo } from "../recibos.js";
+import type { EstadoLote } from "../recibos.js";
+import { estadoCanonico, normalizarClaves } from "../vocabulario.js";
+import type { SesionAbierta } from "../sesiones.js";
 import type { Recibo } from "../recibos.js";
 import { archivoDeTarea } from "../recursos.js";
 import { estadosConPlazo, resolverRepo } from "../repos.js";
@@ -34,6 +36,7 @@ import { textoDelPromptDeFase } from "../servidor.js";
 import { avisoDeCompuerta, avisoDePendientes, describeEstado, detectarSalto, listarTareas, tareaActiva, tieneValidacionesPendientes } from "../tasks.js";
 import type { EstadoTarea } from "../tasks.js";
 import type {
+  AjustesRespuesta,
   BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
@@ -48,26 +51,26 @@ import type {
   ProyectoApi,
   ProyectosRespuesta,
   RepoApi,
-  SesionApi,
   TareaRespuesta,
   TareasRespuesta,
 } from "./contrato.js";
 import { ErrorDeAccion, crearAcciones } from "./acciones.js";
+import { ajustesDeEsteEquipo, ajustesDeProyecto } from "./ajustes.js";
 import { sinRutasDelEquipo } from "./privacidad.js";
 import type { ManejadorApi, PeticionApi, RespuestaApi } from "./servidor.js";
 
 export type ContextoApi = {
-  modo: Modo; // "estatico" solo al exportar (exportar.ts): ningún servidor sirve en ese modo
+  modo: Modo; // "estatico" only when exporting (exportar.ts): no server runs in that mode
   watcher: () => EstadoRespuesta["studio"]["watcher"];
-  sesiones: () => SesionApi[];
-  // Para /api/clientes: la carpeta del usuario, APPDATA y cómo se ejecuta `claude`. En los tests y en la
-  // demo, uno falso: nunca la configuración real de los clientes.
+  sesiones: () => SesionAbierta[];
+  // For /api/clientes: the user's folder, APPDATA and how `claude` is run. In the tests and the demo, a fake
+  // one: never the clients' real configuration.
   entornoInit: () => EntornoInit;
-  // El SSE (L03), si lo hay.
+  // The SSE endpoint, if there is one.
   eventos?: (peticion: PeticionApi, res: import("http").ServerResponse) => void;
 };
 
-// ─── Errores ────────────────────────────────────────────────────────────────
+// ─── Errors ─────────────────────────────────────────────────────────────────
 export class ErrorHttp extends Error {
   constructor(
     readonly estado: number,
@@ -83,10 +86,10 @@ function mensajeDe(error: unknown): string {
   return sinRutasDelEquipo(error instanceof Error ? error.message : String(error));
 }
 
-// El estado de un error que no es un ErrorHttp, por su mensaje: así las funciones de dominio no saben
-// nada de HTTP.
-// Desde la Etapa 6 los errores llevan su código (ErrorConCodigo) y su texto puede estar en inglés: se mira
-// primero el código. El texto queda de respaldo para un error que no lo tenga.
+// The status of an error that is not an ErrorHttp, worked out from its message: that way the domain
+// functions know nothing about HTTP.
+// Errors carry a code (ErrorConCodigo) and their text may be in English, so the code is checked first. The
+// text is the fallback for an error that has none.
 const POR_CODIGO: [RegExp, number][] = [
   [/^(?:RUTA-PROYECTO-NO-EXISTE|RECURSO-[A-Z-]*NO-EXISTE|RECURSO-SIN-SUBCARPETA-DE-RECIBOS|EJECT-[A-Z-]*NO-EXISTE|LOTE-TAREA-NO-EXISTE)$/, 404],
   [/^(?:RUTA-FUERA-[A-Z-]+|RUTA-GIT-POR-ENLACE|RUTA-ENTRA-EN-GIT|REPOS-PATH-FUERA|REPOS-PATH-GIT-POR-ENLACE|REPOS-PATH-EN-GIT|RECURSO-FUERA-DE-TAREA)$/, 403],
@@ -107,13 +110,12 @@ function estadoDe(error: unknown): number {
   if (/ no es válido: /.test(texto)) return 400;
   if (/empiezan por punto/.test(texto)) return 400;
   if (/límite de lectura|parece binario|no es un archivo/.test(texto)) return 422;
-  // Un phase-gate.json o un machine.json mal escritos: el proyecto existe, pero no se puede leer su configuración.
+  // A malformed phase-gate.json or machine.json: the project exists, but its configuration cannot be read.
   if (/^(?:phase-gate|machine)\.json .*no es válido/.test(texto)) return 422;
   return 500;
 }
 
-// ─── Parámetros ─────────────────────────────────────────────────────────────
-// Un segmento de la ruta de la API, decodificado una vez y validado.
+// ─── Parameters ─────────────────────────────────────────────────────────────
 function segmento(crudo: string, campo: string): string {
   let valor: string;
   try {
@@ -124,7 +126,7 @@ function segmento(crudo: string, campo: string): string {
   return nombreValido(valor, campo);
 }
 
-// Un nombre ya decodificado (los de la consulta los decodifica URLSearchParams): solo se valida.
+// An already decoded name (URLSearchParams decodes the query ones): it is only validated.
 function nombreValido(valor: string, campo: string): string {
   validarSegmento(valor, campo);
   if (valor.startsWith(".")) throw new ErrorHttp(400, mensaje("STUDIO-EMPIEZA-POR-PUNTO", { campo }));
@@ -160,7 +162,7 @@ async function estado(ctx: ContextoApi): Promise<EstadoRespuesta> {
 }
 
 // ─── /api/proyectos ─────────────────────────────────────────────────────────
-async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<ProyectoApi> {
+async function proyecto(nombre: string, sesiones: SesionAbierta[]): Promise<ProyectoApi> {
   const lectura = leerManifiesto(nombre);
   let errorDeConfiguracion: string | null = null;
   let preset: ProyectoApi["preset"] = null;
@@ -173,8 +175,8 @@ async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<Proyecto
     errorDeConfiguracion = mensajeDe(error);
   }
 
-  // Una vía por repo del manifiesto, con su estado de git: el mismo de repo_status (estadoDeRepo), en
-  // paralelo y con plazo.
+  // One entry per repo in the manifest, with its git state: the same as repo_status (estadoDeRepo), in
+  // parallel and with a deadline.
   let repos: RepoApi[] = [];
   if (lectura.estado === "valido" && lectura.manifiesto.repos.length) {
     try {
@@ -234,7 +236,9 @@ async function proyecto(nombre: string, sesiones: SesionApi[]): Promise<Proyecto
     repos,
     tareas,
     activa,
-    sesiones: sesiones.filter((s) => s.proyecto !== null && s.proyecto.toLowerCase() === nombre.toLowerCase()),
+    sesiones: sesiones
+      .filter((s) => s.proyecto !== null && s.proyecto.toLowerCase() === nombre.toLowerCase())
+      .map(({ pid, cliente, proyecto, desde, actualizado }) => ({ pid, cliente, proyecto, desde, actualizado })),
   };
 }
 
@@ -264,7 +268,14 @@ function tareas(crudo: string): TareasRespuesta {
 }
 
 // ─── /api/tareas/:p/:t ──────────────────────────────────────────────────────
-const ESTADOS_PENDIENTES = new Set(["con pendientes", "fallido", "descartado"]);
+// A batch with pending items or a failed one keeps its phase amber. A discarded one was closed on purpose, with its
+// note, as the batch summary already counts it. Read in both languages, like the receipts themselves.
+const ESTADOS_PENDIENTES = new Set<EstadoLote>(["con pendientes", "fallido"]);
+
+function conEstadoPendiente(texto: string): boolean {
+  const estado = estadoCanonico(normalizarClaves(separarFrontmatter(texto).meta).estado);
+  return estado !== null && ESTADOS_PENDIENTES.has(estado);
+}
 
 function recibosDe(carpetaTarea: string, subcarpeta: string): string[] {
   const carpeta = path.join(carpetaTarea, subcarpeta);
@@ -295,17 +306,18 @@ function mtimeDe(ruta: string): number | null {
   }
 }
 
-// Las estaciones del tablero, con su señal (§7.7.2):
-//   verde    el documento existe y no trae `## Validaciones pendientes` con contenido;
-//   ámbar    existe con pendientes (la misma sección, o un recibo con pendientes, fallido o descartado,
-//            como avisoDePendientes), o es la fase de los lotes con recibos y sin documento ("en curso");
-//   rojo     falta y hay una fase posterior presente (detectarSalto);
-//   apagado  todavía no toca.
+// The state of each of the task's phases on the Board:
+//   verde    the document exists and has no `## Validaciones pendientes` section with content;
+//   ámbar    it exists with pending items (the same section, or a receipt with pending or failed status),
+//            or it is the batches phase with receipts and no document
+//            ("en curso");
+//   rojo     it is missing and a later phase is present (detectarSalto);
+//   apagado  not due yet.
 export function estaciones(carpetaProyecto: string, estado: EstadoTarea, phases: Map<number, PhaseFile>): Estacion[] {
   const ordenadas = [...phases.entries()].filter(([, d]) => d.documento).sort((a, b) => a[0] - b[0]);
-  const presente = (numero: number, datos: PhaseFile): boolean =>
+  const presente = (datos: PhaseFile): boolean =>
     fs.existsSync(path.join(estado.folderPath, datos.documento!)) || (datos.recibos ? recibosDe(estado.folderPath, datos.recibos).length > 0 : false);
-  const ultimaPresente = ordenadas.filter(([n, d]) => presente(n, d)).map(([n]) => n).pop() ?? 0;
+  const ultimaPresente = ordenadas.filter(([, d]) => presente(d)).map(([n]) => n).pop() ?? 0;
   const huecos = new Set((detectarSalto(ultimaPresente, estado, phases)?.faltan ?? []).map((f) => f.fase));
 
   const lista: Estacion[] = [];
@@ -333,10 +345,10 @@ export function estaciones(carpetaProyecto: string, estado: EstadoTarea, phases:
       const contenido = textoSinFallar(ruta);
       const conPendientes =
         (contenido !== null && tieneValidacionesPendientes(contenido)) ||
-        (contenido !== null && datos.recibos !== undefined && ESTADOS_PENDIENTES.has((separarFrontmatter(contenido).meta.estado ?? "").trim().toLowerCase())) ||
+        (contenido !== null && datos.recibos !== undefined && conEstadoPendiente(contenido)) ||
         recibos.some((r) => {
           const texto = textoSinFallar(path.join(estado.folderPath, datos.recibos!, r));
-          return texto !== null && ESTADOS_PENDIENTES.has((separarFrontmatter(texto).meta.estado ?? "").trim().toLowerCase());
+          return texto !== null && conEstadoPendiente(texto);
         });
       [senal, texto] = conPendientes ? ["ambar", "con pendientes"] : ["verde", "cerrada"];
     } else if (recibos.length) {
@@ -356,8 +368,8 @@ function tarea(crudoP: string, crudoT: string): TareaRespuesta {
   const phases = fasesDe(carpeta);
   const estado = tareaDe(carpeta, crudoT, phases);
   const deRecibos = [...phases.values()].find((d) => d.recibos)?.recibos ?? null;
-  // La fase que se pediría a continuación: la siguiente a la última hecha. Con un hueco, es la que
-  // recibiría el aviso de la compuerta.
+  // The phase that would be requested next: the one after the last done. With a gap, it is the one that
+  // would receive the gate warning.
   const siguiente = (estado.fasesHechas.length ? Math.max(...estado.fasesHechas) : 0) + 1;
   const opciones = { project: carpeta, taskName: estado.taskName };
   return {
@@ -376,11 +388,11 @@ function documento(crudoP: string, crudoT: string, consulta: URLSearchParams): D
   if (archivos.length !== 1 || !archivos[0]) throw new ErrorHttp(400, mensaje("STUDIO-FALTA-ARCHIVO"));
   const carpeta = proyectoDe(crudoP);
   const nombreTarea = segmento(crudoT, "tarea");
-  // URLSearchParams ya decodificó `archivo` una vez; no se vuelve a decodificar.
+  // URLSearchParams already decoded `archivo` once; it is not decoded again.
   const partes = archivos[0].split("/");
   const { ruta, tarea: carpetaTarea } = archivoDeTarea(carpeta, nombreTarea, partes);
-  // La regla de .git y de los nombres con punto, también sobre la ruta resuelta: un enlace o un nombre
-  // corto 8.3 (GIT~1) dentro de la tarea no lleva a .git ni a un archivo oculto.
+  // The .git and dot-name rule, applied to the resolved path too: a link or an 8.3 short name (GIT~1) inside
+  // the task cannot lead to .git or to a hidden file.
   const real = path.relative(rutaReal(carpetaTarea), rutaReal(ruta)).split(/[\\/]/);
   if (real.some((s) => s.startsWith(".") || esSegmentoDeGit(s))) throw new ErrorHttp(403, mensaje("STUDIO-ARCHIVO-OCULTO"));
   const texto = leerTextoAcotado(ruta).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
@@ -409,10 +421,10 @@ async function lotes(crudoP: string, crudoT: string, consulta: URLSearchParams):
   }
 }
 
-// Lo que el tablero pinta en cada sello y estadoDeLotes no da por separado: el SHA corto, los 8 primeros
-// caracteres del sha256 y la fecha del recibo. Se leen con las mismas funciones del motor de lotes, por la
-// ruta relativa del recibo (la que da estadoDeLotes). Con un solo lote y la fase cerrada, el recibo es el
-// documento de la fase.
+// What the board paints on each seal and estadoDeLotes does not give separately: the short SHA, the first 8
+// characters of the sha256 and the receipt's date. They are read with the batch engine's own functions, by
+// the receipt's relative path (the one estadoDeLotes gives). With a single batch and the phase closed, the
+// receipt is the phase document.
 type Sello = { corto: string | null; sha256: string | null; fecha: string | null };
 
 function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string, Sello> {
@@ -430,24 +442,24 @@ function sellosDeLaTarea(carpetaProyecto: string, taskName: string): Map<string,
       try {
         sellos.set(fase.documento!, deRecibo(parsearRecibo(leerTextoAcotado(documento), fase.documento!)));
       } catch {
-        // un índice de varios lotes no es un recibo: no tiene sello propio
+        // an index of several batches is not a receipt: it has no seal of its own
       }
     }
   } catch {
-    // sin recibos legibles, los vagones van sin detalle; estadoDeLotes ya lo dijo
+    // without readable receipts, the board's wagons carry no detail; estadoDeLotes already reported it
   }
   return sellos;
 }
 
 // ─── /api/tareas/:p/:t/bitacora ─────────────────────────────────────────────
-// La línea de tiempo de la tarea (§7.7.5), de lo más reciente a lo más antiguo:
-//   documento     el mtime de cada documento que existe (creado o modificado: el disco no distingue);
-//   recibo        el `registrado` del frontmatter de cada recibo (o su mtime, si es de la 2.x);
-//   commit        la fecha del commit anclado (%ct, en UTC), con su asunto y su SHA corto (datosDeCommit);
-//   reanclaje     la fecha de cada línea "Reanclado el …" de la sección "Verificación del commit";
-//   fase-cerrada  el `registrado` más reciente de los recibos, si la fase tiene su documento.
-// Una escritura con confirmación (force o elicitation) no deja rastro propio en el disco —un recibo de la
-// escotilla solo queda con `origen: manual`, igual que uno de la 2.x—, así que no aparece.
+// The task's timeline, newest first:
+//   documento     the mtime of each existing document (created or modified: the disk cannot tell);
+//   recibo        the `registrado` in each receipt's frontmatter (or its mtime, for a 2.x one);
+//   commit        the anchored commit's date (%ct, in UTC), with its subject and short SHA (datosDeCommit);
+//   reanclaje     the date of each "Reanclado el …" line in the "Verificación del commit" section;
+//   fase-cerrada  the latest `registrado` among the receipts, if the phase has its document.
+// A write made with confirmation (force or elicitation) leaves no trace of its own on disk —a receipt from the
+// escape hatch only ends up with `origen: manual`, the same as a 2.x one—, so it does not show up.
 const REANCLADO = /^(?:Reanclado el|Re-anchored on) (\d{4}-\d{2}-\d{2}): (.*)$/;
 
 async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespuesta> {
@@ -473,7 +485,7 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
     try {
       for (const lista of recibosDeLaTarea(fase).values()) for (const r of lista) recibos.push({ recibo: r.recibo, relativo: `${fase.recibos}/${r.nombre}`, mtimeMs: r.mtimeMs });
     } catch {
-      // un recibo ilegible: el resto de la bitácora sigue (doctor lo avisa)
+      // an unreadable receipt: the rest of the timeline goes on (doctor reports it)
     }
     const documento = fase.documento ? path.join(fase.carpetaTarea, fase.documento) : null;
     const cerrada = documento !== null && fs.existsSync(documento);
@@ -481,7 +493,7 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
       try {
         recibos.push({ recibo: parsearRecibo(leerTextoAcotado(documento!), fase.documento!), relativo: fase.documento!, mtimeMs: fs.statSync(documento!).mtimeMs });
       } catch {
-        // con varios lotes el documento es un índice, no un recibo
+        // with several batches the document is an index, not a receipt
       }
     }
 
@@ -495,8 +507,8 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
       }
     }
 
-    // Los commits, en paralelo y de seis en seis, con la puerta de git. Uno que ya no existe (un rebase) no
-    // tiene fecha que enseñar: no sale.
+    // The commits, in parallel and six at a time, through git's gate. One that no longer exists (after a
+    // rebase) has no date to show: it is left out.
     const conCommit = recibos.filter((r) => r.recibo.ancla.tipo === "commit");
     const datos = await enParalelo(conCommit, VERIFICACIONES_A_LA_VEZ, async ({ recibo }) => {
       const ancla = recibo.ancla as Extract<Recibo["ancla"], { tipo: "commit" }>;
@@ -523,9 +535,9 @@ async function bitacora(crudoP: string, crudoT: string): Promise<BitacoraRespues
 }
 
 // ─── /api/prompts/:p/:fase?tarea= ───────────────────────────────────────────
-// De qué capa sale el contenido de una ranura, dicho para la ficha del Taller: "fábrica", "preset: <nombre>",
-// "reglas: <variante>", "global" o "proyecto". `contenidoDe` es "fábrica" o "<archivo>:<línea>" (en Windows
-// el archivo lleva sus propios ":", así que se corta por el último).
+// Which layer a slot's content comes from, worded for the Taller card: "fábrica", "preset: <name>",
+// "reglas: <variant>", "global" or "proyecto". `contenidoDe` is "fábrica" or "<file>:<line>" (on Windows the
+// file carries its own ":", so it is split at the last one).
 export function capaDeProcedencia(contenidoDe: string, capas: Capa[]): string {
   if (contenidoDe === "fábrica") return "fábrica";
   const corte = contenidoDe.lastIndexOf(":");
@@ -547,12 +559,12 @@ async function prompt(crudoP: string, crudoFase: string, consulta: URLSearchPara
   const phases = fasesDe(carpeta);
   if (!phases.has(fase)) throw new ErrorHttp(404, mensaje("STUDIO-FASE-NO-EXISTE", { fase, proyecto: carpeta, fases: [...phases.keys()].sort((a, b) => a - b).join(", ") }));
   const crudoTarea = consulta.get("tarea");
-  // Sin tarea, la activa del proyecto, como get_phase_prompt con `project` y sin `task_name`.
+  // Without a task, the project's active one, like get_phase_prompt with `project` and no `task_name`.
   const elegida = crudoTarea ? tareaDe(carpeta, crudoTarea, phases, true) : (tareaActiva(carpeta, phases)?.estado ?? null);
   const carpetaTarea = elegida?.folderPath ?? null;
 
-  // El texto exacto que recibe el modelo: get_phase_prompt habla en el idioma del proyecto, no en el de la
-  // interfaz del Studio, así que se ensambla en ese (como hace la tool al resolver el proyecto).
+  // The exact text the model receives: get_phase_prompt speaks the project's language, not the Studio
+  // interface's, so it is assembled in that one (as the tool does when it resolves the project).
   const opcionesDelPrompt = { project: carpeta, task_name: crudoTarea ? elegida!.taskName : undefined, carpetaProyecto: carpeta, deducido: null };
   const texto = await enIdioma(idiomaDelProyecto(carpeta).idioma, () => textoDelPromptDeFase(fase, opcionesDelPrompt));
   const capas = capasDe(carpeta, carpetaTarea);
@@ -581,8 +593,8 @@ async function prompt(crudoP: string, crudoFase: string, consulta: URLSearchPara
 }
 
 // ─── /api/clientes ──────────────────────────────────────────────────────────
-// Lo que haría `init --dry-run` en cada cliente, con la misma función que init (planDeArchivo y
-// planDeClaude). No escribe nada; para Claude Code ejecuta `claude --version` y `claude mcp list`.
+// What `init --dry-run` would do in each client, with the same function init uses (planDeArchivo and
+// planDeClaude). It writes nothing; for Claude Code it runs `claude --version` and `claude mcp list`.
 function conTilde(ruta: string, home: string): string {
   const relativa = path.relative(home, ruta);
   return relativa && !relativa.startsWith("..") && !path.isAbsolute(relativa) ? `~/${relativa.split(path.sep).join("/")}` : ruta;
@@ -595,27 +607,27 @@ export async function planesDeClientes(entorno: EntornoInit): Promise<PlanDeClie
   const repos = leerVariable("REPOS_PATH").valor;
   const existe = (ruta: string | undefined): ruta is string => Boolean(ruta) && (fs.statSync(path.resolve(ruta!), { throwIfNoEntry: false })?.isDirectory() ?? false);
   const detectados = await detectarClientes(entorno);
-  const rutas = existe(docs) && existe(repos) ? { docs: path.resolve(docs), repos: path.resolve(repos) } : null;
+  const hayRutas = existe(docs) && existe(repos);
 
   const planes: PlanDeClienteApi[] = [];
   for (const cliente of CLIENTES) {
     const base = { cliente, nombre: NOMBRES[cliente], detectado: detectados.includes(cliente) };
-    if (!rutas) {
+    if (!hayRutas) {
       planes.push({ ...base, estado: "sin-rutas", archivo: null, comando: null, diff: null, mensaje: mensaje("STUDIO-SIN-RUTAS") });
       continue;
     }
     if (cliente === "claude-code") {
-      const plan = await planDeClaude(rutas, null, entorno);
+      const plan = await planDeClaude(null, entorno);
       const texto =
         plan.estado === "sin-lista"
           ? mensaje("STUDIO-CLIENTE-SIN-LISTA", { detalle: sinRutasDelEquipo(plan.mensaje) })
           : plan.estado === "existente"
-            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente })
+            ? mensaje("STUDIO-CLIENTE-EXISTENTE", { clave: plan.existente, conRutas: plan.rehacer.length > 0 })
             : mensaje("STUDIO-CLIENTE-CLAUDE-NUEVO", { clave: plan.clave });
       planes.push({ ...base, estado: plan.estado, archivo: null, comando: plan.estado === "sin-lista" ? null : plan.comando, diff: null, mensaje: texto });
       continue;
     }
-    const plan = planDeArchivo(cliente, rutas, null, entorno);
+    const plan = planDeArchivo(cliente, null, entorno);
     const archivo = conTilde(plan.archivo, entorno.home);
     let texto: string;
     let diff: string | null = null;
@@ -643,7 +655,7 @@ export async function planesDeClientes(entorno: EntornoInit): Promise<PlanDeClie
   return planes;
 }
 
-// ─── El enrutado ────────────────────────────────────────────────────────────
+// ─── Routing ────────────────────────────────────────────────────────────────
 type Ruta = { patron: RegExp; atender: (m: RegExpMatchArray, p: PeticionApi) => Promise<unknown> | unknown };
 
 export function crearApi(ctx: ContextoApi): ManejadorApi {
@@ -657,6 +669,8 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
     { patron: /^\/tareas\/([^/]+)\/([^/]+)\/bitacora$/, atender: (m) => bitacora(m[1]!, m[2]!) },
     { patron: /^\/prompts\/([^/]+)\/([^/]+)$/, atender: (m, p) => prompt(m[1]!, m[2]!, p.consulta) },
     { patron: /^\/clientes$/, atender: async (): Promise<ClientesRespuesta> => ({ clientes: await planesDeClientes(ctx.entornoInit()) }) },
+    { patron: /^\/ajustes$/, atender: (): AjustesRespuesta => ajustesDeEsteEquipo({ entornoInit: ctx.entornoInit, sesiones: ctx.sesiones }) },
+    { patron: /^\/ajustes\/proyectos\/([^/]+)$/, atender: (m) => ajustesDeProyecto(proyectoDe(m[1]!)) },
   ];
 
   const acciones = crearAcciones({ entornoInit: ctx.entornoInit });
@@ -665,22 +679,25 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
       ctx.eventos(peticion, res);
       return "manejada";
     }
-    // Las dos únicas escrituras: el plan con su huella, y aplicarlo (§7.6).
+    // The only two writes: the plan with its fingerprint, and applying it.
     if (peticion.ruta === "/acciones/plan" || peticion.ruta === "/acciones/aplicar") {
       if (peticion.metodo !== "POST") return { estado: 405, json: { error: mensaje("STUDIO-SOLO-POST") } };
       try {
         return { estado: 200, json: peticion.ruta === "/acciones/plan" ? await acciones.plan(peticion.cuerpo) : await acciones.aplicar(peticion.cuerpo) };
       } catch (error) {
         const codigo = error instanceof ErrorDeAccion ? error.estado : estadoDe(error);
-        return { estado: codigo, json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error) } };
+        return {
+          estado: codigo,
+          json: { error: codigo === 500 && !(error instanceof ErrorDeAccion) ? mensaje("STUDIO-ERROR-INTERNO", { detalle: mensajeDe(error) }) : mensajeDe(error), ...(error instanceof ErrorDeAccion ? error.extra : {}) },
+        };
       }
     }
     for (const { patron, atender } of rutas) {
       const m = peticion.ruta.match(patron);
       if (!m) continue;
       if (peticion.metodo !== "GET") return { estado: 405, json: { error: mensaje("STUDIO-SOLO-GET") } };
-      // Una lectura recuenta los documentos por idioma una vez por proyecto. Las acciones y el SSE, no: escriben
-      // o viven más que una petición.
+      // A read counts the documents per language once per project. Actions and the SSE do not: they write, or
+      // outlive a single request.
       try {
         return { estado: 200, json: await conCacheDelIdioma(() => atender(m, peticion)) };
       } catch (error) {
@@ -692,7 +709,7 @@ export function crearApi(ctx: ContextoApi): ManejadorApi {
   };
 }
 
-// El entorno de init de este proceso, sin terminal: para /api/clientes en vivo.
+// This process's init environment, without a terminal: for the live /api/clientes.
 export function entornoInitDelProceso(ejecutar: EntornoInit["ejecutar"]): EntornoInit {
   return {
     home: os.homedir(),

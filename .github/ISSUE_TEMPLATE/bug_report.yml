@@ -1,0 +1,57 @@
+name: Bug / Error
+description: Something doesn't work as documented. / Algo no funciona como dice la documentación.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. Write in English or in Spanish, whichever is easier for you.
+        If it's a security problem, please don't use this form: use the private report (link in the issue chooser).
+        Gracias por avisar. Puedes escribir en inglés o en español.
+  - type: textarea
+    id: que-paso
+    attributes:
+      label: What happened? / ¿Qué pasó?
+      description: What you did, what you expected and what you got instead. / Qué hiciste, qué esperabas y qué obtuviste.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduccion
+    attributes:
+      label: Steps to reproduce / Cómo reproducirlo
+      description: The shortest list of steps that triggers it. If it's a tool call or a command, paste it. / La lista más corta de pasos que lo provoca. Si es una llamada a una tool o un comando, pégalo.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / Versión
+      description: The output of `npx mcp-phase-gate --version`. / La salida de `npx mcp-phase-gate --version`.
+      placeholder: 4.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Operating system / Sistema operativo
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other / Otro
+    validations:
+      required: true
+  - type: input
+    id: cliente
+    attributes:
+      label: MCP client / Cliente MCP
+      description: Claude Code, Cursor, VS Code or another, with its version. / Claude Code, Cursor, VS Code u otro, con su versión.
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `doctor` / Salida de `doctor`
+      description: Run `npx mcp-phase-gate doctor` and paste it. Check it for paths you don't want to share first. / Corre `npx mcp-phase-gate doctor` y pégala. Revisa antes si trae rutas que no quieras compartir.
+      render: text

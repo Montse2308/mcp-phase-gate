@@ -1,14 +1,11 @@
-// Confirmaciones pedidas directamente a la persona, por elicitation de MCP.
+// Confirmations asked of the person directly, through MCP elicitation.
 //
-// Hasta ahora, reescribir un documento protegido o estrenar un proyecto dependía de una bandera
-// (`force`, `crear_proyecto`) que pone el modelo cuando "el usuario lo confirmó en el chat". Es
-// justo lo que se quiere evitar: la bandera la escribe quien no debe decidir. Con elicitation, el
-// servidor le pregunta a la persona en un formulario de su cliente, y la respuesta no pasa por el
-// modelo.
+// A flag (`force`, `crear_proyecto`) set by the model when "the user confirmed in the chat" is exactly
+// what this avoids: the flag is written by whoever should not decide. With elicitation, the server asks
+// the person in a form of their client, and the answer does not go through the model.
 //
-// Si el cliente no lo soporta, o lo anuncia pero no lo muestra, se vuelve al comportamiento
-// anterior: deciden las banderas. Una persona que dice que no, o que cierra el formulario, nunca
-// se convierte en un sí.
+// If the client does not support it, or announces it but does not show it, the flags decide. A person who
+// says no, or closes the form, never becomes a yes.
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
@@ -21,12 +18,12 @@ import { log } from "./log.js";
 
 export type Confirmacion = "confirmada" | "rechazada" | "no-disponible";
 
-// `nota` acompaña al resultado cuando hay algo que decirle al modelo (y, por él, a la persona):
-// por qué no se preguntó, o qué hacer si el formulario no apareció.
+// `nota` goes with the result when there is something to tell the model (and, through it, the person):
+// why nothing was asked, or what to do if the form did not appear.
 export type ResultadoConfirmacion = { estado: Confirmacion; nota?: string };
 
-// El SDK espera un minuto por defecto a que el cliente responda; para que una persona lea y
-// decida es poco. Los tests lo acortan.
+// The SDK waits one minute by default for the client to answer; that is too little for a person to read
+// and decide. The tests shorten it.
 export const ESPERA_POR_DEFECTO_MS = 180_000;
 let esperaMs = ESPERA_POR_DEFECTO_MS;
 
@@ -34,10 +31,9 @@ export function fijarEsperaDeConfirmacion(ms: number | null): void {
   esperaMs = ms ?? ESPERA_POR_DEFECTO_MS;
 }
 
-// Lo que se aprende de un cliente durante la sesión. Un cliente que anuncia elicitation y no la
-// implementa, o que dos veces seguidas deja vencer el plazo (validación V4: un bug abierto de
-// Cursor en Windows en el que el formulario no aparece), no vuelve a recibir preguntas: cada
-// escritura protegida esperaría tres minutos para nada.
+// What is learned about a client during the session. A client that announces elicitation and does not
+// implement it, or that lets the deadline pass twice in a row (an open Cursor bug on Windows where the
+// form does not appear), is not asked again: every protected write would wait three minutes for nothing.
 type Sesion = { noDisponible: boolean; vencimientosSeguidos: number };
 const sesiones = new WeakMap<McpServer, Sesion>();
 
@@ -50,9 +46,9 @@ function sesionDe(mcp: McpServer): Sesion {
   return sesion;
 }
 
-// Las notas (CONFIRMACION-NOTA-*) se redactan al devolverlas, en el idioma de la llamada.
+// The notes (CONFIRMACION-NOTA-*) are worded when returned, in the language of the call.
 
-// Valores de PHASE_GATE_ELICITATION que apagan las confirmaciones directas.
+// Values of PHASE_GATE_ELICITATION that turn direct confirmations off.
 const APAGADO = new Set(["off", "false", "0", "no"]);
 
 export async function pedirConfirmacion(
@@ -60,7 +56,7 @@ export async function pedirConfirmacion(
   extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
   pregunta: { mensaje: string; etiqueta: string }
 ): Promise<ResultadoConfirmacion> {
-  // La escotilla para un cliente cuya implementación falle.
+  // The escape hatch for a client whose implementation fails.
   if (APAGADO.has(leerVariable("ELICITATION").valor?.toLowerCase() ?? "")) return { estado: "no-disponible" };
   if (!mcp.server.getClientCapabilities()?.elicitation?.form) return { estado: "no-disponible" };
 
@@ -85,8 +81,8 @@ export async function pedirConfirmacion(
           required: ["confirmar"],
         },
       },
-      // Con la señal de la llamada: si el cliente cancela la tool (por su propio plazo, o porque la
-      // persona la detuvo), la pregunta se cancela también y no se escribe nada a sus espaldas.
+      // With the call's signal: if the client cancels the tool (by its own deadline, or because the person
+      // stopped it), the question is cancelled too and nothing is written behind their back.
       { timeout: esperaMs, relatedRequestId: extra.requestId, signal: extra.signal }
     );
 
@@ -95,15 +91,15 @@ export async function pedirConfirmacion(
   } catch (error) {
     const detalle = error instanceof Error ? error.message : String(error);
 
-    // Una cancelación del cliente no dice nada de si muestra o no el formulario: no cuenta como
-    // vencimiento ni cambia la sesión.
+    // A cancellation from the client says nothing about whether it shows the form: it does not count as a
+    // timeout and does not change the session.
     if (extra.signal.aborted) return { estado: "rechazada", nota: mensaje("CONFIRMACION-NOTA-CANCELADA") };
 
     if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
       sesion.vencimientosSeguidos++;
       if (sesion.vencimientosSeguidos >= 2) {
-        // Desde la siguiente llamada decide force; ESTA falla cerrada. Si no, una persona ausente
-        // dos veces más un force puesto por el modelo acabarían escribiendo sin que nadie confirmara.
+        // From the next call force decides; THIS one fails closed. Otherwise, a person absent twice plus a
+        // force set by the model would end up writing without anyone confirming.
         sesion.noDisponible = true;
         log("warning", mensaje("CONFIRMACION-LOG-VENCIDAS"));
         return { estado: "rechazada", nota: mensaje("CONFIRMACION-NOTA-SIN-RESPUESTA") };
@@ -119,7 +115,7 @@ export async function pedirConfirmacion(
       return { estado: "no-disponible", nota: mensaje("CONFIRMACION-NOTA-NO-IMPLEMENTA") };
     }
 
-    // Ante lo desconocido se falla cerrado: no se escribe nada y la persona puede repetirlo.
+    // Facing the unknown it fails closed: nothing is written and the person can repeat it.
     log("warning", mensaje("CONFIRMACION-LOG-FALLO", { detalle }));
     return { estado: "rechazada" };
   }

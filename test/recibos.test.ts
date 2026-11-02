@@ -1,4 +1,4 @@
-// Los recibos como datos (§6.2 del plan maestro v3): escritura determinista, lectura tolerante con
+// Los recibos como datos: escritura determinista, lectura tolerante con
 // los recibos escritos a mano en la 2.x, y el nombre del archivo hecho por el servidor.
 
 import { strict as assert } from "node:assert";

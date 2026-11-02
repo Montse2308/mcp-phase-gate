@@ -1,16 +1,19 @@
 # Los comandos de fase
 
 Los comandos `/f1`…`/f5` disparan el flujo: cada uno le dice al modelo qué tools llamar, y en
-qué orden, para arrancar su fase. Su texto vive en **una sola fuente**:
-[`prompts/es/comandos/`](../prompts/es/comandos), que viaja dentro del paquete de npm.
+qué orden, para arrancar su fase. Su texto vive en **una sola fuente por idioma**:
+[`prompts/es/comandos/`](../prompts/es/comandos) y [`prompts/en/commands/`](../prompts/en/commands),
+que viajan dentro del paquete de npm.
+
+*Su gemelo en inglés es [`phase-commands.md`](phase-commands.md); si cambias uno, cambia el otro.*
 
 ## Cómo llegan a tu cliente
 
 **Como MCP Prompts (desde la versión 2.2.0).** El servidor ofrece cada comando como un prompt
 MCP llamado `f1`, `f2`… Los clientes que muestran prompts los listan solos, sin copiar nada a
 ninguna carpeta, y se actualizan con cada versión del paquete. Cómo se ven, según la
-documentación de cada cliente (lo observado en cada uno queda en la tabla de clientes del
-README):
+documentación de cada cliente (lo observado en cada uno queda en la tabla de clientes de la
+[guía de instalación](guia/instalacion.md#los-comandos-de-fase)):
 
 | Cliente | Cómo se invocan |
 |---------|-----------------|
@@ -29,10 +32,10 @@ largo puede ir pegado después del comando como texto normal del chat.
 **Como comandos de archivo.** Para quien trabaja en este repo, o con un cliente que no muestra
 bien los prompts MCP, hay una copia idéntica en [`.claude/commands/`](../.claude/commands), que
 Claude Code lee al abrir el repo. Para usarlos en otros proyectos, o en Cursor sin prompts MCP,
-`npx mcp-phase-gate init --comandos` copia los de `prompts/es/comandos/` a `~/.claude/commands/`
-o a `~/.cursor/commands/`, con una marca en la primera línea; un archivo tuyo, sin la marca, no
-lo pisa. Un test (`test/docs.test.ts`) obliga a que `.claude/commands/` y `prompts/es/comandos/`
-sean idénticos.
+`npx mcp-phase-gate init --comandos` copia los del idioma de tu equipo (los de `prompts/es/comandos/`
+o los de `prompts/en/commands/`) a `~/.claude/commands/` o a `~/.cursor/commands/`, con una marca en la
+primera línea; un archivo tuyo, sin la marca, no lo pisa. Un test (`test/docs.test.ts`) obliga a que
+`.claude/commands/` y `prompts/es/comandos/` sean idénticos.
 
 **Comandos propios.** Un `comandos/fN.md` en tu carpeta de prompts propia
 (`PHASE_GATE_PROMPTS_PATH`) gana al de fábrica, igual que los prompts de fase; uno en la capa de

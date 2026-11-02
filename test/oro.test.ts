@@ -1,13 +1,13 @@
-// La prueba de oro (§5.5.2 del plan maestro v3): con el preset software-replica, cada fase se
+// La prueba de oro: con el preset software-replica, cada fase se
 // ensambla EXACTAMENTE como la entregaba la 2.2.0. Es la garantía de que el flujo de quien ya usaba
 // la réplica no cambia al pasar a la 3.0, aunque los prompts base sean ahora genéricos.
 //
 // test/oro/2.2.0/fase-N.txt se generaron con loadPhasePrompt(N) del build de la etiqueta v2.2.0.
 // Se excluye el bloque CONFIGURACIÓN DEL PROYECTO (incluirConfigProyecto: false), que no existía.
 // Si un cambio posterior toca a propósito un texto compartido, estos archivos se regeneran en el
-// mismo lote y se dice en el commit (riesgo E3-R8).
+// mismo lote y se dice en el commit.
 //
-// La 3.0.0 cambia a propósito las Fases 4 y 5 (L08 de la Etapa 4: la Fase 4 ejecuta con record_batch y
+// La 3.0.0 cambia a propósito las Fases 4 y 5 (la Fase 4 ejecuta con record_batch y
 // la 5 audita los commits que lista el servidor). Esas dos se comparan con test/oro/3.0.0/, generado
 // con ensamblarFase después de cambiar los textos y revisado a mano (ORO_REGENERAR=1 los reescribe;
 // nunca los de la 2.2.0). Las fases 1, 2 y 3 siguen comparándose con la 2.2.0, sin tocarlas.
@@ -70,7 +70,7 @@ describe("prueba de oro: software-replica reproduce la 2.2.0 (fases 1 a 3) y la 
 
   // La suite fija PHASE_GATE_LANG=es (test/helpers.ts), que oculta el idioma del sistema. Aquí no: un sistema
   // en inglés sin PHASE_GATE_LANG, como el de un cliente MCP en Linux sin LANG. Un manifiesto de la 3.x, sin
-  // `idioma` y sin documentos, sigue dando el español de siempre (hallazgo 2 de la auditoría de la Etapa 6).
+  // `idioma` y sin documentos, sigue dando el español de siempre.
   it("lo mismo con el sistema en inglés y sin PHASE_GATE_LANG: el manifiesto sin idioma sigue en español", () => {
     proyecto({ version: 1, preset: "software-replica" });
     delete process.env.PHASE_GATE_LANG;
@@ -109,10 +109,10 @@ describe("prueba de oro: software-replica reproduce la 2.2.0 (fases 1 a 3) y la 
   });
 });
 
-// La prueba de oro en inglés (§8.4, L06 de la Etapa 6): con "idioma": "en" y software-replica, cada fase se
+// La prueba de oro en inglés: con "idioma": "en" y software-replica, cada fase se
 // ensambla exactamente como test/oro/3.2.0-en/fase-N.txt, generado una vez con ORO_REGENERAR_EN=1 y revisado.
-// Desde entonces, cualquier cambio en los prompts o presets en inglés lo tiene que regenerar a propósito
-// (E3-R8). Las de español (2.2.0 y 3.0.0) no cambian: esta etapa no tocó el español.
+// Desde entonces, cualquier cambio en los prompts o presets en inglés lo tiene que regenerar a propósito.
+// Las de español (2.2.0 y 3.0.0) no cambian.
 const ORO_EN = path.join(RAIZ, "test", "oro", "3.2.0-en");
 
 describe("prueba de oro en inglés: software-replica con idioma en (3.2.0-en)", () => {

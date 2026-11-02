@@ -352,7 +352,7 @@ describe("resolveRepoPath", () => {
     }
   });
 
-  // Hallazgo 9 de la auditoría de la Etapa 3: la misma regla de .git que read_repo_file.
+  // La misma regla de .git que read_repo_file.
   it("no entra en .git, ni en otras mayúsculas, ni por un enlace interno; .github sí", () => {
     const repos = reposTemporales();
     fs.mkdirSync(path.join(repos, "repoA", ".git"), { recursive: true });

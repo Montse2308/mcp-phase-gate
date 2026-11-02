@@ -1,4 +1,4 @@
-// Los presets que trae el paquete (§5.5 del plan maestro v3): bien formados, sin bloques huérfanos,
+// Los presets que trae el paquete: bien formados, sin bloques huérfanos,
 // y cada uno ensambla las cinco fases sin dejar marcadores para el modelo.
 
 import { strict as assert } from "node:assert";
@@ -35,7 +35,7 @@ function conPreset(preset: string): void {
 }
 
 describe("presets publicados", () => {
-  it("son los cinco del plan, y software sigue existiendo sin archivo", () => {
+  it("son los cinco publicados, y software sigue existiendo sin archivo", () => {
     assert.deepEqual(ARCHIVOS, ["ai-agent-ops.md", "multi-repo-feature.md", "research-ops.md", "software-replica.md", "software-tdd.md"]);
 
     fijarRaizDelPaquete(RAIZ);

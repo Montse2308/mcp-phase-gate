@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// El shebang es lo que vuelve ejecutable este archivo como `bin` del paquete. Sin él,
-// `npx mcp-phase-gate` falla en Linux y macOS: el sistema no sabe con qué interpretarlo.
+// The shebang is what makes this file executable as the package's `bin`. Without it, `npx mcp-phase-gate`
+// fails on Linux and macOS: the system does not know what to run it with.
 //
-// El punto de entrada: con argumentos, la línea de comandos (cli.ts); sin ellos, el servidor MCP
-// (servidor.ts) conectado por stdio. Aquí no se define ninguna tool.
+// The entry point: with arguments, the command line (cli.ts); without them, the MCP server (servidor.ts)
+// connected over stdio. No tool is defined here.
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
@@ -16,9 +16,9 @@ import { crearServidor } from "./servidor.js";
 import { registrarSesion } from "./sesiones.js";
 import { limpiarEstadoViejo } from "./tasks.js";
 
-// Deja en el log el estado de cada ruta al arrancar. No aborta: el servidor sigue en pie y
-// el error real se entrega al llamar la tool. Esto es solo para que, cuando alguien acabe
-// abriendo el log, el motivo ya esté ahí escrito.
+// Logs the state of each path at startup. It does not abort: the server stays up and the real error is
+// returned when the tool is called. This is only so that, when someone ends up opening the log, the
+// reason is already written there.
 function reportarRutas(): void {
   for (const requerida of [DOCS, REPOS]) {
     try {
@@ -29,7 +29,6 @@ function reportarRutas(): void {
     }
   }
 
-  // Las dos variables de un mismo nombre lógico, con valores distintos: se avisa una vez.
   for (const logica of NOMBRES_LOGICOS) {
     const { discrepancia } = leerVariable(logica);
     if (discrepancia) log("warning", discrepancia);
@@ -40,9 +39,8 @@ function reportarRutas(): void {
 }
 
 async function main() {
-  // Con argumentos, el binario es la herramienta de la persona (ayuda, versión, doctor); sin
-  // ellos, el servidor que lanza el cliente. exitCode y no exit(): exit cortaría la salida de
-  // doctor a medio escribir cuando stdout es una tubería.
+  // With arguments, the binary is the person's tool (help, version, doctor); without them, the server a
+  // client launches. exitCode and not exit(): exit would cut doctor's output short when stdout is a pipe.
   const resultado = ejecutarCli(process.argv.slice(2));
   if (resultado.accion === "salir") {
     process.exitCode = resultado.codigo;
@@ -64,7 +62,7 @@ async function main() {
   limpiarEstadoViejo();
   reportarRutas();
 
-  // El registro de sesiones solo lo lleva el servidor por stdio: es el que lanza un cliente de verdad.
+  // Only the server over stdio keeps the session registry: it is the one a real client launches.
   const mcp = crearServidor();
   registrarSesion(mcp);
   await mcp.connect(new StdioServerTransport());

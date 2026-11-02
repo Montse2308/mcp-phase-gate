@@ -1,5 +1,5 @@
 // Los prompts que se publican: que sus ranuras estén bien formadas y que el modelo nunca vea un
-// marcador. Las reglas son las del mapa de ranuras del plan maestro v3 (§3.2):
+// marcador. Las reglas son estas:
 //   1. Toda ranura abierta se cierra; no se anidan.
 //   2. El nombre es único dentro de su archivo y pertenece al catálogo.
 //   3. El encabezado "##" de la sección queda fuera de la ranura.
@@ -21,13 +21,13 @@ import { crearProyecto, docsTemporales, limpiarEntorno } from "./helpers.js";
 // Como en test/phases.test.ts: la capa de fábrica no se resuelve al repo desde build-test/.
 const PROMPTS = path.join(process.cwd(), "prompts", "es");
 
-// El catálogo de §3.2, por identificador de archivo (el de los bloques de la Etapa 3).
+// El catálogo de ranuras, por identificador de archivo (el de los bloques).
 const CATALOGO: Record<string, string[]> = {
   global: ["cero-rupturas", "evidencia", "extra"],
   "fase-1": ["rol", "verificacion", "ejemplos"],
   "fase-2": ["rol", "verificacion", "ejemplos"],
-  // La Etapa 4 (L08) suma las ranuras de las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de
-  // una regla (deuda E3-D5): las variantes las sustituyen en vez de decir que "no aplican".
+  // Las ranuras de las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de
+  // una regla: las variantes las sustituyen en vez de decir que "no aplican".
   "fase-3": ["rol", "comprobaciones", "lotes", "pruebas", "ejemplos", "prohibido-lotes", "autoverificacion-lotes"],
   "fase-4": ["rol", "verificacion", "pruebas", "lotes", "commits", "ejemplos", "prohibido-commits", "autoverificacion-commits"],
   "fase-5": ["rol", "pr", "ejemplos"],
@@ -154,8 +154,8 @@ describe("revisarRanuras (el propio validador)", () => {
     assert.match(revisarRanuras(despues, PERMITIDAS).join("\n"), /encabezado/);
   });
 
-  // Hallazgo 8 de la auditoría de la Etapa 1: un ejemplo sin FIN eximía el resto del archivo, y
-  // un ~~~ cerraba un bloque abierto con ```.
+  // Un ejemplo sin FIN no exime el resto del archivo, y
+  // un ~~~ no cierra un bloque abierto con ```.
   it("un ejemplo sin FIN, o un FIN suelto, es un error", () => {
     assert.match(revisarRanuras("--- INICIO EJEMPLO ---\n## Cambios\n", PERMITIDAS).join("\n"), /no tiene FIN EJEMPLO/);
     assert.match(revisarRanuras("--- FIN EJEMPLO ---\n", PERMITIDAS).join("\n"), /sin INICIO/);
@@ -171,7 +171,7 @@ describe("revisarRanuras (el propio validador)", () => {
 describe("prompts publicados", () => {
   const archivos = fs.readdirSync(PROMPTS).filter((archivo) => archivo.endsWith(".md")).sort();
 
-  // Etapa 3, L01: los de fábrica viven en una subcarpeta por idioma. Un prompt que se quedara en
+  // Los de fábrica viven en una subcarpeta por idioma. Un prompt que se quedara en
   // la raíz de prompts/ ya no lo lee nadie, y se publicaría igual.
   it("los prompts de fábrica viven en prompts/es/ y no queda ninguno suelto en prompts/", () => {
     const raiz = path.dirname(PROMPTS);
@@ -189,7 +189,7 @@ describe("prompts publicados", () => {
     }
   });
 
-  // Mientras los prompts no tengan ranuras (llegan en L04 a L08), pasa con cero.
+  // Mientras los prompts no tengan ranuras, pasa con cero.
   for (const archivo of archivos) {
     it(`las ranuras de ${archivo} están bien formadas`, () => {
       const permitidas = CATALOGO[identificador(archivo) ?? ""] ?? [];
@@ -199,9 +199,9 @@ describe("prompts publicados", () => {
     });
   }
 
-  // Hallazgo 8: comprobar solo que cada ranura fuera del catálogo dejaba pasar que se borrara una.
-  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 23 de §3.2 y §5.3.5 (la Etapa 3 suma `global/extra`)
-  // más las 4 de la Etapa 4.
+  // Comprobar solo que cada ranura esté en el catálogo dejaría pasar que se borrara una.
+  // Cada archivo tiene exactamente las de su catálogo, y entre todos son las 23 base (con `global/extra`)
+  // más las 4 de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla.
   it("cada prompt tiene exactamente las ranuras de su catálogo, 27 en total", () => {
     let total = 0;
     for (const archivo of archivos) {
@@ -220,7 +220,7 @@ describe("prompts publicados", () => {
     });
   }
 
-  // L05 (#39 y #40 en las Fases 1 y 2): cada fase ancla Base y Pendientes con frases cortas, y
+  // #39 y #40 en las Fases 1 y 2: cada fase ancla Base y Pendientes con frases cortas, y
   // marca como ranura su rol, su verificación y sus ejemplos.
   const leer = (archivo: string): string => fs.readFileSync(path.join(PROMPTS, archivo), "utf-8");
 
@@ -257,7 +257,7 @@ describe("prompts publicados", () => {
     }
   });
 
-  // L06: en la Fase 3 los lotes son estructurales. La sección condicional "Etapas con commits
+  // En la Fase 3 los lotes son estructurales. La sección condicional "Etapas con commits
   // separados" desaparece y la política de pruebas se junta en una sola ranura.
   it("la Fase 3 planea por lotes y junta las pruebas en PRUEBAS Y PARIDAD", () => {
     const texto = leer("fase-3-plan-tecnico.md");
@@ -280,8 +280,8 @@ describe("prompts publicados", () => {
     }
   });
 
-  // L07 de la Etapa 1: la Fase 4 ejecuta lote por lote, con un recibo y un commit con OK por lote.
-  // L08 de la Etapa 4: los recibos y el documento de la fase los escribe record_batch; el prompt ya
+  // La Fase 4 ejecuta lote por lote, con un recibo y un commit con OK por lote.
+  // Los recibos y el documento de la fase los escribe record_batch; el prompt ya
   // no trae la plantilla del recibo ni la del índice, y el ciclo se apoya en get_batch_status.
   it("la Fase 4 ejecuta por lotes con record_batch, y el commit con el OK del usuario", () => {
     const texto = leer("fase-4-ejecucion.md");
@@ -329,8 +329,8 @@ describe("prompts publicados", () => {
     }
   });
 
-  // L08 de la Etapa 1: la Fase 5 trata los pendientes sin comprobar como bloqueantes, con su propio
-  // PROHIBIDO y su AUTOVERIFICACIÓN. L08 de la Etapa 4: la entrada son los commits que lista el
+  // La Fase 5 trata los pendientes sin comprobar como bloqueantes, con su propio
+  // PROHIBIDO y su AUTOVERIFICACIÓN. La entrada son los commits que lista el
   // servidor al final del prompt (COMMITS DE LA FASE 4), no los que el modelo saque de los recibos.
   it("la Fase 5 audita los commits que lista el servidor y bloquea con pendientes sin comprobar", () => {
     const texto = leer("fase-5-auditoria-pr.md");
@@ -354,7 +354,7 @@ describe("prompts publicados", () => {
     assert.ok(prompt.indexOf("### PROHIBIDO (auditoría)") < prompt.indexOf("## SALIDA 2"));
   });
 
-  // L04 (#39 y #40): se escriben una vez en las reglas globales, que se anteponen a cada fase.
+  // #39 y #40: se escriben una vez en las reglas globales, que se anteponen a cada fase.
   for (const fase of [1, 2, 3, 4, 5]) {
     it(`get_phase_prompt(${fase}) trae la base de cada decisión y los pendientes heredados`, () => {
       const prompt = loadPhasePrompt(fase, [PROMPTS]);
@@ -366,7 +366,7 @@ describe("prompts publicados", () => {
   }
 });
 
-// L08 de la Etapa 4, sobre los prompts ensamblados de verdad: con cada preset del paquete y cada
+// Sobre los prompts ensamblados de verdad: con cada preset del paquete y cada
 // combinación de reglas (las cuatro políticas de commits, con y sin lotes).
 describe("prompts de la Fase 4 ensamblados con cada preset y cada regla", () => {
   const RAIZ = process.cwd();
@@ -391,7 +391,7 @@ describe("prompts de la Fase 4 ensamblados con cada preset y cada regla", () => 
   });
 
   // Toda mención de write_central_doc en la Fase 4 es para decir que NO se use con los recibos ni con el
-  // documento de la fase: el servidor los rechaza (L05), así que pedirlo sería mandar al modelo contra un muro.
+  // documento de la fase: el servidor los rechaza, así que pedirlo sería mandar al modelo contra un muro.
   it("ningún prompt de la Fase 4 pide escribir recibos o el documento de la fase con write_central_doc", () => {
     const NEGATIVA = /nunca escribas|no lo escribas|sin usar `write_central_doc`|^- Escribir recibos o el documento de esta fase con `write_central_doc`: los escribe `record_batch`\.$/;
     for (const { preset, commits, lotes } of combinaciones) {
@@ -404,12 +404,12 @@ describe("prompts de la Fase 4 ensamblados con cada preset y cada regla", () => 
         assert.equal(texto.includes(resto), false, `${caso}: sigue «${resto}»`);
       }
       assert.ok(texto.includes("record_batch") && texto.includes("get_batch_status"), caso);
-      // P1: el push no es configurable. Ninguna variante puede llevarse esa prohibición con sus ranuras.
+      // El push no es configurable. Ninguna variante puede llevarse esa prohibición con sus ranuras.
       assert.ok(texto.includes("- Hacer push, crear o cambiar de rama, o abrir un PR."), `${caso}: falta la prohibición del push`);
     }
   });
 
-  // Deuda E3-D5 (b): las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras, y
+  // Las líneas de PROHIBIDO y AUTOVERIFICACIÓN que dependen de una regla son ranuras, y
   // cada variante pone las suyas en vez de avisar de que "no aplican".
   it("cada política pone sus propias líneas de PROHIBIDO y AUTOVERIFICACIÓN sobre los commits", () => {
     const esperado: Record<string, [string, string]> = {

@@ -1,14 +1,14 @@
-// El Taller de prompts (§7.7.3 del plan): de qué capa sale cada ranura de una fase, el contenido efectivo
-// frente al de fábrica (un diff por líneas), las reglas del proyecto y "Editar", que lanza un eject a la
-// capa global o a la del proyecto. "Ver prompt completo" enseña el texto exacto que recibe el modelo (el
-// mismo de get_phase_prompt) con un botón para copiarlo.
+// El Taller de prompts: de qué capa sale cada ranura de una fase, el contenido efectivo frente al de fábrica
+// (un diff por líneas), las reglas del proyecto (que se cambian en Ajustes) y "Editar", que lanza un eject a la
+// capa global o a la del proyecto. "Ver prompt completo" enseña el texto exacto que recibe el modelo (el mismo
+// de get_phase_prompt) con un botón para copiarlo.
 //
 // En inglés, cada ranura se enseña con su alias y el id canónico entre paréntesis (`phase-3/tests
 // (fase-3/pruebas)`), y las capas y los modos de un bloque se dicen en inglés. Solo al enseñarlos: lo que
 // se manda al servidor (el objetivo de un eject, por ejemplo) es siempre el id canónico.
 
 import { diffLines } from "diff";
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 
 import type { ProyectosRespuesta, PromptRespuesta, RanuraApi, TareasRespuesta } from "../../../src/studio/contrato.js";
 import { idInglesDeRanura } from "../../../src/vocabulario.js";
@@ -19,9 +19,6 @@ import { idiomaActual, t } from "../i18n/idioma";
 import { origenDelPreset } from "../red/red";
 import { enlace } from "../rutas";
 import type { Ruta } from "../rutas";
-
-// Las políticas de commits son identificadores: no se traducen.
-const POLITICAS = ["agente-commitea-con-OK", "agente-propone", "auto", "ninguno"];
 
 // El id de una ranura para enseñarlo: el canónico en español; en inglés, el alias con el canónico detrás.
 export function idVisible(id: string): string {
@@ -84,14 +81,8 @@ function DiffDeRanura({ ranura }: { ranura: RanuraApi }) {
   );
 }
 
-function Reglas({ p, datos, alAplicar }: { p: string; datos: PromptRespuesta; alAplicar: () => void }) {
-  const [lotes, setLotes] = useState(datos.reglas.lotes);
-  const [commits, setCommits] = useState(datos.reglas.commits);
-  useEffect(() => {
-    setLotes(datos.reglas.lotes);
-    setCommits(datos.reglas.commits);
-  }, [datos.reglas.lotes, datos.reglas.commits]);
-  const cambios = { ...(lotes !== datos.reglas.lotes ? { lotes } : {}), ...(commits !== datos.reglas.commits ? { commits } : {}) };
+// Las reglas del proyecto, para leerlas: se cambian en Ajustes.
+function Reglas({ p, datos }: { p: string; datos: PromptRespuesta }) {
   return (
     <section class="reglas" aria-labelledby="titulo-reglas">
       <h2 id="titulo-reglas">{t("taller.reglasDe", { proyecto: p })}</h2>
@@ -99,19 +90,8 @@ function Reglas({ p, datos, alAplicar }: { p: string; datos: PromptRespuesta; al
         {t("taller.preset")} <strong>{datos.preset.nombre}</strong> ({origenDelPreset(datos.preset.origen)})
       </p>
       <p>
-        <label>
-          <input type="checkbox" checked={lotes} onChange={(e) => setLotes((e.target as HTMLInputElement).checked)} /> {t("taller.lotes")}
-        </label>{" "}
-        <label for="politica-commits">{t("taller.politica")}</label>{" "}
-        <select id="politica-commits" value={commits} onChange={(e) => setCommits((e.target as HTMLSelectElement).value)}>
-          {POLITICAS.map((politica) => (
-            <option key={politica} value={politica}>
-              {politica}
-            </option>
-          ))}
-        </select>
+        {t("red.reglas", { lotes: t(datos.reglas.lotes ? "comun.si" : "comun.no"), commits: datos.reglas.commits })} · <a href={enlace("ajustes", "proyecto", p)}>{t("ajustes.cambiarEnAjustes")}</a>
       </p>
-      <Accion etiqueta={t("taller.cambiarReglas")} accion="reglas" argumentos={{ proyecto: p, ...cambios }} alAplicar={alAplicar} deshabilitado={Object.keys(cambios).length === 0} />
     </section>
   );
 }
@@ -123,7 +103,7 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
   const fase = Number(r.consulta.get("fase") ?? "1") || 1;
   const tarea = r.consulta.get("tarea");
   const tareas = useRecurso<TareasRespuesta>(p ? `/api/proyectos/${ruta(p)}/tareas` : null, ["documento", "punteros"]);
-  const prompt = useRecurso<PromptRespuesta>(p ? `/api/prompts/${ruta(p, fase)}${tarea ? `?tarea=${encodeURIComponent(tarea)}` : ""}` : null, ["prompts", "config", "documento"], (_t, d) => !d.p || d.p === p);
+  const prompt = useRecurso<PromptRespuesta>(p ? `/api/prompts/${ruta(p, fase)}${tarea ? `?tarea=${encodeURIComponent(tarea)}` : ""}` : null, ["prompts", "config", "documento", "equipo"], (_t, d) => !d.p || d.p === p);
   const [elegida, setElegida] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const datos = prompt.datos;
@@ -133,6 +113,15 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
     <section class="vista vista-taller" aria-labelledby="titulo-taller">
       <h1 id="titulo-taller">{t("taller.titulo")}</h1>
       {proyectos.error ? <Aviso error={proyectos.error} /> : null}
+      {proyectos.datos?.error ? <Aviso error={proyectos.datos.error} /> : null}
+      {proyectos.datos && (proyectos.datos.error || proyectos.datos.proyectos.length === 0) ? (
+        <>
+          {proyectos.datos.error ? null : <p>{t("red.vacia")}</p>}
+          <p>
+            <a href={enlace("ajustes", "equipo")}>{t("red.abrirAjustes")}</a>
+          </p>
+        </>
+      ) : null}
       <form class="selectores" onSubmit={(e) => e.preventDefault()}>
         <label for="taller-proyecto">{t("taller.proyecto")}</label>
         <select id="taller-proyecto" value={p ?? ""} onChange={(e) => irA((e.target as HTMLSelectElement).value, fase, null)}>
@@ -234,7 +223,7 @@ export function Taller({ ruta: r }: { ruta: Ruta }) {
               </pre>
             </details>
           </section>
-          <Reglas p={p} datos={datos} alAplicar={prompt.recargar} />
+          <Reglas p={p} datos={datos} />
         </>
       ) : null}
     </section>

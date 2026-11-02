@@ -1,10 +1,10 @@
-// La forma de un catálogo de mensajes: cada código con su texto en los dos idiomas. Un texto fijo es una
-// cadena; uno con datos, una función de sus parámetros. Los dos idiomas reciben los mismos parámetros.
+// The shape of a message catalog: each code with its text in both languages. A fixed text is a string; one
+// with data is a function of its parameters. Both languages receive the same parameters.
 
 import type { Idioma } from "../../vocabulario.js";
 
-// `any` a propósito: cada plantilla declara sus parámetros en su firma, y `mensaje()` los pasa tal cual.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// `any` on purpose: each template declares its parameters in its own signature, and `mensaje()` passes them
+// as they are.
 export type Plantilla = string | ((p: any) => string);
 
 export type Catalogo = Record<string, Record<Idioma, Plantilla>>;

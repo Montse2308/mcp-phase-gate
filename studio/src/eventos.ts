@@ -9,13 +9,13 @@ import { useEffect, useRef } from "preact/hooks";
 
 import { MODO } from "./datos";
 
-export type TipoDeEvento = "documento" | "recibo" | "config" | "prompts" | "sesiones" | "punteros" | "reconexion";
+export type TipoDeEvento = "documento" | "recibo" | "config" | "prompts" | "equipo" | "sesiones" | "punteros" | "reconexion";
 type Oyente = (tipo: TipoDeEvento, datos: Record<string, string>) => void;
 
 const oyentes = new Set<Oyente>();
 let fuente: EventSource | null = null;
 
-const TIPOS: TipoDeEvento[] = ["documento", "recibo", "config", "prompts", "sesiones", "punteros"];
+const TIPOS: TipoDeEvento[] = ["documento", "recibo", "config", "prompts", "equipo", "sesiones", "punteros"];
 
 function abrir(): void {
   if (fuente || MODO === "estatico" || typeof EventSource === "undefined") return;

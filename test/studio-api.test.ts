@@ -1,4 +1,4 @@
-// La API de lectura del Studio (§7.5 del plan) contra un árbol de fixtures: cada ruta, validada con su
+// La API de lectura del Studio contra un árbol de fixtures: cada ruta, validada con su
 // shape de src/studio/contrato.ts; los parámetros inválidos rechazados; un proyecto o una tarea que no
 // existen, 404; ningún GET escribe en el disco, y los errores no llevan las rutas del equipo.
 
@@ -9,9 +9,11 @@ import * as path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { fijarRaizDelPaquete } from "../src/config.js";
+import { cargarEnv, configDir, fijarRaizDelPaquete } from "../src/config.js";
 import { registrarLote } from "../src/lotes.js";
 import {
+  AjustesDeProyecto,
+  AjustesRespuesta,
   BitacoraRespuesta,
   ClientesRespuesta,
   DocumentoRespuesta,
@@ -22,6 +24,7 @@ import {
   TareaRespuesta,
   TareasRespuesta,
 } from "../src/studio/contrato.js";
+import { carpetaDelCliente } from "../src/init.js";
 import { sinRutasDelEquipo } from "../src/studio/api.js";
 import { conectar, textoDe } from "./cliente.js";
 import { carpetaTemporal, configTemporal, crearProyecto, crearSymlink, crearTarea, docsTemporales, estadoTemporal, limpiarEntorno } from "./helpers.js";
@@ -182,6 +185,30 @@ describe("API del Studio: cada ruta con su shape", () => {
     assert.ok(vacia.estaciones.every((e) => e.senal === "apagado"));
   });
 
+  it("/api/tareas/:p/:t: un lote descartado cierra la Fase 4 y uno fallido la deja en ámbar, en los dos idiomas", async () => {
+    const { docs } = await instalacion();
+    const fases = ["00 - Contexto Inicial.md", "01 - Análisis Técnico.md", "02 - Decisiones.md", "03 - Plan Técnico.md", "04 - Ejecución.md"];
+    const conRecibo = (tarea: string, frontmatter: string) => {
+      const carpeta = crearTarea(docs, "P", tarea, fases);
+      fs.mkdirSync(path.join(carpeta, "04 - Ejecución"));
+      fs.writeFileSync(path.join(carpeta, "04 - Ejecución", "L01 - x.md"), `---\n${frontmatter}\n---\n\n# L01\n`, "utf-8");
+    };
+    conRecibo("descartado-es", "estado: descartado");
+    conRecibo("descartado-en", "status: discarded");
+    conRecibo("fallido-es", "estado: fallido");
+    conRecibo("fallido-en", "status: failed");
+    const s = await studioConApi();
+    const fase4 = async (tarea: string) => {
+      const r = await s.get(`/api/tareas/P/${tarea}`);
+      const e = TareaRespuesta.parse(r.json).estaciones[4]!;
+      return `${e.senal}:${e.texto}`;
+    };
+    assert.equal(await fase4("descartado-es"), "verde:cerrada");
+    assert.equal(await fase4("descartado-en"), "verde:cerrada");
+    assert.equal(await fase4("fallido-es"), "ambar:con pendientes");
+    assert.equal(await fase4("fallido-en"), "ambar:con pendientes");
+  });
+
   it("/api/tareas/:p/:t/documento: el texto, el frontmatter y la fecha, también de un recibo", async () => {
     await instalacion();
     const s = await studioConApi();
@@ -302,6 +329,161 @@ describe("API del Studio: cada ruta con su shape", () => {
     assert.deepEqual(entorno.llamadas.map((l) => l.slice(1).join(" ")), ["--version", "mcp list"]);
     assert.equal(fs.existsSync(path.join(entorno.home, ".cursor", "mcp.json")), false);
     assert.notEqual(entorno.home, os.homedir());
+  });
+});
+
+describe("API del Studio: /api/ajustes", () => {
+  const maquina = (config: string, contenido: unknown): void => fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify(contenido), "utf-8");
+  const campo = (r: AjustesRespuesta, nombre: string) => r.campos.find((c) => c.campo === nombre)!;
+  async function pedirAjustes(contexto: Parameters<typeof studioConApi>[0] = {}): Promise<AjustesRespuesta> {
+    const s = await studioConApi(contexto);
+    const r = await s.get("/api/ajustes");
+    assert.equal(r.estado, 200, r.texto);
+    return AjustesRespuesta.parse(r.json);
+  }
+  const sesion = (pid: number, rutas?: object) => ({ pid, cliente: "claude-code 2.1.0", proyecto: "P", desde: "2026-10-27T10:00:00.000Z", actualizado: "2026-10-27T10:00:00.000Z", ...(rutas ? { rutas } : {}) });
+
+  it("para cada ruta y el idioma: el valor de machine.json, el efectivo y su fuente; sin machine.json ni clientes, nada más", async () => {
+    const { docs, repos } = await instalacion();
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+
+    assert.deepEqual(r.maquina, { estado: "ausente", error: null, deMemoria: false, version: null, presetPorDefecto: null });
+    assert.deepEqual(r.campos.map((c) => c.campo), ["documentacion", "carpetaDeRepos", "subcarpetaTareas", "idioma"]);
+    assert.deepEqual(
+      r.campos.map((c) => [c.variable, c.enMaquina, c.efectivo, c.fuente, c.propioStudioPisa, c.sinGuardar]),
+      [
+        ["PHASE_GATE_DOCS_PATH", null, docs, "entorno", false, true],
+        ["PHASE_GATE_REPOS_PATH", null, repos, "entorno", false, true],
+        ["PHASE_GATE_TASKS_SUBDIR", null, "Proyectos", "entorno", false, true],
+        ["PHASE_GATE_LANG", null, "es", "entorno", false, true],
+      ],
+      "lo del entorno de este Studio que machine.json no tiene se puede guardar ahí"
+    );
+    assert.deepEqual(r.clientes.map((c) => [c.cliente, c.lectura, c.entradas]), [["claude-code", "no-existe", []], ["cursor", "no-existe", []], ["vscode", "no-existe", []]]);
+    assert.deepEqual(r.sesiones, []);
+
+    // Sin entorno, la ruta sale de machine.json; sin ninguno, sin definir.
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    delete process.env.PHASE_GATE_REPOS_PATH;
+    delete process.env.ORQUESTADOR_TASKS_SUBDIR;
+    delete process.env.PHASE_GATE_LANG;
+    const sin = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.deepEqual(sin.campos.slice(0, 2).map((c) => [c.efectivo, c.fuente]), [[null, "sin definir"], [null, "sin definir"]]);
+    maquina(configDir(), { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos, subcarpetaTareas: "" }, idiomaPorDefecto: "en" });
+    const guardado = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.deepEqual(
+      guardado.campos.map((c) => [c.enMaquina, c.efectivo, c.fuente, c.propioStudioPisa, c.sinGuardar]),
+      [[docs, docs, "machine.json", false, false], [repos, repos, "machine.json", false, false], ["", "", "machine.json", false, false], ["en", "en", "machine.json", false, false]]
+    );
+    assert.deepEqual([guardado.maquina.estado, guardado.maquina.version], ["valido", 2]);
+  });
+
+  it("como primer aviso, si el propio Studio usa otro valor por su entorno o su .env que el de machine.json", async () => {
+    const { docs, config } = await instalacion();
+    const otra = carpetaTemporal("otra-docs");
+    maquina(config, { version: 2, rutas: { documentacion: otra, carpetaDeRepos: process.env.PHASE_GATE_REPOS_PATH }, idiomaPorDefecto: "en" });
+    process.env.PHASE_GATE_LANG = "es";
+
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.equal(campo(r, "documentacion").propioStudioPisa, true);
+    assert.equal(campo(r, "documentacion").efectivo, docs, "gana el entorno");
+    assert.equal(campo(r, "documentacion").enMaquina, otra);
+    assert.equal(campo(r, "carpetaDeRepos").propioStudioPisa, false, "la misma ruta");
+    assert.equal(campo(r, "idioma").propioStudioPisa, true, "PHASE_GATE_LANG=es contra idiomaPorDefecto=en");
+    assert.equal(campo(r, "idioma").efectivo, "es");
+
+    // La misma ruta con otra forma no es otro valor; y una ruta que viene del .env se dice como tal.
+    process.env.ORQUESTADOR_DOCS_PATH = path.join(otra, "sub", "..");
+    assert.equal(campo(await pedirAjustes({ entornoInit: () => entornoInitDePrueba() }), "documentacion").propioStudioPisa, false);
+    delete process.env.ORQUESTADOR_DOCS_PATH;
+    const archivo = path.join(carpetaTemporal("env"), ".env");
+    fs.writeFileSync(archivo, `PHASE_GATE_DOCS_PATH=${docs}\nPHASE_GATE_LANG=es\n`);
+    delete process.env.PHASE_GATE_LANG;
+    cargarEnv(archivo);
+    const delEnv = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+    assert.deepEqual([campo(delEnv, "documentacion").fuente, campo(delEnv, "documentacion").propioStudioPisa], [".env", true]);
+    assert.equal(campo(delEnv, "idioma").fuente, ".env");
+  });
+
+  it("por cliente: un env que pisa, uno que coincide y ninguno, leyendo el mcp.json de Cursor y VS Code y ~/.claude.json en sus ámbitos", async () => {
+    const { docs, repos, config } = await instalacion();
+    const otra = carpetaTemporal("otra-docs");
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos }, idiomaPorDefecto: "es" });
+    const entorno = entornoInitDePrueba();
+    const pisa = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: otra, ORQUESTADOR_REPOS_PATH: repos, PHASE_GATE_LANG: "en", OTRA: "1" } };
+    const coincide = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_DOCS_PATH: path.join(docs, "sub", ".."), PHASE_GATE_TASKS_SUBDIR: "Cosas" } };
+    const ninguno = { command: "npx", args: ["-y", "mcp-phase-gate"], env: { PHASE_GATE_ELICITATION: "off" } };
+    const ajena = { command: "npx", args: ["-y", "otro-servidor"], env: { PHASE_GATE_DOCS_PATH: otra } };
+    fs.mkdirSync(path.join(entorno.home, ".cursor"));
+    fs.writeFileSync(path.join(entorno.home, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: { pg: pisa, ajena } }), "utf-8");
+    const carpetaVsCode = carpetaDelCliente("vscode", entorno);
+    fs.mkdirSync(carpetaVsCode, { recursive: true });
+    fs.writeFileSync(path.join(carpetaVsCode, "mcp.json"), `{ // con comentarios\n "servers": { "pg": ${JSON.stringify({ type: "stdio", ...ninguno })}, }, }`, "utf-8");
+    fs.writeFileSync(path.join(entorno.home, ".claude.json"), JSON.stringify({ numStartups: 3, mcpServers: { pg: coincide }, projects: { "C:/trabajo/app": { mcpServers: { pg: pisa } }, "C:/otro": { mcpServers: {} } } }), "utf-8");
+
+    const r = await pedirAjustes({ entornoInit: () => entorno });
+    const [claude, cursor, vscode] = r.clientes;
+    assert.deepEqual([claude!.cliente, claude!.archivo, claude!.lectura], ["claude-code", "~/.claude.json", "leido"]);
+    assert.deepEqual(
+      claude!.entradas.map((e) => [e.clave, e.ambito, e.carpeta, e.variables.map((v) => `${v.campo}:${v.estado}`)]),
+      [
+        ["pg", "usuario", null, ["documentacion:coincide", "subcarpetaTareas:sin-valor-en-maquina"]],
+        ["pg", "local", "C:/trabajo/app", ["documentacion:pisa", "carpetaDeRepos:coincide", "idioma:pisa"]],
+      ]
+    );
+    assert.deepEqual([cursor!.archivo, cursor!.lectura, cursor!.entradas.length], ["~/.cursor/mcp.json", "leido", 1], "la entrada de otro servidor no cuenta");
+    // Cada una con el nombre que la entrada usa de verdad, alias incluido: es el que habría que quitar.
+    assert.deepEqual(cursor!.entradas[0]!.variables.map((v) => [v.variable, v.valor, v.estado]), [["PHASE_GATE_DOCS_PATH", otra, "pisa"], ["ORQUESTADOR_REPOS_PATH", repos, "coincide"], ["PHASE_GATE_LANG", "en", "pisa"]]);
+    assert.deepEqual([vscode!.lectura, vscode!.entradas.map((e) => [e.clave, e.variables])], ["leido", [["pg", []]]], "un env que no habla de rutas ni de idioma no pisa nada");
+
+    // Un archivo roto se dice, sin romper la respuesta.
+    fs.writeFileSync(path.join(entorno.home, ".cursor", "mcp.json"), "{ roto", "utf-8");
+    assert.equal((await pedirAjustes({ entornoInit: () => entorno })).clientes[1]!.lectura, "ilegible");
+    assert.equal(fs.readFileSync(path.join(entorno.home, ".cursor", "mcp.json"), "utf-8"), "{ roto", "solo lee");
+  });
+
+  it("por sesión: cualquier cliente con un servidor abierto, con lo que recibió al arrancar; uno 3.x no dice nada", async () => {
+    const { docs, repos, config } = await instalacion();
+    const otra = carpetaTemporal("otra-docs");
+    maquina(config, { version: 2, rutas: { documentacion: docs, carpetaDeRepos: repos } });
+
+    const r = await pedirAjustes({
+      entornoInit: () => entornoInitDePrueba(),
+      sesiones: () => [sesion(11, { documentacion: otra, carpetaDeRepos: repos }), sesion(12), sesion(13, { subcarpetaTareas: "Cosas" })],
+    });
+    assert.deepEqual(
+      r.sesiones.map((s) => [s.pid, s.sinRutas, s.variables.map((v) => `${v.campo}:${v.estado}`)]),
+      [[11, false, ["documentacion:pisa", "carpetaDeRepos:coincide"]], [12, true, []], [13, false, ["subcarpetaTareas:sin-valor-en-maquina"]]]
+    );
+  });
+
+  it("las variables avanzadas: valor, origen y cómo cambiarlas, sin editarlas", async () => {
+    await instalacion();
+    const estadoPropio = carpetaTemporal("estado-propio");
+    process.env.PHASE_GATE_STATE_PATH = estadoPropio;
+    process.env.PHASE_GATE_ELICITATION = "off";
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba() });
+
+    assert.deepEqual(r.avanzadas.map((a) => a.variable), ["PHASE_GATE_PROMPTS_PATH", "PHASE_GATE_STATE_PATH", "PHASE_GATE_CONFIG_PATH", "PHASE_GATE_ELICITATION", "PHASE_GATE_LANG"]);
+    const estado = r.avanzadas.find((a) => a.logica === "STATE_PATH")!;
+    assert.deepEqual([estado.valor, estado.usada, estado.fuente], [estadoPropio, "PHASE_GATE_STATE_PATH", "entorno"]);
+    assert.equal(r.avanzadas.find((a) => a.logica === "PROMPTS_PATH")!.fuente, "sin definir");
+    assert.match(estado.comoCambiarla, /No se edita desde Ajustes\. Se cambia en el bloque "env" del mcp\.json de tu cliente .*: PHASE_GATE_STATE_PATH\./);
+    assert.ok(r.avanzadas.every((a) => a.descripcion.length > 20));
+  });
+
+  it("con un machine.json roto: lo dice, sin las rutas del equipo; y /api/proyectos no lleva las rutas de las sesiones", async () => {
+    const { config } = await instalacion();
+    fs.writeFileSync(path.join(config, "machine.json"), '{\n  "version": 2,\n  "rutas": }', "utf-8");
+    const r = await pedirAjustes({ entornoInit: () => entornoInitDePrueba(), sesiones: () => [sesion(21, { documentacion: "/x" })] });
+    assert.equal(r.maquina.estado, "invalido");
+    assert.match(r.maquina.error ?? "", /machine\.json no es válido \(<configuración>.machine\.json\): no es un JSON válido: carácter inesperado «\}» \(línea 3, columna 12\)/);
+    assert.ok(!(r.maquina.error ?? "").includes(config));
+
+    const s = await studioConApi({ entornoInit: () => entornoInitDePrueba(), sesiones: () => [sesion(21, { documentacion: "/x" })] });
+    const proyectos = await s.get("/api/proyectos");
+    assert.deepEqual(Object.keys(ProyectosRespuesta.parse(proyectos.json).proyectos.find((p) => p.nombre === "P")!.sesiones[0]!).sort(), ["actualizado", "cliente", "desde", "pid", "proyecto"]);
+    assert.ok(!proyectos.texto.includes('"rutas"'), "las rutas de una sesión no salen por /api/proyectos");
   });
 });
 
@@ -447,6 +629,9 @@ describe("API del Studio: parámetros, errores y lo que no se hace", () => {
       "/api/prompts/P/4?tarea=en-curso",
       "/api/prompts/Q/1",
       "/api/clientes",
+      "/api/ajustes",
+      "/api/ajustes/proyectos/P",
+      "/api/ajustes/proyectos/R",
       "/api/proyectos/R/tareas",
     ]) {
       await s.get(ruta);
@@ -459,5 +644,77 @@ describe("API del Studio: parámetros, errores y lo que no se hace", () => {
     const texto = `${path.join(docs, "P")} · ${path.join(repos, "api")} · ${config} · ${estado} · ${path.join(os.homedir(), "x")} · ${docs.replace(/\\/g, "/")}/y`;
     const limpio = sinRutasDelEquipo(texto);
     assert.equal(limpio, `${path.join("<Documentación>", "P")} · ${path.join("<repos>", "api")} · <configuración> · <estado> · ${path.join("~", "x")} · <Documentación>/y`);
+  });
+});
+
+describe("API del Studio: /api/ajustes/proyectos/:p", () => {
+  async function pedirProyecto(nombre: string): Promise<{ estado: number; datos: AjustesDeProyecto | null; texto: string }> {
+    const s = await studioConApi({ entornoInit: () => entornoInitDePrueba() });
+    const r = await s.get(`/api/ajustes/proyectos/${nombre}`);
+    return { estado: r.estado, datos: r.estado === 200 ? AjustesDeProyecto.parse(r.json) : null, texto: r.texto };
+  }
+
+  it("lo que dice phase-gate.json (null donde decide el preset), lo que aplica y la ruta propia de cada repo", async () => {
+    const { docs, config } = await instalacion();
+    const propia = path.join(carpetaTemporal("propia"), "api-aqui");
+    fs.writeFileSync(path.join(config, "machine.json"), JSON.stringify({ version: 2, repos: { "p/api": propia, "otro/api": "/x/y" } }), "utf-8");
+    fs.writeFileSync(
+      path.join(docs, "P", "phase-gate.json"),
+      JSON.stringify({ version: 1, preset: "software", idioma: "en", repos: [{ id: "api", dir: "api", rol: "backend" }, { id: "web", dir: "web" }], reglas: { lotes: false, verificacion: ["npm test"] }, fase5: { prPorRepo: true } }),
+      "utf-8"
+    );
+    const { estado, datos } = await pedirProyecto("P");
+    assert.equal(estado, 200);
+    assert.deepEqual(datos!.manifiesto, { estado: "valido", error: null });
+    assert.deepEqual(datos!.archivo, {
+      preset: "software",
+      idioma: "en",
+      lotes: false,
+      commits: null,
+      verificacion: ["npm test"],
+      prPorRepo: true,
+      repos: [{ id: "api", dir: "api", rol: "backend" }, { id: "web", dir: "web", rol: null }],
+    });
+    assert.deepEqual(datos!.efectivo?.preset, "software");
+    assert.equal(datos!.efectivo?.lotes, false);
+    // Solo las claves de este proyecto, y con la ruta resuelta de este equipo.
+    assert.deepEqual(datos!.rutasPropias, { api: path.resolve(propia) });
+  });
+
+  it("sin preset en el archivo, preset es null y el efectivo dice el que aplica", async () => {
+    const { docs } = await instalacion();
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1 }), "utf-8");
+    const { datos } = await pedirProyecto("P");
+    assert.equal(datos!.archivo!.preset, null);
+    assert.deepEqual(datos!.archivo!.repos, []);
+    assert.equal(datos!.efectivo?.preset, "software");
+    assert.deepEqual(datos!.rutasPropias, {});
+    // Sin reglas en el archivo, lo que decide el preset es lo que aplica.
+    const delPreset = datos!.efectivo!.delPreset;
+    assert.deepEqual(delPreset, { lotes: datos!.efectivo!.lotes, commits: datos!.efectivo!.commits });
+    // Con una regla en el archivo, el efectivo es el del archivo, y delPreset sigue diciendo lo del preset: lo que
+    // valdría si se quita la clave.
+    fs.writeFileSync(path.join(docs, "P", "phase-gate.json"), JSON.stringify({ version: 1, reglas: { commits: "ninguno", lotes: !delPreset.lotes } }), "utf-8");
+    const conReglas = (await pedirProyecto("P")).datos!;
+    assert.equal(conReglas.efectivo?.commits, "ninguno");
+    assert.deepEqual(conReglas.efectivo?.delPreset, delPreset);
+  });
+
+  it("un proyecto sin phase-gate.json no tiene archivo, y uno roto trae su error sin las rutas del equipo", async () => {
+    const { docs } = await instalacion();
+    const sin = await pedirProyecto("Q");
+    assert.equal(sin.datos!.manifiesto.estado, "ausente");
+    assert.equal(sin.datos!.archivo, null);
+    assert.ok(sin.datos!.efectivo, "aun sin manifiesto, el preset que aplica se dice");
+    const roto = await pedirProyecto("R");
+    assert.equal(roto.datos!.manifiesto.estado, "invalido");
+    assert.equal(roto.datos!.archivo, null);
+    assert.ok(!roto.datos!.manifiesto.error!.includes(docs));
+  });
+
+  it("un proyecto que no existe da 404 y un nombre inválido, 400", async () => {
+    await instalacion();
+    assert.equal((await pedirProyecto("NoExiste")).estado, 404);
+    assert.equal((await pedirProyecto("..")).estado, 400);
   });
 });

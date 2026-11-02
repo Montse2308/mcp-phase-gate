@@ -1,18 +1,18 @@
-// Bloques: la forma de cambiar el contenido de una ranura sin copiar el prompt entero.
+// Blocks: the way to change the content of a slot without copying the whole prompt.
 //
 //   <!-- bloque: fase-3/pruebas -->
-//   contenido que sustituye a la ranura
+//   content that replaces the slot
 //   <!-- /bloque -->
 //
 //   <!-- bloque: global/cero-rupturas | despues -->
-//   contenido que se añade al final de la ranura
+//   content that is added at the end of the slot
 //   <!-- /bloque -->
 //
-// Un preset es un archivo de bloques, y una capa propia (global o de proyecto) los escribe en su
-// `bloques.md`. Copiar un prompt entero para cambiar un párrafo deja una copia congelada que ya no
-// recibe las mejoras del resto del texto; un bloque cambia solo su ranura y deja vivo lo demás.
+// A preset is a file of blocks, and a layer of one's own (global or per project) writes them in its
+// `bloques.md`. Copying a whole prompt to change a paragraph leaves a frozen copy that no longer gets the
+// improvements of the rest of the text; a block changes only its slot and leaves everything else alive.
 //
-// Este módulo solo lee y aplica: qué archivos de bloques entran y en qué orden lo decide capas.ts.
+// This module only reads and applies: which block files come in, and in what order, is decided by capas.ts.
 
 import * as fs from "fs";
 
@@ -26,25 +26,25 @@ export type ModoBloque = "reemplazar" | "antes" | "despues";
 
 export type Bloque = {
   id: string; // "fase-3/pruebas"
-  archivo: string; // "global" o "fase-N"
+  archivo: string; // "global" or "fase-N"
   ranura: string;
   modo: ModoBloque;
-  contenido: string; // las líneas entre los marcadores, unidas con \n, sin el salto final
+  contenido: string; // the lines between the markers, joined with \n, without the final line break
   origen: { capa: Capa; archivo: string; linea: number };
 };
 
-// Por línea, como quitarMarcadores: un marcador ocupa su propia línea entera. En los dos idiomas (§8.2):
-// `bloque` o `block`, `fase-3` o `phase-3`, el id de la ranura o su alias inglés, y el modo en cualquiera
-// de los dos (`despues` o `after`). Todo se resuelve al id y al modo canónicos.
+// Per line, like quitarMarcadores: a marker takes up its whole line. In both languages: `bloque` or `block`,
+// `fase-3` or `phase-3`, the id of the slot or its English alias, and the mode in either (`despues` or
+// `after`). Everything resolves to the canonical id and mode.
 const APERTURA = /^[ \t]*<!--\s*(?:bloque|block):\s*(global|(?:fase|phase)-\d+)\/([\w-]+)\s*(?:\|\s*(reemplazar|antes|despues|replace|before|after)\s*)?-->[ \t]*$/;
 const CIERRE = /^[ \t]*<!--\s*\/(?:bloque|block)\s*-->[ \t]*$/;
-// Lo que parece un marcador de bloque y no es ninguno de los dos: un identificador inventado, un
-// modo con acento, texto detrás. Dentro de un bloque llegaría tal cual al modelo, y fuera se
-// ignoraría en silencio; las dos cosas esconden un error de quien lo escribió.
+// What looks like a block marker and is neither of the two: a made-up identifier, a mode with an accent,
+// text after it. Inside a block it would reach the model as is, and outside it would be ignored silently;
+// both hide a mistake of whoever wrote it.
 const PARECE_MARCADOR = /<!--\s*\/?\s*(?:bloque|block)\b/i;
 
-// El id canónico del bloque que abre esta línea, o null si no abre ninguno. Para quien busca un bloque
-// concreto en un archivo (eject), en cualquiera de las dos formas del marcador.
+// The canonical id of the block that this line opens, or null if it opens none. For whoever looks for a
+// specific block in a file (eject), in either form of the marker.
 export function idDeAperturaDeBloque(linea: string): string | null {
   const apertura = linea.match(APERTURA);
   return apertura ? `${archivoCanonico(apertura[1]!)}/${nombreCanonicoDeRanura(apertura[2]!)}` : null;
@@ -58,9 +58,8 @@ function aviso(codigo: string, texto: string): Hallazgo {
   return { severidad: "aviso", codigo, texto };
 }
 
-// Los bloques de un texto ya normalizado a LF. Un error de forma (sin cerrar, cierre suelto,
-// anidado, marcador mal escrito) invalida el archivo entero: aplicar la mitad de un preset daría un
-// prompt que nadie escribió.
+// The blocks of a text already normalized to LF. A shape error (unclosed, loose close, nested, badly
+// written marker) invalidates the whole file: applying half a preset would give a prompt nobody wrote.
 export function parsearBloques(texto: string, archivo: string, capa: Capa): { bloques: Bloque[]; avisos: Hallazgo[] } {
   const lineas = texto.split("\n");
   const bloques: Bloque[] = [];
@@ -117,7 +116,7 @@ export function parsearBloques(texto: string, archivo: string, capa: Capa): { bl
   return { bloques, avisos };
 }
 
-// Un archivo que no existe no tiene bloques; uno que no se puede leer, sí es un aviso.
+// A file that does not exist has no blocks; one that cannot be read is a warning.
 export function leerBloques(archivo: string, capa: Capa): { bloques: Bloque[]; avisos: Hallazgo[] } {
   if (!fs.statSync(archivo, { throwIfNoEntry: false })?.isFile()) return { bloques: [], avisos: [] };
   try {
@@ -128,15 +127,15 @@ export function leerBloques(archivo: string, capa: Capa): { bloques: Bloque[]; a
   }
 }
 
-// ─── Ranuras ────────────────────────────────────────────────────────────────
-// `ranura` o `slot`, con el id o su alias inglés: el nombre que se devuelve es siempre el canónico.
+// ─── Slots ──────────────────────────────────────────────────────────────────
+// `ranura` or `slot`, with the id or its English alias: the name that is returned is always the canonical one.
 const RANURA_ABRE = /^[ \t]*<!--[ \t]*(?:ranura|slot)[ \t]*:[ \t]*([\w-]+)[ \t]*-->[ \t]*$/;
 const RANURA_CIERRA = /^[ \t]*<!--[ \t]*\/(?:ranura|slot)[ \t]*-->[ \t]*$/;
 
-type Ranura = { nombre: string; apertura: number; cierre: number }; // índices de línea de los marcadores
+type Ranura = { nombre: string; apertura: number; cierre: number }; // line indexes of the markers
 
-// Las ranuras de un texto, en orden. Una ranura que se abre dentro de otra, o que no se cierra, no
-// cuenta: los prompts de fábrica los valida un test, y uno propio mal formado se entrega como esté.
+// The slots of a text, in order. A slot that opens inside another, or is not closed, does not count: a test
+// validates the factory prompts, and a malformed one of one's own is delivered as it is.
 export function ranurasDe(texto: string): Ranura[] {
   const ranuras: Ranura[] = [];
   let abierta: { nombre: string; apertura: number } | null = null;
@@ -160,8 +159,8 @@ function origenDe(bloque: Bloque): string {
   return `${bloque.origen.archivo}:${bloque.origen.linea}`;
 }
 
-// Sin las líneas en blanco del borde que toca: al sumar dos contenidos los separa una sola línea en
-// blanco, venga cada uno como venga.
+// Without the blank lines of the edge it touches: when two contents are added they are separated by a
+// single blank line, however each one comes.
 function unir(primero: string, segundo: string): string {
   const a = primero.replace(/(?:[ \t]*\n)+$/, "").replace(/^\s*$/, "");
   const b = segundo.replace(/^(?:[ \t]*\n)+/, "").replace(/^\s*$/, "");
@@ -170,12 +169,12 @@ function unir(primero: string, segundo: string): string {
   return `${a}\n\n${b}`;
 }
 
-// Aplica a las ranuras de `texto` (con sus marcadores todavía) los bloques de su archivo, en el orden
-// en que llegan. Devuelve el texto con los marcadores intactos —los quita quien entrega el prompt—,
-// la procedencia de cada ranura y los bloques que no encajaron en ninguna.
+// Applies to the slots of `texto` (with their markers still in) the blocks of its file, in the order they
+// arrive. Returns the text with the markers intact —whoever delivers the prompt removes them—, the origin
+// of each slot and the blocks that did not fit in any.
 //
-// Una ranura que ningún bloque toca se deja tal cual, byte a byte: es lo que garantiza que un
-// proyecto sin bloques reciba exactamente el mismo prompt que antes.
+// A slot that no block touches is left as it is, byte for byte: that is what guarantees that a project
+// without blocks receives exactly the same prompt as before.
 export function aplicarBloques(
   texto: string,
   archivo: string,
@@ -216,7 +215,7 @@ export function aplicarBloques(
     }
   }
 
-  // De la última ranura a la primera, para que los índices de las de arriba sigan valiendo.
+  // From the last slot to the first, so that the indexes of the ones above stay valid.
   for (const { ranura, contenido, tocada } of [...estado.values()].reverse()) {
     if (!tocada) continue;
     lineas.splice(ranura.apertura + 1, ranura.cierre - ranura.apertura - 1, ...(contenido === "" ? [] : contenido.split("\n")));
@@ -233,8 +232,8 @@ export function aplicarBloques(
   };
 }
 
-// Quita una ranura vacía junto con el encabezado "## …" que la presenta. Es lo que hace la ranura
-// `global/extra`: si nadie le añade reglas, el prompt no lleva un "## REGLAS ADICIONALES" vacío.
+// Removes an empty slot together with the "## …" heading that introduces it. It is what the `global/extra`
+// slot does: if nobody adds rules to it, the prompt does not carry an empty "## REGLAS ADICIONALES".
 export function omitirRanuraVacia(texto: string, nombre: string): string {
   const lineas = texto.split("\n");
   const ranura = ranurasDe(texto).find((r) => r.nombre === nombre);

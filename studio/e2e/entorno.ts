@@ -40,8 +40,8 @@ export function entornoFalso(raiz: string): EntornoFalso {
 
 // La configuración real de los clientes de quien corre los E2E: antes y después tiene que ser la misma. Por su
 // contenido y no por su fecha: Claude Code reescribe ~/.claude.json por su cuenta mientras trabaja, así que de
-// ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto (hallazgo 8 de la auditoría de
-// la Etapa 6). De una carpeta de comandos, sus archivos y el contenido de cada uno.
+// ese archivo solo cuentan sus `mcpServers`, los globales y los de cada proyecto.
+// De una carpeta de comandos, sus archivos y el contenido de cada uno.
 export function huellaDeLosClientesReales(): string[] {
   const casa = os.homedir();
   const appData = process.env.APPDATA ?? path.join(casa, "AppData", "Roaming");

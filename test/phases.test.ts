@@ -268,7 +268,7 @@ describe("describePhaseFiles", () => {
 
     assert.ok(bloque.includes("Los recibos de lote van en la subcarpeta `04 - Ejecución/`, uno por lote"), bloque);
     assert.ok(bloque.includes("`04 - Ejecución/L01 - <slug>.md`"), bloque);
-    // Etapa 4 (L08): los escribe record_batch, también con un solo lote (H2), y el documento de la fase
+    // Los escribe record_batch, también con un solo lote, y el documento de la fase
     // no se escribe con write_central_doc.
     assert.ok(bloque.includes("Los escribe `record_batch`, también con un solo lote mientras está abierto."), bloque);
     assert.ok(bloque.includes("Lo genera `record_batch` al cerrar el último lote: no lo escribas con `write_central_doc`."), bloque);
@@ -316,7 +316,7 @@ describe("recibos en el frontmatter", () => {
     assert.match(String(log.mock.calls[0]?.arguments[0]), /recibos/);
   });
 
-  // Hallazgo 2 de la auditoría de la Etapa 1: un valor visible y portable puede igual romper el
+  // Un valor visible y portable puede igual romper el
   // flujo. Con punto delante, write_central_doc no escribe ahí; con el nombre de un documento, la
   // carpeta hace que ese documento "exista" al primer recibo.
   it("se ignora un valor con punto delante o con el nombre de un documento de fase", (t) => {
@@ -355,7 +355,7 @@ describe("quitarMarcadores", () => {
   });
 });
 
-// Los archivos propios de la usuaria, escritos con el Bloc de notas, llegan en CRLF (§1.3).
+// Los archivos propios de la usuaria, escritos con el Bloc de notas, llegan en CRLF.
 describe("finales de línea y marcadores en el prompt entregado", () => {
   it("parsePhaseFile entrega el cuerpo en LF aunque el archivo venga en CRLF", () => {
     const carpeta = promptsTemporales({ "fase-1-descubrimiento.md": FASE_1.replace(/\n/g, "\r\n") });
@@ -392,7 +392,7 @@ describe("finales de línea y marcadores en el prompt entregado", () => {
     assert.ok(prompt.includes("## ROL\nEres analista."));
   });
 
-  // Hallazgo 15 de la auditoría de la Etapa 1: el Bloc de notas puede guardar con BOM, y con él
+  // El Bloc de notas puede guardar con BOM, y con él
   // delante el frontmatter no se reconocía y llegaba en crudo al modelo.
   it("un prompt propio guardado con BOM conserva su frontmatter", () => {
     const capa = promptsTemporales({ "global-rules.md": "﻿# REGLAS\n", "fase-4-ejecucion.md": `﻿${FASE_4}` });
@@ -406,7 +406,7 @@ describe("finales de línea y marcadores en el prompt entregado", () => {
     assert.equal(prompt.includes("documento:"), false);
   });
 
-  // Hallazgo 7: un marcador solo se quita si ocupa su línea entera. Lo que parece un marcador y
+  // Un marcador solo se quita si ocupa su línea entera. Lo que parece un marcador y
   // no se reconoce llega al modelo, así que queda en el log.
   it("un marcador con texto detrás, o dos en una línea, no se quitan y se avisan", (t) => {
     const log = t.mock.method(console, "error", () => {});

@@ -1,0 +1,25 @@
+/* El tema claro: solo custom properties, sin reglas de componentes. Es el que se ve con la elección
+   guardada, y sin ella cuando el sistema no pide el oscuro (tema-oscuro.css, que va después, lo cambia
+   en ese caso). */
+
+:root:not([data-tema]),
+:root[data-tema="claro"] {
+  color-scheme: light;
+  --fondo: #f3f5f7;
+  --superficie: #ffffff;
+  --superficie-2: #e9ecf0;
+  --borde: #dde2e8;
+  --borde-control: #7d8592;
+  --texto: #18181b;
+  --texto-2: #52525b;
+  --acento: #1d4ed8;
+  --acento-suave: #dbeafe;
+  --sobre-acento: #ffffff;
+  --banda: #fdecc8;
+  --texto-banda: #18181b;
+  --verde: #166534;
+  --ambar: #92560a;
+  --rojo: #b91c1c;
+  --violeta: #6d28d9;
+  --apagado: #5f6673;
+}

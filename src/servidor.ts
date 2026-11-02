@@ -1,17 +1,17 @@
-// El servidor MCP: registra las tools y las conecta con la lógica de los demás módulos.
-// Aquí no se calcula nada — las rutas viven en paths.ts, las fases en phases.ts y las tareas en
-// tasks.ts. Este archivo solo traduce entre el protocolo y esas funciones.
+// The MCP server: it registers the tools and connects them with the logic of the other modules. Nothing is
+// computed here — paths live in paths.ts, phases in phases.ts and tasks in tasks.ts. This file only
+// translates between the protocol and those functions.
 //
-// crearServidor no conecta ningún transporte: lo hace index.ts con stdio, y los tests con un
-// transporte en memoria. Así el servidor entero se puede probar sin lanzar un proceso.
+// crearServidor does not connect any transport: index.ts does it with stdio, and the tests with an in-memory
+// transport. That way the whole server can be tested without launching a process.
 //
-// Cada tool se registra con su shape de schemas.ts: el SDK valida los argumentos antes del
-// callback y convierte en `isError` tanto un fallo de validación como un Error lanzado aquí. Por
-// eso los callbacks lanzan Error con el mensaje para el modelo, y no arman respuestas de error.
+// Each tool is registered with its shape from schemas.ts: the SDK validates the arguments before the callback
+// and turns into `isError` both a validation failure and an Error thrown here. That is why the callbacks
+// throw Error with the message for the model, and do not build error responses.
 //
-// Idiomas (§8.5): los títulos y las descripciones de las tools y de sus parámetros se fijan al crear el
-// servidor, en el idioma de arranque. Cada llamada abre su propio contexto de mensajes y lo fija al idioma
-// de su proyecto en cuanto lo sabe: sus errores y su respuesta salen en ese idioma.
+// Languages: the titles and descriptions of the tools and of their parameters are fixed when the server is
+// created, in the startup language. Each call opens its own message context and fixes it to its project's
+// language as soon as it knows it: its errors and its response come out in that language.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -81,12 +81,11 @@ function mensajeDe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// IDIOMA-CON-TAREAS (§8.3): el manifiesto declara un idioma y hay tareas con documentos del otro. La
-// deducción daría esas tareas por "sin documentos", así que nada que lea o escriba documentos de fase sigue:
-// get_phase_prompt, start_task, record_batch, get_batch_status y write_central_doc con un nombre de documento
-// de fase se niegan con el texto de doctor (hallazgo 4 de la auditoría de la Etapa 6: antes solo se negaba
-// get_phase_prompt, start_task mezclaba nombres de los dos idiomas en el mismo proyecto y get_batch_status
-// decía que faltaba el plan). list_tasks, que solo lista, lo antepone como aviso.
+// IDIOMA-CON-TAREAS: the manifest declares a language and there are tasks with documents of the other one.
+// The deduction would take those tasks as "without documents", so nothing that reads or writes phase
+// documents goes on: get_phase_prompt, start_task, record_batch, get_batch_status and write_central_doc with
+// the name of a phase document refuse with doctor's text. list_tasks, which only lists, puts it in front as
+// a warning.
 function conflictoConTareas(carpetaProyecto: string): string | null {
   const conflicto = conflictoDeIdioma(carpetaProyecto);
   return conflicto?.codigo === "IDIOMA-CON-TAREAS" ? `${conflicto.texto} (${conflicto.codigo})` : null;
@@ -97,29 +96,29 @@ function negarSiHayTareasDelOtroIdioma(carpetaProyecto: string): void {
   if (texto) throw new Error(texto);
 }
 
-// Los nombres de documento de fase de fábrica, en los dos idiomas, comparados sin mayúsculas.
+// The names of the factory phase documents, in both languages, compared case-insensitively.
 const DOCUMENTOS_DE_FASE = new Set(
   (["es", "en"] as const).flatMap((idioma) => [VOCABULARIO[idioma].documentos.contextoInicial, ...VOCABULARIO[idioma].documentos.deFase]).map((n) => n.normalize("NFC").toLowerCase())
 );
 
-// La llamada ya sabe su proyecto, y existe: sus errores y su respuesta, en el idioma de ese proyecto. Un
-// manifiesto que no se puede leer no cambia qué error se lanza: el idioma se queda como estaba.
+// The call already knows its project, and it exists: its errors and its response, in that project's language.
+// A manifest that cannot be read does not change which error is thrown: the language stays as it was.
 function fijarIdiomaDelProyecto(carpetaProyecto: string | null | undefined): void {
   if (!carpetaProyecto) return;
   try {
     fijarIdiomaDeMensajes(idiomaDelProyecto(carpetaProyecto).idioma);
   } catch {
-    // El error de verdad, si lo hay, lo dará quien lea el proyecto.
+    // The real error, if there is one, will come from whoever reads the project.
   }
 }
 
-// El proyecto de una llamada que lo necesita: el que se indica o, si no, el que deducen las raíces
-// del cliente. Si no se puede deducir, la llamada falla pidiéndolo (con los candidatos si hay varios).
-// `deducido` es la línea que la respuesta añade para que se vea de dónde salió.
+// The project of a call that needs it: the one indicated or, otherwise, the one that the client's roots
+// deduce. If it cannot be deduced, the call fails asking for it (with the candidates if there are several).
+// `deducido` is the line the response adds so that it shows where it came from.
 //
-// Para escribir hace falta una coincidencia fuerte (la carpeta abierta ES un repo del proyecto o está en
-// su carpeta de la Documentación). Una débil (la carpeta abierta solo CONTIENE un repo suyo) basta para
-// leer, pero no para escribir en un proyecto que la IA no nombró (hallazgo 3 de la auditoría de la Etapa 3).
+// Writing needs a strong match (the open folder IS a repo of the project or is in its folder of the
+// Documentation). A weak one (the open folder only CONTAINS a repo of its own) is enough for reading, but
+// not for writing in a project the AI did not name.
 async function proyectoDeLaLlamada(
   mcp: McpServer,
   project: string | undefined,
@@ -138,8 +137,8 @@ async function proyectoDeLaLlamada(
   return { nombre: porRaices.carpetaProyecto, deducido: lineaDeDeduccion(porRaices) };
 }
 
-// Para read_central_doc y write_central_doc: solo hace falta proyecto cuando se usa la forma
-// recomendada (task_name + file_name) sin project; con file_path, no.
+// For read_central_doc and write_central_doc: a project is only needed when the recommended form
+// (task_name + file_name) is used without project; with file_path, no.
 async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args: T, uso: "lee" | "escribe"): Promise<{ args: T; deducido: string | null }> {
   if (args.project) fijarIdiomaDelProyecto(proyectoSiExiste(args.project));
   if (args.project || args.file_path || !args.task_name || !args.file_name) return { args, deducido: null };
@@ -147,13 +146,13 @@ async function conProyecto<T extends ArgumentosDeDocumento>(mcp: McpServer, args
   return { args: { ...args, project: nombre }, deducido };
 }
 
-// Con file_path, el proyecto sale de la ruta: si cae en la carpeta de una tarea, sus mensajes van en el
-// idioma de ese proyecto.
+// With file_path, the project comes from the path: if it falls in the folder of a task, its messages go in
+// that project's language.
 function fijarIdiomaDeLaRuta(rutaAbsoluta: string): void {
   try {
     fijarIdiomaDelProyecto(ubicarEnTarea(rutaAbsoluta)?.carpetaProyecto);
   } catch {
-    // Una ruta que no se puede ubicar no cambia el idioma.
+    // A path that cannot be located does not change the language.
   }
 }
 
@@ -171,8 +170,9 @@ function notaSinProyecto(pedido: string | undefined): string {
   return mensaje("SERVIDOR-NOTA-SIN-PROYECTO", { pedido: pedido ? pedido.replace(/\s+/g, " ").trim() : null, preset, origen });
 }
 
-// Un proyecto que no existe no impide entregar un prompt: se entrega sin su configuración, y la
-// compuerta lo dice en el log como siempre. Sin Documentación configurada, tampoco hay proyecto.
+// A project that does not exist does not prevent delivering a prompt: it is delivered without its
+// configuration, and the gate says so in the log as always. Without Documentation configured, there is no
+// project either.
 function proyectoSiExiste(project: string): string | null {
   try {
     return findProjectFolder(project);
@@ -181,8 +181,8 @@ function proyectoSiExiste(project: string): string | null {
   }
 }
 
-// La cabecera que start_task escribe en el contexto inicial cuando la tarea elige sus repos o su
-// preset. Se valida ANTES de crear nada: un id mal escrito no debe dejar media tarea creada.
+// The header that start_task writes in the initial context when the task chooses its repos or its preset.
+// It is validated BEFORE creating anything: a misspelled id must not leave half a task created.
 function cabeceraDeTarea(
   carpetaProyecto: string,
   estrenado: boolean,
@@ -211,14 +211,14 @@ function cabeceraDeTarea(
     lineas.push(`preset: ${preset}`);
   }
 
-  // El idioma en que se redacta la tarea, si se pidió (§8.3). Lo lee frontmatterDeTarea.
+  // The language the task is written in, if requested. frontmatterDeTarea reads it.
   if (redaccion) lineas.push(`redaccion: ${redaccion}`);
 
   return lineas.length ? `---\n${lineas.join("\n")}\n---\n` : "";
 }
 
-// `estado` y los títulos de `condicionales` pueden llegar en inglés (los prompts en inglés los usan así): el
-// motor de lotes trabaja con los valores canónicos (§8.2).
+// `estado` and the titles of `condicionales` may arrive in English (the English prompts use them that way):
+// the batch engine works with the canonical values.
 export function normalizarEntradaDeLote<T extends { estado?: string | undefined; condicionales?: { titulo: string; texto: string }[] | undefined }>(
   entrada: T
 ): Omit<T, "estado" | "condicionales"> & { estado?: EstadoLote | undefined; condicionales?: { titulo: TituloCondicional; texto: string }[] | undefined } {
@@ -233,8 +233,8 @@ function siCancelada(extra: { signal: AbortSignal }): void {
   if (extra.signal.aborted) throw fallo("SERVIDOR-CANCELADA");
 }
 
-// Las fases de un proyecto para un listado. Si se pidió ese proyecto, un manifiesto inválido es un
-// error; en el listado de todos, ese proyecto sale con su error y los demás se listan igual.
+// The phases of a project for a listing. If that project was requested, an invalid manifest is an error; in
+// the listing of all of them, that project comes out with its error and the others are listed anyway.
 function fasesDelListado(carpetaProyecto: string, pedido: boolean, bloques: string[]): Map<number, PhaseFile> | null {
   try {
     return fasesDe(carpetaProyecto);
@@ -249,10 +249,9 @@ function lineaDeTarea(estado: EstadoTarea, phases: Map<number, PhaseFile>): stri
   return `- ${estado.taskName} — ${describeEstado(estado, phases)}`;
 }
 
-// Las anotaciones dicen al cliente qué hace cada tool, para que decida si pide permiso. Los
-// valores por defecto del protocolo son pesimistas (destructiva y de mundo abierto), así que todas
-// declaran los cuatro valores. openWorldHint es false en todas: ninguna sale de las carpetas
-// configuradas.
+// The annotations tell the client what each tool does, so that it can decide whether to ask for permission.
+// The protocol's default values are pessimistic (destructive and open-world), so all of them declare the
+// four values. openWorldHint is false in all of them: none leaves the configured folders.
 function anotaciones(
   title: string,
   readOnlyHint: boolean,
@@ -262,8 +261,8 @@ function anotaciones(
   return { title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint: false };
 }
 
-// `idioma`: el de los títulos y las descripciones de las tools, sus parámetros, los /fN y los recursos.
-// Por defecto, el de los mensajes al arrancar (PHASE_GATE_LANG o, si no, el del sistema).
+// `idioma`: that of the titles and descriptions of the tools, their parameters, the /fN and the resources.
+// By default, that of the messages at startup (PHASE_GATE_LANG or, otherwise, the system's).
 export function crearServidor(idioma: Idioma = idiomaDeMensajes()): McpServer {
   const mcp = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
@@ -275,8 +274,8 @@ export function crearServidor(idioma: Idioma = idiomaDeMensajes()): McpServer {
   registrarTools(mcp, idioma);
   enIdioma(idioma, () => registrarRecursos(mcp));
 
-  // Los /fN se registran ya, antes de conectar, y se vuelven a sincronizar tras cada tool y
-  // cuando cambia una capa de prompts.
+  // The /fN are registered now, before connecting, and synchronized again after each tool and when a prompts
+  // layer changes.
   sincronizarPrompts(mcp, idioma);
   asegurarCapacidadDePrompts(mcp);
   const dejarDeVigilar = vigilarCapas(mcp);
@@ -291,13 +290,14 @@ export function crearServidor(idioma: Idioma = idiomaDeMensajes()): McpServer {
 
 function registrarTools(mcp: McpServer, idioma: Idioma): void {
   const shapes = shapesDe(idioma);
-  // El título y la descripción de una tool, en el idioma del servidor.
+  // The title and description of a tool, in the server's language.
   const titulo = (codigo: string): string => mensaje(`${codigo}-TITULO`, {}, idioma);
   const descripcion = (codigo: string): string => mensaje(codigo, {}, idioma);
 
-  // Cada llamada abre su contexto de mensajes (el idioma de su proyecto, en cuanto lo sepa) y su caché del
-  // recuento de documentos por idioma (conCacheDelIdioma), y tras ella se sincronizan los prompts /fN. Leer las carpetas de prompts cuesta milisegundos, y es lo único que
-  // garantiza que una fase nueva aparezca en OneDrive, donde fs.watch no avisa.
+  // Each call opens its message context (its project's language, as soon as it knows it) and its cache of the
+  // per-language document count (conCacheDelIdioma), and after it the /fN prompts are synchronized. Reading
+  // the prompts folders costs milliseconds, and it is the only thing that guarantees that a new phase shows up
+  // on OneDrive, where fs.watch does not notify.
   const sincronizandoTras =
     <A extends unknown[], R>(callback: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
@@ -308,7 +308,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       }
     };
 
-  // start_task no es destructiva (se niega a pisar una tarea) ni idempotente (la segunda llamada falla).
+  // start_task is not destructive (it refuses to overwrite a task) nor idempotent (the second call fails).
   mcp.registerTool(
     "start_task",
     {
@@ -321,22 +321,22 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       const args = sinNulos(entrada);
       const taskName = args.task_name;
 
-      // `create_project` es `crear_proyecto` con su nombre en inglés: vale cualquiera, y los dos a la vez
-      // solo si dicen lo mismo.
+      // `create_project` is `crear_proyecto` with its English name: either is valid, and both at once only if they
+      // say the same.
       if (args.crear_proyecto !== undefined && args.create_project !== undefined && args.crear_proyecto !== args.create_project) {
         throw fallo("TOOL-START-ALIAS-DISCREPA");
       }
       const crearProyecto = args.crear_proyecto ?? args.create_project;
 
-      // Sin project, el de la carpeta abierta. Un proyecto nuevo no se deduce: estrenarlo exige
-      // decir su nombre.
+      // Without project, that of the open folder. A new project is not deduced: opening one requires saying its
+      // name.
       if (!args.project && crearProyecto === true) {
         throw fallo("TOOL-START-CREAR-SIN-NOMBRE");
       }
-      const { nombre: proj, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe"); // el schema ya le quitó los espacios
+      const { nombre: proj, deducido } = await proyectoDeLaLlamada(mcp, args.project, "escribe"); // the schema already trimmed the spaces
 
-      // Estrenar proyecto tiene que ser deliberado: sin esta puerta, un nombre mal escrito
-      // creaba una carpeta suelta en la Documentación y nadie se enteraba hasta buscarla.
+      // Opening a project has to be deliberate: without this door, a misspelled name would create a loose folder in
+      // the Documentation and nobody would find out until looking for it.
       let carpetaProyecto = findProjectFolder(proj);
       let estrenado = false;
 
@@ -344,7 +344,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         if (crearProyecto !== true) {
           throw fallo("TOOL-START-PROYECTO-NO-EXISTE", { proyecto: proj, disponibles: describeProjects(), mayusculas: proj.toUpperCase() });
         }
-        // El nombre se vuelve carpeta tal cual: "../evil" la creaba fuera de la Documentación.
+        // The name becomes a folder as is: "../evil" would create it outside the Documentation.
         validarSegmento(proj, "project");
         validarNombreVisible(proj, "project");
         carpetaProyecto = proj.toUpperCase();
@@ -363,9 +363,8 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         throw fallo("TOOL-ACCESO-DENEGADO-TAREA", { docsBase });
       }
 
-      // Estrenar un proyecto se le confirma a la persona si el cliente puede preguntarle. Sin
-      // crear_proyecto no se pregunta nada: ofrecer "¿lo creo?" ante un nombre desconocido
-      // invitaría a aceptar un typo con un clic.
+      // Opening a project is confirmed with the person if the client can ask them. Without crear_proyecto nothing
+      // is asked: offering "shall I create it?" for an unknown name would invite accepting a typo with a click.
       if (estrenado) {
         const { estado, nota } = await pedirConfirmacion(mcp, extra, {
           mensaje: mensaje("TOOL-START-CONFIRMAR", { carpetaProyecto, ruta: path.join(docsBase, carpetaProyecto) }),
@@ -376,9 +375,9 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         }
       }
 
-      // start_task escribe el contexto inicial sin preguntar, así que llamarlo sobre una tarea
-      // que ya existe borraba el requerimiento original — el único documento que no se puede
-      // regenerar leyendo el código. Retomar una tarea es switch_task, que no toca archivos.
+      // start_task writes the initial context without asking, so calling it on a task that already exists would
+      // erase the original requirement — the only document that cannot be regenerated by reading the code.
+      // Resuming a task is switch_task, which touches no files.
       if (fs.existsSync(contextoInicial)) {
         throw fallo("TOOL-START-TAREA-YA-EXISTE", { taskName, carpetaProyecto, carpetaTarea });
       }
@@ -390,10 +389,10 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
 
       fs.writeFileSync(contextoInicial, `${cabecera}${args.initial_context}`, "utf-8");
 
-      // Queda como activa de SU proyecto. Otra ventana trabajando en otro proyecto conserva
-      // la suya: los punteros son independientes.
+      // It becomes the active one of ITS project. Another window working on another project keeps its own: the
+      // pointers are independent.
       guardarPuntero(carpetaProyecto, taskName);
-      // Cambia la tarea activa, y con ella qué documentos se listan como recursos.
+      // The active task changes, and with it which documents are listed as resources.
       mcp.sendResourceListChanged();
 
       return responder(mensaje("TOOL-START-OK", { taskName, contextoInicial, carpetaProyecto, estrenado, deducido }));
@@ -409,12 +408,12 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       annotations: anotaciones(titulo("DESC-TOOL-GET-PHASE-PROMPT"), true, false, true),
     },
     sincronizandoTras(async (entrada) => {
-      // Que sea un entero ya lo garantiza el schema; si la fase no existe, lo dice ensamblarFase.
+      // That it is an integer is already guaranteed by the schema; if the phase does not exist, ensamblarFase says so.
       const { phase, project, task_name } = sinNulos(entrada);
 
-      // El proyecto del prompt (su preset, sus reglas, sus capas y el bloque de configuración) es el
-      // que se indica o, si no, el de la carpeta abierta. El único puntero solo sirve para la
-      // compuerta y los pendientes, como antes.
+      // The project of the prompt (its preset, its rules, its layers and the configuration block) is the one
+      // indicated or, otherwise, the one of the open folder. The single pointer is only used for the gate and the
+      // pending items.
       let carpetaProyecto = project ? proyectoSiExiste(project) : null;
       let deducido: string | null = null;
       if (!project) {
@@ -440,9 +439,9 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
     sincronizandoTras(async (entrada) => {
       const pedido = sinNulos(entrada).project ?? "";
 
-      // Con proyecto: la suya. Sin proyecto: la de cada uno. Antes había un único puntero
-      // global y responder "la activa" a secas obligaba a adivinar cuál de dos ventanas
-      // preguntaba; listar todas es la respuesta honesta cuando no se sabe.
+      // With a project: its own. Without a project: each one's. A single global pointer would mean that answering
+      // just "the active one" forced guessing which of two windows was asking; listing all of them is the honest
+      // answer when it is not known.
       if (pedido) fijarIdiomaDelProyecto(proyectoSiExiste(pedido));
       const proyectos = pedido ? [requireProjectFolder(pedido)] : [...discoverProjects().values()].sort();
 
@@ -517,7 +516,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
     })
   );
 
-  // Escribe el puntero, así que no es de solo lectura; pero repetirla da el mismo estado.
+  // It writes the pointer, so it is not read-only; but repeating it gives the same state.
   mcp.registerTool(
     "switch_task",
     {
@@ -567,15 +566,15 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         throw fallo("TOOL-ACCESO-DENEGADO-RUTA", { docsBase });
       }
 
-      // La línea de la deducción va aparte, para no mezclarla con el contenido del documento.
+      // The deduction line goes apart, so as not to mix it with the document's content.
       const resultado = responder(leerTextoAcotado(fullPath));
       if (deducido) resultado.content.push({ type: "text", text: deducido });
       return resultado;
     })
   );
 
-  // La única destructiva: puede sobrescribir un documento. Repetirla con el mismo contenido deja
-  // el mismo archivo, así que es idempotente.
+  // The only destructive one: it can overwrite a document. Repeating it with the same content leaves the same
+  // file, so it is idempotent.
   mcp.registerTool(
     "write_central_doc",
     {
@@ -593,7 +592,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         throw fallo("TOOL-ACCESO-DENEGADO-RUTA", { docsBase });
       }
 
-      // Antes del mkdir: con una tarea mal escrita, el mkdir recursivo creaba su carpeta.
+      // Before the mkdir: with a misspelled task, the recursive mkdir would create its folder.
       const ubicacion = ubicarEnTarea(fullPath);
       if (!ubicacion) {
         throw fallo("TOOL-ESCRIBIR-FUERA-DE-TAREA");
@@ -601,8 +600,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       fijarIdiomaDelProyecto(ubicacion.carpetaProyecto);
       if (DOCUMENTOS_DE_FASE.has(ubicacion.relativo.normalize("NFC").toLowerCase())) negarSiHayTareasDelOtroIdioma(ubicacion.carpetaProyecto);
 
-      // Con los nombres de documento de SU proyecto: uno que sustituye una fase con otro documento
-      // protege ese.
+      // With the document names of ITS project: one that replaces a phase with another document protects that one.
       const motivo = motivoDeProteccion(
         ubicacion.carpetaTarea,
         ubicacion.relativo,
@@ -611,13 +609,12 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       );
       const existia = fs.existsSync(fullPath);
 
-      // Un documento protegido se le pregunta a la persona si el cliente puede mostrarle la
-      // pregunta; entonces force no basta, porque lo pone el modelo. Solo sin elicitation decide
-      // force, como antes.
+      // A protected document is asked about to the person if the client can show them the question; then force is
+      // not enough, because the model sets it. Only without elicitation does force decide.
       let sufijo = "";
       if (motivo) {
         const archivo = ubicacion.relativo;
-        // Un recibo o el documento de la Fase 4: la escotilla es para reparar a mano un archivo dañado.
+        // A receipt or the Phase 4 document: the hatch is for repairing a damaged file by hand.
         const deLotes = esMotivoDeLotes(motivo);
         const { estado, nota } = await pedirConfirmacion(mcp, extra, {
           mensaje: deLotes
@@ -633,28 +630,28 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
           throw fallo(deLotes ? "TOOL-ESCRIBIR-PIDE-FORCE-LOTES" : "TOOL-ESCRIBIR-PIDE-FORCE", { motivo, nota });
         }
 
-        // force también crea el contexto inicial cuando falta: no se dice "sobrescrito" si no lo era.
+        // force also creates the initial context when it is missing: it is not said "overwritten" if it was not.
         sufijo = mensaje("TOOL-ESCRIBIR-SUFIJO", { confirmada: estado === "confirmada", existia });
         if (deLotes) sufijo += mensaje("TOOL-ESCRIBIR-SUFIJO-MANUAL");
         if (nota) sufijo += `\n${nota}`;
       }
 
-      // Si el cliente canceló la llamada mientras se esperaba algo (una confirmación), ya no
-      // escucha la respuesta: escribir ahora dejaría un archivo que el modelo cree que no existe.
+      // If the client cancelled the call while something was awaited (a confirmation), it no longer listens to the
+      // response: writing now would leave a file that the model believes does not exist.
       siCancelada(extra);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, motivo && esMotivoDeLotes(motivo) ? comoManual(args.content) : args.content, "utf-8");
 
-      // Un archivo nuevo puede ser un documento o un recibo que se lista como recurso. Reescribir
-      // uno que ya existía no cambia la lista.
+      // A new file may be a document or a receipt that is listed as a resource. Rewriting one that already existed
+      // does not change the list.
       if (!existia) mcp.sendResourceListChanged();
 
       return responder(mensaje("TOOL-ESCRIBIR-OK", { ruta: fullPath, sufijo, deducido }));
     })
   );
 
-  // Escribe recibos, así que no es de solo lectura; no es destructiva (nunca pisa un recibo sellado) ni
-  // idempotente (la segunda llamada con el mismo lote cambia de modo o falla).
+  // It writes receipts, so it is not read-only; it is not destructive (it never overwrites a sealed receipt)
+  // nor idempotent (the second call with the same batch changes mode or fails).
   mcp.registerTool(
     "record_batch",
     {
@@ -670,8 +667,8 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
       const carpetaProyecto = requireProjectFolder(nombre);
       negarSiHayTareasDelOtroIdioma(carpetaProyecto);
 
-      // La tarea activa solo si es la que el usuario eligió: escribir en una deducida por fecha sería
-      // escribir en la tarea equivocada sin que nadie lo diga.
+      // The active task only if it is the one the user chose: writing in one deduced by date would be writing in
+      // the wrong task without anyone saying so.
       let taskName = args.task_name;
       if (!taskName) {
         const activa = tareaActiva(carpetaProyecto, fasesDe(carpetaProyecto));
@@ -686,7 +683,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
         antesDeEscribir: () => siCancelada(extra),
         confirmar: (pregunta) => pedirConfirmacion(mcp, extra, pregunta),
       });
-      // Un recibo nuevo (o renombrado) cambia la lista de recursos.
+      // A new (or renamed) receipt changes the list of resources.
       if (resultado.archivoNuevo) mcp.sendResourceListChanged();
 
       return {
@@ -728,8 +725,8 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
     })
   );
 
-  // La misma radiografía que `npx mcp-phase-gate doctor`, más lo que solo se sabe desde dentro de
-  // una sesión: qué cliente está conectado y qué capacidades anunció.
+  // The same X-ray as `npx mcp-phase-gate doctor`, plus what is only known from inside a session: which client
+  // is connected and which capabilities it announced.
   mcp.registerTool(
     "get_orchestrator_status",
     {
@@ -750,7 +747,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
           }
         : undefined;
 
-      // Las raíces de la sesión dicen con qué proyecto coincide la carpeta abierta.
+      // The roots of the session say which project the open folder matches.
       const raices = capacidades?.roots ? await raicesActuales(mcp) : undefined;
       const diagnostico = await diagnosticarSinBloquear({ ...(cliente ? { cliente } : {}), ...(raices ? { raices } : {}) });
       return {
@@ -829,8 +826,7 @@ function registrarTools(mcp: McpServer, idioma: Idioma): void {
   );
 }
 
-// El idioma del proyecto para los bloques que el servidor añade al prompt. Si no se puede saber, el de
-// la llamada.
+// The project's language for the blocks the server adds to the prompt. If it cannot be known, the call's.
 function idiomaDelPrompt(carpetaProyecto: string | null): Idioma {
   try {
     return idiomaDelProyecto(carpetaProyecto).idioma;
@@ -839,10 +835,10 @@ function idiomaDelPrompt(carpetaProyecto: string | null): Idioma {
   }
 }
 
-// El texto que entrega get_phase_prompt, una vez resuelto el proyecto: `project` es el que se pidió (puede
-// no existir), `carpetaProyecto` el que existe (el pedido o el que dedujeron las raíces) y `deducido` la
-// línea de la deducción. La tool lo llama tras deducir; el Studio, con el proyecto y la tarea que elige la
-// persona, para enseñar exactamente el mismo texto.
+// The text that get_phase_prompt delivers, once the project is resolved: `project` is the one requested (it
+// may not exist), `carpetaProyecto` the one that exists (the requested one or the one the roots deduced) and
+// `deducido` the line of the deduction. The tool calls it after deducing; the Studio, with the project and
+// the task the person chooses, to show exactly the same text.
 export async function textoDelPromptDeFase(
   phase: number,
   { project, task_name, carpetaProyecto, deducido }: { project?: string | undefined; task_name?: string | undefined; carpetaProyecto: string | null; deducido: string | null }
@@ -850,9 +846,9 @@ export async function textoDelPromptDeFase(
   const delPrompt = project ?? carpetaProyecto;
   const opciones = { ...(delPrompt ? { project: delPrompt } : {}), ...(task_name ? { taskName: task_name } : {}) };
 
-  // La compuerta avisa, no bloquea: el prompt se entrega siempre. Si comprobarla fallara
-  // por lo que sea, entregarlo igual es mejor que dejar al usuario sin fase por un aviso.
-  // Lo mismo con la lista de recibos: es una ayuda, no una condición.
+  // The gate warns, it does not block: the prompt is always delivered. If checking it failed for whatever
+  // reason, delivering it anyway is better than leaving the user without a phase over a warning. The same goes
+  // for the list of receipts: it is a help, not a condition.
   let aviso: string | null = null;
   let pendientes: string | null = null;
   let recibos: string | null = null;
@@ -863,13 +859,13 @@ export async function textoDelPromptDeFase(
 
     const resuelta = resolverTareaDelPrompt(fasesDe, opciones);
     if (resuelta && resuelta !== "ambigua") {
-      // Los bloques que se añaden al prompt, en el idioma del proyecto de la tarea.
+      // The blocks added to the prompt, in the language of the task's project.
       const idiomaDeLaTarea = idiomaDelPrompt(resuelta.carpetaProyecto);
       pendientes = avisoDePendientes(phase, resuelta.estado, resuelta.phases, idiomaDeLaTarea);
       recibos = bloqueDeRecibos(phase, resuelta.estado, resuelta.phases, idiomaDeLaTarea);
-      // La tarea aporta su preset si declara uno en su contexto inicial.
+      // The task contributes its preset if it declares one in its initial context.
       if (carpetaProyecto && resuelta.carpetaProyecto === carpetaProyecto) carpetaTarea = resuelta.estado.folderPath;
-      // En la fase siguiente a la de los lotes (la 5), los commits ya verificados para el auditor.
+      // In the phase after the batches one (the 5th), the already verified commits for the auditor.
       const deLotes = [...resuelta.phases.entries()].find(([, datos]) => datos.recibos);
       if (deLotes && phase === deLotes[0] + 1) commits = await bloqueDeCommitsConPlazo(resuelta.carpetaProyecto, resuelta.estado.folderPath, resuelta.phases);
     }
@@ -877,27 +873,27 @@ export async function textoDelPromptDeFase(
     log("warning", mensaje("SERVIDOR-COMPUERTA-FALLO", { error: mensajeDe(error) }));
   }
 
-  // Un proyecto que declara un idioma y tiene tareas en el otro: la deducción las daría por sin
-  // documentos, así que el prompt no se entrega (IDIOMA-CON-TAREAS, §8.3), con el mismo texto que doctor.
+  // A project that declares a language and has tasks in the other: the deduction would take them as without
+  // documents, so the prompt is not delivered (IDIOMA-CON-TAREAS), with the same text as doctor.
   if (carpetaProyecto) negarSiHayTareasDelOtroIdioma(carpetaProyecto);
 
-  // Un manifiesto o un preset mal escrito sí es un error: entregar el prompt de fábrica en su
-  // lugar sería el fallo silencioso que el manifiesto evita.
+  // A badly written manifest or preset is an error: delivering the factory prompt in its place would be the
+  // silent failure the manifest avoids.
   const columnas = carpetaProyecto ? await columnasDeGit(carpetaProyecto, carpetaTarea) : new Map<string, string>();
   const ensamblado = ensamblarFase(phase, carpetaProyecto, carpetaTarea, { estadoDeRepo: (repo) => columnas.get(repo.id) ?? null });
   const idiomaDelEnsamblado = idiomaDelPrompt(carpetaProyecto);
   const notas = ensamblado.avisos.filter((h) => h.codigo === "BLOQUE-HUERFANO").map((h) => notaDeHuerfano(h, idiomaDelEnsamblado));
   for (const h of ensamblado.avisos) if (h.codigo !== "BLOQUE-HUERFANO") log("warning", h.texto);
-  // Sin proyecto, el prompt no lleva la configuración de ninguno: se dice, para que el modelo no crea
-  // que tiene el preset de su proyecto (hallazgo 8 de la auditoría de la Etapa 3). En el idioma de la llamada.
+  // Without a project, the prompt carries no project's configuration: it is said, so that the model does not
+  // believe it has its project's preset. In the call's language.
   if (!carpetaProyecto) notas.unshift(notaSinProyecto(project));
 
-  // Lo que el modelo tiene que leer antes de nada va delante: el salto de fase y los pendientes.
+  // What the model has to read first goes in front: the phase skip and the pending items.
   return [deducido, aviso, pendientes, notas.join("\n") || null, ensamblado.texto, recibos, commits].filter(Boolean).join("\n\n");
 }
 
-// El estado de git de los repos de la tarea, para el bloque CONFIGURACIÓN DEL PROYECTO. Si tarda más de
-// 3 s o falla, la columna se omite y el prompt se entrega igual: es una ayuda, no una condición.
+// The git state of the task's repos, for the PROJECT CONFIGURATION block. If it takes more than 3 s or
+// fails, the column is left out and the prompt is delivered anyway: it is a help, not a condition.
 export const ESPERA_DE_ESTADO_MS = 3000;
 
 async function columnasDeGit(carpetaProyecto: string, carpetaTarea: string | null): Promise<Map<string, string>> {
@@ -905,9 +901,9 @@ async function columnasDeGit(carpetaProyecto: string, carpetaTarea: string | nul
   try {
     repos = reposDeLaTarea(configuracionDe(carpetaProyecto, carpetaTarea));
   } catch {
-    return new Map(); // el error de configuración lo da ensamblarFase
+    return new Map(); // the configuration error comes from ensamblarFase
   }
-  // Un repo que no responde a tiempo pierde su columna; los demás la conservan.
+  // A repo that does not answer in time loses its column; the others keep theirs.
   const estados = await estadosConPlazo(repos, ESPERA_DE_ESTADO_MS);
   return new Map(
     repos.flatMap((repo, i) => {
