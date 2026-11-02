@@ -72,7 +72,7 @@ npx mcp-phase-gate init --docs "C:\Users\YOUR_USER\Documents\DOCUMENTATION" --re
 
 ## What changes if you upgrade from 3.x
 
-4.0 changes what you see and touch, not the engine: the 13 tools, the prompts, the presets and the formats on disk are the same. What does change:
+4.0 changes what you see and touch, not the engine: the 13 tools, the prompts, the presets and the formats on disk are the same, with one addition: in `get_orchestrator_status`, the `fuente` of a variable can now be `machine.json`. What does change:
 
 - **Your machine's paths moved to `machine.json`**, now version 2. `init` and Settings write them there and take them out of your client's `env`. 3.x can't read version 2: [how to go back](https://github.com/Montse2308/mcp-phase-gate/blob/master/docs/notas/v4.0.0.md#going-back-to-3x).
 - **The environment always wins.** A value in a client's `env` still beats `machine.json`, and now that includes the language: `PHASE_GATE_LANG` beats the default language in `machine.json`, which used to win.
