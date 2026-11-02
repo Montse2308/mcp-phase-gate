@@ -246,7 +246,7 @@ jobs:
       name: github-pages
       url: ${{ steps.despliegue.outputs.page_url }}
     steps:
-      # El `if` del job deja pasar cualquier tag que empiece por v y no lleve guion (vnext, v4.0.0.rc1). Aquí se
+      # El `if` del job deja pasar cualquier tag que empiece por v y no lleve guion (vnext, v4.0.0.beta1). Aquí se
       # exige la forma de una versión: si no la tiene, no se publica y se dice por qué.
       - name: El tag es una versión
         env:

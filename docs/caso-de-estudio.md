@@ -40,7 +40,7 @@ La versión 3 empezó con un diagnóstico del código de la 2.0: nueve hallazgos
 
 ## 5. La versión 4: qué se rediseñó, y por qué
 
-La versión 4 cambia lo que la gente ve y toca, no el motor. Las 13 tools, los prompts, los presets, las capas, los formatos en disco y el modelo de seguridad del Studio son los de la 3.2: la diferencia de `prompts/` y `presets/` entre `master` y la rama de integración sale vacía. Lo que fallaba en la 3.2 estaba alrededor del motor.
+La versión 4 cambia lo que la gente ve y toca, no el motor. Las 13 tools, los prompts, los presets, las capas, los formatos en disco y el modelo de seguridad del Studio son los de la 3.2: la diferencia de `prompts/` y `presets/` entre `master` y la rama de integración sale vacía. La única novedad en la respuesta de una tool: en `get_orchestrator_status`, la `fuente` de una variable puede decir ahora `machine.json`, porque las rutas pueden salir de ese archivo. Lo que fallaba en la 3.2 estaba alrededor del motor.
 
 - **Cada vista se dibujaba dos veces.** El Studio tenía dos modos, Cabina (una vía con semáforos y sellos SVG) y Sobrio (tablas), y un botón pasaba de uno a otro. Eran dos interfaces que mantener y probar, y Sobrio tenía menos funciones que Cabina, así que quedarse solo con él habría perdido datos. Ahora cada vista tiene una sola estructura, y el tema, claro u oscuro, solo cambia los colores. Una prueba compara el árbol del DOM y el de accesibilidad en los dos temas, en cada vista, a 1280 y a 390 px, así que «el tema solo cambia colores» está probado, no prometido.
 - **El aspecto se comprueba, no solo se elige.** Inter y JetBrains Mono, un acento azul, un fondo gris. Los colores se nombran por su función (`fondo`, `acento`), no por metáfora, y un test lee las hojas de estilo: el texto llega a 4.5:1 sobre sus fondos, y el acento y los bordes de los controles llegan a 3:1. Ningún estado se dice solo con color: cada uno tiene su forma y siempre su texto.
@@ -68,21 +68,21 @@ Para el lanzamiento, la regla es que no existe el tag `v4.0.0` mientras haya un 
 
 ## 7. Lo que se midió
 
-La columna de la 3.2 se midió a mano en un Windows con Node 24.11.0, antes de empezar la 4.0. En la columna de la 4.0, las cifras de pruebas y del frontend salen de la corrida de CI del último commit de este pull request, y las de la portada y los medios, de la corrida manual del workflow de Pages 41127672319 (solo construye, no despliega) sobre el commit `5d5ba7c`, este pull request con la misma cadena de medios. Cuatro cifras no salen del CI ni de un workflow sino de un comando que cualquiera puede correr sobre el mismo commit, y la tabla dice cuáles: el paquete, el registro de decisiones, los mensajes y los README.
+La columna de la 3.2 se midió a mano en un Windows con Node 24.11.0, antes de empezar la 4.0. En la columna de la 4.0, las cifras de pruebas y del frontend salen de la corrida de CI del último commit de este pull request, y las de la portada y los medios, de la corrida manual del workflow de Pages 41488978782 (solo construye, no despliega) sobre el commit `7efe7c7`, el commit de versión, con la misma cadena de medios. Cuatro cifras no salen del CI ni de un workflow sino de un comando que cualquiera puede correr sobre el mismo commit, y la tabla dice cuáles: el paquete, el registro de decisiones, los mensajes y los README.
 
 | Cifra | 3.2 | 4.0 | De dónde sale la cifra de la 4.0 |
 |---|---|---|---|
 | Suite de pruebas | 1004 tests: 1002 pasan, 2 omitidos | 1149 tests: 1147 pasan y 2 omitidos en Windows; 1145 pasan y 4 omitidos en Linux; 0 fallan | `npm test`, jobs `build-and-test` de la corrida de CI |
 | Studio de extremo a extremo | 51 pasan | 269 pasan, en cada uno de Linux, Windows y macOS | `npm run test:e2e`, jobs `e2e-studio` de la corrida de CI |
 | Frontend del Studio | 125,76 kB en gzip de un presupuesto de 200 kB | 161,24 kB en gzip del mismo presupuesto | `npm run build`, su log en la corrida de CI |
-| Paquete | 183 archivos, 536,0 kB comprimido, 1,8 MB descomprimido | 137 archivos, 510,0 kB comprimido, 1,5 MB descomprimido. Antes de este pull request eran 188: los 51 `.d.ts` (263 kB) quedan fuera porque es un CLI sin `types` | comando: `npm pack --dry-run` |
+| Paquete | 183 archivos, 536,0 kB comprimido, 1,8 MB descomprimido | 137 archivos, 507,6 kB comprimido, 1,5 MB descomprimido. Antes de este pull request eran 188: los 51 `.d.ts` (263 kB) quedan fuera porque es un CLI sin `types` | comando: `npm pack --dry-run` |
 | Registro de decisiones | 101 entradas | 107 entradas | comando: `node scripts/indice-decisiones.mjs`, que arma el índice con ellas |
 | Mensajes del servidor | 724 códigos en español y en inglés, 7 catálogos | 756 códigos, 8 catálogos | comando: claves de cada objeto `TEXTOS_*` de `build/i18n/textos/*.js` |
 | README | 1002 y 1046 líneas | 105 líneas cada uno | comando: `wc -l`; en el CI, `test/readme.test.ts` falla por encima de 200 |
-| Portada, primera carga con sus tres capturas | no había | 245 555 bytes en inglés y 250 551 en español, de un presupuesto de 300 000 | job `ensamblar` de la corrida de Pages, que falla si pasa del presupuesto |
+| Portada, primera carga con sus tres capturas | no había | 245 550 bytes en inglés y 250 546 en español, de un presupuesto de 300 000 | job `ensamblar` de la corrida de Pages, que falla si pasa del presupuesto |
 | Imagen de la vista previa del link, 1200 × 630 | no había | 107 111 bytes (inglés) y 113 350 (español), PNG | job `capturas` de la corrida de Pages; GitHub admite hasta 1 MB |
-| Video | 41,3 s y 42,4 s; MP4 de 1,52 MB cada uno | 41,6 s (inglés) y 41,7 s (español); MP4 de 1 100 799 y 1 154 349 bytes | `medios.json` de la corrida de Pages |
-| GIF del README | 42 s, 4,93 MB y 4,72 MB, a 8 fps y 760 px | 21,8 s (inglés) y 21,9 s (español), 2 305 855 y 2 235 759 bytes, a 10 fps y 840 px; presupuesto de 2 621 440 (2,5 MiB) | `medios.json` de la corrida de Pages |
+| Video | 41,3 s y 42,4 s; MP4 de 1,52 MB cada uno | 41,8 s (inglés) y 41,8 s (español); MP4 de 1 208 441 y 1 172 086 bytes | `medios.json` de la corrida de Pages |
+| GIF del README | 42 s, 4,93 MB y 4,72 MB, a 8 fps y 760 px | 22,0 s (inglés) y 22,0 s (español), 2 304 277 y 2 567 654 bytes, a 10 fps y 840 px; presupuesto de 2 621 440 (2,5 MiB) | `medios.json` de la corrida de Pages |
 
 La demo, contada generándola en los dos idiomas, listando sus recibos y con `git rev-list --count HEAD` en cada repo: tres proyectos, dos repos de git con seis commits reales y ocho recibos. Seis están sellados (cuatro a un commit, dos a un sha256), uno se descartó con una nota y otro espera su commit.
 
